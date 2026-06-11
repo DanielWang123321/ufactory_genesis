@@ -1,0 +1,11 @@
+genesis-world==1.1.1
+# GPU (RTX 4060Ti, py313, driver >=580.65):
+# pip install torch==2.12.0+cu130 torchvision==0.27.0+cu130 \
+#   --index-url https://download.pytorch.org/whl/cu130
+torch>=2.8
+numpy
+pyyaml
+rsl-rl-lib==2.2.4
+tensorboard
+xarm-python-sdk
+pytest
