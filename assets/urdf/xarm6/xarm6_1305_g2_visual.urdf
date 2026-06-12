@@ -1,5 +1,4 @@
 <?xml version='1.0' encoding='utf-8'?>
-<!-- xArm6 1305 GLB visuals + Gripper G2 static GLB visual; legacy gripper collision/joints retained -->
 <robot name="xarm6_1305_g2_visual">
   <material name="White">
     <color rgba="1.0 1.0 1.0 1.0" />
@@ -18,7 +17,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link_base.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -41,7 +41,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link1.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -67,7 +68,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link2.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -93,7 +95,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link3.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -119,7 +122,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link4.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -145,7 +149,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link5.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -171,7 +176,8 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="meshes/xarm6_1305/visual_glb/link6.glb" />
-      </geometry>    </visual>
+      </geometry>
+    </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -197,13 +203,19 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper_g2/visual/xarm_gripper_g2.glb" />
+        <mesh filename="../gripper_g2/meshes/visual/gripper_g2_static_link6.glb" />
       </geometry>
+      <material name="White" />
     </visual>
   </link>
   <joint name="gripper_g2_visual_fix" type="fixed">
-    <parent link="link_eef" />
+    <parent link="link6" />
     <child link="gripper_g2_visual" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <joint name="gripper_fix" type="fixed">
+    <parent link="link6" />
+    <child link="xarm_gripper_base_link" />
     <origin xyz="0 0 0" rpy="0 0 0" />
   </joint>
   <link name="xarm_gripper_base_link">
@@ -215,15 +227,10 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/base_link.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/base_link.STL" />
       </geometry>
     </collision>
   </link>
-  <joint name="gripper_fix" type="fixed">
-    <parent link="link_eef" />
-    <child link="xarm_gripper_base_link" />
-    <origin xyz="0 0 0" rpy="0 0 0" />
-  </joint>
   <link name="left_outer_knuckle">
     <inertial>
       <origin xyz="0 0.01175 0.02625" rpy="0 0 0" />
@@ -233,7 +240,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/left_outer_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/left_outer_knuckle.STL" />
       </geometry>
     </collision>
   </link>
@@ -254,7 +261,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/left_finger.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/left_finger.STL" />
       </geometry>
     </collision>
   </link>
@@ -276,7 +283,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/left_inner_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/left_inner_knuckle.STL" />
       </geometry>
     </collision>
   </link>
@@ -298,7 +305,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/right_outer_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/right_outer_knuckle.STL" />
       </geometry>
     </collision>
   </link>
@@ -320,7 +327,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/right_finger.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/right_finger.STL" />
       </geometry>
     </collision>
   </link>
@@ -342,7 +349,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/gripper/right_inner_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/right_inner_knuckle.STL" />
       </geometry>
     </collision>
   </link>

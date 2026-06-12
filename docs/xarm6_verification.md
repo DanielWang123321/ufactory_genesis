@@ -34,13 +34,20 @@ python examples/xarm6/verify_xarm6.py            # headless
 
 **Genesis FK vs SDK FK comparison (requires robot network):**
 
+XI1305 (SN model code ≥ 1304) and other newer xArms have per-unit kinematic calibration in firmware.
+Units with SN code **< 1304** have **no** compensation — use nominal `xarm6_1305.urdf` without `--kinematics-*`.
+
+Extract YAML from the control box (when SN allows), then verify:
+
 ```bash
-python examples/xarm6/fk_verify.py --ip 192.168.1.60
-python examples/xarm6/fk_verify.py --ip 192.168.1.60 --urdf assets/urdf/xarm6/xarm6_1305.urdf
+# One-time per robot (saves to assets/urdf/xarm6/kinematics/user/, gitignored)
+python scripts/gen_kinematics_params.py 192.168.1.60 xi1305
+
+python examples/xarm6/fk_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
 ```
 
 - PASS criteria: position error < 1.0 mm, rotation error < 0.5 deg
-- Default URDF: `xarm6_xarm6_kinematics_calib1_calib.urdf`
+- Default base URDF: `xarm6_1305.urdf` (calibration applied via `--kinematics-*`)
 
 ---
 
@@ -61,7 +68,7 @@ python examples/xarm6/run_fk_alignment_cycle.py --real-ip 192.168.1.60
 ## Step 3 - Inverse Kinematics (IK)
 
 ```bash
-python examples/xarm6/ik_verify.py --ip 192.168.1.60
+python examples/xarm6/ik_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
 ```
 
 - PASS criteria: position error < 1.0 mm, rotation error < 0.5 deg
@@ -128,16 +135,26 @@ Genesis built-in assets (e.g. ground plane) use relative paths from the pip pack
 | `xarm6_1305.urdf` | STL | STL/OBJ, 6 DOF | Simulation baseline |
 | `xarm6_with_gripper.urdf` | STL | STL/OBJ, 12 DOF | RL / grasp-place (default) |
 | `xarm6_1305_visual.glb.urdf` | GLB (7 links) | STL/OBJ, 6 DOF | High-fidelity arm preview |
-| `xarm6_1305_g2_visual.urdf` | GLB arm + G2 | STL/OBJ + gripper joints, 12 DOF | Preview with G2 look |
+| `xarm6_1305_g2_visual.urdf` | GLB arm + Gripper G2 static | STL/OBJ + gripper joints, 12 DOF | High-res Gripper G2 preview (fixed) |
+| `xarm6_1305_g2_movable_visual.urdf` | GLB arm + Gripper G2 per-link | STL/OBJ + gripper joints, 12 DOF | Gripper G2 open/close animation |
 
-G2 is **visual-only**: the single `xarm_gripper_g2.glb` does not animate with `drive_joint`; physics still uses the original finger collision meshes.
+Gripper G2 uses a **dual-track** visual setup:
+
+- **Static** (`visual_glb_src/gripper_g2_movable.glb` → `gripper_g2_static_{ee_link}.glb`): high-res CAD assembly on a fixed link; does not move with `drive_joint`.
+- **Movable** (`visual_glb_src/gripper_g2.glb` → `visual_glb/*.glb` + `visual_glb/{ee_link}/base.glb`): semantic parts split across gripper links; visuals follow `drive_joint` + mimic joints.
+
+Assets live under `assets/urdf/gripper_g2/` (shared across xArm5/6/7 and UF850). Regenerate with `python scripts/relocalize_gripper_glb.py` and `python scripts/generate_gripper_g2_combo_urdf.py`.
 
 **GLB preview:**
 
 ```bash
-python examples/xarm6/view_xarm6_glb.py              # arm GLB
-python examples/xarm6/view_xarm6_glb.py --g2         # arm + G2
-python examples/xarm6/view_xarm6_glb.py --g2 --pd    # with PD motion
+python examples/view_robot_glb.py --robot xarm6_1305              # arm GLB
+python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2         # arm + Gripper G2 static
+python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --gripper-demo
+python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --pd --gripper-demo
+
+# xArm6-specific wrapper (also supports --diagnose)
+python examples/xarm6/view_xarm6_glb.py --gripper-g2 --movable --gripper-demo
 ```
 
 **Verify GLB URDF (FK/IK/PD unchanged):**
@@ -145,6 +162,9 @@ python examples/xarm6/view_xarm6_glb.py --g2 --pd    # with PD motion
 ```bash
 python examples/xarm6/verify_xarm6.py --robot-model assets/urdf/xarm6/xarm6_1305_visual.glb.urdf
 python examples/xarm6/verify_xarm6.py --robot-model assets/urdf/xarm6/xarm6_1305_g2_visual.urdf
+python examples/xarm6/verify_xarm6.py --robot-model assets/urdf/xarm6/xarm6_1305_g2_movable_visual.urdf
 ```
 
-Helper: `ufactory.paths.xarm6_1305_visual_glb_urdf(with_g2=True|False)`.
+Helper: `ufactory.paths.robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=True|False, movable=True|False)` (alias: `xarm6_1305_visual_glb_urdf`).
+
+Other robots: `python examples/view_robot_glb.py --robot uf850 --gripper-g2` (see [multi_robot_compatibility.md](multi_robot_compatibility.md)).

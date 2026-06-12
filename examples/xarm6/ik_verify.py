@@ -14,8 +14,8 @@ Verification flow (per test config):
 
 Usage:
     source ~/envs/py312/bin/activate
-    python examples/xarm6/ik_verify.py --ip 192.168.1.60
-    python examples/xarm6/ik_verify.py --ip 192.168.1.60 --urdf path/to/custom.urdf
+    python scripts/gen_kinematics_params.py 192.168.1.60 xi1305
+    python examples/xarm6/ik_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
     python examples/xarm6/ik_verify.py --ip 192.168.1.60 -v
 """
 
@@ -29,9 +29,13 @@ import torch
 
 import _bootstrap  # noqa: F401
 import genesis as gs
-from ufactory.paths import xarm6_urdf
-
-DEFAULT_URDF = xarm6_urdf("xarm6_xarm6_kinematics_calib1_calib.urdf")
+from ufactory.kinematics import (
+    get_robot_sn,
+    log_kinematics_sn_status,
+    prepare_robot_model_for_verification,
+    validate_kinematics_calibration_request,
+)
+from ufactory.paths import xarm6_1305_urdf
 
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 EE_LINK_NAME = "link6"
@@ -197,7 +201,19 @@ def run_genesis_ik(robot, ee_link, target_pos_m_t, target_quat_t, init_qpos_np,
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 IK Verification")
     parser.add_argument("--ip", required=True, help="xArm IP (simulation mode, for FK only)")
-    parser.add_argument("--urdf", default=DEFAULT_URDF)
+    parser.add_argument(
+        "--robot-model", type=str, default=None,
+        help="Base URDF path. Default: xarm6_1305.urdf",
+    )
+    parser.add_argument("--urdf", type=str, default=None, help="Alias for --robot-model (deprecated).")
+    parser.add_argument(
+        "--kinematics-suffix",
+        type=str,
+        default=None,
+        help="Kinematics YAML suffix, e.g. xi1305",
+    )
+    parser.add_argument("--kinematics-yaml", type=str, default=None)
+    parser.add_argument("--kinematics-yaml-dir", type=str, default=None)
     parser.add_argument("-v", "--vis", action="store_true")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed for perturbation")
     parser.add_argument("--max-iters", type=int, default=20,
@@ -211,7 +227,16 @@ def main():
     # Build test config list: manual + random
     test_configs = list(MANUAL_CONFIGS) + generate_random_configs(rng, NUM_RANDOM_CONFIGS)
 
-    urdf_path = Path(args.urdf).resolve()
+    robot_model_arg = args.robot_model or args.urdf
+
+    urdf_path_str, kinematics_yaml_path = prepare_robot_model_for_verification(
+        robot_model_arg,
+        args.kinematics_yaml,
+        args.kinematics_suffix,
+        args.kinematics_yaml_dir,
+        default_base_urdf=xarm6_1305_urdf(),
+    )
+    urdf_path = Path(urdf_path_str).resolve()
     if not urdf_path.exists():
         raise FileNotFoundError(f"URDF not found: {urdf_path}")
 
@@ -219,6 +244,8 @@ def main():
     print("xArm 6 IK Verification")
     print("=" * 80)
     print(f"URDF : {urdf_path}")
+    if kinematics_yaml_path:
+        print(f"Calib: {kinematics_yaml_path}")
     print(f"SDK  : {args.ip}  [FK only, simulation mode]")
     print(f"Tests: {len(test_configs)} configs ({len(MANUAL_CONFIGS)} manual + {NUM_RANDOM_CONFIGS} random) × 2 init = {len(test_configs)*2} tests")
     print(f"Pass : FK(q_ik) pos_err < {PASS_POS_MM} mm, rpy_err < {PASS_RPY_DEG} deg")
@@ -247,6 +274,19 @@ def main():
     assert arm.connected, f"Cannot connect to {args.ip}"
     arm.set_simulation_robot(on_off=True)
     print(f"SDK connected  firmware={arm.version}  simulation_mode=ON  (FK only)")
+    print(f"tcp_offset   : {list(arm.tcp_offset)}")
+    print(f"world_offset : {list(arm.world_offset)}")
+    sn = get_robot_sn(arm)
+    validate_kinematics_calibration_request(
+        sn, "xarm6",
+        kinematics_yaml=args.kinematics_yaml,
+        kinematics_suffix=args.kinematics_suffix,
+    )
+    log_kinematics_sn_status(
+        sn, "xarm6",
+        kinematics_yaml=kinematics_yaml_path,
+        kinematics_suffix=args.kinematics_suffix,
+    )
     print()
 
     # ---- GPU warmup (non-trivial solve to trigger all CUDA kernel paths) ----

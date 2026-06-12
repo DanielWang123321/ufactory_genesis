@@ -13,17 +13,15 @@ Usage:
 import argparse
 import math
 from pathlib import Path
-from typing import Dict, Optional
 
 import numpy as np
 import torch
-import xml.etree.ElementTree as ET
 
 import _bootstrap  # noqa: F401
 import genesis as gs
-from ufactory.paths import PROJECT_ROOT, xarm6_urdf
+from ufactory.kinematics import prepare_robot_model_for_verification
+from ufactory.paths import xarm6_urdf
 
-REPO_ROOT = PROJECT_ROOT
 XARM6_URDF_PATH = xarm6_urdf()
 
 # Joint/link names (URDF style, with fallback for namespaced names)
@@ -89,154 +87,6 @@ def normalize_angle_to_pi(angle: float) -> float:
 def angle_diff_deg(a: float, b: float) -> float:
     """Compute smallest wrapped angle difference in degrees."""
     return abs(normalize_angle_to_pi(a - b)) * 180.0 / math.pi
-
-
-def load_kinematics_yaml(kinematics_yaml_path: str) -> Dict[str, Dict[str, float]]:
-    """Load joint offsets from xArm kinematics YAML."""
-    try:
-        import yaml
-    except ImportError as e:
-        raise ImportError(
-            "PyYAML is required to load kinematics YAML. Install with `pip install pyyaml`."
-        ) from e
-
-    yaml_path = Path(kinematics_yaml_path).expanduser().resolve()
-    if not yaml_path.exists():
-        raise FileNotFoundError(f"Kinematics YAML not found: {yaml_path}")
-
-    with yaml_path.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
-    if not isinstance(data, dict):
-        raise ValueError(f"Invalid kinematics YAML format: {yaml_path}")
-
-    kinematics = data.get("kinematics", data)
-    if not isinstance(kinematics, dict):
-        raise ValueError(f"Invalid kinematics block in YAML: {yaml_path}")
-
-    values = {}
-    for i in range(1, 7):
-        joint_key = f"joint{i}"
-        cfg = kinematics.get(joint_key, {})
-        if not isinstance(cfg, dict):
-            cfg = {}
-        values[joint_key] = {
-            "x": float(cfg.get("x", 0.0)),
-            "y": float(cfg.get("y", 0.0)),
-            "z": float(cfg.get("z", 0.0)),
-            "roll": float(cfg.get("roll", 0.0)),
-            "pitch": float(cfg.get("pitch", 0.0)),
-            "yaw": float(cfg.get("yaw", 0.0)),
-        }
-    return values
-
-
-def find_kinematics_yaml(
-    kinematics_suffix: str,
-    kinematics_yaml_dir: Optional[str] = None,
-) -> Path:
-    """Find a kinematics yaml file from a suffix (e.g., SUFFIX -> *SUFFIX*.yaml)."""
-    suffix = (kinematics_suffix or "").strip()
-    if not suffix:
-        raise ValueError("kinematics_suffix is empty")
-
-    search_dirs = [Path.cwd()]
-    if kinematics_yaml_dir:
-        search_dirs.append(Path(kinematics_yaml_dir).expanduser())
-    search_dirs.append(REPO_ROOT)
-
-    patterns = (
-        f"*kinematics_{suffix}.yaml",
-        f"*{suffix}*.yaml",
-    )
-    for root in search_dirs:
-        if not root.exists():
-            continue
-        for pattern in patterns:
-            matches = sorted(root.glob(pattern))
-            if matches:
-                return matches[0].resolve()
-
-    raise FileNotFoundError(
-        f"Cannot find kinematics YAML for suffix '{suffix}'. "
-        "Please pass --kinematics-yaml explicitly."
-    )
-
-
-def build_calibrated_urdf(
-    base_urdf_path: str,
-    kinematics: Dict[str, Dict[str, float]],
-    suffix: Optional[str] = None,
-) -> str:
-    """Generate a patched URDF with calibrated joint origins for testing."""
-    base = Path(base_urdf_path).expanduser().resolve()
-    if not base.exists():
-        raise FileNotFoundError(f"Base URDF not found: {base}")
-
-    safe_suffix = "calib"
-    if suffix:
-        safe_suffix = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in suffix) or "calib"
-
-    output_path = base.with_name(f"{base.stem}_{safe_suffix}_calib.urdf")
-    tree = ET.parse(str(base))
-    root = tree.getroot()
-
-    for i in range(1, 7):
-        joint_name = f"joint{i}"
-        target = None
-        for joint in root.findall("joint"):
-            if joint.get("name") == joint_name:
-                target = joint
-                break
-
-        if target is None:
-            continue
-
-        cfg = kinematics.get(joint_name, {})
-        x = float(cfg.get("x", 0.0))
-        y = float(cfg.get("y", 0.0))
-        z = float(cfg.get("z", 0.0))
-        roll = float(cfg.get("roll", 0.0))
-        pitch = float(cfg.get("pitch", 0.0))
-        yaw = float(cfg.get("yaw", 0.0))
-
-        origin = target.find("origin")
-        if origin is None:
-            origin = ET.Element("origin")
-            target.insert(0, origin)
-        origin.set("xyz", f"{x} {y} {z}")
-        origin.set("rpy", f"{roll} {pitch} {yaw}")
-
-    try:
-        ET.indent(tree)  # Python 3.9+
-    except AttributeError:
-        pass
-    tree.write(str(output_path), encoding="utf-8", xml_declaration=False)
-    return str(output_path)
-
-
-def prepare_robot_model_for_verification(
-    robot_model: Optional[str],
-    kinematics_yaml: Optional[str],
-    kinematics_suffix: Optional[str],
-    kinematics_yaml_dir: Optional[str] = None,
-) -> str:
-    """Resolve robot model and apply kinematic calibration if requested."""
-    model_path = Path(robot_model).expanduser().resolve() if robot_model else Path(XARM6_URDF_PATH)
-
-    if kinematics_yaml is None and kinematics_suffix is None:
-        return str(model_path)
-
-    if kinematics_yaml is not None:
-        yaml_path = Path(kinematics_yaml).expanduser().resolve()
-    else:
-        yaml_path = find_kinematics_yaml(kinematics_suffix, kinematics_yaml_dir)
-
-    return build_calibrated_urdf(
-        str(model_path),
-        load_kinematics_yaml(str(yaml_path)),
-        suffix=kinematics_suffix or yaml_path.stem,
-    )
 
 
 def run_genesis_tests(args, robot_model_path):
@@ -675,7 +525,7 @@ def main():
     )
     args = parser.parse_args()
 
-    robot_model = prepare_robot_model_for_verification(
+    robot_model, _ = prepare_robot_model_for_verification(
         args.robot_model,
         args.kinematics_yaml,
         args.kinematics_suffix,

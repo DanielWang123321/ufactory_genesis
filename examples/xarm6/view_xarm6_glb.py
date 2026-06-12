@@ -4,14 +4,17 @@ View xArm6 1305 GLB visual model in Genesis.
 Usage:
     export NUMBA_CACHE_DIR=~/.cache/numba
     python examples/xarm6/view_xarm6_glb.py              # arm only
-    python examples/xarm6/view_xarm6_glb.py --g2         # arm + Gripper G2
-    python examples/xarm6/view_xarm6_glb.py --g2 --pd    # with simple joint motion demo
+    python examples/xarm6/view_xarm6_glb.py --gripper-g2         # arm + Gripper G2 static preview
+    python examples/xarm6/view_xarm6_glb.py --gripper-g2 --movable --gripper-demo
+    python examples/xarm6/view_xarm6_glb.py --gripper-g2 --movable --pd --gripper-demo
     python examples/xarm6/view_xarm6_glb.py --diagnose   # headless alignment check
     python examples/xarm6/view_xarm6_glb.py --no-show-tcp  # hide DH TCP marker
 """
 
 import argparse
+import json
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -30,6 +33,92 @@ FORCE_LOWER = [-50, -50, -32, -32, -32, -20]
 FORCE_UPPER = [50, 50, 32, 32, 32, 20]
 ARM_LINKS = ("link_base", "link1", "link2", "link3", "link4", "link5", "link6")
 HOME_QPOS = np.zeros(6)
+GRIPPER_OPEN = 0.0
+GRIPPER_CLOSE = 0.85
+GRIPPER_HOLD_STEPS = 200
+ALL_GRIPPER_JOINTS = (
+    "drive_joint",
+    "left_finger_joint",
+    "left_inner_knuckle_joint",
+    "right_outer_knuckle_joint",
+    "right_finger_joint",
+    "right_inner_knuckle_joint",
+)
+GRIPPER_LINKS = (
+    "xarm_gripper_base_link",
+    "left_outer_knuckle",
+    "left_finger",
+    "left_inner_knuckle",
+    "right_outer_knuckle",
+    "right_finger",
+    "right_inner_knuckle",
+)
+DEBUG_LOG = Path(__file__).resolve().parents[2] / ".cursor" / "debug-a21d90.log"
+
+
+def _debug_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # #region agent log
+    payload = {
+        "sessionId": "a21d90",
+        "runId": "viewer-gripper",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    with DEBUG_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload) + "\n")
+    # #endregion
+
+
+def _try_resolve_link(robot, name: str):
+    available = {link.name.split("/")[-1]: link for link in robot.links}
+    return available.get(name)
+
+
+def _is_gripper_vgeom(link_name: str, mesh_path: str) -> bool:
+    if link_name in GRIPPER_LINKS:
+        return True
+    return link_name == "link6" and mesh_path.endswith("base.glb")
+
+
+def _log_gripper_vgeoms(robot) -> None:
+    # Genesis merges xarm_gripper_base_link into link6; use link6 as base reference.
+    base_link = _try_resolve_link(robot, "xarm_gripper_base_link") or _try_resolve_link(robot, "link6")
+    base_pos = _to_numpy3(base_link.get_pos()) if base_link is not None else np.zeros(3)
+    for vg in robot.vgeoms:
+        link_name = vg.link.name.split("/")[-1]
+        mesh_path = str((vg.metadata or {}).get("mesh_path", ""))
+        if not _is_gripper_vgeom(link_name, mesh_path):
+            continue
+        tm = vg.get_trimesh()
+        verts = tm.vertices
+        extent_mm = ((verts.max(0) - verts.min(0)) * 1000).tolist()
+        link = _try_resolve_link(robot, link_name)
+        rel_base_mm = None
+        if link is not None:
+            link_pos = _to_numpy3(link.get_pos())
+            mesh_world = link_pos + verts.mean(0)
+            rel_base_mm = [round(float(x), 2) for x in (mesh_world - base_pos) * 1000]
+        _debug_log(
+            "A",
+            "view_xarm6_glb.py:_log_gripper_vgeoms",
+            f"gripper vgeom {link_name}",
+            {
+                "link": link_name,
+                "verts": int(len(verts)),
+                "extent_mm": [round(float(x), 3) for x in extent_mm],
+                "mesh": Path(mesh_path).name if mesh_path else "",
+                "world_centroid_rel_base_mm": rel_base_mm,
+            },
+        )
+
+
+def _to_numpy3(pos) -> np.ndarray:
+    if hasattr(pos, "cpu"):
+        pos = pos.cpu().numpy()
+    return np.asarray(pos).reshape(-1)[:3]
 
 
 def _link_world_positions(robot) -> dict[str, list[float]]:
@@ -60,6 +149,35 @@ def _setup_arm_pd(robot, dof_idx: list[int]) -> None:
 def _hold_home(robot, dof_idx: list[int]) -> None:
     robot.set_dofs_position(HOME_QPOS[: len(dof_idx)], dof_idx)
     robot.control_dofs_position(HOME_QPOS[: len(dof_idx)], dof_idx)
+
+
+def _setup_gripper_pd(robot, gripper_dof_idx: list[int], all_gripper_dof_idx: list[int]) -> None:
+    active_dofs = all_gripper_dof_idx or gripper_dof_idx
+    n_grip = len(active_dofs)
+    robot.set_dofs_kp(np.full(n_grip, 30.0), active_dofs)
+    robot.set_dofs_kv(np.full(n_grip, 6.0), active_dofs)
+    robot.set_dofs_force_range(np.full(n_grip, -50.0), np.full(n_grip, 50.0), active_dofs)
+    robot.set_dofs_damping(np.full(n_grip, 0.05), active_dofs)
+    robot.set_dofs_frictionloss(np.zeros(n_grip), active_dofs)
+
+
+def _set_gripper_pose(robot, gripper_dof_idx: list[int], all_gripper_dof_idx: list[int], value: float) -> None:
+    active_dofs = all_gripper_dof_idx or gripper_dof_idx
+    target = np.full(len(active_dofs), value)
+    robot.set_dofs_position(target, active_dofs)
+    robot.control_dofs_position(target, active_dofs)
+
+
+def _control_gripper_pose(robot, gripper_dof_idx: list[int], all_gripper_dof_idx: list[int], value: float) -> None:
+    active_dofs = all_gripper_dof_idx or gripper_dof_idx
+    target = np.full(len(active_dofs), value)
+    robot.set_dofs_position(target, active_dofs, zero_velocity=False)
+    robot.control_dofs_position(target, active_dofs)
+
+
+def _gripper_demo_target(step: int) -> float:
+    phase = (step // GRIPPER_HOLD_STEPS) % 2
+    return GRIPPER_CLOSE if phase else GRIPPER_OPEN
 
 
 def _resolve_link(robot, name: str):
@@ -96,18 +214,12 @@ def _fk_link6_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
     return links_pos[0, idx].cpu().numpy()
 
 
-def _to_numpy3(pos) -> np.ndarray:
-    if hasattr(pos, "cpu"):
-        pos = pos.cpu().numpy()
-    return np.asarray(pos).reshape(-1)[:3]
-
-
 def run_diagnose() -> None:
     """Headless: compare GLB vs STL URDF link poses and print visual surface flags."""
     enable_glb_pbr_surfaces()
     gs.init(backend=gs.gpu)
     stl_path = xarm6_urdf("xarm6_1305.urdf")
-    glb_path = xarm6_1305_visual_glb_urdf(with_g2=False)
+    glb_path = xarm6_1305_visual_glb_urdf(with_gripper_g2=False)
 
     def load_robot(urdf_path: str, use_glb: bool = False):
         scene = gs.Scene(show_viewer=False, sim_options=gs.options.SimOptions(dt=0.01))
@@ -177,7 +289,17 @@ def run_diagnose() -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="View xArm6 1305 GLB model")
-    parser.add_argument("--g2", action="store_true", help="Include Gripper G2 visual URDF")
+    parser.add_argument("--gripper-g2", action="store_true", help="Include Gripper G2 visual URDF")
+    parser.add_argument(
+        "--movable",
+        action="store_true",
+        help="Use per-link G2 GLB visuals (required for gripper animation)",
+    )
+    parser.add_argument(
+        "--gripper-demo",
+        action="store_true",
+        help="Cycle drive_joint open/close (requires --gripper-g2 --movable)",
+    )
     parser.add_argument("--pd", action="store_true", help="Run simple joint PD motion demo")
     parser.add_argument("--headless", action="store_true", help="Run without viewer")
     parser.add_argument("--diagnose", action="store_true", help="Headless alignment diagnostic")
@@ -188,12 +310,17 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.movable and not args.gripper_g2:
+        parser.error("--movable requires --gripper-g2")
+    if args.gripper_demo and not args.movable:
+        parser.error("--gripper-demo requires --movable")
+
     if args.diagnose:
         run_diagnose()
         return
 
     enable_glb_pbr_surfaces()
-    urdf_path = xarm6_1305_visual_glb_urdf(with_g2=args.g2)
+    urdf_path = xarm6_1305_visual_glb_urdf(with_gripper_g2=args.gripper_g2, movable=args.movable)
     print(f"Loading: {urdf_path}")
 
     gs.init(backend=gs.gpu)
@@ -222,10 +349,20 @@ def main():
         tcp_marker = _add_tcp_marker(scene)
     scene.build()
 
+    if args.gripper_g2 and args.movable:
+        _log_gripper_vgeoms(robot)
+
     print(f"DOFs: {robot.n_dofs}, Links: {robot.n_links}")
 
     joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
     arm_dof_idx = [joint_map[n].dofs_idx_local[0] for n in JOINT_NAMES if n in joint_map]
+    gripper_dof_idx: list[int] = []
+    all_gripper_dof_idx: list[int] = []
+    if "drive_joint" in joint_map:
+        gripper_dof_idx = [joint_map["drive_joint"].dofs_idx_local[0]]
+        all_gripper_dof_idx = [
+            joint_map[n].dofs_idx_local[0] for n in ALL_GRIPPER_JOINTS if n in joint_map
+        ]
     ee_link = _resolve_link(robot, EE_LINK_NAME)
     if tcp_marker is not None:
         print(f"TCP marker: {EE_LINK_NAME} (DH flange, no tool)")
@@ -233,12 +370,16 @@ def main():
     if arm_dof_idx:
         _setup_arm_pd(robot, arm_dof_idx)
         _hold_home(robot, arm_dof_idx)
-        for _ in range(100):
-            if tcp_marker is not None:
-                _update_tcp_marker(tcp_marker, ee_link)
-            scene.step()
+    if args.gripper_demo and gripper_dof_idx:
+        _setup_gripper_pd(robot, gripper_dof_idx, all_gripper_dof_idx)
+        _set_gripper_pose(robot, gripper_dof_idx, all_gripper_dof_idx, GRIPPER_OPEN)
+        print("Gripper demo: all gripper joints open/close cycle")
+    for _ in range(100):
+        if tcp_marker is not None:
+            _update_tcp_marker(tcp_marker, ee_link)
+        scene.step()
 
-    if not args.pd:
+    if not args.pd and not args.gripper_demo:
         print("Viewer running (holding home pose). Close window or Ctrl+C to exit.")
         while True:
             if arm_dof_idx:
@@ -255,17 +396,35 @@ def main():
         np.array([-0.3, 0.2, -0.15, 0.3, -0.2, 0.1]),
         HOME_QPOS.copy(),
     ]
-    print("PD motion demo (looping)...")
+    if args.pd:
+        print("PD motion demo (looping)...")
+    elif args.gripper_demo:
+        print("Gripper open/close demo (looping)...")
     step = 0
     pose_idx = 0
     hold_steps = 300
+    last_gripper_phase = -1
     while True:
-        if step % hold_steps == 0:
+        if args.pd and step % hold_steps == 0:
             target = poses[pose_idx % len(poses)]
             if arm_dof_idx:
                 robot.control_dofs_position(target[: len(arm_dof_idx)], arm_dof_idx)
             pose_idx += 1
             print(f"  Target pose {pose_idx % len(poses)}: {target.round(2)}")
+        elif not args.pd and arm_dof_idx:
+            robot.control_dofs_position(HOME_QPOS[: len(arm_dof_idx)], arm_dof_idx)
+        if args.gripper_demo and gripper_dof_idx:
+            grip_phase = (step // GRIPPER_HOLD_STEPS) % 2
+            if grip_phase != last_gripper_phase:
+                label = "closed" if grip_phase else "open"
+                print(f"  Gripper target: {label} ({GRIPPER_CLOSE if grip_phase else GRIPPER_OPEN})")
+                last_gripper_phase = grip_phase
+            _control_gripper_pose(
+                robot,
+                gripper_dof_idx,
+                all_gripper_dof_idx,
+                _gripper_demo_target(step),
+            )
         if tcp_marker is not None:
             _update_tcp_marker(tcp_marker, ee_link)
         scene.step()

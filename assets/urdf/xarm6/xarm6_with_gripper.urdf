@@ -250,14 +250,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/base_link.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/base_link.STL"/>
       </geometry>
       <material name="White"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/base_link.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/base_link.STL"/>
       </geometry>
     </collision>
   </link>
@@ -279,14 +279,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/left_outer_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/left_outer_knuckle.STL"/>
       </geometry>
       <material name="Silver"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/left_outer_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/left_outer_knuckle.STL"/>
       </geometry>
     </collision>
   </link>
@@ -311,14 +311,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/left_finger.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/left_finger.STL"/>
       </geometry>
       <material name="Silver"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/left_finger.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/left_finger.STL"/>
       </geometry>
     </collision>
   </link>
@@ -344,14 +344,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/left_inner_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/left_inner_knuckle.STL"/>
       </geometry>
       <material name="Silver"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/left_inner_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/left_inner_knuckle.STL"/>
       </geometry>
     </collision>
   </link>
@@ -377,14 +377,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/right_outer_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/right_outer_knuckle.STL"/>
       </geometry>
       <material name="Silver"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/right_outer_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/right_outer_knuckle.STL"/>
       </geometry>
     </collision>
   </link>
@@ -410,14 +410,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/right_finger.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/right_finger.STL"/>
       </geometry>
       <material name="Silver"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/right_finger.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/right_finger.STL"/>
       </geometry>
     </collision>
   </link>
@@ -443,14 +443,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/right_inner_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/right_inner_knuckle.STL"/>
       </geometry>
       <material name="Silver"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="meshes/gripper/right_inner_knuckle.STL"/>
+        <mesh filename="../gripper_g2/meshes/collision/right_inner_knuckle.STL"/>
       </geometry>
     </collision>
   </link>

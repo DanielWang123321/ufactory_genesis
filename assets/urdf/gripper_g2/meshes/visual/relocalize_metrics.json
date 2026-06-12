@@ -1,0 +1,311 @@
+[
+  {
+    "file": "gripper_g2_static_link5.glb",
+    "scope": "link5",
+    "source": "gripper_g2_movable.glb",
+    "parts": 39,
+    "mean_surface_mm": 10.21,
+    "geom_centroid_vs_stl_mm": 17.74,
+    "flange_gap_mm": 0.0,
+    "ee_link": "link5",
+    "alignment": "outer_ring_mating_face",
+    "z_ee_outer_ring_m": 2e-05,
+    "z_g2_outer_ring_before_m": 0.004371,
+    "z_g2_center_boss_before_m": -0.003567,
+    "z_g2_center_boss_after_m": -0.007919,
+    "z_shift_mm": -4.351,
+    "xy_shift_mm": [
+      -1.815,
+      -0.59
+    ],
+    "ee_ring_xy_mm": [
+      -0.901,
+      1.96
+    ],
+    "ring_gap_after_mm": 0.0
+  },
+  {
+    "file": "gripper_g2_static_link6.glb",
+    "scope": "link6",
+    "source": "gripper_g2_movable.glb",
+    "parts": 39,
+    "mean_surface_mm": 10.08,
+    "geom_centroid_vs_stl_mm": 18.4,
+    "flange_gap_mm": 0.0,
+    "ee_link": "link6",
+    "alignment": "outer_ring_mating_face",
+    "z_ee_outer_ring_m": 0.00033,
+    "z_g2_outer_ring_before_m": 0.004371,
+    "z_g2_center_boss_before_m": -0.003567,
+    "z_g2_center_boss_after_m": -0.007608,
+    "z_shift_mm": -4.041,
+    "xy_shift_mm": [
+      -3.48,
+      1.761
+    ],
+    "ee_ring_xy_mm": [
+      -2.566,
+      4.31
+    ],
+    "ring_gap_after_mm": 0.0
+  },
+  {
+    "file": "gripper_g2_static_link7.glb",
+    "scope": "link7",
+    "source": "gripper_g2_movable.glb",
+    "parts": 39,
+    "mean_surface_mm": 10.71,
+    "geom_centroid_vs_stl_mm": 17.7,
+    "flange_gap_mm": 0.0,
+    "ee_link": "link7",
+    "alignment": "outer_ring_mating_face",
+    "z_ee_outer_ring_m": -4.3e-05,
+    "z_g2_outer_ring_before_m": 0.004371,
+    "z_g2_center_boss_before_m": -0.003567,
+    "z_g2_center_boss_after_m": -0.007982,
+    "z_shift_mm": -4.414,
+    "xy_shift_mm": [
+      -0.909,
+      -0.565
+    ],
+    "ee_ring_xy_mm": [
+      0.005,
+      1.985
+    ],
+    "ring_gap_after_mm": 0.0
+  },
+  {
+    "file": "left_outer_knuckle.glb",
+    "scope": "shared",
+    "source": "gripper_g2.glb",
+    "method": "scene_graph_pose_static_ref",
+    "labeled_vertices": 2369,
+    "static_parts_in": 39,
+    "nodes": [
+      "support_l",
+      "support_dot_l"
+    ],
+    "parts": 1,
+    "verts": 4842,
+    "mean_surface_mm": 1.4,
+    "geom_centroid_vs_stl_mm": 0.68,
+    "candidate_mean_surface_mm": {
+      "static_vertex_stl_cloud": 3.64,
+      "semantic_genesis_centroid": 11.5,
+      "scene_graph_pose_static_ref": 1.4
+    },
+    "link_local_visual_rpy_deg": [
+      0.0,
+      0.0,
+      90.0
+    ]
+  },
+  {
+    "file": "left_finger.glb",
+    "scope": "shared",
+    "source": "gripper_g2.glb",
+    "method": "semantic_genesis_centroid",
+    "labeled_vertices": 6262,
+    "static_parts_in": 39,
+    "nodes": [
+      "splint_l",
+      "splint_l_876957",
+      "splint_l_d1229c",
+      "splint_l_4924e8",
+      "splint_l_94ba8d",
+      "splint_dot_l"
+    ],
+    "parts": 1,
+    "verts": 10023,
+    "mean_surface_mm": 0.35,
+    "geom_centroid_vs_stl_mm": 0.0,
+    "candidate_mean_surface_mm": {
+      "static_vertex_stl_cloud": 20.41,
+      "semantic_genesis_centroid": 0.38
+    },
+    "link_local_visual_rpy_deg": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "file": "left_inner_knuckle.glb",
+    "scope": "shared",
+    "source": "gripper_g2.glb",
+    "method": "scene_graph_pose_static_ref",
+    "labeled_vertices": 3065,
+    "static_parts_in": 39,
+    "nodes": [
+      "tie_l",
+      "tie_dot_l"
+    ],
+    "parts": 1,
+    "verts": 2505,
+    "mean_surface_mm": 4.37,
+    "geom_centroid_vs_stl_mm": 6.42,
+    "candidate_mean_surface_mm": {
+      "static_vertex_stl_cloud": 5.2,
+      "semantic_genesis_centroid": 10.09,
+      "scene_graph_pose_static_ref": 4.37
+    },
+    "link_local_visual_rpy_deg": [
+      0.0,
+      0.0,
+      90.0
+    ]
+  },
+  {
+    "file": "right_outer_knuckle.glb",
+    "scope": "shared",
+    "source": "gripper_g2.glb",
+    "method": "scene_graph_pose_static_ref",
+    "labeled_vertices": 2951,
+    "static_parts_in": 39,
+    "nodes": [
+      "support_r",
+      "support_dot_r"
+    ],
+    "parts": 1,
+    "verts": 4836,
+    "mean_surface_mm": 1.41,
+    "geom_centroid_vs_stl_mm": 3.67,
+    "candidate_mean_surface_mm": {
+      "static_vertex_stl_cloud": 4.72,
+      "semantic_genesis_centroid": 11.35,
+      "scene_graph_pose_static_ref": 1.41
+    },
+    "link_local_visual_rpy_deg": [
+      0.0,
+      0.0,
+      90.0
+    ]
+  },
+  {
+    "file": "right_finger.glb",
+    "scope": "shared",
+    "source": "gripper_g2.glb",
+    "method": "semantic_genesis_centroid",
+    "labeled_vertices": 5640,
+    "static_parts_in": 39,
+    "nodes": [
+      "splint_r",
+      "splint_r_fd3f4d",
+      "splint_r_28cbee",
+      "splint_r_fb352a",
+      "splint_r_f6c0ef",
+      "splint_dot_r"
+    ],
+    "parts": 1,
+    "verts": 10019,
+    "mean_surface_mm": 0.38,
+    "geom_centroid_vs_stl_mm": 0.0,
+    "candidate_mean_surface_mm": {
+      "static_vertex_stl_cloud": 24.04,
+      "semantic_genesis_centroid": 0.33
+    },
+    "link_local_visual_rpy_deg": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "file": "right_inner_knuckle.glb",
+    "scope": "shared",
+    "source": "gripper_g2.glb",
+    "method": "scene_graph_pose_static_ref",
+    "labeled_vertices": 3326,
+    "static_parts_in": 39,
+    "nodes": [
+      "tie_r",
+      "tie_dot_r"
+    ],
+    "parts": 1,
+    "verts": 2507,
+    "mean_surface_mm": 2.51,
+    "geom_centroid_vs_stl_mm": 4.62,
+    "candidate_mean_surface_mm": {
+      "static_vertex_stl_cloud": 5.47,
+      "semantic_genesis_centroid": 9.78,
+      "scene_graph_pose_static_ref": 2.51
+    },
+    "link_local_visual_rpy_deg": [
+      0.0,
+      0.0,
+      90.0
+    ]
+  },
+  {
+    "file": "visual_glb/link5/base.glb",
+    "scope": "link5",
+    "source": "gripper_g2_static_link5.glb",
+    "verts": 25411,
+    "mean_surface_mm": 2.67,
+    "flange_gap_mm": 0.0,
+    "ee_link": "link5",
+    "alignment": "outer_ring_mating_face",
+    "z_ee_outer_ring_m": 2e-05,
+    "z_g2_outer_ring_before_m": 0.004371,
+    "z_g2_center_boss_before_m": -0.003567,
+    "z_g2_center_boss_after_m": -0.007919,
+    "z_shift_mm": -4.351,
+    "xy_shift_mm": [
+      -1.815,
+      -0.59
+    ],
+    "ee_ring_xy_mm": [
+      -0.901,
+      1.96
+    ],
+    "ring_gap_after_mm": 0.0
+  },
+  {
+    "file": "visual_glb/link6/base.glb",
+    "scope": "link6",
+    "source": "gripper_g2_static_link6.glb",
+    "verts": 25411,
+    "mean_surface_mm": 2.75,
+    "flange_gap_mm": 0.0,
+    "ee_link": "link6",
+    "alignment": "outer_ring_mating_face",
+    "z_ee_outer_ring_m": 0.00033,
+    "z_g2_outer_ring_before_m": 0.004371,
+    "z_g2_center_boss_before_m": -0.003567,
+    "z_g2_center_boss_after_m": -0.007608,
+    "z_shift_mm": -4.041,
+    "xy_shift_mm": [
+      -3.48,
+      1.761
+    ],
+    "ee_ring_xy_mm": [
+      -2.566,
+      4.31
+    ],
+    "ring_gap_after_mm": 0.0
+  },
+  {
+    "file": "visual_glb/link7/base.glb",
+    "scope": "link7",
+    "source": "gripper_g2_static_link7.glb",
+    "verts": 25411,
+    "mean_surface_mm": 2.54,
+    "flange_gap_mm": 0.0,
+    "ee_link": "link7",
+    "alignment": "outer_ring_mating_face",
+    "z_ee_outer_ring_m": -4.3e-05,
+    "z_g2_outer_ring_before_m": 0.004371,
+    "z_g2_center_boss_before_m": -0.003567,
+    "z_g2_center_boss_after_m": -0.007982,
+    "z_shift_mm": -4.414,
+    "xy_shift_mm": [
+      -0.909,
+      -0.565
+    ],
+    "ee_ring_xy_mm": [
+      0.005,
+      1.985
+    ],
+    "ring_gap_after_mm": 0.0
+  }
+]

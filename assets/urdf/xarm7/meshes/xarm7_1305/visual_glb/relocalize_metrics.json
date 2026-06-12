@@ -1,0 +1,74 @@
+[
+  {
+    "src_file": "link0.glb",
+    "file": "link_base.glb",
+    "parts": 4,
+    "materials_double_sided": true,
+    "verts": 25966,
+    "mean_surface_mm": 0.8,
+    "centroid_err_mm": 1.38
+  },
+  {
+    "src_file": "link1.glb",
+    "file": "link1.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 99746,
+    "mean_surface_mm": 0.04,
+    "centroid_err_mm": 0.03
+  },
+  {
+    "src_file": "link2.glb",
+    "file": "link2.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 23780,
+    "mean_surface_mm": 0.07,
+    "centroid_err_mm": 0.03
+  },
+  {
+    "src_file": "link3.glb",
+    "file": "link3.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 21888,
+    "mean_surface_mm": 0.1,
+    "centroid_err_mm": 0.01
+  },
+  {
+    "src_file": "link4.glb",
+    "file": "link4.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 38662,
+    "mean_surface_mm": 0.07,
+    "centroid_err_mm": 0.04
+  },
+  {
+    "src_file": "link5.glb",
+    "file": "link5.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 139133,
+    "mean_surface_mm": 0.07,
+    "centroid_err_mm": 0.04
+  },
+  {
+    "src_file": "link6.glb",
+    "file": "link6.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 89419,
+    "mean_surface_mm": 0.04,
+    "centroid_err_mm": 0.04
+  },
+  {
+    "src_file": "link7.glb",
+    "file": "link7.glb",
+    "parts": 5,
+    "materials_double_sided": true,
+    "verts": 31933,
+    "mean_surface_mm": 0.26,
+    "centroid_err_mm": 3.54
+  }
+]

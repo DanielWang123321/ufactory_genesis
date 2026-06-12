@@ -5,7 +5,7 @@ Usage examples:
     --robot-ip 192.168.1.60 \
     --real-ip 192.168.1.60 \
     --suffixes SUFFIX_A,SUFFIX_B \
-    --gen-script /path/to/xArm-Developer/xarm_ros2/xarm_description/config/kinematics/gen_kinematics_params.py \
+    --gen-script scripts/gen_kinematics_params.py \
     --log-dir logs/kinematics
 """
 

@@ -1,0 +1,137 @@
+[
+  {
+    "ee_link": "link5",
+    "output": "bio_gripper_g2_visual_link5.glb",
+    "verts": 15958,
+    "hole_fit_mm": 1.78,
+    "finger_dir": [
+      0.9644,
+      0.0047,
+      -0.2646
+    ],
+    "finger_dot_tcp": 0.7933,
+    "finger_y_abs": 0.0047,
+    "ring_gap_mm": 39.795,
+    "xy_ring_gap_mm": [
+      -16.22,
+      -4.12
+    ],
+    "stl_surface_mm": 37.62,
+    "pin_verts_mm": [
+      [
+        40.17,
+        -0.74,
+        1.54
+      ],
+      [
+        40.17,
+        -0.69,
+        1.54
+      ]
+    ],
+    "holes_mm": [
+      [
+        -1.07,
+        -24.2,
+        0.02
+      ],
+      [
+        -0.74,
+        22.84,
+        0.02
+      ]
+    ],
+    "pin_separation_mm": 45.26,
+    "z_shift_skipped_mm": 39.795
+  },
+  {
+    "ee_link": "link6",
+    "output": "bio_gripper_g2_visual_link6.glb",
+    "verts": 15958,
+    "hole_fit_mm": 1.59,
+    "finger_dir": [
+      0.9517,
+      0.0189,
+      -0.3065
+    ],
+    "finger_dot_tcp": 0.7657,
+    "finger_y_abs": 0.0189,
+    "ring_gap_mm": 39.795,
+    "xy_ring_gap_mm": [
+      -16.17,
+      22.69
+    ],
+    "stl_surface_mm": 40.17,
+    "pin_verts_mm": [
+      [
+        -41.11,
+        -1.08,
+        -3.98
+      ],
+      [
+        -41.12,
+        -1.12,
+        -3.98
+      ]
+    ],
+    "holes_mm": [
+      [
+        0.02,
+        16.11,
+        -5.5
+      ],
+      [
+        -0.11,
+        -18.12,
+        -5.5
+      ]
+    ],
+    "pin_separation_mm": 45.26,
+    "z_shift_skipped_mm": 39.795
+  },
+  {
+    "ee_link": "link7",
+    "output": "bio_gripper_g2_visual_link7.glb",
+    "verts": 15958,
+    "hole_fit_mm": 1.73,
+    "finger_dir": [
+      0.966,
+      -0.0171,
+      0.2581
+    ],
+    "finger_dot_tcp": 0.992,
+    "finger_y_abs": 0.0171,
+    "ring_gap_mm": 0.0,
+    "xy_ring_gap_mm": [
+      -27.65,
+      10.38
+    ],
+    "stl_surface_mm": 18.03,
+    "pin_verts_mm": [
+      [
+        -41.08,
+        -1.29,
+        -1.56
+      ],
+      [
+        -41.08,
+        -1.24,
+        -1.56
+      ]
+    ],
+    "holes_mm": [
+      [
+        -0.2,
+        -24.21,
+        -0.04
+      ],
+      [
+        0.17,
+        22.87,
+        -0.04
+      ]
+    ],
+    "pin_separation_mm": 45.26,
+    "z_shift_skipped_mm": -0.509
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "src_file": "link0.glb",
+    "file": "link_base.glb",
+    "parts": 2,
+    "materials_double_sided": true,
+    "verts": 60563,
+    "mean_surface_mm": 0.06,
+    "centroid_err_mm": 0.04,
+    "normal_dot": 0.721,
+    "extent_ratio_min": 1.0,
+    "extent_ratio_max": 1.0
+  },
+  {
+    "src_file": "link1.glb",
+    "file": "link1.glb",
+    "parts": 2,
+    "materials_double_sided": true,
+    "verts": 53843,
+    "mean_surface_mm": 0.05,
+    "centroid_err_mm": 0.02,
+    "normal_dot": 0.82,
+    "extent_ratio_min": 1.0,
+    "extent_ratio_max": 1.001
+  },
+  {
+    "src_file": "link2.glb",
+    "file": "link2.glb",
+    "parts": 2,
+    "materials_double_sided": true,
+    "verts": 88321,
+    "mean_surface_mm": 0.83,
+    "centroid_err_mm": 0.45,
+    "normal_dot": 0.93,
+    "extent_ratio_min": 1.001,
+    "extent_ratio_max": 1.01
+  },
+  {
+    "src_file": "link3.glb",
+    "file": "link3.glb",
+    "parts": 2,
+    "materials_double_sided": true,
+    "verts": 91682,
+    "mean_surface_mm": 0.06,
+    "centroid_err_mm": 0.01,
+    "normal_dot": 0.866,
+    "extent_ratio_min": 1.0,
+    "extent_ratio_max": 1.0
+  },
+  {
+    "src_file": "link4.glb",
+    "file": "link4.glb",
+    "parts": 3,
+    "materials_double_sided": true,
+    "verts": 65425,
+    "mean_surface_mm": 0.05,
+    "centroid_err_mm": 0.19,
+    "normal_dot": 0.832,
+    "extent_ratio_min": 1.0,
+    "extent_ratio_max": 1.0
+  },
+  {
+    "src_file": "link5.glb",
+    "file": "link5.glb",
+    "parts": 1,
+    "materials_double_sided": true,
+    "verts": 56071,
+    "mean_surface_mm": 0.05,
+    "centroid_err_mm": 0.45,
+    "normal_dot": 0.963,
+    "extent_ratio_min": 1.0,
+    "extent_ratio_max": 1.0
+  },
+  {
+    "src_file": "link6.glb",
+    "file": "link6.glb",
+    "parts": 1,
+    "materials_double_sided": true,
+    "verts": 53137,
+    "mean_surface_mm": 0.71,
+    "centroid_err_mm": 1.59,
+    "normal_dot": 0.338,
+    "extent_ratio_min": 1.006,
+    "extent_ratio_max": 1.026
+  }
+]

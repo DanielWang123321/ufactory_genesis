@@ -3,6 +3,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .cursor/
+experience/
 logs/
+assets/urdf/*/kinematics/user/*.yaml
+assets/urdf/*/*_calib.urdf
 *.patch
 .DS_Store
+agents.md

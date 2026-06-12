@@ -1,0 +1,350 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="xarm5_1305_g2_visual">
+  <material name="Black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="Red">
+    <color rgba="0.8 0.0 0.0 1.0" />
+  </material>
+  <material name="White">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="Silver">
+    <color rgba="0.753 0.753 0.753 1.0" />
+  </material>
+  <link name="world" />
+  <joint name="world_joint" type="fixed">
+    <parent link="world" />
+    <child link="link_base" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link name="link_base">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.00218 -0.00023 0.08604" />
+      <mass value="1.95" />
+      <inertia ixx="0.004805" ixy="-8.33E-06" ixz="0.00026847" iyy="0.0050349" iyz="7.23E-06" izz="0.0025418" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/visual_glb/link_base.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/collision/link_base.obj" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00013 0.0294 -0.01239" />
+      <mass value="2.3849" />
+      <inertia ixx="0.005705" ixy="1.056e-05" ixz="-2.642e-05" iyy="0.00489488" iyz="-0.000890795" izz="0.00334846" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/visual_glb/link1.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/collision/link1.obj" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint1" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.267" />
+    <parent link="link_base" />
+    <child link="link1" />
+    <axis xyz="0 0 1" />
+    <limit effort="50" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="10" friction="1" />
+  </joint>
+  <link name="link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.03788 -0.2254 0.03447" />
+      <mass value="2.164" />
+      <inertia ixx="0.0278053" ixy="0.0048865" ixz="0.000656695" iyy="0.00551739" iyz="-0.00466808" izz="0.02692536" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/visual_glb/link2.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/collision/link2.obj" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint2" type="revolute">
+    <origin rpy="-1.5708 0 0" xyz="0 0 0" />
+    <parent link="link1" />
+    <child link="link2" />
+    <axis xyz="0 0 1" />
+    <limit effort="50" lower="-2.059" upper="2.0944" velocity="3.14" />
+    <dynamics damping="10" friction="1" />
+  </joint>
+  <link name="link3">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.06883 0.22985 0.00102" />
+      <mass value="2.121" />
+      <inertia ixx="0.0373639" ixy="-0.00417385" ixz="0.00143647" iyy="0.0058447" iyz="0.0075398" izz="0.0359236" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/visual_glb/link3.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/collision/link3.obj" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint3" type="revolute">
+    <origin rpy="0 0 0" xyz="0.0535 -0.2845 0" />
+    <parent link="link2" />
+    <child link="link3" />
+    <axis xyz="0 0 1" />
+    <limit effort="30" lower="-3.927" upper="0.19198" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link4">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.06489 0.03122 0.00319" />
+      <mass value="1.3169" />
+      <inertia ixx="0.00144315" ixy="-0.000455133" ixz="0.000291878" iyy="0.0018275" iyz="0.000132545" izz="0.00231563" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/visual_glb/link4.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/collision/link4.obj" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint4" type="revolute">
+    <origin rpy="0 0 0" xyz="0.0775 0.3425 0" />
+    <parent link="link3" />
+    <child link="link4" />
+    <axis xyz="0 0 1" />
+    <limit effort="20" lower="-1.69297" upper="3.141592653589793" velocity="3.14" />
+    <dynamics damping="3" friction="1" />
+  </joint>
+  <link name="link5">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 -0.00677 -0.01098" />
+      <mass value="0.17" />
+      <inertia ixx="9.3e-05" ixy="-0.0" ixz="-0.0" iyy="5.87e-05" iyz="-3.6e-06" izz="0.000132" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/visual_glb/link5.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="Silver" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/xarm5_1305/collision/link5.obj" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint5" type="revolute">
+    <origin rpy="-1.5708 0 0" xyz="0.076 0.097 0" />
+    <parent link="link4" />
+    <child link="link5" />
+    <axis xyz="0 0 1" />
+    <limit effort="20" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="3" friction="1" />
+  </joint>
+  <link name="gripper_g2_visual">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/visual/gripper_g2_static_link5.glb" />
+      </geometry>
+      <material name="White" />
+    </visual>
+  </link>
+  <joint name="gripper_g2_visual_fix" type="fixed">
+    <parent link="link5" />
+    <child link="gripper_g2_visual" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <joint name="gripper_fix" type="fixed">
+    <parent link="link5" />
+    <child link="xarm_gripper_base_link" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link name="xarm_gripper_base_link">
+    <inertial>
+      <origin xyz="-0.00065489 -0.0018497 0.048028" rpy="0 0 0" />
+      <mass value="0.54156" />
+      <inertia ixx="0.00047106" ixy="3.9292e-07" ixz="2.6537e-06" iyy="0.00033072" iyz="-1.0975e-05" izz="0.00025642" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="left_outer_knuckle">
+    <inertial>
+      <origin xyz="0 0.01175 0.02625" rpy="0 0 0" />
+      <mass value="0.033618" />
+      <inertia ixx="1.9111e-05" ixy="0" ixz="0" iyy="6.6256e-06" iyz="-7.3008e-06" izz="1.3185e-05" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/left_outer_knuckle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="drive_joint" type="revolute">
+    <parent link="xarm_gripper_base_link" />
+    <child link="left_outer_knuckle" />
+    <origin xyz="0 0.035 0.059098" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="0" upper="0.85" effort="50" velocity="2" />
+    <dynamics damping="1.0" friction="0.5" />
+  </joint>
+  <link name="left_finger">
+    <inertial>
+      <origin xyz="0 -0.01425 0.03" rpy="0 0 0" />
+      <mass value="0.048304" />
+      <inertia ixx="1.7493e-05" ixy="0" ixz="0" iyy="1.7225e-05" iyz="4.6433e-06" izz="5.1466e-06" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/left_finger.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="left_finger_joint" type="revolute">
+    <parent link="left_outer_knuckle" />
+    <child link="left_finger" />
+    <origin xyz="0 0.035465 0.042039" rpy="0 0 0" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.85" effort="50" velocity="2" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <link name="left_inner_knuckle">
+    <inertial>
+      <origin xyz="0 0.011 0.035" rpy="0 0 0" />
+      <mass value="0.023013" />
+      <inertia ixx="6.0949e-06" ixy="0" ixz="0" iyy="6.0196e-06" iyz="-2.7532e-06" izz="5.0786e-06" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/left_inner_knuckle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="left_inner_knuckle_joint" type="revolute">
+    <parent link="xarm_gripper_base_link" />
+    <child link="left_inner_knuckle" />
+    <origin xyz="0 0.02 0.074098" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="0" upper="0.85" effort="50" velocity="2" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <link name="right_outer_knuckle">
+    <inertial>
+      <origin xyz="0 -0.01175 0.02625" rpy="0 0 0" />
+      <mass value="0.033618" />
+      <inertia ixx="1.9111e-05" ixy="0" ixz="0" iyy="6.6256e-06" iyz="7.3008e-06" izz="1.3185e-05" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/right_outer_knuckle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_outer_knuckle_joint" type="revolute">
+    <parent link="xarm_gripper_base_link" />
+    <child link="right_outer_knuckle" />
+    <origin xyz="0 -0.035 0.059098" rpy="0 0 0" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.85" effort="50" velocity="2" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <link name="right_finger">
+    <inertial>
+      <origin xyz="0 0.01425 0.03" rpy="0 0 0" />
+      <mass value="0.048304" />
+      <inertia ixx="1.7493e-05" ixy="0" ixz="0" iyy="1.7225e-05" iyz="-4.6435e-06" izz="5.1466e-06" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/right_finger.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_finger_joint" type="revolute">
+    <parent link="right_outer_knuckle" />
+    <child link="right_finger" />
+    <origin xyz="0 -0.035465 0.042039" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="0" upper="0.85" effort="50" velocity="2" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <link name="right_inner_knuckle">
+    <inertial>
+      <origin xyz="0 -0.011 0.035" rpy="0 0 0" />
+      <mass value="0.023013" />
+      <inertia ixx="6.0949e-06" ixy="0" ixz="0" iyy="6.0196e-06" iyz="2.7531e-06" izz="5.0784e-06" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../gripper_g2/meshes/collision/right_inner_knuckle.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="right_inner_knuckle_joint" type="revolute">
+    <parent link="xarm_gripper_base_link" />
+    <child link="right_inner_knuckle" />
+    <origin xyz="0 -0.02 0.074098" rpy="0 0 0" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0" upper="0.85" effort="50" velocity="2" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <link name="link_tcp" />
+  <joint name="joint_tcp" type="fixed">
+    <parent link="xarm_gripper_base_link" />
+    <child link="link_tcp" />
+    <origin xyz="0 0 0.172" rpy="0 0 0" />
+  </joint>
+</robot>
