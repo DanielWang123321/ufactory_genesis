@@ -10,3 +10,4 @@ assets/urdf/*/*_calib.urdf
 *.patch
 .DS_Store
 agents.md
+.cache/

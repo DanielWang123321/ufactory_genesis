@@ -6,7 +6,7 @@ UFACTORY robot models and Genesis simulation tests.
 
 ## Setup
 
-Tested with Python 3.13, Genesis 1.1.1, PyTorch 2.12.0+cu130.
+Tested with Python 3.13, Genesis 1.1.2, PyTorch 2.12.0+cu130.
 
 ```bash
 conda activate py313
@@ -76,6 +76,8 @@ python scripts/relocalize_arm_glb.py --robot <profile_key>
 Load in code: `ufactory.paths.robot_visual_glb_urdf(robot_key, with_gripper_g2=..., with_bio_gripper_g2=..., movable=...)`.
 
 Verify: `python examples/verify_robot.py --robot <key>`, `PYTHONPATH=. python scripts/verify_gripper_g2_assets.py`.
+
+Gripper G2 linkage debug captures: `python scripts/capture_gripper_keyframes.py` (writes `.cursor/gripper_keyframes/`).
 
 ## Kinematic calibration (SN rules)
 

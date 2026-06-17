@@ -123,6 +123,14 @@ KNUCKLE_GLBS = frozenset(
     }
 )
 INNER_KNUCKLE_GLBS = frozenset({"left_inner_knuckle.glb", "right_inner_knuckle.glb"})
+# gripper_g2_movable.glb Genesis bake indices for whole knuckle solids (link6 frame).
+# Discovered via scripts/diagnose_knuckle_pipeline.py (large parts, max_ext >= 20mm).
+STATIC_KNUCKLE_PART_INDICES: dict[str, list[int]] = {
+    "left_outer_knuckle.glb": [6],
+    "left_inner_knuckle.glb": [7],
+    "right_outer_knuckle.glb": [4],
+    "right_inner_knuckle.glb": [5],
+}
 # Legacy coarse yaw; used only when knuckle ICP is rejected.
 LINK_LOCAL_VISUAL_RPY_DEG: dict[str, tuple[float, float, float]] = {
     "left_outer_knuckle.glb": (0.0, 0.0, 90.0),
@@ -130,7 +138,6 @@ LINK_LOCAL_VISUAL_RPY_DEG: dict[str, tuple[float, float, float]] = {
     "left_inner_knuckle.glb": (0.0, 0.0, 90.0),
     "right_inner_knuckle.glb": (0.0, 0.0, 90.0),
 }
-DEBUG_LOG = Path(__file__).resolve().parents[1] / ".cursor" / "debug-a21d90.log"
 # Genesis semantic gripper bake uses X for left/right; URDF uses Y. Shell + fingers get Rz90.
 SEMANTIC_FRAME_ROT = Rotation.from_euler("z", 90, degrees=True).as_matrix()
 
@@ -404,25 +411,6 @@ def _align_centroid_to_stl(mesh: trimesh.Trimesh, stl_ref: trimesh.Trimesh) -> t
     return out
 
 
-def _debug_log_icp(glb_name: str, meta: dict) -> None:
-    # #region agent log
-    import time as _t
-
-    payload = {
-        "sessionId": "a21d90",
-        "runId": "post-fix",
-        "hypothesisId": "ICP",
-        "location": "relocalize_gripper_glb.py:_align_knuckle_icp",
-        "message": f"knuckle ICP {glb_name}",
-        "data": {"glb": glb_name, **meta},
-        "timestamp": int(_t.time() * 1000),
-    }
-    DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with DEBUG_LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(payload) + "\n")
-    # #endregion
-
-
 def _icp_rigid_once(candidate: trimesh.Trimesh, stl_ref: trimesh.Trimesh) -> tuple[trimesh.Trimesh, float, dict]:
     """Single rigid ICP step (no scale); inner knuckle semantic mesh can exceed extent guard."""
     matrix, _cost = trimesh.registration.mesh_other(
@@ -525,9 +513,7 @@ def _align_knuckle_icp(
         out = _apply_link_local_visual_rotation(mesh, glb_name)
         report["fallback"] = "link_local_visual_rpy"
         report["surf_after_fallback_mm"] = round(mean_surface_distance(out, stl_ref) * 1000, 2)
-        _debug_log_icp(glb_name, report)
         return out, report
-    _debug_log_icp(glb_name, report)
     return best_mesh, report
 
 
@@ -575,35 +561,6 @@ def _semantic_movable_candidates(
     base_mesh = base_aligned[0].copy()
     # Same link6-frame Rz90 as fingers/knuckles (about origin), not a separate centroid pivot.
     base_mesh.vertices = base_mesh.vertices @ semantic_rot.T
-    # #region agent log
-    import time as _t
-
-    _shell_log = {
-        "sessionId": "a21d90",
-        "runId": "post-fix-verify",
-        "hypothesisId": "S4",
-        "location": "relocalize_gripper_glb.py:_semantic_movable_candidates",
-        "message": "base shell Rz90 applied",
-        "data": {
-            "base_vs_static_case_mm": round(
-                float(
-                    mean_surface_distance(
-                        base_mesh,
-                        static_refs["base.glb"],
-                    )
-                    * 1000
-                ),
-                2,
-            )
-            if static_refs and "base.glb" in static_refs
-            else None,
-        },
-        "timestamp": int(_t.time() * 1000),
-    }
-    DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with DEBUG_LOG.open("a", encoding="utf-8") as _f:
-        _f.write(json.dumps(_shell_log) + "\n")
-    # #endregion
     out["base.glb"] = base_mesh
     for glb_name, indices in GENESIS_PART_INDICES.items():
         if glb_name == "base.glb":
@@ -644,6 +601,53 @@ def _mesh_quality_metrics(mesh: trimesh.Trimesh) -> dict:
         "open_edge_ratio": round(open_edges / max(unique_edges, 1), 4),
         "watertight": bool(mesh.is_watertight),
     }
+
+
+def _bounds_volume(mesh: trimesh.Trimesh) -> float:
+    ext = mesh.bounds[1] - mesh.bounds[0]
+    return float(np.prod(np.maximum(ext, 1e-9)))
+
+
+def _volume_ratio_vs_stl(mesh: trimesh.Trimesh, stl_ref: trimesh.Trimesh) -> float:
+    return _bounds_volume(mesh) / max(_bounds_volume(stl_ref), 1e-12)
+
+
+def _knuckle_candidate_score(
+    mesh: trimesh.Trimesh,
+    stl_ref: trimesh.Trimesh,
+    method: str,
+) -> float:
+    """Lower is better. Penalize low volume coverage and vertex-split burrs."""
+    surf_mm = mean_surface_distance(mesh, stl_ref) * 1000
+    vol_ratio = _volume_ratio_vs_stl(mesh, stl_ref)
+    score = float(surf_mm)
+    if vol_ratio < 0.85:
+        score += 25.0 * (0.85 - vol_ratio)
+    if method == "static_vertex_stl_cloud":
+        oer = _mesh_quality_metrics(mesh)["open_edge_ratio"]
+        if oer > 0.05:
+            score += 40.0 * oer
+    return score
+
+
+def _knuckle_from_static_whole(
+    static_parts_eef: list[trimesh.Trimesh],
+    link_poses_link6: dict[str, np.ndarray],
+) -> dict[str, trimesh.Trimesh]:
+    """Whole high-res static baked part(s) per knuckle, URDF link-local frame."""
+    out: dict[str, trimesh.Trimesh] = {}
+    for glb_name in KNUCKLE_GLBS:
+        indices = STATIC_KNUCKLE_PART_INDICES[glb_name]
+        parts = [static_parts_eef[i].copy() for i in indices]
+        mesh_link6 = trimesh.util.concatenate(parts)
+        mesh_local = _split_assembly_to_link(mesh_link6, link_poses_link6[glb_name])
+        stl_ref = trimesh.load(GRIPPER_STL_DIR / STL_FOR_GLB[glb_name], force="mesh")
+        mesh_local = _align_centroid_to_stl(mesh_local, stl_ref)
+        aligned, meta = refine_rigid_to_stl([mesh_local], stl_ref)
+        if not meta.get("rejected"):
+            mesh_local = aligned[0]
+        out[glb_name] = mesh_local
+    return out
 
 
 def _procrustes_rigid(source_pts: np.ndarray, target_pts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -807,6 +811,7 @@ def relocalize_shared_movable_parts(
         static_refs=static_candidates,
     )
     scene_knuckles = _knuckle_candidates_from_scene(baked_parts, link_poses_link6)
+    static_whole_knuckles = _knuckle_from_static_whole(static_parts_eef, link_poses_link6)
     knuckle_pose_aligned: dict[str, trimesh.Trimesh] = {}
     knuckle_align_meta: dict[str, dict] = {}
     for glb_name in KNUCKLE_GLBS:
@@ -816,49 +821,6 @@ def relocalize_shared_movable_parts(
         )
         knuckle_pose_aligned[glb_name] = aligned
         knuckle_align_meta[glb_name] = meta
-    # #region agent log
-    import time as _tq
-
-    _burr_log = {
-        "sessionId": "a21d90",
-        "runId": "knuckle-burr-fix",
-        "hypothesisId": "B1",
-        "location": "relocalize_gripper_glb.py:relocalize_shared_movable_parts",
-        "message": "knuckle mesh quality static vs scene_pose",
-        "data": {
-            glb: {
-                "static_vertex": _mesh_quality_metrics(static_candidates[glb]),
-                "scene_pose_aligned": _mesh_quality_metrics(knuckle_pose_aligned[glb]),
-                "icp": knuckle_align_meta[glb],
-            }
-            for glb in sorted(KNUCKLE_GLBS)
-        },
-        "timestamp": int(_tq.time() * 1000),
-    }
-    with DEBUG_LOG.open("a", encoding="utf-8") as _bf:
-        _bf.write(json.dumps(_burr_log) + "\n")
-    # #endregion
-    # #region agent log
-    import time as _t
-
-    _dbg = Path(__file__).resolve().parents[1] / ".cursor" / "debug-906f67.log"
-    _dbg.parent.mkdir(parents=True, exist_ok=True)
-    with _dbg.open("a", encoding="utf-8") as _f:
-        _f.write(
-            json.dumps(
-                {
-                    "sessionId": "906f67",
-                    "runId": "relocalize",
-                    "hypothesisId": "L",
-                    "location": "relocalize_gripper_glb.py:relocalize_movable_parts",
-                    "message": "static vertex label counts",
-                    "data": vertex_counts,
-                    "timestamp": int(_t.time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
 
     if not dry_run:
         VISUAL_GLB_OUT.mkdir(parents=True, exist_ok=True)
@@ -872,52 +834,43 @@ def relocalize_shared_movable_parts(
             "semantic_genesis_centroid": semantic_candidates[glb_name],
         }
         if glb_name in KNUCKLE_GLBS:
+            candidates["scene_graph_link_local"] = scene_knuckles[glb_name]
+            candidates["static_whole_link_local"] = static_whole_knuckles[glb_name]
             candidates["scene_graph_pose_static_ref"] = knuckle_pose_aligned[glb_name]
         candidate_metrics = {
             name: _candidate_surface_mm(mesh, stl_ref) for name, mesh in candidates.items()
         }
-        # Knuckles: scene-graph topology + rigid pose from static vertex split (no cut burrs).
         if glb_name in KNUCKLE_GLBS:
-            method = "scene_graph_pose_static_ref"
-            combined = knuckle_pose_aligned[glb_name]
+            knuckle_scores = {
+                name: round(_knuckle_candidate_score(mesh, stl_ref, name), 3)
+                for name, mesh in candidates.items()
+            }
+            method = min(knuckle_scores, key=knuckle_scores.get)
+            combined = candidates[method]
         else:
             method = "semantic_genesis_centroid"
             combined = candidates[method]
-        # #region agent log
-        if glb_name in KNUCKLE_GLBS:
-            import time as _tk
-
-            _kn_log = {
-                "sessionId": "a21d90",
-                "runId": "post-fix-verify",
-                "hypothesisId": "K3",
-                "location": "relocalize_gripper_glb.py:relocalize_movable_parts",
-                "message": f"knuckle pick {glb_name}",
-                "data": {
-                    "glb": glb_name,
-                    "method": method,
-                    **{f"{k}_vs_stl_mm": v for k, v in candidate_metrics.items()},
-                },
-                "timestamp": int(_tk.time() * 1000),
-            }
-            with DEBUG_LOG.open("a", encoding="utf-8") as _kf:
-                _kf.write(json.dumps(_kn_log) + "\n")
-        # #endregion
+            knuckle_scores = {}
         surf_mm = mean_surface_distance(combined, stl_ref) * 1000
         geom_centroid_mm = float(np.linalg.norm(combined.centroid - stl_ref.centroid) * 1000)
         entry = {
             "file": glb_name,
             "scope": "shared",
             "source": (
-                MOVABLE_SRC.name
-                if method == "scene_graph_pose_static_ref"
+                "gripper_g2_movable.glb"
+                if method == "static_whole_link_local"
                 else (
-                    "gripper_g2_static_link6.glb"
-                    if method == "static_vertex_stl_cloud"
-                    else MOVABLE_SRC.name
+                    MOVABLE_SRC.name
+                    if method in ("scene_graph_pose_static_ref", "scene_graph_link_local")
+                    else (
+                        "gripper_g2_static_link6.glb"
+                        if method == "static_vertex_stl_cloud"
+                        else MOVABLE_SRC.name
+                    )
                 )
             ),
             "method": method,
+            "static_knuckle_part_indices": list(STATIC_KNUCKLE_PART_INDICES.get(glb_name, [])),
             "labeled_vertices": vertex_counts[glb_name],
             "static_parts_in": len(static_parts_eef),
             "nodes": node_names,
@@ -928,6 +881,7 @@ def relocalize_shared_movable_parts(
             "candidate_mean_surface_mm": {
                 name: round(value, 2) for name, value in candidate_metrics.items()
             },
+            **({"candidate_scores": knuckle_scores} if knuckle_scores else {}),
             "link_local_visual_rpy_deg": list(LINK_LOCAL_VISUAL_RPY_DEG.get(glb_name, (0.0, 0.0, 0.0))),
             **({"knuckle_icp": knuckle_icp_reports[glb_name]} if glb_name in knuckle_icp_reports else {}),
         }

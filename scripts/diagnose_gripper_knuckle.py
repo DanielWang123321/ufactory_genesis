@@ -31,7 +31,8 @@ from relocalize_gripper_glb import (
     _apply_rigid_to_parts,
     _gripper_link_poses_in_link6,
     _split_assembly_to_link,
-    align_parts_to_link6_flange,
+    _ee_glb_path,
+    align_parts_to_ee_flange,
     relocalize_static_assembly,
     _movable_from_static_parts,
     refine_rigid_to_stl,
@@ -106,13 +107,17 @@ def _set_gripper(robot, scene, q: float) -> None:
     dofs = [jm[n].dofs_idx_local[0] for n in joints if n in jm]
     if dofs:
         robot.set_dofs_position(np.full(len(dofs), q), dofs)
+        robot.control_dofs_position(np.full(len(dofs), q), dofs)
     for _ in range(30):
         scene.step()
 
 
 def _runtime_knuckle_vs_static() -> None:
     enable_glb_pbr_surfaces()
-    gs.init(backend=gs.gpu, logging_level="error")
+    try:
+        gs.init(backend=gs.gpu, logging_level="error")
+    except gs.GenesisException:
+        gs.init(backend=gs.cpu, logging_level="error")
     scenes = {}
     for movable in (False, True):
         sc = gs.Scene(show_viewer=False, sim_options=gs.options.SimOptions(dt=0.01))
@@ -137,13 +142,19 @@ def _runtime_knuckle_vs_static() -> None:
         )
         pm_knuckle = _sample_cloud(scenes[True][0], set(KNUCKLE_NAMES))
         pm_finger = _sample_cloud(scenes[True][0], finger_names)
-        # knuckle-only region in static: label via nearest static knuckle ref
-        _init_genesis()
+        # knuckle-only region in static: whole-part reference in link6 frame
+        try:
+            _init_genesis()
+        except gs.GenesisException:
+            pass
         _, static_parts = relocalize_static_assembly("link6", True)
         link_poses = _gripper_link_poses_in_link6()
+        from relocalize_gripper_glb import _knuckle_from_static_whole
+
+        static_knuckle_meshes = _knuckle_from_static_whole(static_parts, link_poses)
         static_knuckle_pts = []
         for glb in KNUCKLE_NAMES:
-            sk = _movable_from_static_parts(static_parts, link_poses)[0][glb]
+            sk = static_knuckle_meshes[glb]
             T = link_poses[glb]
             v = sk.vertices
             ones = np.ones((len(v), 1))
@@ -164,9 +175,12 @@ def _runtime_knuckle_vs_static() -> None:
 
 
 def _pipeline_knuckle_variants() -> None:
-    _init_genesis()
+    try:
+        _init_genesis()
+    except gs.GenesisException:
+        pass
     baked = bake_glb_genesis_parts(MOVABLE_SRC)
-    _, flange = align_parts_to_link6_flange([baked[0].copy()])
+    _, flange = align_parts_to_ee_flange([baked[0].copy()], _ee_glb_path("link6"), "link6")
     base_t = np.array(
         [flange["xy_shift_mm"][0] / 1000, flange["xy_shift_mm"][1] / 1000, flange["z_shift_mm"] / 1000]
     )

@@ -6,7 +6,7 @@ UFACTORY 机器人模型与 Genesis 仿真测试。
 
 ## 环境安装
 
-已在 Python 3.13、Genesis 1.1.1、PyTorch 2.12.0+cu130 下验证。
+已在 Python 3.13、Genesis 1.1.2、PyTorch 2.12.0+cu130 下验证。
 
 ```bash
 conda activate py313
@@ -76,6 +76,8 @@ python scripts/relocalize_arm_glb.py --robot <profile_key>
 代码加载：`ufactory.paths.robot_visual_glb_urdf(robot_key, with_gripper_g2=..., with_bio_gripper_g2=..., movable=...)`。
 
 校验：`python examples/verify_robot.py --robot <key>`、`PYTHONPATH=. python scripts/verify_gripper_g2_assets.py`。
+
+调试 Gripper G2 连杆对齐：`python scripts/capture_gripper_keyframes.py`（输出至 `.cursor/gripper_keyframes/`）。
 
 ## 运动学补偿（按 SN 判断）
 

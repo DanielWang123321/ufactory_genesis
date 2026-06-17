@@ -4,7 +4,7 @@
     "scope": "link5",
     "source": "gripper_g2_movable.glb",
     "parts": 39,
-    "mean_surface_mm": 10.21,
+    "mean_surface_mm": 9.33,
     "geom_centroid_vs_stl_mm": 17.74,
     "flange_gap_mm": 0.0,
     "ee_link": "link5",
@@ -29,7 +29,7 @@
     "scope": "link6",
     "source": "gripper_g2_movable.glb",
     "parts": 39,
-    "mean_surface_mm": 10.08,
+    "mean_surface_mm": 9.41,
     "geom_centroid_vs_stl_mm": 18.4,
     "flange_gap_mm": 0.0,
     "ee_link": "link6",
@@ -54,7 +54,7 @@
     "scope": "link7",
     "source": "gripper_g2_movable.glb",
     "parts": 39,
-    "mean_surface_mm": 10.71,
+    "mean_surface_mm": 9.73,
     "geom_centroid_vs_stl_mm": 17.7,
     "flange_gap_mm": 0.0,
     "ee_link": "link7",
@@ -77,8 +77,11 @@
   {
     "file": "left_outer_knuckle.glb",
     "scope": "shared",
-    "source": "gripper_g2.glb",
-    "method": "scene_graph_pose_static_ref",
+    "source": "gripper_g2_movable.glb",
+    "method": "static_whole_link_local",
+    "static_knuckle_part_indices": [
+      6
+    ],
     "labeled_vertices": 2369,
     "static_parts_in": 39,
     "nodes": [
@@ -86,13 +89,22 @@
       "support_dot_l"
     ],
     "parts": 1,
-    "verts": 4842,
-    "mean_surface_mm": 1.4,
-    "geom_centroid_vs_stl_mm": 0.68,
+    "verts": 5915,
+    "mean_surface_mm": 1.14,
+    "geom_centroid_vs_stl_mm": 4.47,
     "candidate_mean_surface_mm": {
-      "static_vertex_stl_cloud": 3.64,
-      "semantic_genesis_centroid": 11.5,
-      "scene_graph_pose_static_ref": 1.4
+      "static_vertex_stl_cloud": 3.5,
+      "semantic_genesis_centroid": 11.6,
+      "scene_graph_link_local": 1.69,
+      "static_whole_link_local": 1.22,
+      "scene_graph_pose_static_ref": 1.26
+    },
+    "candidate_scores": {
+      "static_vertex_stl_cloud": 38.153,
+      "semantic_genesis_centroid": 13.941,
+      "scene_graph_link_local": 22.943,
+      "static_whole_link_local": 1.146,
+      "scene_graph_pose_static_ref": 22.201
     },
     "link_local_visual_rpy_deg": [
       0.0,
@@ -105,23 +117,24 @@
     "scope": "shared",
     "source": "gripper_g2.glb",
     "method": "semantic_genesis_centroid",
+    "static_knuckle_part_indices": [],
     "labeled_vertices": 6262,
     "static_parts_in": 39,
     "nodes": [
       "splint_l",
-      "splint_l_876957",
-      "splint_l_d1229c",
-      "splint_l_4924e8",
-      "splint_l_94ba8d",
+      "splint_l_c5e950",
+      "splint_l_5355d8",
+      "splint_l_d6c573",
+      "splint_l_dbcfb0",
       "splint_dot_l"
     ],
     "parts": 1,
     "verts": 10023,
-    "mean_surface_mm": 0.35,
+    "mean_surface_mm": 0.37,
     "geom_centroid_vs_stl_mm": 0.0,
     "candidate_mean_surface_mm": {
-      "static_vertex_stl_cloud": 20.41,
-      "semantic_genesis_centroid": 0.38
+      "static_vertex_stl_cloud": 20.25,
+      "semantic_genesis_centroid": 0.37
     },
     "link_local_visual_rpy_deg": [
       0.0,
@@ -132,8 +145,11 @@
   {
     "file": "left_inner_knuckle.glb",
     "scope": "shared",
-    "source": "gripper_g2.glb",
-    "method": "scene_graph_pose_static_ref",
+    "source": "gripper_g2_movable.glb",
+    "method": "static_whole_link_local",
+    "static_knuckle_part_indices": [
+      7
+    ],
     "labeled_vertices": 3065,
     "static_parts_in": 39,
     "nodes": [
@@ -141,13 +157,22 @@
       "tie_dot_l"
     ],
     "parts": 1,
-    "verts": 2505,
-    "mean_surface_mm": 4.37,
-    "geom_centroid_vs_stl_mm": 6.42,
+    "verts": 2094,
+    "mean_surface_mm": 0.78,
+    "geom_centroid_vs_stl_mm": 0.22,
     "candidate_mean_surface_mm": {
-      "static_vertex_stl_cloud": 5.2,
-      "semantic_genesis_centroid": 10.09,
-      "scene_graph_pose_static_ref": 4.37
+      "static_vertex_stl_cloud": 5.15,
+      "semantic_genesis_centroid": 9.75,
+      "scene_graph_link_local": 1.93,
+      "static_whole_link_local": 0.74,
+      "scene_graph_pose_static_ref": 4.25
+    },
+    "candidate_scores": {
+      "static_vertex_stl_cloud": 34.958,
+      "semantic_genesis_centroid": 19.283,
+      "scene_graph_link_local": 23.178,
+      "static_whole_link_local": 0.803,
+      "scene_graph_pose_static_ref": 14.484
     },
     "link_local_visual_rpy_deg": [
       0.0,
@@ -158,8 +183,11 @@
   {
     "file": "right_outer_knuckle.glb",
     "scope": "shared",
-    "source": "gripper_g2.glb",
-    "method": "scene_graph_pose_static_ref",
+    "source": "gripper_g2_movable.glb",
+    "method": "static_whole_link_local",
+    "static_knuckle_part_indices": [
+      4
+    ],
     "labeled_vertices": 2951,
     "static_parts_in": 39,
     "nodes": [
@@ -167,13 +195,22 @@
       "support_dot_r"
     ],
     "parts": 1,
-    "verts": 4836,
-    "mean_surface_mm": 1.41,
-    "geom_centroid_vs_stl_mm": 3.67,
+    "verts": 6058,
+    "mean_surface_mm": 1.18,
+    "geom_centroid_vs_stl_mm": 4.84,
     "candidate_mean_surface_mm": {
-      "static_vertex_stl_cloud": 4.72,
-      "semantic_genesis_centroid": 11.35,
-      "scene_graph_pose_static_ref": 1.41
+      "static_vertex_stl_cloud": 4.5,
+      "semantic_genesis_centroid": 11.12,
+      "scene_graph_link_local": 1.69,
+      "static_whole_link_local": 1.21,
+      "scene_graph_pose_static_ref": 1.49
+    },
+    "candidate_scores": {
+      "static_vertex_stl_cloud": 38.917,
+      "semantic_genesis_centroid": 13.841,
+      "scene_graph_link_local": 22.943,
+      "static_whole_link_local": 1.272,
+      "scene_graph_pose_static_ref": 11.258
     },
     "link_local_visual_rpy_deg": [
       0.0,
@@ -186,14 +223,15 @@
     "scope": "shared",
     "source": "gripper_g2.glb",
     "method": "semantic_genesis_centroid",
+    "static_knuckle_part_indices": [],
     "labeled_vertices": 5640,
     "static_parts_in": 39,
     "nodes": [
       "splint_r",
-      "splint_r_fd3f4d",
-      "splint_r_28cbee",
-      "splint_r_fb352a",
-      "splint_r_f6c0ef",
+      "splint_r_bc3058",
+      "splint_r_60cabe",
+      "splint_r_3f591c",
+      "splint_r_4f8bde",
       "splint_dot_r"
     ],
     "parts": 1,
@@ -201,8 +239,8 @@
     "mean_surface_mm": 0.38,
     "geom_centroid_vs_stl_mm": 0.0,
     "candidate_mean_surface_mm": {
-      "static_vertex_stl_cloud": 24.04,
-      "semantic_genesis_centroid": 0.33
+      "static_vertex_stl_cloud": 24.03,
+      "semantic_genesis_centroid": 0.31
     },
     "link_local_visual_rpy_deg": [
       0.0,
@@ -213,8 +251,11 @@
   {
     "file": "right_inner_knuckle.glb",
     "scope": "shared",
-    "source": "gripper_g2.glb",
-    "method": "scene_graph_pose_static_ref",
+    "source": "gripper_g2_movable.glb",
+    "method": "static_whole_link_local",
+    "static_knuckle_part_indices": [
+      5
+    ],
     "labeled_vertices": 3326,
     "static_parts_in": 39,
     "nodes": [
@@ -222,13 +263,22 @@
       "tie_dot_r"
     ],
     "parts": 1,
-    "verts": 2507,
-    "mean_surface_mm": 2.51,
-    "geom_centroid_vs_stl_mm": 4.62,
+    "verts": 2106,
+    "mean_surface_mm": 0.6,
+    "geom_centroid_vs_stl_mm": 1.28,
     "candidate_mean_surface_mm": {
-      "static_vertex_stl_cloud": 5.47,
-      "semantic_genesis_centroid": 9.78,
-      "scene_graph_pose_static_ref": 2.51
+      "static_vertex_stl_cloud": 5.18,
+      "semantic_genesis_centroid": 9.32,
+      "scene_graph_link_local": 1.93,
+      "static_whole_link_local": 0.62,
+      "scene_graph_pose_static_ref": 2.48
+    },
+    "candidate_scores": {
+      "static_vertex_stl_cloud": 35.005,
+      "semantic_genesis_centroid": 18.835,
+      "scene_graph_link_local": 23.178,
+      "static_whole_link_local": 0.669,
+      "scene_graph_pose_static_ref": 14.028
     },
     "link_local_visual_rpy_deg": [
       0.0,
@@ -241,7 +291,7 @@
     "scope": "link5",
     "source": "gripper_g2_static_link5.glb",
     "verts": 25411,
-    "mean_surface_mm": 2.67,
+    "mean_surface_mm": 2.69,
     "flange_gap_mm": 0.0,
     "ee_link": "link5",
     "alignment": "outer_ring_mating_face",
@@ -265,7 +315,7 @@
     "scope": "link6",
     "source": "gripper_g2_static_link6.glb",
     "verts": 25411,
-    "mean_surface_mm": 2.75,
+    "mean_surface_mm": 2.88,
     "flange_gap_mm": 0.0,
     "ee_link": "link6",
     "alignment": "outer_ring_mating_face",
@@ -289,7 +339,7 @@
     "scope": "link7",
     "source": "gripper_g2_static_link7.glb",
     "verts": 25411,
-    "mean_surface_mm": 2.54,
+    "mean_surface_mm": 2.6,
     "flange_gap_mm": 0.0,
     "ee_link": "link7",
     "alignment": "outer_ring_mating_face",
