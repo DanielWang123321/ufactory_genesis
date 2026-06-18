@@ -1,0 +1,6 @@
+# Optional LeRobot ACT pipeline (install in same env as Genesis py313)
+lerobot>=0.3.0
+imageio>=2.34
+imageio-ffmpeg>=0.5
+scipy>=1.11
+opencv-python-headless>=4.8

@@ -16,7 +16,7 @@
       -16.22,
       -4.12
     ],
-    "stl_surface_mm": 37.62,
+    "stl_surface_mm": 37.01,
     "pin_verts_mm": [
       [
         40.17,
@@ -42,7 +42,25 @@
       ]
     ],
     "pin_separation_mm": 45.26,
-    "z_shift_skipped_mm": 39.795
+    "z_shift_skipped_mm": 39.795,
+    "partition_counts": {
+      "base": 1,
+      "right_finger": 2,
+      "left_finger": 1
+    },
+    "finger_method": "ee_align_link_frame",
+    "static_open_edge_ratio": 0.549,
+    "base_open_edge_ratio": 0.1141,
+    "base_extents_mm": [
+      96.64,
+      165.08,
+      45.57
+    ],
+    "left_open_edge_ratio": 0.2085,
+    "right_open_edge_ratio": 0.2114,
+    "base_verts": 91148,
+    "left_finger_verts": 30162,
+    "right_finger_verts": 25982
   },
   {
     "ee_link": "link6",
@@ -61,7 +79,7 @@
       -16.17,
       22.69
     ],
-    "stl_surface_mm": 40.17,
+    "stl_surface_mm": 40.1,
     "pin_verts_mm": [
       [
         -41.11,
@@ -87,7 +105,25 @@
       ]
     ],
     "pin_separation_mm": 45.26,
-    "z_shift_skipped_mm": 39.795
+    "z_shift_skipped_mm": 39.795,
+    "partition_counts": {
+      "base": 1,
+      "right_finger": 2,
+      "left_finger": 1
+    },
+    "finger_method": "ee_align_link_frame",
+    "static_open_edge_ratio": 0.549,
+    "base_open_edge_ratio": 0.1141,
+    "base_extents_mm": [
+      96.78,
+      165.14,
+      45.57
+    ],
+    "left_open_edge_ratio": 0.2114,
+    "right_open_edge_ratio": 0.2085,
+    "base_verts": 91148,
+    "left_finger_verts": 25982,
+    "right_finger_verts": 30162
   },
   {
     "ee_link": "link7",
@@ -97,26 +133,26 @@
     "finger_dir": [
       0.966,
       -0.0171,
-      0.2581
+      0.258
     ],
-    "finger_dot_tcp": 0.992,
+    "finger_dot_tcp": 0.9919,
     "finger_y_abs": 0.0171,
     "ring_gap_mm": 0.0,
     "xy_ring_gap_mm": [
       -27.65,
       10.38
     ],
-    "stl_surface_mm": 18.03,
+    "stl_surface_mm": 17.88,
     "pin_verts_mm": [
       [
         -41.08,
         -1.29,
-        -1.56
+        -1.57
       ],
       [
         -41.08,
         -1.24,
-        -1.56
+        -1.57
       ]
     ],
     "holes_mm": [
@@ -132,6 +168,24 @@
       ]
     ],
     "pin_separation_mm": 45.26,
-    "z_shift_skipped_mm": -0.509
+    "z_shift_skipped_mm": -0.509,
+    "partition_counts": {
+      "base": 1,
+      "right_finger": 2,
+      "left_finger": 1
+    },
+    "finger_method": "ee_align_link_frame",
+    "static_open_edge_ratio": 0.549,
+    "base_open_edge_ratio": 0.1254,
+    "base_extents_mm": [
+      97.48,
+      165.55,
+      45.57
+    ],
+    "left_open_edge_ratio": 0.2085,
+    "right_open_edge_ratio": 0.2114,
+    "base_verts": 44345,
+    "left_finger_verts": 30162,
+    "right_finger_verts": 25982
   }
 ]

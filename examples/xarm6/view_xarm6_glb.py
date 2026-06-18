@@ -8,11 +8,12 @@ Usage:
     python examples/xarm6/view_xarm6_glb.py --gripper-g2 --movable --gripper-demo
     python examples/xarm6/view_xarm6_glb.py --gripper-g2 --movable --pd --gripper-demo
     python examples/xarm6/view_xarm6_glb.py --diagnose   # headless alignment check
-    python examples/xarm6/view_xarm6_glb.py --no-show-tcp  # hide DH TCP marker
+    python examples/xarm6/view_xarm6_glb.py --show-tcp   # DH TCP debug marker
 """
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -24,9 +25,22 @@ import genesis as gs
 from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.paths import xarm6_1305_visual_glb_urdf, xarm6_urdf
 
+EXAMPLES_ROOT = Path(__file__).resolve().parents[1]
+if str(EXAMPLES_ROOT) not in sys.path:
+  sys.path.insert(0, str(EXAMPLES_ROOT))
+
+from _robot_viewer import (
+    _apply_kinematic_hold,
+    _disable_robot_pd,
+    _kinematic_step,
+    add_tcp_marker,
+    resolve_robot_link,
+    start_deferred_viewer,
+    update_tcp_marker,
+)
+
 JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
 EE_LINK_NAME = "link6"
-TCP_MARKER_RADIUS = 0.008
 PD_KP = [3000, 3000, 2000, 2000, 1000, 1000]
 PD_KV = [300, 300, 200, 200, 100, 100]
 FORCE_LOWER = [-50, -50, -32, -32, -32, -20]
@@ -180,31 +194,6 @@ def _gripper_demo_target(step: int) -> float:
     return GRIPPER_CLOSE if phase else GRIPPER_OPEN
 
 
-def _resolve_link(robot, name: str):
-    available = {link.name.split("/")[-1]: link for link in robot.links}
-    if name not in available:
-        raise KeyError(f"Link not found: {name}. Available: {sorted(available)}")
-    return available[name]
-
-
-def _add_tcp_marker(scene):
-    """Red sphere at DH TCP (link6 flange); visual only, no collision."""
-    return scene.add_entity(
-        gs.morphs.Sphere(
-            radius=TCP_MARKER_RADIUS,
-            fixed=True,
-            collision=False,
-        ),
-        surface=gs.surfaces.Rough(
-            diffuse_texture=gs.textures.ColorTexture(color=(1.0, 0.0, 0.0)),
-        ),
-    )
-
-
-def _update_tcp_marker(marker, ee_link) -> None:
-    marker.set_pos(ee_link.get_pos())
-
-
 def _fk_link6_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
     qpos_t = torch.tensor(qpos_np, dtype=torch.float32, device=gs.device)
     links_pos, _ = robot.forward_kinematics(qpos=qpos_t)
@@ -276,7 +265,7 @@ def run_diagnose() -> None:
         robot.set_dofs_position(HOME_QPOS[: len(arm_dof_idx)], arm_dof_idx)
         for _ in range(5):
             scene.step()
-    ee_link = _resolve_link(robot, EE_LINK_NAME)
+    ee_link = resolve_robot_link(robot, EE_LINK_NAME)
     qpos = robot.get_dofs_position()
     if hasattr(qpos, "cpu"):
         qpos = qpos.cpu().numpy()
@@ -304,9 +293,9 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without viewer")
     parser.add_argument("--diagnose", action="store_true", help="Headless alignment diagnostic")
     parser.add_argument(
-        "--no-show-tcp",
+        "--show-tcp",
         action="store_true",
-        help="Hide red DH TCP marker (link6 flange, default: shown)",
+        help="Show red DH TCP debug marker on link6 flange (default: hidden)",
     )
     args = parser.parse_args()
 
@@ -332,7 +321,7 @@ def main():
             max_FPS=60,
         ),
         sim_options=gs.options.SimOptions(dt=0.01),
-        show_viewer=not args.headless,
+        show_viewer=False,
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
     robot = scene.add_entity(
@@ -345,8 +334,8 @@ def main():
         surface=glb_view_surface(),
     )
     tcp_marker = None
-    if not args.no_show_tcp:
-        tcp_marker = _add_tcp_marker(scene)
+    if args.show_tcp and not args.headless:
+        tcp_marker = add_tcp_marker(scene)
     scene.build()
 
     if args.gripper_g2 and args.movable:
@@ -363,30 +352,75 @@ def main():
         all_gripper_dof_idx = [
             joint_map[n].dofs_idx_local[0] for n in ALL_GRIPPER_JOINTS if n in joint_map
         ]
-    ee_link = _resolve_link(robot, EE_LINK_NAME)
+    ee_link = resolve_robot_link(robot, EE_LINK_NAME)
     if tcp_marker is not None:
         print(f"TCP marker: {EE_LINK_NAME} (DH flange, no tool)")
 
-    if arm_dof_idx:
+    arm_kinematic_hold = not args.pd
+    idle_gripper_kinematic_hold = not args.gripper_demo
+    held_dof_idx: list[int] = []
+    if arm_kinematic_hold:
+        held_dof_idx.extend(arm_dof_idx)
+    if idle_gripper_kinematic_hold:
+        held_dof_idx.extend(all_gripper_dof_idx)
+    if held_dof_idx:
+        _disable_robot_pd(robot, sorted(set(held_dof_idx)))
+    if arm_kinematic_hold or idle_gripper_kinematic_hold:
+        _apply_kinematic_hold(
+            robot,
+            arm_dof_idx,
+            HOME_QPOS,
+            hold_arm=arm_kinematic_hold,
+            hold_gripper=idle_gripper_kinematic_hold,
+            all_gripper_dof_idx=all_gripper_dof_idx,
+            all_lite6_gripper_dof_idx=[],
+            all_bio_gripper_dof_idx=[],
+        )
+
+    if args.pd and arm_dof_idx:
         _setup_arm_pd(robot, arm_dof_idx)
         _hold_home(robot, arm_dof_idx)
     if args.gripper_demo and gripper_dof_idx:
         _setup_gripper_pd(robot, gripper_dof_idx, all_gripper_dof_idx)
         _set_gripper_pose(robot, gripper_dof_idx, all_gripper_dof_idx, GRIPPER_OPEN)
         print("Gripper demo: all gripper joints open/close cycle")
-    for _ in range(100):
+    warmup_steps = 3 if arm_kinematic_hold else 100
+    for _ in range(warmup_steps):
+        if args.pd and arm_dof_idx:
+            robot.control_dofs_position(HOME_QPOS[: len(arm_dof_idx)], arm_dof_idx)
         if tcp_marker is not None:
-            _update_tcp_marker(tcp_marker, ee_link)
-        scene.step()
+            update_tcp_marker(tcp_marker, ee_link)
+        _kinematic_step(
+            scene,
+            robot,
+            arm_kinematic_hold=arm_kinematic_hold,
+            idle_gripper_kinematic_hold=idle_gripper_kinematic_hold,
+            arm_dof_idx=arm_dof_idx,
+            home=HOME_QPOS,
+            all_gripper_dof_idx=all_gripper_dof_idx,
+            all_lite6_gripper_dof_idx=[],
+            all_bio_gripper_dof_idx=[],
+        )
+
+    if not args.headless:
+        start_deferred_viewer(scene)
 
     if not args.pd and not args.gripper_demo:
         print("Viewer running (holding home pose). Close window or Ctrl+C to exit.")
         while True:
-            if arm_dof_idx:
-                robot.control_dofs_position(HOME_QPOS[: len(arm_dof_idx)], arm_dof_idx)
             if tcp_marker is not None:
-                _update_tcp_marker(tcp_marker, ee_link)
-            scene.step()
+                update_tcp_marker(tcp_marker, ee_link)
+            _kinematic_step(
+                scene,
+                robot,
+                arm_kinematic_hold=arm_kinematic_hold,
+                idle_gripper_kinematic_hold=idle_gripper_kinematic_hold,
+                arm_dof_idx=arm_dof_idx,
+                home=HOME_QPOS,
+                all_gripper_dof_idx=all_gripper_dof_idx,
+                all_lite6_gripper_dof_idx=[],
+                all_bio_gripper_dof_idx=[],
+            )
             time.sleep(0.01)
         return
 
@@ -411,8 +445,6 @@ def main():
                 robot.control_dofs_position(target[: len(arm_dof_idx)], arm_dof_idx)
             pose_idx += 1
             print(f"  Target pose {pose_idx % len(poses)}: {target.round(2)}")
-        elif not args.pd and arm_dof_idx:
-            robot.control_dofs_position(HOME_QPOS[: len(arm_dof_idx)], arm_dof_idx)
         if args.gripper_demo and gripper_dof_idx:
             grip_phase = (step // GRIPPER_HOLD_STEPS) % 2
             if grip_phase != last_gripper_phase:
@@ -426,8 +458,18 @@ def main():
                 _gripper_demo_target(step),
             )
         if tcp_marker is not None:
-            _update_tcp_marker(tcp_marker, ee_link)
-        scene.step()
+            update_tcp_marker(tcp_marker, ee_link)
+        _kinematic_step(
+            scene,
+            robot,
+            arm_kinematic_hold=arm_kinematic_hold,
+            idle_gripper_kinematic_hold=idle_gripper_kinematic_hold,
+            arm_dof_idx=arm_dof_idx,
+            home=HOME_QPOS,
+            all_gripper_dof_idx=all_gripper_dof_idx,
+            all_lite6_gripper_dof_idx=[],
+            all_bio_gripper_dof_idx=[],
+        )
         step += 1
         time.sleep(0.01)
 

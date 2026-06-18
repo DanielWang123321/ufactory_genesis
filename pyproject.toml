@@ -5,8 +5,36 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "genesis-ufactory"
 version = "0.1.0"
-description = "UFACTORY robot models and Genesis simulation tests"
+description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "UFACTORY"},
+]
+maintainers = [
+    {name = "UFACTORY"},
+]
+keywords = ["ufactory", "xarm", "genesis", "simulation", "robotics", "urdf", "robot-learning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/ufactory/genesis-ufactory"
+Repository = "https://github.com/ufactory/genesis-ufactory"
+Issues = "https://github.com/ufactory/genesis-ufactory/issues"
+
+# NOTE: This project is designed for editable install (pip install -e .).
+# Assets (URDF, STL, GLB) live outside the Python package in assets/ and
+# are resolved relative to PROJECT_ROOT at runtime. For a standard pip
+# install, assets must be packaged via MANIFEST.in + package_data (future).
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -40,3 +40,15 @@ def test_verify_robot_headless(robot: str):
 def test_view_robot_headless(robot: str):
   result = _run([PYTHON, "examples/view_robot_glb.py", "--robot", robot, "--headless"])
   assert result.returncode == 0, result.stderr[-3000:]
+
+
+@pytest.mark.parametrize(
+  "args",
+  [
+    ["--robot", "xarm5_1305", "--bio-gripper-g2", "--movable", "--gripper-demo", "--headless"],
+    ["--robot", "xarm6_1305", "--gripper-g2", "--movable", "--gripper-demo", "--headless"],
+  ],
+)
+def test_view_robot_gripper_demo_headless(args: list[str]):
+  result = _run([PYTHON, "examples/view_robot_glb.py", *args])
+  assert result.returncode == 0, result.stderr[-3000:]

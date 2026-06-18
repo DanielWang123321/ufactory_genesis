@@ -1,10 +1,31 @@
 # ufactory_genesis
 
-UFACTORY robot models and Genesis simulation tests.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/version-0.1.0-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.1.2-lightgrey" alt="Genesis">
+</p>
 
-[中文文档](README.zh.md)
+UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, RL environments, and LeRobot integration.
 
-## Setup
+[中文文档](README.zh.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Supported Robots](#supported-robots)
+- [GLB Visual Preview](#glb-visual-preview)
+- [API Quick Reference](#api-quick-reference)
+- [Real-Robot Kinematic Calibration](#real-robot-kinematic-calibration-sn-rules)
+- [xArm 6 — Reference Robot](#xarm-6)
+- [Documentation](#documentation)
+- [Project Layout](#project-layout)
+- [Contributing](#contributing)
+- [License](#license)
+- [Citation](#citation)
+
+## Quick Start
 
 Tested with Python 3.13, Genesis 1.1.2, PyTorch 2.12.0+cu130.
 
@@ -18,25 +39,28 @@ pip install -e .
 
 export NUMBA_CACHE_DIR=~/.cache/numba
 python -c "import genesis, torch; print('OK', torch.__version__, 'cuda:', torch.cuda.is_available())"
+
+# Preview xArm 6 GLB model
+python examples/view_robot_glb.py --robot xarm6_1305
 ```
 
 ## Supported Robots
 
-| profile key | Model | Gripper G2 | Bio Gripper G2 |
-|-------------|-------|:----------:|:--------------:|
-| `xarm5_1305` | xArm 5 | ✓ | ✓ |
-| `xarm6_1305` | xArm 6 | ✓ | ✓ |
-| `xarm7_1305` | xArm 7 | ✓ | ✓ |
-| `uf850` | UF850 | ✓ | ✓ |
-| `lite6` | Lite6 | — | — |
+| profile key | Model | DOF | Gripper G2 | Bio Gripper G2 | Lite6 Gripper | Lite6 Vacuum |
+|-------------|-------|-----|:----------:|:--------------:|:-------------:|:------------:|
+| `xarm5_1305` | xArm 5 | 5 | ✓ | ✓ | — | — |
+| `xarm6_1305` | xArm 6 | 6 | ✓ | ✓ | — | — |
+| `xarm7_1305` | xArm 7 | 7 | ✓ | ✓ | — | — |
+| `uf850` | UF850 | 6 | ✓ | ✓ | — | — |
+| `lite6` | Lite6 | 6 | — | — | ✓ | ✓ |
 
-Two distinct G2 accessories: **Gripper G2** (parallel jaw, `assets/urdf/gripper_g2/`) and **Bio Gripper G2** (bio gripper, `assets/urdf/bio_gripper/`). Mutually exclusive at load time; Lite6 supports neither.
+**Gripper G2** and **Bio Gripper G2** are shared xArm/UF850 accessories. **Lite6 Gripper** (parallel jaw) and **Lite6 Vacuum Gripper** are Lite6-only. End-effector flags are mutually exclusive.
 
-See [docs/multi_robot_compatibility.md](docs/multi_robot_compatibility.md).
+Capabilities, known limits, and asset maintenance: [docs/multi_robot_compatibility.md](docs/multi_robot_compatibility.md).
 
 ## GLB Visual Preview
 
-High-fidelity GLB rendering; collision and physics still use STL meshes. Single entry point:
+High-fidelity GLB rendering with PBR material preservation; collision and physics still use STL meshes. Single entry point:
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -50,6 +74,13 @@ python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --gr
 
 # Bio Gripper G2 (static)
 python examples/view_robot_glb.py --robot uf850 --bio-gripper-g2
+
+# Lite6 parallel gripper (static / movable open-close)
+python examples/view_robot_glb.py --robot lite6 --lite6-gripper
+python examples/view_robot_glb.py --robot lite6 --lite6-gripper --movable --gripper-demo
+
+# Lite6 vacuum gripper (static)
+python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 ```
 
 Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are thin wrappers around `view_robot_glb.py --robot <key>`; the xArm6 script also adds `--diagnose`.
@@ -57,29 +88,57 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 | Flag | Product | Effect |
 |------|---------|--------|
 | `--gripper-g2` | Gripper G2 | Load combo URDF |
-| `--movable` | Gripper G2 | Per-link GLBs (required for animation) |
-| `--gripper-demo` | Gripper G2 | Cycle `drive_joint` open ↔ close |
+| `--movable` | Gripper G2 / Lite6 Gripper / Bio Gripper G2 | Per-link GLBs (required for animation) |
+| `--gripper-demo` | Gripper G2 / Lite6 Gripper | Cycle open ↔ close |
 | `--bio-gripper-g2` | Bio Gripper G2 | Static GLB overlay |
-| `--pd` | Arm | Joint pose demo |
-| `--no-show-tcp` | Arm | Hide red TCP marker on EE flange |
+| `--lite6-gripper` | Lite6 Gripper | Lite6 parallel gripper combo URDF |
+| `--lite6-vacuum-gripper` | Lite6 Vacuum Gripper | Lite6 vacuum static GLB |
+| `--pd` | Arm | Joint motion demo (50 deg/s smooth interp, not stiff PD) |
+| `--show-tcp` | Arm | Show red TCP debug marker on EE flange (default: hidden) |
 
-After updating source GLBs:
+## API Quick Reference
 
-```bash
-python scripts/relocalize_gripper_glb.py           # Gripper G2
-python scripts/generate_gripper_g2_combo_urdf.py
-python scripts/relocalize_bio_gripper_glb.py       # Bio Gripper G2
-python scripts/generate_bio_gripper_combo_urdf.py
-python scripts/relocalize_arm_glb.py --robot <profile_key>
+```python
+import ufactory
 ```
 
-Load in code: `ufactory.paths.robot_visual_glb_urdf(robot_key, with_gripper_g2=..., with_bio_gripper_g2=..., movable=...)`.
+### Robot Registry
 
-Verify: `python examples/verify_robot.py --robot <key>`, `PYTHONPATH=. python scripts/verify_gripper_g2_assets.py`.
+| Function / Object | Description |
+|-------------------|-------------|
+| `ufactory.ROBOT_PROFILES` | Dict of all supported robot `RobotModelSpec` entries |
+| `ufactory.get_robot_profile(key)` | Get `RobotModelSpec` by profile key |
+| `ufactory.get_profile_key_for_robot_name(name)` | Resolve robot name to profile key |
+| `ufactory.arm_link_names(profile)` | Link name tuple for a robot profile |
+| `ufactory.joint_names(profile)` | Joint name tuple for a robot profile |
 
-Gripper G2 linkage debug captures: `python scripts/capture_gripper_keyframes.py` (writes `.cursor/gripper_keyframes/`).
+### Paths
 
-## Kinematic calibration (SN rules)
+| Function | Description |
+|----------|-------------|
+| `ufactory.robot_urdf(key)` | Absolute path to default URDF |
+| `ufactory.robot_visual_glb_urdf(key, ...)` | URDF with GLB visuals, optionally with end-effector |
+| `ufactory.robot_assets(name)` | `Path` to robot asset directory |
+| `ufactory.xarm6_1305_urdf()` | Convenience: xArm6 1305 URDF |
+| `ufactory.lite6_visual_glb_urdf(...)` | Convenience: Lite6 GLB URDF with gripper options |
+
+### Kinematic Calibration
+
+| Function | Description |
+|----------|-------------|
+| `ufactory.load_kinematics_yaml(path)` | Load joint offsets from kinematics YAML |
+| `ufactory.build_calibrated_urdf(base, kinematics)` | Generate URDF with calibrated joint origins |
+| `ufactory.parse_sn_model_code(sn)` | Extract 4-digit model code from serial number |
+| `ufactory.has_per_unit_kinematics_calibration(sn, name)` | Check if SN-based calibration applies |
+
+### GLB PBR Visuals
+
+| Function | Description |
+|----------|-------------|
+| `ufactory.enable_glb_pbr_surfaces()` | Monkey-patch Genesis to preserve PBR materials from GLB |
+| `ufactory.glb_view_surface()` | Default double-sided surface for non-GLB geometries |
+
+## Real-Robot Kinematic Calibration (SN Rules)
 
 Per-unit firmware calibration eligibility (SN positions 3–6, four-digit model code):
 
@@ -99,48 +158,50 @@ python examples/fk_verify_robot.py --robot xarm6_1305 --ip <ip> --kinematics-suf
 python examples/ik_verify_robot.py --robot lite6 --ip <ip> --kinematics-suffix <suffix>
 ```
 
-## xArm 6 Verification
+## xArm 6
 
-```bash
-export NUMBA_CACHE_DIR=~/.cache/numba
+xArm 6 is the reference robot in this repo, with kinematics/dynamics verification and reach / grasp-place RL examples. Full guide: [docs/xarm6_verification.md](docs/xarm6_verification.md).
 
-python examples/xarm6/verify_xarm6.py
-python examples/xarm6/verify_xarm6_dynamics.py
+## Documentation
 
-# Optional: FK/IK vs real robot (SN ≥ 1304 needs per-unit calibration)
-python scripts/gen_kinematics_params.py 192.168.1.60 xi1305
-python examples/xarm6/fk_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
-python examples/xarm6/ik_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
-
-python examples/xarm6/xarm6_reach_train.py -B 1 --max_iterations 10
-python examples/xarm6/xarm6_grasp_place_train.py -B 1 --max_iterations 5
-
-pytest tests/test_xarm6_smoke.py -v
-```
-
-Details: [docs/xarm6_verification.md](docs/xarm6_verification.md).
-
-Simulation URDFs: `xarm6_1305.urdf` (6 DOF), `xarm6_with_gripper.urdf` (12 DOF, default for RL).
-
-## Roadmap
-
-- [ ] **Multi-robot kinematics verification** — Extend xArm6 FK/IK real-robot comparison and SN calibration to Lite6, UF850, and xArm5/7
-- [ ] **Multi-robot dynamics verification** — Generalize xArm6 dynamics checks to all models (URDF inertias and Genesis physics)
-- [ ] **RL environment verification** — Formalize reach / grasp-place obs, rewards, and collision checks in pytest
-- [ ] **RL training examples** — Reproducible training configs and eval demos (rsl-rl-lib)
-- [ ] **LeRobot integration** — Bridge sim policies to real-robot data collection and deployment
-
-> xArm6 is the reference implementation today; verification depth for other models is still expanding.
+| Doc | Contents |
+|-----|----------|
+| [docs/multi_robot_compatibility.md](docs/multi_robot_compatibility.md) | Multi-robot capabilities, asset pipeline, maintainer relocalize |
+| [docs/xarm6_verification.md](docs/xarm6_verification.md) | xArm6 FK/IK, dynamics, RL, pytest |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Project roadmap |
 
 ## Project Layout
 
 ```
-assets/urdf/
-  xarm6/ xarm5/ xarm7/ lite6/ uf850/ gripper_g2/ bio_gripper/
-ufactory/                   # paths, robot_registry, kinematics, GLB PBR
-examples/xarm6/             # xArm6 verify, RL, viewer
-examples/{lite6,uf850,xarm5,xarm7}/
-examples/view_robot_glb.py  # generic GLB preview
-scripts/                    # vendor, relocalize, bio combo
-tests/
+ufactory/             # Core Python package (robot registry, paths, kinematics, GLB)
+assets/urdf/          # Robot URDFs, STL collision, GLB visual meshes
+assets/scenes/        # Simulation scene assets (textures, props)
+examples/             # Usage examples (viewer, FK/IK, RL, LeRobot)
+scripts/              # Asset generation and maintenance scripts
+tests/                # Pytest test suite
+docs/                 # Extended documentation
+```
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding style, asset pipeline, and pull request process.
+
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md) code of conduct.
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+## Citation
+
+If you use genesis-ufactory in your research, please cite:
+
+```bibtex
+@misc{genesis-ufactory,
+  author = {UFACTORY},
+  title = {genesis-ufactory: UFACTORY Robot Models for Genesis Simulation},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/ufactory/genesis-ufactory}
+}
 ```

@@ -168,3 +168,14 @@ python examples/xarm6/verify_xarm6.py --robot-model assets/urdf/xarm6/xarm6_1305
 Helper: `ufactory.paths.robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=True|False, movable=True|False)` (alias: `xarm6_1305_visual_glb_urdf`).
 
 Other robots: `python examples/view_robot_glb.py --robot uf850 --gripper-g2` (see [multi_robot_compatibility.md](multi_robot_compatibility.md)).
+
+### Gripper G2 linkage debugging
+
+Capture open/close keyframe screenshots to inspect knuckle alignment:
+
+```bash
+export NUMBA_CACHE_DIR=~/.cache/numba
+python scripts/capture_gripper_keyframes.py
+```
+
+Output: `.cursor/gripper_keyframes/` (PNG frames at drive_joint q=0 and q=0.85).

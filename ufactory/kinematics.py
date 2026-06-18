@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from ufactory.paths import PROJECT_ROOT, kinematics_user_dir, xarm6_urdf
-from ufactory.robot_registry import ROBOT_PROFILES, RobotModelSpec, get_robot_profile
+from ufactory.robot_registry import RobotModelSpec, get_profile_key_for_robot_name, get_robot_profile
 
 DEFAULT_XARM6_URDF = xarm6_urdf()
 
@@ -74,7 +74,7 @@ def find_kinematics_yaml(
   if not suffix:
     raise ValueError("kinematics_suffix is empty")
 
-  profile_key = _profile_key_for_robot_name(robot_name)
+  profile_key = get_profile_key_for_robot_name(robot_name)
   profile = get_robot_profile(profile_key)
   prefix = profile.kinematics_prefix
 
@@ -169,7 +169,7 @@ def prepare_robot_model_for_verification(
 
   Returns (urdf_path, kinematics_yaml_path_or_none).
   """
-  profile_key = _profile_key_for_robot_name(robot_name)
+  profile_key = get_profile_key_for_robot_name(robot_name)
   profile = get_robot_profile(profile_key)
   dof = joint_count or profile.dof
   base_default = default_base_urdf or str(profile.assets_dir / profile.default_urdf)
@@ -190,15 +190,6 @@ def prepare_robot_model_for_verification(
     joint_count=dof,
   )
   return calibrated, str(yaml_path)
-
-
-def _profile_key_for_robot_name(robot_name: str) -> str:
-  if robot_name in ROBOT_PROFILES:
-    return robot_name
-  for key, profile in ROBOT_PROFILES.items():
-    if profile.robot_name == robot_name:
-      return key
-  raise KeyError(f"Unknown robot name: {robot_name}")
 
 
 def parse_sn_model_code(sn: str) -> Optional[int]:

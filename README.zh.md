@@ -1,10 +1,32 @@
 # ufactory_genesis
 
-UFACTORY 机器人模型与 Genesis 仿真测试。
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/version-0.1.0-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.1.2-lightgrey" alt="Genesis">
+</p>
 
-[English](README.md)
+UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化、运动学校准、强化学习环境和 LeRobot 集成。
 
-## 环境安装
+[English](README.md) | [贡献指南](CONTRIBUTING.md) | [变更日志](CHANGELOG.md)
+
+## 目录
+
+- [快速开始](#快速开始)
+- [支持机型](#支持机型)
+- [GLB 视觉预览](#glb-视觉预览)
+- [展示场景](#展示场景xarm6--gripper-g2-物理装箱)
+- [API 快速参考](#api-快速参考)
+- [真机运动学校准](#真机运动学校准按-sn-判断)
+- [xArm 6 — 参考机型](#xarm-6)
+- [文档](#文档)
+- [项目结构](#项目结构)
+- [参与贡献](#参与贡献)
+- [开源协议](#开源协议)
+- [引用](#引用)
+
+## 快速开始
 
 已在 Python 3.13、Genesis 1.1.2、PyTorch 2.12.0+cu130 下验证。
 
@@ -18,25 +40,28 @@ pip install -e .
 
 export NUMBA_CACHE_DIR=~/.cache/numba
 python -c "import genesis, torch; print('OK', torch.__version__, 'cuda:', torch.cuda.is_available())"
+
+# 预览 xArm 6 GLB 模型
+python examples/view_robot_glb.py --robot xarm6_1305
 ```
 
 ## 支持机型
 
-| profile key | 机型 | Gripper G2 | Bio Gripper G2 |
-|-------------|------|:----------:|:--------------:|
-| `xarm5_1305` | xArm 5 | ✓ | ✓ |
-| `xarm6_1305` | xArm 6 | ✓ | ✓ |
-| `xarm7_1305` | xArm 7 | ✓ | ✓ |
-| `uf850` | UF850 | ✓ | ✓ |
-| `lite6` | Lite6 | — | — |
+| profile key | 机型 | 自由度 | Gripper G2 | Bio Gripper G2 | Lite6 Gripper | Lite6 Vacuum |
+|-------------|------|--------|:----------:|:--------------:|:-------------:|:------------:|
+| `xarm5_1305` | xArm 5 | 5 | ✓ | ✓ | — | — |
+| `xarm6_1305` | xArm 6 | 6 | ✓ | ✓ | — | — |
+| `xarm7_1305` | xArm 7 | 7 | ✓ | ✓ | — | — |
+| `uf850` | UF850 | 6 | ✓ | ✓ | — | — |
+| `lite6` | Lite6 | 6 | — | — | ✓ | ✓ |
 
-两种 G2 配件为不同产品：**Gripper G2**（原厂平行夹爪，资产 `assets/urdf/gripper_g2/`）与 **Bio Gripper G2**（生物夹爪，资产 `assets/urdf/bio_gripper/`）。加载时互斥；Lite6 均不支持。
+**Gripper G2** 与 **Bio Gripper G2** 为 xArm/UF850 共用配件；**Lite6 Gripper**（平行夹爪）与 **Lite6 Vacuum Gripper**（真空吸盘）仅适用于 Lite6。加载末端时各配件互斥，一次只能选一种。
 
-多机型资产管线与限制见 [docs/multi_robot_compatibility.md](docs/multi_robot_compatibility.md)。
+机型能力、已知限制与资产维护见 [docs/multi_robot_compatibility.md](docs/multi_robot_compatibility.md)。
 
 ## GLB 视觉预览
 
-GLB 用于高精度渲染；碰撞与物理仍走 STL 网格。统一入口：
+GLB 用于高精度 PBR 渲染；碰撞与物理仍走 STL 网格。统一入口：
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -50,6 +75,13 @@ python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --gr
 
 # Bio Gripper G2（静态）
 python examples/view_robot_glb.py --robot uf850 --bio-gripper-g2
+
+# Lite6 平行夹爪（静态 / 可动开合）
+python examples/view_robot_glb.py --robot lite6 --lite6-gripper
+python examples/view_robot_glb.py --robot lite6 --lite6-gripper --movable --gripper-demo
+
+# Lite6 真空吸盘（静态）
+python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 ```
 
 各目录下 `view_*_glb.py`（如 `examples/xarm6/view_xarm6_glb.py`）等价于 `view_robot_glb.py --robot <key>`；xArm6 专用脚本额外提供 `--diagnose`。
@@ -57,29 +89,78 @@ python examples/view_robot_glb.py --robot uf850 --bio-gripper-g2
 | 参数 | 产品 | 说明 |
 |------|------|------|
 | `--gripper-g2` | Gripper G2 | 加载 combo URDF |
-| `--movable` | Gripper G2 | 分 link GLB（开合必需） |
-| `--gripper-demo` | Gripper G2 | `drive_joint` 循环演示 |
+| `--movable` | Gripper G2 / Lite6 Gripper / Bio Gripper G2 | 分 link GLB（开合动画必需） |
+| `--gripper-demo` | Gripper G2 / Lite6 Gripper | 夹爪开合循环演示 |
 | `--bio-gripper-g2` | Bio Gripper G2 | 静态 GLB 叠加 |
-| `--pd` | 机械臂 | 关节演示 |
-| `--no-show-tcp` | 机械臂 | 隐藏 EE 法兰红色 TCP 标记 |
+| `--lite6-gripper` | Lite6 Gripper | Lite6 平行夹爪 combo URDF |
+| `--lite6-vacuum-gripper` | Lite6 Vacuum Gripper | Lite6 真空吸盘静态 GLB |
+| `--pd` | 机械臂 | 关节演示（50°/s 平滑插值，非高增益 PD） |
+| `--show-tcp` | 机械臂 | 显示 EE 法兰红色 TCP 调试标记（默认隐藏） |
 
-更换源 GLB 后重定位与生成 combo URDF：
+## 展示场景（xArm6 + Gripper G2 物理装箱）
+
+黄色桌面（臂固定在桌面长边）、真实物理抓取红色木块、放入开口快递纸箱。GLB 高模 G2 可动 combo + 碰撞/惯性一体。首次运行需生成纸箱贴图：
 
 ```bash
-python scripts/relocalize_gripper_glb.py           # Gripper G2
-python scripts/generate_gripper_g2_combo_urdf.py
-python scripts/relocalize_bio_gripper_glb.py       # Bio Gripper G2
-python scripts/generate_bio_gripper_combo_urdf.py
-python scripts/relocalize_arm_glb.py --robot <profile_key>
+export NUMBA_CACHE_DIR=~/.cache/numba
+python scripts/generate_showcase_textures.py
+
+# 完整展示（默认循环）
+python examples/xarm6/xarm6_g2_showcase.py
+
+# 单周期后保持画面；加快节奏
+python examples/xarm6/xarm6_g2_showcase.py --no-loop --speed 1.5
 ```
 
-代码加载：`ufactory.paths.robot_visual_glb_urdf(robot_key, with_gripper_g2=..., with_bio_gripper_g2=..., movable=...)`。
+| 参数 | 说明 |
+|------|------|
+| `--table-height` | 桌面顶面高度（米，默认 0.75） |
+| `--speed` | 动作速度倍率（>1 更快） |
+| `--loop` / `--no-loop` | 是否循环 pick-place（默认循环） |
 
-校验：`python examples/verify_robot.py --robot <key>`、`PYTHONPATH=. python scripts/verify_gripper_g2_assets.py`。
+## API 快速参考
 
-调试 Gripper G2 连杆对齐：`python scripts/capture_gripper_keyframes.py`（输出至 `.cursor/gripper_keyframes/`）。
+```python
+import ufactory
+```
 
-## 运动学补偿（按 SN 判断）
+### 机器人注册表
+
+| 函数 / 对象 | 说明 |
+|------------|------|
+| `ufactory.ROBOT_PROFILES` | 所有支持机型的 `RobotModelSpec` 字典 |
+| `ufactory.get_robot_profile(key)` | 按 profile key 获取 `RobotModelSpec` |
+| `ufactory.get_profile_key_for_robot_name(name)` | 机器人名称解析为 profile key |
+| `ufactory.arm_link_names(profile)` | 获取某机型的连杆名称元组 |
+| `ufactory.joint_names(profile)` | 获取某机型的关节名称元组 |
+
+### 路径工具
+
+| 函数 | 说明 |
+|------|------|
+| `ufactory.robot_urdf(key)` | 默认 URDF 绝对路径 |
+| `ufactory.robot_visual_glb_urdf(key, ...)` | 带 GLB 视觉的 URDF，支持末端执行器 |
+| `ufactory.robot_assets(name)` | 机器人资产目录 `Path` |
+| `ufactory.xarm6_1305_urdf()` | 便捷函数：xArm6 1305 URDF |
+| `ufactory.lite6_visual_glb_urdf(...)` | 便捷函数：Lite6 带夹爪选项的 GLB URDF |
+
+### 运动学校准
+
+| 函数 | 说明 |
+|------|------|
+| `ufactory.load_kinematics_yaml(path)` | 从运动学 YAML 加载关节偏移 |
+| `ufactory.build_calibrated_urdf(base, kinematics)` | 生成含标定关节原点的 URDF |
+| `ufactory.parse_sn_model_code(sn)` | 从序列号提取 4 位型号码 |
+| `ufactory.has_per_unit_kinematics_calibration(sn, name)` | 判断某 SN 是否需要逐台标定 |
+
+### GLB PBR 视觉
+
+| 函数 | 说明 |
+|------|------|
+| `ufactory.enable_glb_pbr_surfaces()` | 修补 Genesis 以保留 GLB 的 PBR 材质 |
+| `ufactory.glb_view_surface()` | 非 GLB 几何体的默认双面渲染表面 |
+
+## 真机运动学校准（按 SN 判断）
 
 控制柜内**逐台运动学补偿**是否可用，可由 SN 第 3–6 位（四位型号码）判断：
 
@@ -102,48 +183,50 @@ python examples/fk_verify_robot.py --robot xarm6_1305 --ip <ip> --kinematics-suf
 python examples/ik_verify_robot.py --robot lite6 --ip <ip> --kinematics-suffix <suffix>
 ```
 
-## xArm 6 验证
+## xArm 6
 
-```bash
-export NUMBA_CACHE_DIR=~/.cache/numba
+xArm 6 是本仓库参考机型，涵盖运动学/动力学验证与 reach、grasp-place 强化学习示例。完整步骤见 [docs/xarm6_verification.md](docs/xarm6_verification.md)。
 
-python examples/xarm6/verify_xarm6.py
-python examples/xarm6/verify_xarm6_dynamics.py
+## 文档
 
-# 可选：与真机对比（XI1305 等 SN≥1304 需先提取本机运动学标定）
-python scripts/gen_kinematics_params.py 192.168.1.60 xi1305
-python examples/xarm6/fk_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
-python examples/xarm6/ik_verify.py --ip 192.168.1.60 --kinematics-suffix xi1305
-
-python examples/xarm6/xarm6_reach_train.py -B 1 --max_iterations 10
-python examples/xarm6/xarm6_grasp_place_train.py -B 1 --max_iterations 5
-
-pytest tests/test_xarm6_smoke.py -v
-```
-
-完整说明：[docs/xarm6_verification.md](docs/xarm6_verification.md)。
-
-仿真 URDF：`xarm6_1305.urdf`（6 自由度）、`xarm6_with_gripper.urdf`（12 自由度，RL 默认）。
-
-## 后续计划
-
-- [ ] **多机型运动学验证** — 在 xArm6 已验证基线上，为 Lite6 / UF850 / xArm5/7 补齐 FK/IK 真机对比与 SN 标定流程
-- [ ] **多机型动力学验证** — 抽象 xArm6 动力学验证，覆盖各机型 URDF 惯量与 Genesis 物理行为
-- [ ] **强化学习环境验证** — 规范化 reach / grasp-place 环境的观测、奖励与碰撞检查，纳入 pytest
-- [ ] **强化学习实例** — 提供可复现的训练配置与 eval demo（基于 rsl-rl-lib）
-- [ ] **LeRobot 集成** — 仿真策略与真机数据采集/部署的桥接适配
-
-> 当前 xArm6 为参考实现；其他机型的验证深度仍在扩展中。
+| 文档 | 内容 |
+|------|------|
+| [docs/multi_robot_compatibility.md](docs/multi_robot_compatibility.md) | 多机型能力、资产管线、维护者重定位 |
+| [docs/xarm6_verification.md](docs/xarm6_verification.md) | xArm6 FK/IK、动力学、RL、pytest |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 项目路线图 |
 
 ## 项目结构
 
 ```
-assets/urdf/
-  xarm6/ xarm5/ xarm7/ lite6/ uf850/ gripper_g2/ bio_gripper/
-ufactory/                   # paths, robot_registry, kinematics, GLB PBR
-examples/xarm6/             # xArm6 验证、RL、查看器
-examples/{lite6,uf850,xarm5,xarm7}/
-examples/view_robot_glb.py  # 通用 GLB 预览
-scripts/                    # vendor, relocalize, bio combo
-tests/
+ufactory/             # 核心 Python 包（机器人注册、路径、运动学、GLB）
+assets/urdf/          # 各机型 URDF、STL 碰撞、GLB 视觉 mesh
+assets/scenes/        # 仿真场景资产（贴图、道具）
+examples/             # 使用示例（预览、FK/IK、RL、LeRobot）
+scripts/              # 资产生成与维护脚本
+tests/                # Pytest 测试集
+docs/                 # 扩展文档
+```
+
+## 参与贡献
+
+欢迎贡献！请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码风格、资产流水线和 PR 流程。
+
+本项目遵循 [Contributor Covenant](CODE_OF_CONDUCT.md) 行为准则。
+
+## 开源协议
+
+MIT — 详见 [LICENSE](LICENSE)。
+
+## 引用
+
+如在研究中使用 genesis-ufactory，请引用：
+
+```bibtex
+@misc{genesis-ufactory,
+  author = {UFACTORY},
+  title = {genesis-ufactory: UFACTORY Robot Models for Genesis Simulation},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/ufactory/genesis-ufactory}
+}
 ```

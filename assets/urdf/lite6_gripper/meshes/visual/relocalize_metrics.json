@@ -1,0 +1,69 @@
+[
+  {
+    "file": "shell.glb",
+    "ee_link": "link6",
+    "verts": 53971,
+    "submesh_count": 1,
+    "hole_fit_mm": null,
+    "assembly_surface_mm": null,
+    "icp_metrics": null,
+    "stl_surface_mm": 0.03,
+    "partition_counts": {
+      "shell": 1,
+      "finger1": 7,
+      "finger2": 6
+    }
+  },
+  {
+    "file": "finger1.glb",
+    "ee_link": "link6",
+    "verts": 9125,
+    "submesh_count": 7,
+    "hole_fit_mm": null,
+    "assembly_surface_mm": null,
+    "icp_metrics": null,
+    "stl_surface_mm": 4.29,
+    "partition_counts": {
+      "shell": 1,
+      "finger1": 7,
+      "finger2": 6
+    }
+  },
+  {
+    "file": "finger2.glb",
+    "ee_link": "link6",
+    "verts": 6781,
+    "submesh_count": 6,
+    "hole_fit_mm": null,
+    "assembly_surface_mm": null,
+    "icp_metrics": null,
+    "stl_surface_mm": 0.21,
+    "partition_counts": {
+      "shell": 1,
+      "finger1": 7,
+      "finger2": 6
+    }
+  },
+  {
+    "file": "lite6_gripper_static_link6.glb",
+    "ee_link": "link6",
+    "verts": 69877,
+    "submesh_count": 14,
+    "hole_fit_mm": 0.02,
+    "assembly_surface_mm": 0.02,
+    "icp_metrics": {
+      "alignment": "stl_coarse",
+      "rejected": false,
+      "surf_before_mm": 27.27,
+      "surf_after_mm": 0.02,
+      "extent_ratio_min": 1.0,
+      "extent_ratio_max": 1.0
+    },
+    "stl_surface_mm": 0.02,
+    "partition_counts": {
+      "shell": 1,
+      "finger1": 7,
+      "finger2": 6
+    }
+  }
+]

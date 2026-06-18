@@ -282,9 +282,9 @@ def vendor_gripper_g2(xarm_desc: Path, work_root: Path) -> None:
   dst_collision = assets / "meshes" / "collision"
   dst_collision.mkdir(parents=True, exist_ok=True)
   if src_collision.is_dir():
-    for path in src_collision.rglob("*.STL"):
-      shutil.copy2(path, dst_collision / path.name)
     for path in src_collision.rglob("*.stl"):
+      shutil.copy2(path, dst_collision / path.name.lower())
+    for path in src_collision.rglob("*.STL"):
       shutil.copy2(path, dst_collision / path.name.lower())
   print(f"[gripper_g2] wrote {out}")
 
@@ -324,23 +324,138 @@ def migrate_sim_glbs(sim_root: Path) -> None:
         shutil.copy2(src, g2_dst / name)
         print(f"[gripper_g2] copied {src} -> {g2_dst}")
 
+  lite6_gripper_src = sim_root / "lite6_gripper" / "lite_gripper.glb"
+  if lite6_gripper_src.is_file():
+    lite6_g_dst = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "meshes" / "visual" / "visual_glb_src"
+    lite6_g_dst.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(lite6_gripper_src, lite6_g_dst / "lite_gripper.glb")
+    print(f"[lite6_gripper] copied {lite6_gripper_src} -> {lite6_g_dst}")
+
+  lite6_vac_src = sim_root / "lite6_vacuum_gripper" / "lite_vacuum_gripper.glb"
+  if lite6_vac_src.is_file():
+    lite6_v_dst = PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "meshes" / "visual" / "visual_glb_src"
+    lite6_v_dst.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(lite6_vac_src, lite6_v_dst / "lite_vacuum_gripper.glb")
+    print(f"[lite6_vacuum_gripper] copied {lite6_vac_src} -> {lite6_v_dst}")
+
+
+def _normalize_gripper_mesh_paths(urdf_text: str, assets_subdir: str) -> str:
+  """Rewrite xarm_description mesh paths to project-relative collision paths."""
+
+  def _collision_path(match: re.Match[str]) -> str:
+    stem = Path(match.group(1)).stem
+    return f'filename="meshes/collision/{stem}.stl"'
+
+  urdf_text = re.sub(
+    r'filename="[^"]*gripper/lite/visual/([^"]+)"',
+    _collision_path,
+    urdf_text,
+  )
+  urdf_text = re.sub(
+    r'filename="[^"]*vacuum_gripper/lite/visual/([^"]+)"',
+    _collision_path,
+    urdf_text,
+  )
+  urdf_text = re.sub(
+    r'filename="[^"]*vacuum_gripper/lite/collision/([^"]+)"',
+    _collision_path,
+    urdf_text,
+  )
+  return urdf_text
+
+
+def vendor_lite6_gripper(xarm_desc: Path, work_root: Path) -> None:
+  work_desc = _preprocess_xarm_description(xarm_desc, work_root / "lite6g" / "xarm_description")
+  wrapper = work_root / "lite6g" / "gen.urdf.xacro"
+  content = f"""<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="lite6_gripper">
+  <xacro:property name="is_ros2" value="true"/>
+  <xacro:property name="use_xacro_load_yaml" value="true"/>
+  <xacro:property name="use_len" value="true"/>
+  <xacro:property name="mesh_suffix" value="stl"/>
+  <xacro:property name="mesh_path" value="meshes"/>
+  <xacro:include filename="{work_desc / 'urdf/common/common.material.xacro'}"/>
+  <xacro:common_material prefix=""/>
+  <xacro:include filename="{work_desc / 'urdf/common/common.link.xacro'}"/>
+  <xacro:include filename="{work_desc / 'urdf/gripper/uflite_gripper.urdf.xacro'}"/>
+  <xacro:uflite_gripper_urdf prefix="" attach_to="link6" attach_xyz="0 0 0" attach_rpy="0 0 0"/>
+</robot>
+"""
+  wrapper.write_text(content, encoding="utf-8")
+  urdf_text = _run_xacro(wrapper)
+  urdf_text = _normalize_gripper_mesh_paths(urdf_text, "lite6_gripper")
+  assets = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper"
+  assets.mkdir(parents=True, exist_ok=True)
+  out = assets / "lite6_gripper.urdf"
+  out.write_text(urdf_text, encoding="utf-8")
+
+  src_visual = work_desc / "meshes" / "gripper" / "lite" / "visual"
+  dst_collision = assets / "meshes" / "collision"
+  dst_collision.mkdir(parents=True, exist_ok=True)
+  if src_visual.is_dir():
+    for path in src_visual.rglob("*.stl"):
+      shutil.copy2(path, dst_collision / path.name.lower())
+    for path in src_visual.rglob("*.STL"):
+      shutil.copy2(path, dst_collision / path.name.lower())
+  print(f"[lite6_gripper] wrote {out}")
+
+
+def vendor_lite6_vacuum_gripper(xarm_desc: Path, work_root: Path) -> None:
+  work_desc = _preprocess_xarm_description(xarm_desc, work_root / "lite6v" / "xarm_description")
+  wrapper = work_root / "lite6v" / "gen.urdf.xacro"
+  content = f"""<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="lite6_vacuum_gripper">
+  <xacro:property name="is_ros2" value="true"/>
+  <xacro:property name="use_xacro_load_yaml" value="true"/>
+  <xacro:property name="use_len" value="true"/>
+  <xacro:property name="mesh_suffix" value="stl"/>
+  <xacro:property name="mesh_path" value="meshes"/>
+  <xacro:include filename="{work_desc / 'urdf/common/common.material.xacro'}"/>
+  <xacro:common_material prefix=""/>
+  <xacro:include filename="{work_desc / 'urdf/common/common.link.xacro'}"/>
+  <xacro:include filename="{work_desc / 'urdf/vacuum_gripper/lite_vacuum_gripper.urdf.xacro'}"/>
+  <xacro:uflite_vacuum_gripper_urdf prefix="" attach_to="link6" attach_xyz="0 0 0" attach_rpy="0 0 0"/>
+</robot>
+"""
+  wrapper.write_text(content, encoding="utf-8")
+  urdf_text = _run_xacro(wrapper)
+  urdf_text = _normalize_gripper_mesh_paths(urdf_text, "lite6_vacuum_gripper")
+  assets = PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper"
+  assets.mkdir(parents=True, exist_ok=True)
+  out = assets / "lite6_vacuum_gripper.urdf"
+  out.write_text(urdf_text, encoding="utf-8")
+
+  for sub in ("visual", "collision"):
+    src = work_desc / "meshes" / "vacuum_gripper" / "lite" / sub
+    dst_collision = assets / "meshes" / "collision"
+    dst_collision.mkdir(parents=True, exist_ok=True)
+    if src.is_dir():
+      for path in src.rglob("*.stl"):
+        shutil.copy2(path, dst_collision / path.name.lower())
+  print(f"[lite6_vacuum_gripper] wrote {out}")
+
 
 def main() -> int:
   parser = argparse.ArgumentParser(description="Vendor robot URDF/meshes from xarm_ros2")
   parser.add_argument("--xarm-description", type=Path, default=None, help="Path to xarm_description root")
-  parser.add_argument("--sim-root", type=Path, default=Path("/home/uf/Desktop/sim"))
+  parser.add_argument("--sim-root", type=Path, default=None, help="Path to source CAD GLB files (e.g. sim repo root)")
   parser.add_argument("--robots", nargs="*", default=list(VENDOR_SPECS.keys()))
   parser.add_argument("--skip-urdf", action="store_true")
   parser.add_argument("--skip-glb-migrate", action="store_true")
   parser.add_argument("--bio-gripper", action="store_true", default=True)
   parser.add_argument("--gripper-g2", action="store_true", default=True)
+  parser.add_argument("--lite6-gripper", action="store_true", default=True)
+  parser.add_argument("--lite6-vacuum-gripper", action="store_true", default=True)
   args = parser.parse_args()
 
   xarm_desc = _ensure_xarm_ros2(args.xarm_description)
   work_root = Path(tempfile.mkdtemp(prefix="ufactory_vendor_"))
 
-  if not args.skip_glb_migrate and args.sim_root.is_dir():
+  if not args.skip_glb_migrate and args.sim_root is not None and args.sim_root.is_dir():
     migrate_sim_glbs(args.sim_root)
+  elif not args.skip_glb_migrate and args.sim_root is None:
+    print("[vendor] --sim-root not provided; skipping GLB migration. "
+          "Pass --sim-root <path> to migrate source CAD GLBs.")
 
   if not args.skip_urdf:
     for key in args.robots:
@@ -351,6 +466,10 @@ def main() -> int:
       vendor_bio_gripper(xarm_desc, work_root)
     if args.gripper_g2:
       vendor_gripper_g2(xarm_desc, work_root)
+    if args.lite6_gripper:
+      vendor_lite6_gripper(xarm_desc, work_root)
+    if args.lite6_vacuum_gripper:
+      vendor_lite6_vacuum_gripper(xarm_desc, work_root)
 
   return 0
 

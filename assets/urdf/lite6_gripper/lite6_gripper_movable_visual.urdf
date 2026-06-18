@@ -1,0 +1,87 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="lite6_gripper_movable_visual">
+  <link name="world" />
+  <joint name="world_joint" type="fixed">
+    <parent link="world" />
+    <child link="uflite_gripper_link" />
+    <origin xyz="0 0 0.12" rpy="0 0 0" />
+  </joint>
+  <link name="uflite_gripper_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.030" />
+      <mass value="0.25" />
+      <inertia ixx="0.00047106" ixy="3.9292E-07" ixz="2.6537E-06" iyy="0.00033072" iyz="-1.0975E-05" izz="0.00025642" />
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../lite6_gripper/meshes/visual/visual_glb/shell.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../lite6_gripper/meshes/collision/shell.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="uflite_finger1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0 0.01 0.0086" />
+      <mass value="0.0163" />
+      <inertia ixx="1.425E-06" ixy="0.0" ixz="0.0" iyy="1.63E-06" iyz="-3.1E-07" izz="8.63E-07" />
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../lite6_gripper/meshes/visual/visual_glb/finger1.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../lite6_gripper/meshes/collision/finger1.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="finger_joint1" type="prismatic">
+    <origin rpy="0 0 0" xyz="0 0 0.0543" />
+    <parent link="uflite_gripper_link" />
+    <child link="uflite_finger1" />
+    <axis xyz="0 1 0" />
+    <limit effort="5" lower="0" upper="0.0089" velocity="2" />
+  </joint>
+  <link name="uflite_finger2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0 -0.01 0.0086" />
+      <mass value="0.0163" />
+      <inertia ixx="1.425E-06" ixy="0.0" ixz="0.0" iyy="1.63E-06" iyz="3.1E-07" izz="8.63E-07" />
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../lite6_gripper/meshes/visual/visual_glb/finger2.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../lite6_gripper/meshes/collision/finger2.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="finger_joint2" type="prismatic">
+    <origin rpy="0 0 0" xyz="0 0 0.0543" />
+    <parent link="uflite_gripper_link" />
+    <child link="uflite_finger2" />
+    <axis xyz="0 -1 0" />
+    <limit effort="5" lower="0" upper="0.0089" velocity="2" />
+    <mimic joint="finger_joint1" multiplier="1" offset="0" />
+  </joint>
+  <link name="link_tcp" />
+  <joint name="joint_tcp" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0.0836" />
+    <parent link="uflite_gripper_link" />
+    <child link="link_tcp" />
+  </joint>
+</robot>

@@ -1,0 +1,17 @@
+[
+  {
+    "ee_link": "link6",
+    "output": "lite6_vacuum_gripper_visual_link6.glb",
+    "verts": 111911,
+    "submesh_count": 4,
+    "stl_surface_mm": 0.44,
+    "align_metrics": {
+      "alignment": "stl_coarse",
+      "rejected": false,
+      "surf_before_mm": 0.47,
+      "surf_after_mm": 0.45,
+      "extent_ratio_min": 0.995,
+      "extent_ratio_max": 1.008
+    }
+  }
+]
