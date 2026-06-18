@@ -2,11 +2,13 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.claude/
 .cursor/
 experience/
 logs/
 debug/
 data/
+dev/
 outputs/
 assets/urdf/*/kinematics/user/*.yaml
 assets/urdf/*/*_calib.urdf
@@ -14,6 +16,13 @@ assets/urdf/*/*_calib.urdf
 .DS_Store
 agents.md
 visual_debug_checklist.md
+scripts/generate_visual_grid.py
+scripts/diagnose_*.py
+scripts/analyze_gripper_assembly.py
+scripts/capture_*.py
+examples/xarm6/check_collision_mesh.py
+examples/xarm6/run_fk_alignment_cycle.py
+examples/xarm6/xarm6_grasp_place_diag.py
 .qoder
 .codex
 .agents

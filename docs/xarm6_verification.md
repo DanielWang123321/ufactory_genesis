@@ -175,7 +175,7 @@ Capture open/close keyframe screenshots to inspect knuckle alignment:
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
-python scripts/capture_gripper_keyframes.py
+python dev/diagnostics/capture_gripper_keyframes.py
 ```
 
 Output: `.cursor/gripper_keyframes/` (PNG frames at drive_joint q=0 and q=0.85).

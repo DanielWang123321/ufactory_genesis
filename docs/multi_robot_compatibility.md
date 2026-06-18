@@ -5,7 +5,7 @@
 | Name | Description | Assets |
 |------|-------------|--------|
 | **Gripper G2** | UFACTORY parallel-jaw G2 gripper; static + movable (`drive_joint`) visual tracks | `assets/urdf/gripper_g2/` |
-| **Bio Gripper G2** | Bio gripper G2; static monolithic GLB + movable (`right_finger_joint` prismatic) | `assets/urdf/bio_gripper/` |
+| **Bio Gripper G2** | Bio Gripper G2; static monolithic GLB + movable (`bio_gripper_g2_right_finger_joint` prismatic) | `assets/urdf/bio_gripper_g2/` |
 
 CLI: `--gripper-g2` vs `--bio-gripper-g2` (mutually exclusive). Not supported on Lite6.
 
@@ -57,8 +57,8 @@ python scripts/generate_gripper_g2_combo_urdf.py
 4. **Bio Gripper G2 combo URDF**:
 
 ```bash
-python scripts/relocalize_bio_gripper_glb.py
-python scripts/generate_bio_gripper_combo_urdf.py
+python scripts/relocalize_bio_gripper_g2_glb.py
+python scripts/generate_bio_gripper_g2_combo_urdf.py
 ```
 
 5. **Lite6 Gripper** (`assets/urdf/lite6_gripper/`):
@@ -101,7 +101,7 @@ python examples/view_robot_glb.py --robot uf850 --gripper-g2
 python examples/view_robot_glb.py --robot xarm5_1305 --gripper-g2 --movable --gripper-demo
 python examples/view_robot_glb.py --robot xarm7_1305 --bio-gripper-g2
 python examples/view_robot_glb.py --robot xarm6_1305 --bio-gripper-g2 --movable --gripper-demo
-python examples/bio_gripper/view_bio_gripper_movable.py
+python examples/bio_gripper_g2/view_bio_gripper_g2_movable.py
 ```
 
 ## Verification
@@ -109,6 +109,7 @@ python examples/bio_gripper/view_bio_gripper_movable.py
 ```bash
 python examples/verify_robot.py --robot lite6
 python scripts/verify_gripper_g2_assets.py
+python scripts/verify_bio_gripper_g2_assets.py
 PYTHONPATH=. python scripts/verify_lite6_gripper_assets.py
 ```
 
@@ -124,7 +125,7 @@ PYTHONPATH=. python scripts/verify_lite6_gripper_assets.py
 
 - GLB relocalize quality depends on STL/EE flange alignment; see `gripper_g2/meshes/visual/relocalize_metrics.json`.
 - G2 static preview uses per-EE high-res GLB; movable mode uses shared finger/knuckle GLBs + per-EE `base.glb`.
-- Bio Gripper G2 static preview uses per-EE monolithic GLB; movable mode uses shared `left_finger.glb` / `right_finger.glb` + per-EE `link_base.glb` (`right_finger_joint` 0–40 mm, mimic `left_finger_joint`).
+- Bio Gripper G2 static preview uses per-EE monolithic GLB; movable mode uses `bio_gripper_g2_left_finger.glb` / `bio_gripper_g2_right_finger.glb` + per-EE `bio_gripper_g2_base.glb` (`bio_gripper_g2_right_finger_joint` 0–40 mm, mimic `bio_gripper_g2_left_finger_joint`).
 - Lite6 Gripper movable mode uses `finger_joint1` (prismatic 0–8.9 mm) + mimic `finger_joint2`; demo via `--lite6-gripper --movable --gripper-demo`.
 - Lite6 Vacuum Gripper preview is static (monolithic GLB); no animation.
 - Per-unit kinematics YAML files are gitignored under `assets/urdf/*/kinematics/user/`.

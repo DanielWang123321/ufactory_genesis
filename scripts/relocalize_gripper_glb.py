@@ -146,13 +146,13 @@ G2_RING_R = (0.015, 0.050)
 G2_BOSS_R_MAX = 0.012
 
 STL_FOR_GLB: dict[str, str] = {
-    "base.glb": "base_link.STL",
-    "left_outer_knuckle.glb": "left_outer_knuckle.STL",
-    "left_finger.glb": "left_finger.STL",
-    "left_inner_knuckle.glb": "left_inner_knuckle.STL",
-    "right_outer_knuckle.glb": "right_outer_knuckle.STL",
-    "right_finger.glb": "right_finger.STL",
-    "right_inner_knuckle.glb": "right_inner_knuckle.STL",
+    "base.glb": "base_link.stl",
+    "left_outer_knuckle.glb": "left_outer_knuckle.stl",
+    "left_finger.glb": "left_finger.stl",
+    "left_inner_knuckle.glb": "left_inner_knuckle.stl",
+    "right_outer_knuckle.glb": "right_outer_knuckle.stl",
+    "right_finger.glb": "right_finger.stl",
+    "right_inner_knuckle.glb": "right_inner_knuckle.stl",
 }
 
 
@@ -915,7 +915,7 @@ def relocalize_base_for_ee(
     )
     combined = base_aligned[0].copy()
     combined.vertices = combined.vertices @ SEMANTIC_FRAME_ROT.T
-    stl_ref = trimesh.load(GRIPPER_STL_DIR / "base_link.STL", force="mesh")
+    stl_ref = trimesh.load(GRIPPER_STL_DIR / "base_link.stl", force="mesh")
     ee_ref = trimesh.load(ee_glb, force="mesh")
     z_g2_ring = _ring_plane_z_and_xy(combined, *G2_RING_R, "area_peak")[0]
     z_ee_ring = _ring_plane_z_and_xy(ee_ref, *EE_RING_R, "max")[0]
@@ -946,7 +946,7 @@ def relocalize_static_assembly(ee_link: str, dry_run: bool) -> tuple[dict, list[
     parts = bake_glb_genesis_parts(STATIC_SRC)
     aligned, flange_metrics = align_parts_to_ee_flange(parts, ee_glb, ee_link)
     combined = trimesh.util.concatenate(aligned)
-    stl_ref = trimesh.load(GRIPPER_STL_DIR / "base_link.STL", force="mesh")
+    stl_ref = trimesh.load(GRIPPER_STL_DIR / "base_link.stl", force="mesh")
     pbr_materials = _raw_material_pbr(STATIC_SRC)
     surf_mm = mean_surface_distance(combined, stl_ref) * 1000
     geom_centroid_mm = float(np.linalg.norm(combined.centroid - stl_ref.centroid) * 1000)

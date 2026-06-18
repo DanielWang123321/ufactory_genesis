@@ -39,8 +39,9 @@ class _FakeRobot:
   def __init__(self):
     self.joints = [
       *[_FakeJoint(f"joint{i}", i - 1) for i in range(1, 6)],
-      _FakeJoint("right_finger_joint", 5),
+      _FakeJoint("drive_joint", 5),
       _FakeJoint("left_finger_joint", 6),
+      _FakeJoint("right_finger_joint", 7),
     ]
     self.links = []
     self.calls: list[tuple[str, tuple[int, ...], bool | None]] = []
@@ -149,7 +150,7 @@ def test_gripper_demo_without_pd_holds_arm_kinematically(monkeypatch):
   ]
   assert any(call == ("set_position", (0, 1, 2, 3, 4), True) for call in robot.calls)
   assert ("kp", (5,), None) in robot.calls
-  assert ("control_position", (5, 6), None) in robot.calls
+  assert ("control_position", (5, 6, 7), None) in robot.calls
   assert scene.step_count == 3
 
 
@@ -168,7 +169,7 @@ def test_kinematic_step_reholds_before_visual_update(monkeypatch):
     home=[0.0, 0.0, 0.0, 0.0, 0.0],
     all_gripper_dof_idx=[5, 6],
     all_lite6_gripper_dof_idx=[],
-    all_bio_gripper_dof_idx=[],
+    all_bio_gripper_g2_dof_idx=[],
   )
 
   assert scene.step_calls == [{"update_visualizer": False}]

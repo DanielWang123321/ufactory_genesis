@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/genesis-1.1.2-lightgrey" alt="Genesis">
 </p>
 
-UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, RL environments, and LeRobot integration.
+UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, and RL environments.
 
 [中文文档](README.zh.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
 
@@ -27,18 +27,18 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 
 ## Quick Start
 
-Tested with Python 3.13, Genesis 1.1.2, PyTorch 2.12.0+cu130.
+Tested with Python 3.13, Genesis 1.1.2, PyTorch 2.12.
 
 ```bash
-conda activate py313
+# 1. Install Genesis (platform-specific: CPU / CUDA / macOS / AMD)
+#    Follow the official guide: https://genesis-world.readthedocs.io/
+pip install genesis-world==1.1.2
 
-pip install torch==2.12.0+cu130 torchvision==0.27.0+cu130 \
-  --index-url https://download.pytorch.org/whl/cu130
+# 2. Install ufactory_genesis
 pip install -r requirements.txt
 pip install -e .
 
 export NUMBA_CACHE_DIR=~/.cache/numba
-python -c "import genesis, torch; print('OK', torch.__version__, 'cuda:', torch.cuda.is_available())"
 
 # Preview xArm 6 GLB model
 python examples/view_robot_glb.py --robot xarm6_1305
@@ -89,7 +89,7 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 |------|---------|--------|
 | `--gripper-g2` | Gripper G2 | Load combo URDF |
 | `--movable` | Gripper G2 / Lite6 Gripper / Bio Gripper G2 | Per-link GLBs (required for animation) |
-| `--gripper-demo` | Gripper G2 / Lite6 Gripper | Cycle open ↔ close |
+| `--gripper-demo` | Gripper G2 / Bio Gripper G2 / Lite6 Gripper | Cycle open ↔ close |
 | `--bio-gripper-g2` | Bio Gripper G2 | Static GLB overlay |
 | `--lite6-gripper` | Lite6 Gripper | Lite6 parallel gripper combo URDF |
 | `--lite6-vacuum-gripper` | Lite6 Vacuum Gripper | Lite6 vacuum static GLB |
@@ -176,7 +176,7 @@ xArm 6 is the reference robot in this repo, with kinematics/dynamics verificatio
 ufactory/             # Core Python package (robot registry, paths, kinematics, GLB)
 assets/urdf/          # Robot URDFs, STL collision, GLB visual meshes
 assets/scenes/        # Simulation scene assets (textures, props)
-examples/             # Usage examples (viewer, FK/IK, RL, LeRobot)
+examples/             # Usage examples (viewer, FK/IK, RL)
 scripts/              # Asset generation and maintenance scripts
 tests/                # Pytest test suite
 docs/                 # Extended documentation
@@ -202,6 +202,6 @@ If you use genesis-ufactory in your research, please cite:
   title = {genesis-ufactory: UFACTORY Robot Models for Genesis Simulation},
   year = {2026},
   publisher = {GitHub},
-  url = {https://github.com/ufactory/genesis-ufactory}
+  url = {https://github.com/DanielWang123321/ufactory_genesis}
 }
 ```

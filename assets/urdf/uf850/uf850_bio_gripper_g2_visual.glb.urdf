@@ -1,0 +1,287 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="uf850_bio_gripper_g2_visual.glb">
+  <material name="Black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="Red">
+    <color rgba="0.8 0.0 0.0 1.0" />
+  </material>
+  <material name="White">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="Silver">
+    <color rgba="0.753 0.753 0.753 1.0" />
+  </material>
+  <link name="world" />
+  <joint name="world_joint" type="fixed">
+    <parent link="world" />
+    <child link="link_base" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link name="link_base">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.00025599 -2.8579E-06 0.085749" />
+      <mass value="2.2684" />
+      <inertia ixx="0.0063949" ixy="-8.0653E-07" ixz="-2.1841E-05" iyy="0.0064375" iyz="-4.2181E-07" izz="0.0048631" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link_base.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link_base.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="5.7e-05 0.013842 -0.02055" />
+      <mass value="4.807" />
+      <inertia ixx="0.022001728999999998" ixy="-1.1152e-05" ixz="6.7380000000000005e-06" iyy="0.018900685" iyz="-0.000364084" izz="0.012270188" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link1.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link1.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint1" type="revolute">
+    <parent link="link_base" />
+    <child link="link1" />
+    <origin rpy="0 0 0" xyz="0 0 0.364" />
+    <axis xyz="0 0 1" />
+    <limit effort="200.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="16.6" friction="9.6" />
+  </joint>
+  <link name="link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.323425 9.5e-05 0.007586" />
+      <mass value="3.28" />
+      <inertia ixx="0.0076119840000000005" ixy="-3.3561e-05" ixz="0.008240021" iyy="0.06420854" iyz="-1.6145e-05" izz="0.06117569999999999" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link2.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link2.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint2" type="revolute">
+    <parent link="link1" />
+    <child link="link2" />
+    <origin rpy="1.5708 -1.5708 0" xyz="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit effort="200.0" lower="-2.3038346" upper="2.3038346" velocity="3.14" />
+    <dynamics damping="12.5" friction="12.1" />
+  </joint>
+  <link name="link3">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.128834 0.11341 0.00978" />
+      <mass value="2.237" />
+      <inertia ixx="0.009920314" ixy="-0.005137841" ixz="0.0026284259999999997" iyy="0.008923236000000001" iyz="0.002412869" izz="0.014284809999999998" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link3.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link3.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint3" type="revolute">
+    <parent link="link2" />
+    <child link="link3" />
+    <origin rpy="-3.1416 0 -1.5708" xyz="0.39 0 0" />
+    <axis xyz="0 0 1" />
+    <limit effort="90.0" lower="-4.2236968" upper="0.061087" velocity="3.14" />
+    <dynamics damping="4.0" friction="5.5" />
+  </joint>
+  <link name="link4">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.000266 -0.03833 -0.101915" />
+      <mass value="2.041" />
+      <inertia ixx="0.019918597" ixy="-2.3185e-05" ixz="5.816899999999999e-05" iyy="0.017515193999999998" iyz="0.005878608" izz="0.004283807" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link4.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link4.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint4" type="revolute">
+    <parent link="link3" />
+    <child link="link4" />
+    <origin rpy="-1.5708 0 0" xyz="0.15 0.426 0" />
+    <axis xyz="0 0 1" />
+    <limit effort="68.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="3.6" friction="2.2" />
+  </joint>
+  <link name="link5">
+    <inertial>
+      <origin rpy="0 0 0" xyz="5.7e-05 -0.015267 -0.001015" />
+      <mass value="1.385" />
+      <inertia ixx="0.0020774540000000003" ixy="-5.026e-06" ixz="-6.989999999999999e-07" iyy="0.001109183" iyz="6.747e-06" izz="0.0020357" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link5.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link5.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint5" type="revolute">
+    <parent link="link4" />
+    <child link="link5" />
+    <origin rpy="-1.5708 0 0" xyz="0 0 0" />
+    <axis xyz="0 0 1" />
+    <limit effort="19.0" lower="-2.1642" upper="2.1642" velocity="3.14" />
+    <dynamics damping="3.45" friction="3.2" />
+  </joint>
+  <link name="link6">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.000484 -0.000334 -0.014217" />
+      <mass value="0.225" />
+      <inertia ixx="0.000130252" ixy="-4.285e-06" ixz="3.19e-07" iyy="0.000128308" iyz="-3.86e-07" izz="0.00023249999999999999" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/uf850/visual_glb/link6.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="meshes/uf850/collision/link6.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint6" type="revolute">
+    <parent link="link5" />
+    <child link="link6" />
+    <origin rpy="1.5708 0 0" xyz="0 -0.09 0" />
+    <axis xyz="0 0 1" />
+    <limit effort="19.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="3.4" friction="1.1" />
+  </joint>
+  <link name="bio_gripper_g2_visual">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_visual_link6.glb" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="bio_gripper_g2_visual_fix" type="fixed">
+    <parent link="link6" />
+    <child link="bio_gripper_g2_visual" />
+    <origin xyz="0 0 0" rpy="3.14159265 0 0" />
+  </joint>
+  <joint name="bio_gripper_g2_attach" type="fixed">
+    <parent link="link6" />
+    <child link="bio_gripper_g2_base_link" />
+    <origin xyz="0 0 0" rpy="3.14159265 0 0" />
+  </joint>
+  <link name="bio_gripper_g2_base_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.016179 -2.3911E-05 0.023897" />
+      <mass value="0.38837" />
+      <inertia ixx="0.00088398" ixy="4.8665E-08" ixz="5.6276E-06" iyy="0.00018256" iyz="4.0828E-08" izz="0.00094673" />
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/visual/link_base.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="bio_gripper_g2_left_finger">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.021846 -0.0276 0.011911" />
+      <mass value="0.012105" />
+      <inertia ixx="3.7322E-06" ixy="4.1705E-06" ixz="-4.0142E-06" iyy="1.744E-05" iyz="1.2237E-06" izz="1.7775E-05" />
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/visual/left_finger.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="bio_gripper_g2_left_finger_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0.059 0 0.027" />
+    <parent link="bio_gripper_g2_base_link" />
+    <child link="bio_gripper_g2_left_finger" />
+    <axis xyz="0 1 0" />
+    <limit effort="2.0" lower="-0.04" upper="0.0" velocity="0.1" />
+    <mimic joint="bio_gripper_g2_right_finger_joint" multiplier="-1" offset="0" />
+  </joint>
+  <link name="bio_gripper_g2_right_finger">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.02037 0.027565 0.010274" />
+      <mass value="0.012068" />
+      <inertia ixx="4.1413E-06" ixy="-3.9682E-06" ixz="-4.5734E-06" iyy="1.6115E-05" iyz="-1.6711E-06" izz="1.6032E-05" />
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/visual/right_finger.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="bio_gripper_g2_right_finger_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0.059 0 0.027" />
+    <parent link="bio_gripper_g2_base_link" />
+    <child link="bio_gripper_g2_right_finger" />
+    <axis xyz="0 1 0" />
+    <limit effort="2.0" lower="0" upper="0.04" velocity="0.1" />
+  </joint>
+  <link name="bio_gripper_g2_tcp_link" />
+  <joint name="bio_gripper_g2_tcp_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.135 0 0.055" />
+    <parent link="bio_gripper_g2_base_link" />
+    <child link="bio_gripper_g2_tcp_link" />
+  </joint>
+</robot>

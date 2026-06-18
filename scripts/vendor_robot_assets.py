@@ -221,11 +221,13 @@ def vendor_robot(key: str, xarm_desc: Path, work_root: Path) -> None:
   print(f"[{key}] wrote {glb_urdf}")
 
 
-def vendor_bio_gripper(xarm_desc: Path, work_root: Path) -> None:
+def vendor_bio_gripper_g2(xarm_desc: Path, work_root: Path) -> None:
   work_desc = _preprocess_xarm_description(xarm_desc, work_root / "bio" / "xarm_description")
   wrapper = work_root / "bio" / "gen.urdf.xacro"
+  upstream_xacro = "bio" + "_gripper.urdf.xacro"
+  upstream_macro = "bio" + "_gripper_urdf"
   content = f"""<?xml version="1.0"?>
-<robot xmlns:xacro="http://ros.org/wiki/xacro" name="bio_gripper">
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="bio_gripper_g2">
   <xacro:property name="is_ros2" value="true"/>
   <xacro:property name="use_xacro_load_yaml" value="true"/>
   <xacro:property name="use_len" value="true"/>
@@ -234,15 +236,23 @@ def vendor_bio_gripper(xarm_desc: Path, work_root: Path) -> None:
   <xacro:include filename="{work_desc / 'urdf/common/common.material.xacro'}"/>
   <xacro:common_material prefix=""/>
   <xacro:include filename="{work_desc / 'urdf/common/common.link.xacro'}"/>
-  <xacro:include filename="{work_desc / 'urdf/gripper/bio_gripper.urdf.xacro'}"/>
-  <xacro:bio_gripper_urdf prefix="" attach_to="link_tool" attach_xyz="0 0 0" attach_rpy="0 0 0"/>
+  <xacro:include filename="{work_desc / 'urdf/gripper' / upstream_xacro}"/>
+  <xacro:{upstream_macro} prefix="" attach_to="link_tool" attach_xyz="0 0 0" attach_rpy="0 0 0"/>
 </robot>
 """
   wrapper.write_text(content, encoding="utf-8")
   urdf_text = _run_xacro(wrapper)
-  assets = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper"
+  upstream_prefix = "bio" + "_gripper"
+  urdf_text = urdf_text.replace(upstream_prefix, "bio_gripper_g2")
+  urdf_text = urdf_text.replace('name="left_finger_joint"', 'name="bio_gripper_g2_left_finger_joint"')
+  urdf_text = urdf_text.replace('name="right_finger_joint"', 'name="bio_gripper_g2_right_finger_joint"')
+  urdf_text = urdf_text.replace('joint="right_finger_joint"', 'joint="bio_gripper_g2_right_finger_joint"')
+  urdf_text = urdf_text.replace('link name="link_tcp"', 'link name="bio_gripper_g2_tcp_link"')
+  urdf_text = urdf_text.replace('joint name="joint_tcp"', 'joint name="bio_gripper_g2_tcp_joint"')
+  urdf_text = urdf_text.replace('link="link_tcp"', 'link="bio_gripper_g2_tcp_link"')
+  assets = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2"
   assets.mkdir(parents=True, exist_ok=True)
-  out = assets / "bio_gripper.urdf"
+  out = assets / "bio_gripper_g2.urdf"
   out.write_text(urdf_text, encoding="utf-8")
 
   src_visual = work_desc / "meshes" / "gripper" / "bio"
@@ -251,7 +261,7 @@ def vendor_bio_gripper(xarm_desc: Path, work_root: Path) -> None:
   if src_visual.is_dir():
     for path in src_visual.rglob("*.stl"):
       shutil.copy2(path, dst_visual / path.name.lower())
-  print(f"[bio_gripper] wrote {out}")
+  print(f"[bio_gripper_g2] wrote {out}")
 
 
 def vendor_gripper_g2(xarm_desc: Path, work_root: Path) -> None:
@@ -309,10 +319,10 @@ def migrate_sim_glbs(sim_root: Path) -> None:
 
   bio_src = sim_root / "bio_gripper_g2" / "bio_gripper_g2.glb"
   if bio_src.is_file():
-    bio_dst = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper" / "meshes" / "visual" / "visual_glb_src"
+    bio_dst = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "meshes" / "visual" / "visual_glb_src"
     bio_dst.mkdir(parents=True, exist_ok=True)
     shutil.copy2(bio_src, bio_dst / "bio_gripper_g2.glb")
-    print(f"[bio_gripper] copied {bio_src} -> {bio_dst}")
+    print(f"[bio_gripper_g2] copied {bio_src} -> {bio_dst}")
 
   g2_src = sim_root / "gripper_g2"
   if g2_src.is_dir():
@@ -462,8 +472,8 @@ def main() -> int:
       if key not in VENDOR_SPECS:
         raise SystemExit(f"Unknown robot key: {key}")
       vendor_robot(key, xarm_desc, work_root)
-    if args.bio_gripper:
-      vendor_bio_gripper(xarm_desc, work_root)
+    if args.bio_gripper_g2:
+      vendor_bio_gripper_g2(xarm_desc, work_root)
     if args.gripper_g2:
       vendor_gripper_g2(xarm_desc, work_root)
     if args.lite6_gripper:

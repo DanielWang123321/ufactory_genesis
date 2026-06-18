@@ -32,8 +32,8 @@ from ufactory.paths import (
     uf850_urdf,
     uf850_visual_glb_urdf,
     # Gripper helpers
-    bio_gripper_glb,
-    bio_gripper_movable_visual_urdf,
+    bio_gripper_g2_glb,
+    bio_gripper_g2_movable_visual_urdf,
     gripper_g2_static_glb,
     gripper_g2_base_glb,
     gripper_g2_shared_glb,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.1.0"
+version = "0.1.1"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -27,9 +27,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ufactory/genesis-ufactory"
-Repository = "https://github.com/ufactory/genesis-ufactory"
-Issues = "https://github.com/ufactory/genesis-ufactory/issues"
+Homepage = "https://github.com/DanielWang123321/ufactory_genesis"
+Repository = "https://github.com/DanielWang123321/ufactory_genesis"
+Issues = "https://github.com/DanielWang123321/ufactory_genesis/issues"
 
 # NOTE: This project is designed for editable install (pip install -e .).
 # Assets (URDF, STL, GLB) live outside the Python package in assets/ and
@@ -41,6 +41,7 @@ where = ["."]
 include = ["ufactory*"]
 
 [tool.pytest.ini_options]
+norecursedirs = ["dev"]
 markers = [
     "hardware: tests requiring xArm SDK or real robot network",
 ]

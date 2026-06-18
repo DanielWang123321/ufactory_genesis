@@ -194,7 +194,21 @@ def _gripper_demo_target(step: int) -> float:
     return GRIPPER_CLOSE if phase else GRIPPER_OPEN
 
 
+def _ensure_fk_scratch(robot) -> None:
+    if hasattr(robot, "_IK_qpos_orig"):
+        return
+    if robot.n_qs == 0:
+        return
+
+    # Genesis 1.1.2 forward_kinematics() reuses this IK scratch field but
+    # creates it lazily only from the IK path. Allocate just the field FK needs.
+    import quadrants as qd
+
+    robot._IK_qpos_orig = qd.field(dtype=gs.qd_float, shape=(robot.n_qs, robot._solver._B))
+
+
 def _fk_link6_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
+    _ensure_fk_scratch(robot)
     qpos_t = torch.tensor(qpos_np, dtype=torch.float32, device=gs.device)
     links_pos, _ = robot.forward_kinematics(qpos=qpos_t)
     idx = int(ee_link.idx_local)
@@ -374,7 +388,7 @@ def main():
             hold_gripper=idle_gripper_kinematic_hold,
             all_gripper_dof_idx=all_gripper_dof_idx,
             all_lite6_gripper_dof_idx=[],
-            all_bio_gripper_dof_idx=[],
+            all_bio_gripper_g2_dof_idx=[],
         )
 
     if args.pd and arm_dof_idx:
@@ -399,7 +413,7 @@ def main():
             home=HOME_QPOS,
             all_gripper_dof_idx=all_gripper_dof_idx,
             all_lite6_gripper_dof_idx=[],
-            all_bio_gripper_dof_idx=[],
+            all_bio_gripper_g2_dof_idx=[],
         )
 
     if not args.headless:
@@ -419,7 +433,7 @@ def main():
                 home=HOME_QPOS,
                 all_gripper_dof_idx=all_gripper_dof_idx,
                 all_lite6_gripper_dof_idx=[],
-                all_bio_gripper_dof_idx=[],
+                all_bio_gripper_g2_dof_idx=[],
             )
             time.sleep(0.01)
         return
@@ -468,7 +482,7 @@ def main():
             home=HOME_QPOS,
             all_gripper_dof_idx=all_gripper_dof_idx,
             all_lite6_gripper_dof_idx=[],
-            all_bio_gripper_dof_idx=[],
+            all_bio_gripper_g2_dof_idx=[],
         )
         step += 1
         time.sleep(0.01)

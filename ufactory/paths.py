@@ -8,7 +8,7 @@ XARM5_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "xarm5"
 XARM7_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "xarm7"
 LITE6_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6"
 UF850_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "uf850"
-BIO_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper"
+BIO_GRIPPER_G2_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2"
 GRIPPER_G2_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "gripper_g2"
 LITE6_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper"
 LITE6_VACUUM_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper"
@@ -49,9 +49,9 @@ def xarm6_1305_urdf() -> str:
   return xarm6_urdf("xarm6_1305.urdf")
 
 
-def xarm6_1305_visual_glb_urdf(with_gripper_g2: bool = False, movable: bool = False) -> str:
-  """Return URDF path for xArm6 1305 GLB visual model (optionally with Gripper G2)."""
-  return robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=with_gripper_g2, movable=movable)
+def xarm6_1305_visual_glb_urdf(with_bio_gripper_g2: bool = False, with_gripper_g2: bool = False, movable: bool = False) -> str:
+  """Return URDF path for xArm6 1305 GLB visual model (optionally with Gripper G2 or Bio Gripper G2)."""
+  return robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=with_bio_gripper_g2, with_gripper_g2=with_gripper_g2, movable=movable)
 
 
 def robot_assets(robot_name: str) -> Path:
@@ -197,8 +197,8 @@ def uf850_visual_glb_urdf(with_bio_gripper_g2: bool = False) -> str:
   return robot_visual_glb_urdf("uf850", with_bio_gripper_g2=with_bio_gripper_g2)
 
 
-def bio_gripper_glb(ee_link: str = "link6") -> str:
-  path = BIO_GRIPPER_ASSETS / "meshes" / "visual" / f"bio_gripper_g2_visual_{ee_link}.glb"
+def bio_gripper_g2_glb(ee_link: str = "link6") -> str:
+  path = BIO_GRIPPER_G2_ASSETS / "meshes" / "visual" / f"bio_gripper_g2_visual_{ee_link}.glb"
   if not path.exists():
     raise FileNotFoundError(path)
   return str(path.resolve())
@@ -233,9 +233,9 @@ def gripper_g2_movable_visual_urdf() -> str:
   return str(path.resolve())
 
 
-def bio_gripper_movable_visual_urdf() -> str:
+def bio_gripper_g2_movable_visual_urdf() -> str:
   """Standalone Bio Gripper G2 movable visual URDF (no arm)."""
-  path = BIO_GRIPPER_ASSETS / "bio_gripper_movable_visual.urdf"
+  path = BIO_GRIPPER_G2_ASSETS / "bio_gripper_g2_movable_visual.urdf"
   if not path.exists():
     raise FileNotFoundError(path)
   return str(path.resolve())

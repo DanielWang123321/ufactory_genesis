@@ -14,13 +14,13 @@ G2_COLLISION = "../gripper_g2/meshes/collision"
 G2_VISUAL = "../gripper_g2/meshes/visual"
 
 GRIPPER_LINK_MESHES: dict[str, tuple[str | None, str]] = {
-  "xarm_gripper_base_link": ("base.glb", "base_link.STL"),
-  "left_outer_knuckle": ("left_outer_knuckle.glb", "left_outer_knuckle.STL"),
-  "left_finger": ("left_finger.glb", "left_finger.STL"),
-  "left_inner_knuckle": ("left_inner_knuckle.glb", "left_inner_knuckle.STL"),
-  "right_outer_knuckle": ("right_outer_knuckle.glb", "right_outer_knuckle.STL"),
-  "right_finger": ("right_finger.glb", "right_finger.STL"),
-  "right_inner_knuckle": ("right_inner_knuckle.glb", "right_inner_knuckle.STL"),
+  "xarm_gripper_base_link": ("base.glb", "base_link.stl"),
+  "left_outer_knuckle": ("left_outer_knuckle.glb", "left_outer_knuckle.stl"),
+  "left_finger": ("left_finger.glb", "left_finger.stl"),
+  "left_inner_knuckle": ("left_inner_knuckle.glb", "left_inner_knuckle.stl"),
+  "right_outer_knuckle": ("right_outer_knuckle.glb", "right_outer_knuckle.stl"),
+  "right_finger": ("right_finger.glb", "right_finger.stl"),
+  "right_inner_knuckle": ("right_inner_knuckle.glb", "right_inner_knuckle.stl"),
 }
 
 _TEMPLATE_URDF = GRIPPER_G2_ASSETS / "gripper_g2.urdf"

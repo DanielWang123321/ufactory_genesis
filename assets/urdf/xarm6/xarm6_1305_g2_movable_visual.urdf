@@ -219,7 +219,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/base_link.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/base_link.stl" />
       </geometry>
     </collision>
   </link>
@@ -238,7 +238,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/left_outer_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/left_outer_knuckle.stl" />
       </geometry>
     </collision>
   </link>
@@ -265,7 +265,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/left_finger.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/left_finger.stl" />
       </geometry>
     </collision>
   </link>
@@ -293,7 +293,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/left_inner_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/left_inner_knuckle.stl" />
       </geometry>
     </collision>
   </link>
@@ -321,7 +321,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/right_outer_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/right_outer_knuckle.stl" />
       </geometry>
     </collision>
   </link>
@@ -349,7 +349,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/right_finger.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/right_finger.stl" />
       </geometry>
     </collision>
   </link>
@@ -377,7 +377,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/collision/right_inner_knuckle.STL" />
+        <mesh filename="../gripper_g2/meshes/collision/right_inner_knuckle.stl" />
       </geometry>
     </collision>
   </link>

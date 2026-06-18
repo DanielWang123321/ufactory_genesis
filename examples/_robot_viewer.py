@@ -11,13 +11,13 @@ import genesis as gs
 from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.robot_registry import RobotModelSpec, joint_names
 
-from _bio_gripper_demo import (
-  BIO_GRIPPER_OPEN,
-  bio_gripper_demo_target,
-  bio_gripper_dof_indices,
-  control_bio_gripper_pose,
-  set_bio_gripper_pose,
-  setup_bio_gripper_pd,
+from _bio_gripper_g2_demo import (
+  BIO_GRIPPER_G2_OPEN,
+  bio_gripper_g2_demo_target,
+  bio_gripper_g2_dof_indices,
+  control_bio_gripper_g2_pose,
+  set_bio_gripper_g2_pose,
+  setup_bio_gripper_g2_pd,
 )
 from _gripper_demo import (
   GRIPPER_OPEN,
@@ -154,7 +154,7 @@ def _apply_kinematic_hold(
   hold_gripper: bool,
   all_gripper_dof_idx: list[int],
   all_lite6_gripper_dof_idx: list[int],
-  all_bio_gripper_dof_idx: list[int],
+  all_bio_gripper_g2_dof_idx: list[int],
 ) -> None:
   """Visual-only hold: teleport joints after physics step, no PD."""
   if hold_arm and arm_dof_idx:
@@ -165,8 +165,8 @@ def _apply_kinematic_hold(
     _set_gripper_kinematic(robot, all_gripper_dof_idx, GRIPPER_OPEN)
   elif all_lite6_gripper_dof_idx:
     _set_gripper_kinematic(robot, all_lite6_gripper_dof_idx, LITE6_GRIPPER_OPEN)
-  elif all_bio_gripper_dof_idx:
-    _set_gripper_kinematic(robot, all_bio_gripper_dof_idx, BIO_GRIPPER_OPEN)
+  elif all_bio_gripper_g2_dof_idx:
+    _set_gripper_kinematic(robot, all_bio_gripper_g2_dof_idx, BIO_GRIPPER_G2_OPEN)
 
 
 def _kinematic_step(
@@ -179,7 +179,7 @@ def _kinematic_step(
   home: np.ndarray,
   all_gripper_dof_idx: list[int],
   all_lite6_gripper_dof_idx: list[int],
-  all_bio_gripper_dof_idx: list[int],
+  all_bio_gripper_g2_dof_idx: list[int],
   arm_target: np.ndarray | None = None,
 ) -> None:
   """Advance sim one step; held DOFs are teleported immediately before and after."""
@@ -193,7 +193,7 @@ def _kinematic_step(
       hold_gripper=idle_gripper_kinematic_hold,
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
-      all_bio_gripper_dof_idx=all_bio_gripper_dof_idx,
+      all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
     )
     scene.step(update_visualizer=False)
     _apply_kinematic_hold(
@@ -204,7 +204,7 @@ def _kinematic_step(
       hold_gripper=idle_gripper_kinematic_hold,
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
-      all_bio_gripper_dof_idx=all_bio_gripper_dof_idx,
+      all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
     )
     visualizer = getattr(scene, "visualizer", None)
     if getattr(visualizer, "viewer", None) is not None:
@@ -288,71 +288,13 @@ def run_glb_viewer(
     tcp_marker = add_tcp_marker(scene)
   scene.build()
 
-  # #region agent log
-  if "bio_gripper" in urdf_path:
-    import json
-    import time
-    from pathlib import Path as _Path
-
-    import trimesh as _trimesh
-    from scipy.spatial.transform import Rotation as _R
-
-    _log = _Path(__file__).resolve().parents[1] / ".cursor" / "debug-e97626.log"
-    _Rx = _R.from_euler("x", 180.0, degrees=True).as_matrix()
-    _t_joint = np.array([0.059, 0.0, 0.027])
-    _ee = profile.ee_link
-    _movable = "movable" in urdf_path
-    _vis_root = _Path(urdf_path).parent / "../bio_gripper/meshes/visual"
-    _data = {"urdf": urdf_path, "movable": _movable, "ee_link": _ee, "attach_rpy": "0 0 0"}
-    _base = (_vis_root / f"visual_glb/{_ee}/bio_gripper_base.glb").resolve()
-    if _base.is_file():
-      _scene = _trimesh.load(_base, force="scene")
-      _metal = list(_scene.geometry.values())[-1]
-      _z_mount = float(_metal.vertices[:, 2].min())
-      _vis = _metal.copy()
-      _vis.vertices = _vis.vertices @ _Rx.T
-      _data["metal_z_min_mm_raw"] = round(_z_mount * 1000, 2)
-      _data["metal_z_min_mm_after_vis_pi"] = round(float(_vis.vertices[:, 2].min()) * 1000, 2)
-    if _movable:
-      _static = (_vis_root / f"bio_gripper_g2_visual_{_ee}.glb").resolve()
-      for _side, _fname in (("left", "bio_left_finger.glb"), ("right", "bio_right_finger.glb")):
-        _finger = (_vis_root / f"visual_glb/{_ee}/{_fname}").resolve()
-        if _static.is_file() and _finger.is_file():
-          _sg = _trimesh.load(_static, force="mesh")
-          _fg = _trimesh.load(_finger, force="mesh")
-          _sv = _sg.vertices
-          _ym = 1 if _side == "right" else -1
-          _sm = _sv[(_sv[:, 1] * _ym > 0.003) & (_sv[:, 0] > 0.05)]
-          if len(_sm):
-            _static_c = (_sm @ _Rx.T).mean(axis=0)
-            _mov_c = (_fg.vertices + _t_joint).mean(axis=0)
-            _data[f"{_side}_finger_disp_delta_mm"] = round(
-              float(np.linalg.norm(_static_c - _mov_c) * 1000), 3
-            )
-    try:
-      _payload = {
-        "sessionId": "e97626",
-        "runId": "finger-pos-fix",
-        "hypothesisId": "H2",
-        "location": "_robot_viewer.py:post_build",
-        "message": "movable finger display vs static",
-        "data": _data,
-        "timestamp": int(time.time() * 1000),
-      }
-      _log.parent.mkdir(parents=True, exist_ok=True)
-      with _log.open("a", encoding="utf-8") as _f:
-        _f.write(json.dumps(_payload, default=str) + "\n")
-    except OSError:
-      pass
-  # #endregion
-
   jnames = joint_names(profile)
   home = np.zeros(profile.dof)
   joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
   arm_dof_idx = [joint_map[n].dofs_idx_local[0] for n in jnames if n in joint_map]
   gripper_dof_idx, all_gripper_dof_idx = gripper_dof_indices(robot)
   lite6_gripper_dof_idx, all_lite6_gripper_dof_idx = lite6_gripper_dof_indices(robot)
-  bio_gripper_dof_idx, all_bio_gripper_dof_idx = bio_gripper_dof_indices(robot)
+  bio_gripper_g2_dof_idx, all_bio_gripper_g2_dof_idx = bio_gripper_g2_dof_indices(robot)
   arm_kinematic_hold = not pd_demo
   idle_gripper_kinematic_hold = not gripper_demo
 
@@ -365,7 +307,7 @@ def run_glb_viewer(
   if arm_kinematic_hold:
     held_dof_idx.extend(arm_dof_idx)
   if idle_gripper_kinematic_hold:
-    held_dof_idx.extend(all_gripper_dof_idx or all_lite6_gripper_dof_idx or all_bio_gripper_dof_idx)
+    held_dof_idx.extend(all_gripper_dof_idx or all_lite6_gripper_dof_idx or all_bio_gripper_g2_dof_idx)
   if held_dof_idx:
     _disable_robot_pd(robot, sorted(set(held_dof_idx)))
   if arm_kinematic_hold or idle_gripper_kinematic_hold:
@@ -377,7 +319,7 @@ def run_glb_viewer(
       hold_gripper=idle_gripper_kinematic_hold,
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
-      all_bio_gripper_dof_idx=all_bio_gripper_dof_idx,
+      all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
     )
   if pd_demo and arm_dof_idx:
     setup_arm_pd(robot, arm_dof_idx, profile.dof)
@@ -394,13 +336,13 @@ def run_glb_viewer(
       all_lite6_gripper_dof_idx,
       LITE6_GRIPPER_OPEN,
     )
-  elif gripper_demo and bio_gripper_dof_idx:
-    setup_bio_gripper_pd(robot, bio_gripper_dof_idx, all_bio_gripper_dof_idx)
-    set_bio_gripper_pose(
+  elif gripper_demo and bio_gripper_g2_dof_idx:
+    setup_bio_gripper_g2_pd(robot, bio_gripper_g2_dof_idx, all_bio_gripper_g2_dof_idx)
+    set_bio_gripper_g2_pose(
       robot,
-      bio_gripper_dof_idx,
-      all_bio_gripper_dof_idx,
-      BIO_GRIPPER_OPEN,
+      bio_gripper_g2_dof_idx,
+      all_bio_gripper_g2_dof_idx,
+      BIO_GRIPPER_G2_OPEN,
     )
 
   warmup_steps = 3 if arm_kinematic_hold else 100
@@ -418,7 +360,7 @@ def run_glb_viewer(
       home=home,
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
-      all_bio_gripper_dof_idx=all_bio_gripper_dof_idx,
+      all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
     )
 
   if headless:
@@ -474,17 +416,17 @@ def run_glb_viewer(
         all_lite6_gripper_dof_idx,
         lite6_gripper_demo_target(step),
       )
-    elif gripper_demo and bio_gripper_dof_idx:
+    elif gripper_demo and bio_gripper_g2_dof_idx:
       grip_phase = (step // 200) % 2
       if grip_phase != last_gripper_phase:
         label = "closed" if grip_phase else "open"
-        print(f"  Bio gripper target: {label}")
+        print(f"  Bio Gripper G2 target: {label}")
         last_gripper_phase = grip_phase
-      control_bio_gripper_pose(
+      control_bio_gripper_g2_pose(
         robot,
-        bio_gripper_dof_idx,
-        all_bio_gripper_dof_idx,
-        bio_gripper_demo_target(step),
+        bio_gripper_g2_dof_idx,
+        all_bio_gripper_g2_dof_idx,
+        bio_gripper_g2_demo_target(step),
       )
     if tcp_marker is not None and ee_link is not None:
       update_tcp_marker(tcp_marker, ee_link)
@@ -497,7 +439,7 @@ def run_glb_viewer(
       home=home,
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
-      all_bio_gripper_dof_idx=all_bio_gripper_dof_idx,
+      all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
       arm_target=arm_target,
     )
     step += 1

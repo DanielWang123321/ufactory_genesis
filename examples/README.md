@@ -29,7 +29,7 @@ python examples/view_robot_glb.py --robot xarm6_1305
 | 目录/文件 | 说明 |
 |-----------|------|
 | `gripper_g2/` | Gripper G2 可动视觉演示 |
-| `bio_gripper/` | Bio Gripper G2 可动视觉演示 |
+| `bio_gripper_g2/` | Bio Gripper G2 可动视觉演示 |
 | `lite6_gripper/` | Lite6 平行夹爪可动视觉演示 |
 
 ## 机械臂验证
@@ -64,9 +64,6 @@ xArm 6 拥有最完整的示例覆盖：
 |------|------|
 | `xarm6/xarm6_g2_showcase.py` | xArm6 + Gripper G2 物理装箱演示 |
 
-### LeRobot 集成
-`xarm6/lerobot/` — 16 个文件，涵盖数据集录制、策略评估、相机标定等。
-
 ## 内部模块
 
 以 `_` 前缀的文件是内部共享模块，被多个示例引用：
@@ -76,6 +73,6 @@ xArm 6 拥有最完整的示例覆盖：
 | `_bootstrap.py` | 添加项目根目录到 sys.path |
 | `_robot_viewer.py` | 共享 Genesis GLB 查看器核心 |
 | `_gripper_demo.py` | Gripper G2 开合控制 |
-| `_bio_gripper_demo.py` | Bio Gripper G2 开合控制 |
+| `_bio_gripper_g2_demo.py` | Bio Gripper G2 开合控制 |
 | `_lite6_gripper_demo.py` | Lite6 夹爪开合控制 |
 | `_packaging_scene.py` | 展示场景构建器 |

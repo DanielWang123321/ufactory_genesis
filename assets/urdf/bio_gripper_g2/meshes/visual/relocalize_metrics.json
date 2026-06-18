@@ -1,0 +1,194 @@
+[
+  {
+    "ee_link": "link5",
+    "output": "bio_gripper_g2_visual_link5.glb",
+    "verts": 15958,
+    "hole_fit_mm": 1.78,
+    "finger_dir": [
+      0.9644,
+      0.0047,
+      -0.2646
+    ],
+    "finger_dot_tcp": 0.7933,
+    "finger_y_abs": 0.0047,
+    "ring_gap_mm": 39.795,
+    "xy_ring_gap_mm": [
+      -16.22,
+      -4.12
+    ],
+    "stl_surface_mm": 36.45,
+    "pin_verts_mm": [
+      [
+        40.17,
+        -0.74,
+        1.54
+      ],
+      [
+        40.17,
+        -0.69,
+        1.54
+      ]
+    ],
+    "holes_mm": [
+      [
+        -1.07,
+        -24.2,
+        0.02
+      ],
+      [
+        -0.74,
+        22.84,
+        0.02
+      ]
+    ],
+    "pin_separation_mm": 45.26,
+    "z_shift_skipped_mm": 39.795,
+    "partition_counts": {
+      "base": 1,
+      "right_finger": 2,
+      "left_finger": 1
+    },
+    "finger_method": "ee_align_link_frame",
+    "frame_rx_pi": false,
+    "static_open_edge_ratio": 0.549,
+    "base_open_edge_ratio": 0.1132,
+    "base_extents_mm": [
+      96.64,
+      165.08,
+      50.53
+    ],
+    "left_open_edge_ratio": 0.2085,
+    "right_open_edge_ratio": 0.2113,
+    "base_verts": 121478,
+    "left_finger_verts": 23612,
+    "right_finger_verts": 23702
+  },
+  {
+    "ee_link": "link6",
+    "output": "bio_gripper_g2_visual_link6.glb",
+    "verts": 15958,
+    "hole_fit_mm": 2.69,
+    "finger_dir": [
+      0.9518,
+      0.0015,
+      -0.3069
+    ],
+    "finger_dot_tcp": 0.7656,
+    "finger_y_abs": 0.0015,
+    "ring_gap_mm": 39.794,
+    "xy_ring_gap_mm": [
+      -16.08,
+      24.71
+    ],
+    "stl_surface_mm": 41.26,
+    "pin_verts_mm": [
+      [
+        41.02,
+        -0.94,
+        -3.98
+      ],
+      [
+        41.02,
+        -0.9,
+        -3.98
+      ]
+    ],
+    "holes_mm": [
+      [
+        -0.11,
+        -18.12,
+        -5.5
+      ],
+      [
+        0.02,
+        16.11,
+        -5.5
+      ]
+    ],
+    "pin_separation_mm": 45.26,
+    "z_shift_skipped_mm": 39.794,
+    "partition_counts": {
+      "base": 1,
+      "right_finger": 2,
+      "left_finger": 1
+    },
+    "finger_method": "ee_align_link_frame",
+    "frame_rx_pi": false,
+    "static_open_edge_ratio": 0.549,
+    "base_open_edge_ratio": 0.1132,
+    "base_extents_mm": [
+      96.78,
+      165.14,
+      50.53
+    ],
+    "left_open_edge_ratio": 0.2085,
+    "right_open_edge_ratio": 0.2113,
+    "base_verts": 121478,
+    "left_finger_verts": 23612,
+    "right_finger_verts": 23702
+  },
+  {
+    "ee_link": "link7",
+    "output": "bio_gripper_g2_visual_link7.glb",
+    "verts": 15958,
+    "hole_fit_mm": 2.0,
+    "finger_dir": [
+      0.9657,
+      0.0288,
+      -0.2581
+    ],
+    "finger_dot_tcp": 0.7969,
+    "finger_y_abs": 0.0288,
+    "ring_gap_mm": 0.0,
+    "xy_ring_gap_mm": [
+      -27.42,
+      10.56
+    ],
+    "stl_surface_mm": 34.81,
+    "pin_verts_mm": [
+      [
+        41.05,
+        -0.05,
+        -1.56
+      ],
+      [
+        41.05,
+        -0.1,
+        -1.56
+      ]
+    ],
+    "holes_mm": [
+      [
+        0.17,
+        22.87,
+        -0.04
+      ],
+      [
+        -0.2,
+        -24.21,
+        -0.04
+      ]
+    ],
+    "pin_separation_mm": 45.26,
+    "z_shift_skipped_mm": -0.509,
+    "partition_counts": {
+      "base": 1,
+      "right_finger": 2,
+      "left_finger": 1
+    },
+    "finger_method": "ee_align_link_frame",
+    "frame_rx_pi": true,
+    "static_open_edge_ratio": 0.549,
+    "base_open_edge_ratio": 0.1132,
+    "base_extents_mm": [
+      97.48,
+      165.55,
+      50.53
+    ],
+    "left_open_edge_ratio": 0.2113,
+    "right_open_edge_ratio": 0.2085,
+    "base_verts": 121478,
+    "left_finger_verts": 23702,
+    "right_finger_verts": 23612
+  }
+]

@@ -6,16 +6,15 @@ Thanks for your interest in contributing! This guide explains how to set up your
 
 ```bash
 # Clone the repository
-git clone https://github.com/ufactory/genesis-ufactory.git
-cd genesis-ufactory
+git clone https://github.com/DanielWang123321/ufactory_genesis.git
+cd ufactory_genesis
 
 # Create a virtual environment (Python >= 3.12 required)
-conda create -n py313 python=3.13
-conda activate py313
+python -m venv .venv
+source .venv/bin/activate
 
-# Install PyTorch (CUDA 13.0 example)
-pip install torch==2.12.0+cu130 torchvision==0.27.0+cu130 \
-    --index-url https://download.pytorch.org/whl/cu130
+# Install Genesis (platform-specific: https://genesis-world.readthedocs.io/)
+pip install genesis-world==1.1.2
 
 # Install in editable mode
 pip install -e .
@@ -60,7 +59,7 @@ Robot URDF assets are generated via a multi-step pipeline:
 |-----------|---------|
 | `ufactory/` | Core Python package (robot registry, paths, kinematics, GLB visuals) |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
-| `examples/` | Usage examples (viewer, FK/IK verification, RL, LeRobot) |
+| `examples/` | Usage examples (viewer, FK/IK verification, RL) |
 | `scripts/` | Asset generation and maintenance scripts |
 | `tests/` | Pytest test suite |
 | `docs/` | Additional documentation |

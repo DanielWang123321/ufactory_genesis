@@ -1,4 +1,0 @@
-lerobot>=0.5.0
-imageio[ffmpeg]>=2.34
-scipy>=1.11
-opencv-python-headless>=4.8
