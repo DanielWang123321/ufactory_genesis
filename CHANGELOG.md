@@ -5,6 +5,26 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — 2026-06-22
+
+### Added
+
+- **`BioGripperG2` controller module** (`ufactory/bio_gripper_g2.py`) for reusable open/close control across all supported arms
+- **Per-robot `bio_gripper_g2_attach` origins** computed during relocalize and written into combo URDFs
+- **`robot_cli_choices()`** and short-name aliases: `xarm5` / `xarm6` / `xarm7` resolve to `*_1305` profiles
+- **`tests/test_robot_registry.py`** for profile resolution and default URDF paths
+
+### Changed
+
+- **Bio Gripper G2 movable mount** uses canonical EE pin-hole alignment (fixes UF850 flange inversion and finger +X orientation)
+- **Regenerated** Bio Gripper G2 combo URDFs, per-link GLBs, and `relocalize_metrics.json`
+- **Default xArm URDF** paths now point to `*_1305.urdf` (`xarm6_urdf()` and friends); CLI/docs recommend short names `xarm6` etc.
+
+### Fixed
+
+- UF850 Bio Gripper G2 movable attach (`ring_gap_mm=0`, fingers toward base +X)
+- `verify_bio_gripper_g2_assets.py` world-frame finger-direction checks for movable combos
+
 ## [0.1.1] — 2026-06-18
 
 ### Changed
