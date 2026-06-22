@@ -41,16 +41,18 @@ pip install -e .
 export NUMBA_CACHE_DIR=~/.cache/numba
 
 # Preview xArm 6 GLB model
-python examples/view_robot_glb.py --robot xarm6_1305
+python examples/view_robot_glb.py --robot xarm6
 ```
+
+Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names `xarm5` / `xarm6` / `xarm7` resolve to `xarm5_1305` / `xarm6_1305` / `xarm7_1305`. The explicit `*_1305` keys remain supported. Older model codes (11, 12, 1300–1304) are not bundled — supply your own URDF via `--urdf` or `prepare_robot_model_for_verification(robot_model=...)`.
 
 ## Supported Robots
 
-| profile key | Model | DOF | Gripper G2 | Bio Gripper G2 | Lite6 Gripper | Lite6 Vacuum |
-|-------------|-------|-----|:----------:|:--------------:|:-------------:|:------------:|
-| `xarm5_1305` | xArm 5 | 5 | ✓ | ✓ | — | — |
-| `xarm6_1305` | xArm 6 | 6 | ✓ | ✓ | — | — |
-| `xarm7_1305` | xArm 7 | 7 | ✓ | ✓ | — | — |
+| profile key | alias | Model | DOF | Gripper G2 | Bio Gripper G2 | Lite6 Gripper | Lite6 Vacuum |
+|-------------|-------|-------|-----|:----------:|:--------------:|:-------------:|:------------:|
+| `xarm5_1305` | `xarm5` | xArm 5 | 5 | ✓ | ✓ | — | — |
+| `xarm6_1305` | `xarm6` | xArm 6 | 6 | ✓ | ✓ | — | — |
+| `xarm7_1305` | `xarm7` | xArm 7 | 7 | ✓ | ✓ | — | — |
 | `uf850` | UF850 | 6 | ✓ | ✓ | — | — |
 | `lite6` | Lite6 | 6 | — | — | ✓ | ✓ |
 
@@ -69,8 +71,8 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 python examples/view_robot_glb.py --robot <profile_key>
 
 # Gripper G2 (static / movable open-close)
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --gripper-demo
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2 --movable --gripper-demo
 
 # Bio Gripper G2 (static)
 python examples/view_robot_glb.py --robot uf850 --bio-gripper-g2
@@ -107,8 +109,9 @@ import ufactory
 | Function / Object | Description |
 |-------------------|-------------|
 | `ufactory.ROBOT_PROFILES` | Dict of all supported robot `RobotModelSpec` entries |
-| `ufactory.get_robot_profile(key)` | Get `RobotModelSpec` by profile key |
-| `ufactory.get_profile_key_for_robot_name(name)` | Resolve robot name to profile key |
+| `ufactory.get_robot_profile(key)` | Get `RobotModelSpec` by profile key or short name (`xarm6`) |
+| `ufactory.get_profile_key_for_robot_name(name)` | Resolve robot name to profile key (`xarm6` → `xarm6_1305`) |
+| `ufactory.robot_cli_choices()` | Sorted `--robot` choices (keys + short aliases) |
 | `ufactory.arm_link_names(profile)` | Link name tuple for a robot profile |
 | `ufactory.joint_names(profile)` | Joint name tuple for a robot profile |
 
@@ -119,7 +122,8 @@ import ufactory
 | `ufactory.robot_urdf(key)` | Absolute path to default URDF |
 | `ufactory.robot_visual_glb_urdf(key, ...)` | URDF with GLB visuals, optionally with end-effector |
 | `ufactory.robot_assets(name)` | `Path` to robot asset directory |
-| `ufactory.xarm6_1305_urdf()` | Convenience: xArm6 1305 URDF |
+| `ufactory.xarm6_urdf()` | Convenience: default xArm6 URDF (`xarm6_1305.urdf`) |
+| `ufactory.xarm6_1305_urdf()` | Same as `xarm6_urdf()` |
 | `ufactory.lite6_visual_glb_urdf(...)` | Convenience: Lite6 GLB URDF with gripper options |
 
 ### Kinematic Calibration
@@ -154,7 +158,7 @@ Example SN: `XI130506D43A0A` → model code `1305` (xArm6, calibration required)
 
 ```bash
 python scripts/gen_kinematics_params.py <ip> <suffix>   # skips old SNs automatically
-python examples/fk_verify_robot.py --robot xarm6_1305 --ip <ip> --kinematics-suffix <suffix>
+python examples/fk_verify_robot.py --robot xarm6 --ip <ip> --kinematics-suffix <suffix>
 python examples/ik_verify_robot.py --robot lite6 --ip <ip> --kinematics-suffix <suffix>
 ```
 

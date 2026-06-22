@@ -35,12 +35,20 @@ from pygltflib import (
 )
 from trimesh.proximity import closest_point
 
-from ufactory.robot_registry import ROBOT_PROFILES, RobotModelSpec, get_robot_profile, glb_output_name, link_glb_stl_pairs
+from ufactory.robot_registry import (
+    ROBOT_PROFILES,
+    RobotModelSpec,
+    get_profile_key_for_robot_name,
+    get_robot_profile,
+    glb_output_name,
+    link_glb_stl_pairs,
+    robot_cli_choices,
+)
 from ufactory.paths import XARM6_ASSETS
 
 CAD_TO_METRES = 0.1
 DEFAULT_RGBA = (1.0, 1.0, 1.0, 1.0)
-DEFAULT_ROBOT_KEY = "xarm6_1305"
+DEFAULT_ROBOT_KEY = "xarm6"
 
 
 def _init_genesis() -> None:
@@ -494,8 +502,8 @@ def main() -> None:
     parser.add_argument(
         "--robot",
         default=DEFAULT_ROBOT_KEY,
-        choices=sorted(ROBOT_PROFILES.keys()),
-        help="Robot profile key (default: xarm6_1305)",
+        choices=robot_cli_choices(),
+        help="Robot profile key or short name (default: xarm6 -> xarm6_1305)",
     )
     parser.add_argument(
         "--src-dir",
@@ -517,7 +525,7 @@ def main() -> None:
     args = parser.parse_args()
 
     profile = get_robot_profile(args.robot)
-    if args.robot == DEFAULT_ROBOT_KEY and args.src_dir is None:
+    if get_profile_key_for_robot_name(args.robot) == "xarm6_1305" and args.src_dir is None:
         legacy_raw = XARM6_ASSETS / "meshes" / "xarm6_1305" / "visual_glb_raw"
         if legacy_raw.is_dir() and any(legacy_raw.glob("*.glb")):
             args.src_dir = legacy_raw

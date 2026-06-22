@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
 NUMBA_CACHE_DIR = os.path.expanduser("~/.cache/numba")
 
-ROBOTS = ["lite6", "uf850", "xarm5_1305", "xarm7_1305"]
+ROBOTS = ["lite6", "uf850", "xarm5", "xarm6", "xarm7", "xarm5_1305", "xarm7_1305"]
 
 
 def _run(cmd: list[str], timeout: int = 300) -> subprocess.CompletedProcess:

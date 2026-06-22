@@ -42,16 +42,18 @@ pip install -e .
 export NUMBA_CACHE_DIR=~/.cache/numba
 
 # 预览 xArm 6 GLB 模型
-python examples/view_robot_glb.py --robot xarm6_1305
+python examples/view_robot_glb.py --robot xarm6
 ```
+
+2024 年起新发货 xArm 均为 **XI1305** 硬件版本。短名 `xarm5` / `xarm6` / `xarm7` 会解析为 `xarm5_1305` / `xarm6_1305` / `xarm7_1305`；显式 `*_1305` 键名仍兼容。旧型号码（11、12、1300–1304）不在本仓库内置，请通过 `--urdf` 或 `prepare_robot_model_for_verification(robot_model=...)` 传入自有 URDF。
 
 ## 支持机型
 
-| profile key | 机型 | 自由度 | Gripper G2 | Bio Gripper G2 | Lite6 Gripper | Lite6 Vacuum |
-|-------------|------|--------|:----------:|:--------------:|:-------------:|:------------:|
-| `xarm5_1305` | xArm 5 | 5 | ✓ | ✓ | — | — |
-| `xarm6_1305` | xArm 6 | 6 | ✓ | ✓ | — | — |
-| `xarm7_1305` | xArm 7 | 7 | ✓ | ✓ | — | — |
+| profile key | 别名 | 机型 | 自由度 | Gripper G2 | Bio Gripper G2 | Lite6 Gripper | Lite6 Vacuum |
+|-------------|------|------|--------|:----------:|:--------------:|:-------------:|:------------:|
+| `xarm5_1305` | `xarm5` | xArm 5 | 5 | ✓ | ✓ | — | — |
+| `xarm6_1305` | `xarm6` | xArm 6 | 6 | ✓ | ✓ | — | — |
+| `xarm7_1305` | `xarm7` | xArm 7 | 7 | ✓ | ✓ | — | — |
 | `uf850` | UF850 | 6 | ✓ | ✓ | — | — |
 | `lite6` | Lite6 | 6 | — | — | ✓ | ✓ |
 
@@ -70,8 +72,8 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 python examples/view_robot_glb.py --robot <profile_key>
 
 # Gripper G2（静态 / 可动开合）
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --gripper-demo
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2 --movable --gripper-demo
 
 # Bio Gripper G2（静态）
 python examples/view_robot_glb.py --robot uf850 --bio-gripper-g2
@@ -129,8 +131,9 @@ import ufactory
 | 函数 / 对象 | 说明 |
 |------------|------|
 | `ufactory.ROBOT_PROFILES` | 所有支持机型的 `RobotModelSpec` 字典 |
-| `ufactory.get_robot_profile(key)` | 按 profile key 获取 `RobotModelSpec` |
-| `ufactory.get_profile_key_for_robot_name(name)` | 机器人名称解析为 profile key |
+| `ufactory.get_robot_profile(key)` | 按 profile key 或短名（`xarm6`）获取 `RobotModelSpec` |
+| `ufactory.get_profile_key_for_robot_name(name)` | 机器人名称解析为 profile key（`xarm6` → `xarm6_1305`） |
+| `ufactory.robot_cli_choices()` | 排序后的 `--robot` 选项（键名 + 短名别名） |
 | `ufactory.arm_link_names(profile)` | 获取某机型的连杆名称元组 |
 | `ufactory.joint_names(profile)` | 获取某机型的关节名称元组 |
 
@@ -141,7 +144,8 @@ import ufactory
 | `ufactory.robot_urdf(key)` | 默认 URDF 绝对路径 |
 | `ufactory.robot_visual_glb_urdf(key, ...)` | 带 GLB 视觉的 URDF，支持末端执行器 |
 | `ufactory.robot_assets(name)` | 机器人资产目录 `Path` |
-| `ufactory.xarm6_1305_urdf()` | 便捷函数：xArm6 1305 URDF |
+| `ufactory.xarm6_urdf()` | 便捷函数：默认 xArm6 URDF（`xarm6_1305.urdf`） |
+| `ufactory.xarm6_1305_urdf()` | 同 `xarm6_urdf()` |
 | `ufactory.lite6_visual_glb_urdf(...)` | 便捷函数：Lite6 带夹爪选项的 GLB URDF |
 
 ### 运动学校准
@@ -179,7 +183,7 @@ import ufactory
 python scripts/gen_kinematics_params.py <ip> <suffix>
 
 # 通用 FK/IK 验证（--robot 见上表「支持机型」）
-python examples/fk_verify_robot.py --robot xarm6_1305 --ip <ip> --kinematics-suffix <suffix>
+python examples/fk_verify_robot.py --robot xarm6 --ip <ip> --kinematics-suffix <suffix>
 python examples/ik_verify_robot.py --robot lite6 --ip <ip> --kinematics-suffix <suffix>
 ```
 

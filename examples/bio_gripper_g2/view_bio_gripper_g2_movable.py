@@ -19,15 +19,9 @@ sys.path.insert(0, str(EXAMPLES_DIR))
 import _bootstrap  # noqa: F401
 
 import genesis as gs
+from ufactory.bio_gripper_g2 import BioGripperG2
 from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.paths import bio_gripper_g2_movable_visual_urdf
-
-from _bio_gripper_g2_demo import (
-    control_bio_gripper_g2_pose,
-    bio_gripper_g2_demo_target,
-    bio_gripper_g2_dof_indices,
-    setup_bio_gripper_g2_pd,
-)
 
 CAMERA_POS = (0.22, -0.28, 0.18)
 CAMERA_LOOKAT = (0.0, 0.0, 0.14)
@@ -58,13 +52,15 @@ def main() -> None:
     )
     scene.build()
 
-    drive_idx, all_idx = bio_gripper_g2_dof_indices(robot)
-    setup_bio_gripper_g2_pd(robot, drive_idx, all_idx)
+    # Reusable controller: the same BioGripperG2 class drives the gripper whether it is
+    # standalone (this demo) or mounted on an xArm / UF850 combo URDF.  Joint zero is the
+    # closed pose (71 mm gap); the dof opens symmetrically to OPEN_POS (150 mm gap).
+    gripper = BioGripperG2(robot)
+    gripper.setup_pd()
 
     step = 0
     while True:
-        q = bio_gripper_g2_demo_target(step)
-        control_bio_gripper_g2_pose(robot, drive_idx, all_idx, q)
+        gripper.control_pose(gripper.demo_target(step))
         scene.step()
         step += 1
         if args.headless and step >= 600:

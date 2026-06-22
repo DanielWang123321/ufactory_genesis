@@ -532,7 +532,7 @@ def main():
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument(
         "--robot-model", type=str, default=None,
-        help="Robot URDF model path. Default: xarm6.urdf",
+        help="Robot URDF model path. Default: xarm6_1305.urdf",
     )
     args = parser.parse_args()
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from ufactory.paths import BIO_GRIPPER_G2_ASSETS
 from ufactory.robot_registry import ROBOT_PROFILES
 
 GRIPPER_VISUAL = "../bio_gripper_g2/meshes/visual"
+METRICS_PATH = BIO_GRIPPER_G2_ASSETS / "meshes" / "visual" / "relocalize_metrics.json"
 # Mount the gripper on the arm flange so the fingers face the arm base +X
 # direction.  At zero config every EE link (link5/6/7) has world orientation
 # Rx(-pi).  Rx(pi) mount yields net identity so the (relocalized) finger
@@ -28,6 +30,31 @@ GRIPPER_LINK_MESHES: dict[str, tuple[str | None, str]] = {
 
 _TEMPLATE_URDF = BIO_GRIPPER_G2_ASSETS / "bio_gripper_g2.urdf"
 _SKIP_JOINTS = frozenset({"bio_gripper_g2_fix"})
+
+
+def _load_attach_origins() -> dict[str, dict[str, str]]:
+  """Movable attach origins from relocalize metrics (per robot_key, fallback ee_link)."""
+  if not METRICS_PATH.is_file():
+    raise FileNotFoundError(
+      f"Missing {METRICS_PATH}; run scripts/relocalize_bio_gripper_g2_glb.py first"
+    )
+  report = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+  out: dict[str, dict[str, str]] = {}
+  for entry in report:
+    xyz = entry.get("attach_xyz_str")
+    rpy = entry.get("attach_rpy_str")
+    if not xyz or not rpy:
+      continue
+    origin = {"xyz": xyz, "rpy": rpy}
+    robot_key = entry.get("robot_key")
+    ee = entry.get("ee_link")
+    if robot_key:
+      out[robot_key] = origin
+    elif ee:
+      out.setdefault(ee, origin)
+  if not out:
+    raise RuntimeError(f"No attach origins in {METRICS_PATH}")
+  return out
 
 
 def _load_gripper_subtree() -> list[ET.Element]:
@@ -114,11 +141,30 @@ def _rewrite_gripper_link(link: ET.Element, ee_link: str, *, movable: bool) -> E
   return out
 
 
-def _append_gripper_kinematics(root: ET.Element, ee_link: str, *, movable: bool) -> None:
+def _append_gripper_kinematics(
+  root: ET.Element,
+  ee_link: str,
+  *,
+  movable: bool,
+  robot_key: str | None = None,
+  attach_origins: dict[str, dict[str, str]] | None = None,
+) -> None:
   joint = ET.SubElement(root, "joint", {"name": "bio_gripper_g2_attach", "type": "fixed"})
   ET.SubElement(joint, "parent", {"link": ee_link})
   ET.SubElement(joint, "child", {"link": "bio_gripper_g2_base_link"})
-  ET.SubElement(joint, "origin", {"xyz": "0 0 0", "rpy": BIO_GRIPPER_G2_ARM_MOUNT_RPY})
+  if movable:
+    if attach_origins is None:
+      raise KeyError("attach_origins required for movable combo URDF")
+    origin = None
+    if robot_key:
+      origin = attach_origins.get(robot_key)
+    if origin is None:
+      origin = attach_origins.get(ee_link)
+    if origin is None:
+      raise KeyError(f"No movable attach origin for {robot_key or ee_link} in relocalize metrics")
+    ET.SubElement(joint, "origin", {"xyz": origin["xyz"], "rpy": origin["rpy"]})
+  else:
+    ET.SubElement(joint, "origin", {"xyz": "0 0 0", "rpy": BIO_GRIPPER_G2_ARM_MOUNT_RPY})
 
   for elem in _load_gripper_subtree():
     if elem.tag == "link":
@@ -127,7 +173,7 @@ def _append_gripper_kinematics(root: ET.Element, ee_link: str, *, movable: bool)
       root.append(copy.deepcopy(elem))
 
 
-def generate_for_profile(key: str, *, movable: bool) -> Path:
+def generate_for_profile(key: str, *, movable: bool, attach_origins: dict[str, dict[str, str]] | None = None) -> Path:
   profile = ROBOT_PROFILES[key]
   if not profile.supports_bio_gripper_g2:
     raise ValueError(f"{key} does not support Bio Gripper G2 combo URDF")
@@ -144,7 +190,9 @@ def generate_for_profile(key: str, *, movable: bool) -> Path:
   root = tree.getroot()
   if not movable:
     _append_bio_gripper_g2_static_overlay(root, profile.ee_link)
-  _append_gripper_kinematics(root, profile.ee_link, movable=movable)
+  _append_gripper_kinematics(
+    root, profile.ee_link, movable=movable, robot_key=key, attach_origins=attach_origins
+  )
   root.set("name", Path(urdf_name).stem)
 
   out = profile.assets_dir / urdf_name
@@ -189,9 +237,10 @@ def main() -> int:
     and p.bio_gripper_g2_visual_urdf
     and p.bio_gripper_g2_movable_visual_urdf
   ]
+  attach_origins = _load_attach_origins()
   for key in keys:
     static_out = generate_for_profile(key, movable=False)
-    movable_out = generate_for_profile(key, movable=True)
+    movable_out = generate_for_profile(key, movable=True, attach_origins=attach_origins)
     print(f"[{key}] wrote {static_out}")
     print(f"[{key}] wrote {movable_out}")
   standalone = generate_standalone_movable()

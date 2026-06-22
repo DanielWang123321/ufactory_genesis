@@ -95,7 +95,7 @@ python examples/xarm6/xarm6_reach_train.py -B 1 --max_iterations 10 -v
 
 - Observation: 18-dim
 - Action: 6-dim delta joint positions
-- URDF: `assets/urdf/xarm6/xarm6.urdf`
+- URDF: `assets/urdf/xarm6/xarm6_1305.urdf`
 
 **4060Ti 8GB**: use `-B 1` for smoke; `-B 64~256` for small-scale training.
 
@@ -125,7 +125,7 @@ pytest tests/test_xarm6_smoke.py -v -m hardware   # SDK FK/IK (needs XARM_IP)
 
 ## Asset Paths
 
-xArm URDF files live in `assets/urdf/xarm6/`. Scripts load them via `ufactory.paths.xarm6_urdf()`.
+xArm URDF files live in `assets/urdf/xarm6/`. Scripts load the default via `ufactory.paths.xarm6_urdf()` (`xarm6_1305.urdf`). Legacy `xarm6.urdf` remains on disk for older hardware revisions; pass an explicit path if needed.
 Genesis built-in assets (e.g. ground plane) use relative paths from the pip package.
 
 ### Visual vs Simulation URDF
@@ -148,10 +148,10 @@ Assets live under `assets/urdf/gripper_g2/` (shared across xArm5/6/7 and UF850).
 **GLB preview:**
 
 ```bash
-python examples/view_robot_glb.py --robot xarm6_1305              # arm GLB
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2         # arm + Gripper G2 static
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --gripper-demo
-python examples/view_robot_glb.py --robot xarm6_1305 --gripper-g2 --movable --pd --gripper-demo
+python examples/view_robot_glb.py --robot xarm6              # arm GLB
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2         # arm + Gripper G2 static
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2 --movable --gripper-demo
+python examples/view_robot_glb.py --robot xarm6 --gripper-g2 --movable --pd --gripper-demo
 
 # xArm6-specific wrapper (also supports --diagnose)
 python examples/xarm6/view_xarm6_glb.py --gripper-g2 --movable --gripper-demo

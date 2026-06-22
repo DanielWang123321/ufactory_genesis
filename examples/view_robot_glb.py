@@ -14,12 +14,12 @@ if str(EXAMPLES_ROOT) not in sys.path:
 
 from _robot_viewer import run_glb_viewer
 from ufactory.paths import robot_visual_glb_urdf
-from ufactory.robot_registry import ROBOT_PROFILES, get_robot_profile
+from ufactory.robot_registry import get_robot_profile, robot_cli_choices
 
 
 def main() -> None:
   parser = argparse.ArgumentParser(description="View robot GLB visual model")
-  parser.add_argument("--robot", required=True, choices=sorted(ROBOT_PROFILES.keys()))
+  parser.add_argument("--robot", required=True, choices=robot_cli_choices())
   parser.add_argument(
     "--bio-gripper-g2",
     action="store_true",

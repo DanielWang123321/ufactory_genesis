@@ -20,9 +20,6 @@ import torch
 import _bootstrap  # noqa: F401
 import genesis as gs
 from ufactory.kinematics import prepare_robot_model_for_verification
-from ufactory.paths import xarm6_urdf
-
-XARM6_URDF_PATH = xarm6_urdf()
 
 # Joint/link names (URDF style, with fallback for namespaced names)
 JOINT_NAMES = (
@@ -497,7 +494,7 @@ def main():
     parser = argparse.ArgumentParser(description="xArm 6 Verification")
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("--robot-model", type=str, default=None,
-                        help="Robot URDF model path. Default: xarm6.urdf")
+                        help="Robot URDF model path. Default: xarm6_1305.urdf")
     parser.add_argument(
         "--kinematics-suffix",
         type=str,

@@ -39,14 +39,24 @@ def _urdf_path(assets: Path, name: str) -> str:
   return str(path.resolve())
 
 
-def xarm6_urdf(name: str = "xarm6.urdf") -> str:
+def xarm5_urdf(name: str = "xarm5_1305.urdf") -> str:
+  """Return absolute path to an xArm 5 URDF file in project assets."""
+  return _urdf_path(XARM5_ASSETS, name)
+
+
+def xarm6_urdf(name: str = "xarm6_1305.urdf") -> str:
   """Return absolute path to an xArm 6 URDF file in project assets."""
   return _urdf_path(XARM6_ASSETS, name)
 
 
+def xarm7_urdf(name: str = "xarm7_1305.urdf") -> str:
+  """Return absolute path to an xArm 7 URDF file in project assets."""
+  return _urdf_path(XARM7_ASSETS, name)
+
+
 def xarm6_1305_urdf() -> str:
   """Return absolute path to the xArm6 XI1305 simulation URDF."""
-  return xarm6_urdf("xarm6_1305.urdf")
+  return xarm6_urdf()
 
 
 def xarm6_1305_visual_glb_urdf(with_bio_gripper_g2: bool = False, with_gripper_g2: bool = False, movable: bool = False) -> str:
@@ -67,7 +77,7 @@ def kinematics_user_dir(robot_name: str) -> Path:
 
 def robot_urdf(robot_key: str, name: str | None = None) -> str:
   """Return absolute path to a robot URDF by profile key or robot name."""
-  profile = get_robot_profile(robot_key)
+  profile = get_robot_profile(get_profile_key_for_robot_name(robot_key))
   urdf_name = name or profile.default_urdf
   return _urdf_path(profile.assets_dir, urdf_name)
 
@@ -81,7 +91,7 @@ def robot_visual_glb_urdf(
   with_lite6_vacuum_gripper: bool = False,
   movable: bool = False,
 ) -> str:
-  profile = get_robot_profile(robot_key)
+  profile = get_robot_profile(get_profile_key_for_robot_name(robot_key))
   accessory_flags = (
     with_bio_gripper_g2,
     with_gripper_g2,

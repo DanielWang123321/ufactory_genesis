@@ -140,10 +140,8 @@ ROBOT_PROFILES: Dict[str, RobotModelSpec] = {
 
 
 def get_robot_profile(key: str) -> RobotModelSpec:
-  profile = ROBOT_PROFILES.get(key)
-  if profile is None:
-    raise KeyError(f"Unknown robot profile: {key}. Known: {sorted(ROBOT_PROFILES)}")
-  return profile
+  resolved = get_profile_key_for_robot_name(key)
+  return ROBOT_PROFILES[resolved]
 
 
 def link_glb_stl_pairs(profile: RobotModelSpec) -> Tuple[Tuple[str, str], ...]:
@@ -173,10 +171,23 @@ def get_profile_key_for_robot_name(robot_name: str) -> str:
   """Resolve a robot name or profile key to a canonical profile key.
 
   Accepts both profile keys (``xarm6_1305``) and short robot names (``xarm6``).
+  Short xArm names resolve to the XI1305 profile (``xarm6`` -> ``xarm6_1305``).
   """
   if robot_name in ROBOT_PROFILES:
     return robot_name
-  for key, profile in ROBOT_PROFILES.items():
-    if profile.robot_name == robot_name:
-      return key
+  preferred = f"{robot_name}_1305"
+  if preferred in ROBOT_PROFILES:
+    return preferred
+  matches = [key for key, profile in ROBOT_PROFILES.items() if profile.robot_name == robot_name]
+  if len(matches) == 1:
+    return matches[0]
+  if matches:
+    return sorted(matches)[0]
   raise KeyError(f"Unknown robot: {robot_name}")
+
+
+def robot_cli_choices() -> list[str]:
+  """Sorted ``--robot`` choices: profile keys plus short robot-name aliases."""
+  keys = set(ROBOT_PROFILES)
+  aliases = {profile.robot_name for profile in ROBOT_PROFILES.values()}
+  return sorted(keys | aliases)

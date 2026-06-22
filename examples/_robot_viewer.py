@@ -8,16 +8,13 @@ import time
 import numpy as np
 
 import genesis as gs
+from ufactory.bio_gripper_g2 import BioGripperG2
 from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.robot_registry import RobotModelSpec, joint_names
 
 from _bio_gripper_g2_demo import (
   BIO_GRIPPER_G2_OPEN,
   bio_gripper_g2_demo_target,
-  bio_gripper_g2_dof_indices,
-  control_bio_gripper_g2_pose,
-  set_bio_gripper_g2_pose,
-  setup_bio_gripper_g2_pd,
 )
 from _gripper_demo import (
   GRIPPER_OPEN,
@@ -155,6 +152,7 @@ def _apply_kinematic_hold(
   all_gripper_dof_idx: list[int],
   all_lite6_gripper_dof_idx: list[int],
   all_bio_gripper_g2_dof_idx: list[int],
+  bio_gripper: BioGripperG2 | None = None,
 ) -> None:
   """Visual-only hold: teleport joints after physics step, no PD."""
   if hold_arm and arm_dof_idx:
@@ -165,8 +163,10 @@ def _apply_kinematic_hold(
     _set_gripper_kinematic(robot, all_gripper_dof_idx, GRIPPER_OPEN)
   elif all_lite6_gripper_dof_idx:
     _set_gripper_kinematic(robot, all_lite6_gripper_dof_idx, LITE6_GRIPPER_OPEN)
-  elif all_bio_gripper_g2_dof_idx:
-    _set_gripper_kinematic(robot, all_bio_gripper_g2_dof_idx, BIO_GRIPPER_G2_OPEN)
+  elif all_bio_gripper_g2_dof_idx and bio_gripper is not None:
+    # Bio Gripper G2 mirrors the left finger (-1), so hold the open pose through the
+    # controller rather than writing the same value to both finger DOFs.
+    bio_gripper.set_pose(BIO_GRIPPER_G2_OPEN)
 
 
 def _kinematic_step(
@@ -180,6 +180,7 @@ def _kinematic_step(
   all_gripper_dof_idx: list[int],
   all_lite6_gripper_dof_idx: list[int],
   all_bio_gripper_g2_dof_idx: list[int],
+  bio_gripper: BioGripperG2 | None = None,
   arm_target: np.ndarray | None = None,
 ) -> None:
   """Advance sim one step; held DOFs are teleported immediately before and after."""
@@ -194,6 +195,7 @@ def _kinematic_step(
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
       all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
+      bio_gripper=bio_gripper,
     )
     scene.step(update_visualizer=False)
     _apply_kinematic_hold(
@@ -205,6 +207,7 @@ def _kinematic_step(
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
       all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
+      bio_gripper=bio_gripper,
     )
     visualizer = getattr(scene, "visualizer", None)
     if getattr(visualizer, "viewer", None) is not None:
@@ -294,7 +297,10 @@ def run_glb_viewer(
   arm_dof_idx = [joint_map[n].dofs_idx_local[0] for n in jnames if n in joint_map]
   gripper_dof_idx, all_gripper_dof_idx = gripper_dof_indices(robot)
   lite6_gripper_dof_idx, all_lite6_gripper_dof_idx = lite6_gripper_dof_indices(robot)
-  bio_gripper_g2_dof_idx, all_bio_gripper_g2_dof_idx = bio_gripper_g2_dof_indices(robot)
+  # Use BioGripperG2 class for discovery and control (preferred API).
+  bio_gripper = BioGripperG2(robot)
+  bio_gripper_g2_dof_idx = bio_gripper.drive_dof_idx
+  all_bio_gripper_g2_dof_idx = bio_gripper.all_dof_idx
   arm_kinematic_hold = not pd_demo
   idle_gripper_kinematic_hold = not gripper_demo
 
@@ -320,6 +326,7 @@ def run_glb_viewer(
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
       all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
+      bio_gripper=bio_gripper,
     )
   if pd_demo and arm_dof_idx:
     setup_arm_pd(robot, arm_dof_idx, profile.dof)
@@ -337,13 +344,8 @@ def run_glb_viewer(
       LITE6_GRIPPER_OPEN,
     )
   elif gripper_demo and bio_gripper_g2_dof_idx:
-    setup_bio_gripper_g2_pd(robot, bio_gripper_g2_dof_idx, all_bio_gripper_g2_dof_idx)
-    set_bio_gripper_g2_pose(
-      robot,
-      bio_gripper_g2_dof_idx,
-      all_bio_gripper_g2_dof_idx,
-      BIO_GRIPPER_G2_OPEN,
-    )
+    bio_gripper.setup_pd()
+    bio_gripper.set_pose(BIO_GRIPPER_G2_OPEN)
 
   warmup_steps = 3 if arm_kinematic_hold else 100
   for _ in range(warmup_steps):
@@ -361,6 +363,7 @@ def run_glb_viewer(
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
       all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
+      bio_gripper=bio_gripper,
     )
 
   if headless:
@@ -422,12 +425,7 @@ def run_glb_viewer(
         label = "closed" if grip_phase else "open"
         print(f"  Bio Gripper G2 target: {label}")
         last_gripper_phase = grip_phase
-      control_bio_gripper_g2_pose(
-        robot,
-        bio_gripper_g2_dof_idx,
-        all_bio_gripper_g2_dof_idx,
-        bio_gripper_g2_demo_target(step),
-      )
+      bio_gripper.control_pose(bio_gripper_g2_demo_target(step))
     if tcp_marker is not None and ee_link is not None:
       update_tcp_marker(tcp_marker, ee_link)
     _kinematic_step(
@@ -440,6 +438,7 @@ def run_glb_viewer(
       all_gripper_dof_idx=all_gripper_dof_idx,
       all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
       all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
+      bio_gripper=bio_gripper,
       arm_target=arm_target,
     )
     step += 1

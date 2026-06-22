@@ -221,7 +221,7 @@ def run_diagnose() -> None:
     """Headless: compare GLB vs STL URDF link poses and print visual surface flags."""
     enable_glb_pbr_surfaces()
     gs.init(backend=gs.gpu)
-    stl_path = xarm6_urdf("xarm6_1305.urdf")
+    stl_path = xarm6_urdf()
     glb_path = xarm6_1305_visual_glb_urdf(with_gripper_g2=False)
 
     def load_robot(urdf_path: str, use_glb: bool = False):

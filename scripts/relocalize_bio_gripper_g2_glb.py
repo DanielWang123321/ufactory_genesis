@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +41,6 @@ from relocalize_gripper_glb import (
     MOUNT_AXIS,
     _mesh_quality_metrics,
     _procrustes_rigid,
-    _rigid_align_mesh_to_ref,
     _ring_plane_z_and_xy,
 )
 from ufactory.paths import BIO_GRIPPER_G2_ASSETS
@@ -93,7 +93,9 @@ FINGER_SUBDIVIDE_ITERS = 2
 # nameplate on the static base link instead of riding along with the fingers.
 FINGER_NODE_RESIDUAL_MAX_M = 0.020
 _FINGER_YSHIFT_GRID = np.linspace(-0.05, 0.05, 41)
-_RX_PI = Rotation.from_euler("x", np.pi, degrees=False).as_matrix()
+# Real Bio Gripper G2 closed two-finger gap (jaw=0). Stroke opens to 150 mm.
+CLOSED_GAP_M = 0.071
+OPEN_GAP_M = 0.150
 
 
 def _align_coarse_part(
@@ -194,37 +196,80 @@ def _subdivide_visual_mesh(mesh: trimesh.Trimesh, iterations: int) -> trimesh.Tr
     return out
 
 
-def _movable_base_ee_material_meshes(
+def _movable_base_gripper_frame(
     material_parts: list[tuple[trimesh.Trimesh, float]],
     jaw_labels: list[str | None],
-    merged_coarse: trimesh.Trimesh,
-    stl_base: trimesh.Trimesh,
-    R: np.ndarray,
-    t: np.ndarray,
-    dz: float,
+    rot: np.ndarray,
+    trans: np.ndarray,
+    center_offset: np.ndarray,
 ) -> tuple[trimesh.Trimesh | None, trimesh.Trimesh | None]:
-    """Static base in EE link frame: everything except the two moving jaw nodes.
+    """Movable base in the canonical gripper base_link frame (EE-link independent).
 
-    Keeps the white-plastic shell plus all non-jaw metal (mount flange, housing rail,
-    body screws, UFACTORY nameplate) so only the jaws move with the finger joints.
+    Everything except the two moving jaw nodes (white-plastic shell plus all non-jaw
+    metal: mount flange, housing rail, body screws, UFACTORY nameplate), expressed in
+    the link_base.stl frame.  The combo URDF mount joint (rpy Rx(pi)) orients this
+    base onto each arm flange, so the same base mesh works for every EE link and for
+    the standalone (rpy 0) gripper.
     """
-    center_offset = _assembly_center_offset(merged_coarse, stl_base)
     plastic_parts: list[trimesh.Trimesh] = []
     metal_parts: list[trimesh.Trimesh] = []
     for (part, metallic), label in zip(material_parts, jaw_labels):
         if label is not None:
             continue
-        coarse = _part_to_assembly_coarse(part, center_offset)
-        aligned = _apply_transform(coarse, R, t, dz)
+        g = _apply_rigid(_part_to_assembly_coarse(part, center_offset), rot, trans)
         if metallic <= 0.01:
-            plastic_parts.append(aligned)
+            plastic_parts.append(g)
         elif metallic >= METAL_METALLIC_MIN:
-            metal_parts.append(aligned)
+            metal_parts.append(g)
     plastic = trimesh.util.concatenate(plastic_parts) if plastic_parts else None
     metal = trimesh.util.concatenate(metal_parts) if metal_parts else None
     if metal is not None:
         metal = _subdivide_visual_mesh(metal, METAL_SUBDIVIDE_ITERS)
     return plastic, metal
+
+
+def _finger_meshes_gripper_frame(
+    material_parts: list[tuple[trimesh.Trimesh, float]],
+    jaw_labels: list[str | None],
+    finger_yshift: dict[str, float],
+    rot: np.ndarray,
+    trans: np.ndarray,
+    center_offset: np.ndarray,
+) -> tuple[trimesh.Trimesh | None, trimesh.Trimesh | None]:
+    """Moving jaws in the URDF finger link frames, built in the canonical gripper frame.
+
+    The jaws are mapped into the link_base.stl (base_link) frame where both the
+    left/right jaw labels and ``finger_yshift`` were computed, so the closed-pose
+    registration is valid and the result is EE-link independent.  Each side is shifted
+    in Y onto its joint-zero collision STL (closed pose) and then expressed in the
+    finger link frame, so the [0, limit] prismatic stroke reproduces the real
+    71 -> 150 mm opening for the standalone and every arm combo alike.
+    """
+    left_parts: list[trimesh.Trimesh] = []
+    right_parts: list[trimesh.Trimesh] = []
+    for (part, _metallic), label in zip(material_parts, jaw_labels):
+        if label is None:
+            continue
+        g = _apply_rigid(_part_to_assembly_coarse(part, center_offset), rot, trans)
+        if label == "left":
+            left_parts.append(g)
+        else:
+            right_parts.append(g)
+    left = trimesh.util.concatenate(left_parts) if left_parts else None
+    right = trimesh.util.concatenate(right_parts) if right_parts else None
+    # finger_yshift gives a coarse closed registration; a final calibration measured on
+    # the assembled finger mesh then snaps each distal gripping blade face exactly onto
+    # +/- CLOSED_GAP_M/2, so the closed two-finger distance is exactly the real 71 mm
+    # (self-consistent regardless of node-vs-assembly sampling differences).
+    if left is not None:
+        left.vertices[:, 1] += finger_yshift.get("left", 0.0)
+        left = _subdivide_visual_mesh(_finger_mesh_in_link_frame(left), FINGER_SUBDIVIDE_ITERS)
+        left.vertices[:, 1] += (-CLOSED_GAP_M / 2.0) - _blade_inner_face(left.vertices, "left")
+    if right is not None:
+        right.vertices[:, 1] += finger_yshift.get("right", 0.0)
+        right = _subdivide_visual_mesh(_finger_mesh_in_link_frame(right), FINGER_SUBDIVIDE_ITERS)
+        right.vertices[:, 1] += (CLOSED_GAP_M / 2.0) - _blade_inner_face(right.vertices, "right")
+    return left, right
 
 
 def _movable_base_meshes_material_split(
@@ -330,6 +375,19 @@ def _best_finger_yshift_residual(verts: np.ndarray, tree: cKDTree) -> tuple[floa
     return mean_dist(best_dy), float(best_dy)
 
 
+def _blade_inner_face(verts: np.ndarray, side: str) -> float:
+    """Center-facing Y of the distal gripping blade flat face (robust to chamfers).
+
+    The jaw slides only in Y, so the closed two-finger distance is set by where the
+    distal blade's inner surface sits.  We sample the distal blade (high X) and take a
+    near-boundary percentile of the inner-facing Y so a small chamfer/edge vertex does
+    not bias the closed gap (a pure max/min would over-reach to the chamfer tip).
+    """
+    distal = verts[verts[:, 0] >= np.percentile(verts[:, 0], 70)]
+    # left jaw sits at -Y → inner face toward +Y (high pct); right jaw at +Y → low pct
+    return float(np.percentile(distal[:, 1], 85 if side == "left" else 15))
+
+
 def _jaw_labels_for_material_parts(
     parts: list[trimesh.Trimesh],
     material_parts: list[tuple[trimesh.Trimesh, float]],
@@ -360,17 +418,13 @@ def _jaw_labels_for_material_parts(
     def to_base_frame(part: trimesh.Trimesh) -> np.ndarray:
         return _apply_rigid(_part_to_assembly_coarse(part, center_offset), rot, trans).vertices
 
-    def gripping_inner_edge(verts: np.ndarray, side: str) -> float:
-        """Center-facing Y of the gripping blade (front half = high X)."""
-        front = verts[verts[:, 0] >= np.percentile(verts[:, 0], 60)]
-        # left jaw sits at -Y, its inner face is the max Y; right jaw the min Y
-        return float(np.percentile(front[:, 1], 97 if side == "left" else 3))
-
-    # collision-STL gripping faces define the joint-0 (closed) target plane
-    stl_inner = {
-        "left": gripping_inner_edge(left_pts, "left"),
-        "right": gripping_inner_edge(right_pts, "right"),
-    }
+    # Joint-0 (closed) target: place each jaw's distal gripping blade face at
+    # +/- CLOSED_GAP_M/2 so the closed two-finger distance equals the real 71 mm, and
+    # the [0, limit] prismatic stroke opens symmetrically to the real 150 mm.  We target
+    # the spec gap directly (rather than full-cloud ICP onto the simplified collision
+    # STL, whose mount riser pulls the blade past center) so the gripping faces land on
+    # the real mechanical range regardless of CAD-vs-STL shape differences.
+    target_inner = {"left": -CLOSED_GAP_M / 2.0, "right": CLOSED_GAP_M / 2.0}
 
     node_trees: list[cKDTree] = []
     node_labels: list[str | None] = []
@@ -382,10 +436,7 @@ def _jaw_labels_for_material_parts(
         if min(res_left, res_right) <= FINGER_NODE_RESIDUAL_MAX_M:
             side = "left" if res_left < res_right else "right"
             node_labels.append(side)
-            # register the jaw's gripping face onto the collision STL gripping face,
-            # so the visual is closed/flush at joint=0 and the [0,limit] stroke
-            # reproduces the real opening width
-            finger_yshift[side] = stl_inner[side] - gripping_inner_edge(verts, side)
+            finger_yshift[side] = target_inner[side] - _blade_inner_face(verts, side)
         else:
             node_labels.append(None)
         node_trees.append(cKDTree(verts))
@@ -396,91 +447,6 @@ def _jaw_labels_for_material_parts(
         node_idx = int(np.argmin([float(np.mean(t.query(verts)[0])) for t in node_trees]))
         labels.append(node_labels[node_idx])
     return labels, finger_yshift
-
-
-def _finger_meshes_from_static_material(
-    material_parts: list[tuple[trimesh.Trimesh, float]],
-    jaw_labels: list[str | None],
-    finger_yshift: dict[str, float],
-    merged_coarse: trimesh.Trimesh,
-    stl_base: trimesh.Trimesh,
-    R: np.ndarray,
-    t: np.ndarray,
-    dz: float,
-) -> tuple[trimesh.Trimesh | None, trimesh.Trimesh | None]:
-    """Moving jaw geometry only, mapped into the URDF finger link frames.
-
-    Only parts belonging to a jaw node (per _jaw_labels_for_material_parts) are kept;
-    left/right is resolved by the aligned-frame Y sign (consistent with base frame).
-    Each side is then shifted in Y by finger_yshift[side] so the jaw registers onto
-    its joint-zero collision STL (closed pose), keeping the fingers flush with the
-    body instead of floating at the CAD's native open opening.
-    """
-    center_offset = _assembly_center_offset(merged_coarse, stl_base)
-    left_parts: list[trimesh.Trimesh] = []
-    right_parts: list[trimesh.Trimesh] = []
-    for (part, _metallic), label in zip(material_parts, jaw_labels):
-        if label is None:
-            continue
-        coarse = _part_to_assembly_coarse(part, center_offset)
-        aligned = _apply_transform(coarse, R, t, dz)
-        ay = float(aligned.centroid[1])
-        if ay < 0.0:
-            left_parts.append(aligned)
-        else:
-            right_parts.append(aligned)
-    left = trimesh.util.concatenate(left_parts) if left_parts else None
-    right = trimesh.util.concatenate(right_parts) if right_parts else None
-    if left is not None:
-        left.vertices[:, 1] += finger_yshift.get("left", 0.0)
-        left = _subdivide_visual_mesh(_finger_mesh_in_link_frame(left), FINGER_SUBDIVIDE_ITERS)
-    if right is not None:
-        right.vertices[:, 1] += finger_yshift.get("right", 0.0)
-        right = _subdivide_visual_mesh(_finger_mesh_in_link_frame(right), FINGER_SUBDIVIDE_ITERS)
-    return left, right
-
-
-def _finger_display_centroid(mesh_link: trimesh.Trimesh) -> np.ndarray:
-    return mesh_link.vertices + FINGER_JOINT_ORIGIN
-
-
-def _rx_pi_base_frame(mesh: trimesh.Trimesh | None) -> trimesh.Trimesh | None:
-    if mesh is None:
-        return None
-    out = mesh.copy()
-    out.vertices = out.vertices @ _RX_PI.T
-    return out
-
-
-def _rx_pi_finger_link_frame(mesh: trimesh.Trimesh | None) -> trimesh.Trimesh | None:
-    if mesh is None:
-        return None
-    out = mesh.copy()
-    out.vertices = (out.vertices + FINGER_JOINT_ORIGIN) @ _RX_PI.T - FINGER_JOINT_ORIGIN
-    return out
-
-
-def _flange_above_plastic(
-    plastic: trimesh.Trimesh | None,
-    metal: trimesh.Trimesh | None,
-) -> bool:
-    if plastic is None or metal is None:
-        return True
-    return float(metal.vertices[:, 2].max()) > float(plastic.vertices[:, 2].max()) + 1e-4
-
-
-def _movable_base_in_gripper_frame(
-    groups: dict[str, list[trimesh.Trimesh]],
-    merged_coarse: trimesh.Trimesh,
-    stl_base: trimesh.Trimesh,
-) -> trimesh.Trimesh:
-    """Movable base GLB in bio_gripper_g2_base_link frame (matches finger STL kinematics)."""
-    merged_base = _merge_group(groups["base"])
-    assert merged_base is not None
-    center_offset = _assembly_center_offset(merged_coarse, stl_base)
-    base_local = _part_to_assembly_coarse(merged_base, center_offset)
-    aligned, _ = _rigid_align_mesh_to_ref(base_local, stl_base)
-    return aligned
 
 
 def _finger_direction(mesh: trimesh.Trimesh) -> np.ndarray:
@@ -604,11 +570,82 @@ def _hole_fit_error_mm(mesh: trimesh.Trimesh, holes: np.ndarray) -> float:
     return float(sum(tree.query(h)[0] for h in holes) * 1000)
 
 
+def _bio_gripper_profiles() -> list:
+    return [
+        p
+        for p in ROBOT_PROFILES.values()
+        if p.supports_bio_gripper_g2 and p.bio_gripper_g2_visual_urdf
+    ]
+
+
+def _robot_ee_glb_path(profile) -> Path:
+    return (
+        profile.assets_dir
+        / "meshes"
+        / profile.mesh_variant
+        / "visual_glb"
+        / f"{profile.ee_link}.glb"
+    )
+
+
+def _canonical_ee_glb_path(ee_link: str) -> Path:
+    """Canonical EE GLB for per-link static export (prefer xarm*_1305)."""
+    matches = [p for p in _bio_gripper_profiles() if p.ee_link == ee_link]
+    if not matches:
+        raise KeyError(f"No Bio Gripper G2 profile with ee_link={ee_link}")
+    matches.sort(key=lambda p: (0 if p.key.startswith("xarm") else 1, p.key))
+    return _robot_ee_glb_path(matches[0])
+
+
 def _ee_glb_path(ee_link: str) -> Path:
-    for profile in ROBOT_PROFILES.values():
-        if profile.ee_link == ee_link:
-            return profile.assets_dir / "meshes" / profile.mesh_variant / "visual_glb" / f"{ee_link}.glb"
-    raise KeyError(f"No robot profile with ee_link={ee_link}")
+    return _canonical_ee_glb_path(ee_link)
+
+
+def _urdf_origin_rt(elem: ET.Element | None) -> tuple[np.ndarray, np.ndarray]:
+    if elem is None:
+        return np.eye(3), np.zeros(3)
+    xyz = np.fromstring(elem.get("xyz", "0 0 0"), sep=" ", dtype=float)
+    roll, pitch, yaw = np.fromstring(elem.get("rpy", "0 0 0"), sep=" ", dtype=float)
+    return Rotation.from_euler("xyz", [roll, pitch, yaw]).as_matrix(), xyz
+
+
+def _urdf_compose(
+    a: tuple[np.ndarray, np.ndarray], b: tuple[np.ndarray, np.ndarray]
+) -> tuple[np.ndarray, np.ndarray]:
+    ra, ta = a
+    rb, tb = b
+    return ra @ rb, ta + ra @ tb
+
+
+def _urdf_link_world_rt(root: ET.Element, link_name: str) -> tuple[np.ndarray, np.ndarray]:
+    parent_by_child: dict[str, tuple[str, tuple[np.ndarray, np.ndarray]]] = {}
+    for joint in root.findall("joint"):
+        parent = joint.find("parent")
+        child = joint.find("child")
+        if parent is None or child is None:
+            continue
+        parent_by_child[child.get("link", "")] = (
+            parent.get("link", ""),
+            _urdf_origin_rt(joint.find("origin")),
+        )
+    chain: list[tuple[np.ndarray, np.ndarray]] = []
+    current = link_name
+    while current in parent_by_child:
+        parent, origin_rt = parent_by_child[current]
+        chain.append(origin_rt)
+        current = parent
+    out = (np.eye(3), np.zeros(3))
+    for origin_rt in reversed(chain):
+        out = _urdf_compose(out, origin_rt)
+    return out
+
+
+def _arm_ee_world_rt_at_zero(profile) -> np.ndarray:
+    """EE link world rotation at URDF zero config (revolute joints at 0)."""
+    urdf_path = profile.assets_dir / profile.visual_glb_urdf
+    root = ET.parse(urdf_path).getroot()
+    R, _ = _urdf_link_world_rt(root, profile.ee_link)
+    return R
 
 
 def _apply_transform(mesh: trimesh.Trimesh, R: np.ndarray, t: np.ndarray, dz: float = 0.0) -> trimesh.Trimesh:
@@ -656,9 +693,19 @@ def _pick_pin_hole_transform(
     pin_verts: np.ndarray,
     holes: np.ndarray,
 ) -> tuple[trimesh.Trimesh, np.ndarray, np.ndarray, np.ndarray, float]:
-    """Try both hole orders; prefer low hole error, +X opening, low |Y| tilt."""
+    """Try both hole orders; prefer low hole error, +X opening, low |Y| tilt.
+
+    Holes are sorted by Y coordinate before enumeration so pin-to-hole
+    correspondence is canonical across all EE links.  pin_verts are
+    always [pos_y, neg_y] from _gripper_pin_points_stl; canonical holes
+    are [neg_y, pos_y] — the two permutations then cover both matchings.
+    """
+    # Canonical hole ordering: sort by Y so permutations are deterministic
+    # across EE link geometries (pin_verts from _gripper_pin_points_stl
+    # already returns [pos_y, neg_y]).
+    holes_canon = holes[np.argsort(holes[:, 1])]  # [neg_y, pos_y]
     best: tuple[float, trimesh.Trimesh, np.ndarray, np.ndarray, np.ndarray, float, bool] | None = None
-    for hole_order in (holes, holes[::-1]):
+    for hole_order in (holes_canon, holes_canon[::-1]):
         R, t = _kabsch(pin_verts, hole_order)
         aligned = coarse.copy()
         aligned.vertices = aligned.vertices @ R.T + t
@@ -686,6 +733,256 @@ def _pick_pin_hole_transform(
         R = rz @ R
         t = rz @ t
     return aligned, R, t, holes, hole_fit
+
+
+def _attach_hole_fit_mm(
+    R: np.ndarray, t: np.ndarray, pins_base: np.ndarray, holes: np.ndarray
+) -> float:
+    """Mean pin→hole distance (mm) after applying attach transform base→EE."""
+    mapped = pins_base @ R.T + t
+    return float(np.mean(np.linalg.norm(mapped - holes, axis=1)) * 1000)
+
+
+def _score_attach_candidate(
+    R: np.ndarray,
+    t: np.ndarray,
+    stl_pins: np.ndarray,
+    holes: np.ndarray,
+    stl_base: trimesh.Trimesh,
+    ee_mesh: trimesh.Trimesh,
+    R_world_ee: np.ndarray,
+) -> tuple[float, float, float, bool, np.ndarray, np.ndarray, np.ndarray]:
+    """Score an attach rigid map (base_link -> EE) for hole fit, ring coplanarity, finger +X."""
+    holes_canon = holes[np.argsort(holes[:, 1])]
+    base_in_ee = stl_base.copy()
+    base_in_ee.vertices = base_in_ee.vertices @ R.T + t
+    fd_before = _finger_direction(base_in_ee)
+    needs_rz_flip = fd_before[0] < 0.0
+    hole_fit = min(
+        _attach_hole_fit_mm(R, t, stl_pins, holes_canon),
+        _attach_hole_fit_mm(R, t, stl_pins, holes_canon[::-1]),
+    )
+    dz = _z_shift_to_flange(base_in_ee, ee_mesh)
+    if abs(dz) <= 0.002:
+        t = t.copy()
+        t[MOUNT_AXIS] += dz
+        base_in_ee.vertices[:, MOUNT_AXIS] += dz
+        hole_fit = min(
+            _attach_hole_fit_mm(R, t, stl_pins, holes_canon),
+            _attach_hole_fit_mm(R, t, stl_pins, holes_canon[::-1]),
+        )
+    z_ee, _ = _ring_plane_z_and_xy(ee_mesh, *EE_RING_R, z_pick="max")
+    z_g, _ = _ring_plane_z_and_xy(base_in_ee, *G2_RING_R, z_pick="area_peak")
+    ring_gap = abs(z_ee - z_g) * 1000
+    fd = _finger_direction(base_in_ee)
+    finger_world = R_world_ee @ (R @ FINGER_TARGET)
+    finger_world = finger_world / (np.linalg.norm(finger_world) + 1e-12)
+    score = hole_fit
+    if needs_rz_flip:
+        score += 80.0
+    score += abs(fd[1]) * 40.0
+    score += (1.0 - float(fd @ FINGER_TARGET)) * 10.0
+    score += (1.0 - float(finger_world[0])) * 60.0
+    score += abs(float(finger_world[1])) * 30.0
+    ring_penalty = max(0.0, ring_gap - 5.0) * 3.0
+    if hole_fit >= 5.0:
+        ring_penalty *= 0.2
+    score += ring_penalty
+    return score, hole_fit, ring_gap, needs_rz_flip, R, t, finger_world
+
+
+def _static_visual_finger_world_ref(profile) -> np.ndarray | None:
+    """Finger opening direction from the static combo visual mesh (user-verified reference)."""
+    urdf_path = profile.assets_dir / profile.bio_gripper_g2_visual_urdf
+    if not urdf_path.is_file():
+        return None
+    root = ET.parse(urdf_path).getroot()
+    visual_link = "bio_gripper_g2_visual"
+    mesh_ref = None
+    visual_rt = (np.eye(3), np.zeros(3))
+    for link in root.findall("link"):
+        if link.get("name") != visual_link:
+            continue
+        visual = link.find("visual")
+        if visual is None:
+            return None
+        mesh = visual.find("./geometry/mesh")
+        if mesh is None or not mesh.get("filename"):
+            return None
+        mesh_ref = mesh.get("filename")
+        visual_rt = _urdf_origin_rt(visual.find("origin"))
+        break
+    if mesh_ref is None:
+        return None
+    mesh_path = (urdf_path.parent / mesh_ref).resolve()
+    if not mesh_path.is_file():
+        return None
+    mesh = trimesh.load(mesh_path, force="mesh")
+    R, t = _urdf_compose(_urdf_link_world_rt(root, visual_link), visual_rt)
+    verts = mesh.vertices @ R.T + t
+    fd = _finger_direction(trimesh.Trimesh(vertices=verts, faces=mesh.faces))
+    return fd / (np.linalg.norm(fd) + 1e-12)
+
+
+def _attach_candidate_sort_key(
+    score: float,
+    hole_fit: float,
+    finger_world: np.ndarray,
+    static_ref: np.ndarray | None,
+    ring_gap: float = 0.0,
+) -> tuple[float, float, float, float, float, float]:
+    """Lower is better: world +X, low |world Y|, ring coplanarity, hole fit, static alignment, score."""
+    fx = float(finger_world[0])
+    fy = abs(float(finger_world[1]))
+    lateral = fy if fy > 0.05 else 0.0
+    angle = 0.0
+    if static_ref is not None:
+        angle = float(
+            np.degrees(
+                np.arccos(float(np.clip(np.dot(finger_world, static_ref), -1.0, 1.0)))
+            )
+        )
+    ring_penalty = max(0.0, float(ring_gap) - 5.0)
+    return (-round(fx, 2), lateral, ring_penalty, hole_fit, angle, score)
+
+
+def _attach_origin_for_ee(
+    stl_pins: np.ndarray,
+    holes: np.ndarray,
+    stl_base: trimesh.Trimesh,
+    ee_mesh: trimesh.Trimesh,
+    R_pin: np.ndarray,
+    t_pin: np.ndarray,
+    rot_g: np.ndarray,
+    trans_g: np.ndarray,
+    profile,
+) -> dict:
+    """Compute URDF ``bio_gripper_g2_attach`` origin for movable arm combos.
+
+    Movable GLBs live in the canonical gripper ``base_link`` frame.  Pick the best of:
+
+    1. Direct pin-hole Kabsch (``stl_pins`` -> EE holes), scored like static alignment.
+    2. Static-visual equivalence: ``T_attach = Rx(pi) @ T_pin @ inv(T_gripper_frame)`` so
+       the movable base matches the static overlay pose on the same EE flange.
+    """
+    holes_canon = holes[np.argsort(holes[:, 1])]
+    rx_pi = Rotation.from_euler("x", np.pi, degrees=False).as_matrix()
+    R_world_ee = _arm_ee_world_rt_at_zero(profile)
+    static_ref = _static_visual_finger_world_ref(profile)
+    best: tuple[
+        tuple[float, float, float, float, float, float],
+        np.ndarray,
+        np.ndarray,
+        float,
+        float,
+        np.ndarray,
+    ] | None = None
+
+    def _consider(
+        score: float,
+        R: np.ndarray,
+        t: np.ndarray,
+        hole_fit: float,
+        ring_gap: float,
+        finger_world: np.ndarray,
+    ) -> None:
+        nonlocal best
+        key = _attach_candidate_sort_key(score, hole_fit, finger_world, static_ref, ring_gap)
+        if best is None or key < best[0]:
+            best = (key, R, t, hole_fit, ring_gap, finger_world)
+
+    for hole_order in (holes_canon, holes_canon[::-1]):
+        R, t = _kabsch(stl_pins, hole_order)
+        score, hole_fit, ring_gap, needs_rz, R, t, finger_world = _score_attach_candidate(
+            R, t, stl_pins, holes, stl_base, ee_mesh, R_world_ee
+        )
+        if finger_world[0] < 0.0:
+            rz = Rotation.from_euler("z", 180.0, degrees=True).as_matrix()
+            score2, hole_fit2, ring_gap2, _, R2, t2, fw2 = _score_attach_candidate(
+                rz @ R, rz @ t, stl_pins, holes, stl_base, ee_mesh, R_world_ee
+            )
+            if fw2[0] > finger_world[0]:
+                score, hole_fit, ring_gap, R, t, finger_world = (
+                    score2,
+                    hole_fit2,
+                    ring_gap2,
+                    R2,
+                    t2,
+                    fw2,
+                )
+        elif needs_rz:
+            rz = Rotation.from_euler("z", 180.0, degrees=True).as_matrix()
+            score2, hole_fit2, ring_gap2, _, R2, t2, fw2 = _score_attach_candidate(
+                rz @ R, rz @ t, stl_pins, holes, stl_base, ee_mesh, R_world_ee
+            )
+            if _attach_candidate_sort_key(
+                score2, hole_fit2, fw2, static_ref, ring_gap2
+            ) < _attach_candidate_sort_key(score, hole_fit, finger_world, static_ref, ring_gap):
+                score, hole_fit, ring_gap, R, t, finger_world = (
+                    score2,
+                    hole_fit2,
+                    ring_gap2,
+                    R2,
+                    t2,
+                    fw2,
+                )
+        _consider(score, R, t, hole_fit, ring_gap, finger_world)
+
+    R_static = rx_pi @ R_pin @ rot_g.T
+    t_static = t_pin @ rx_pi.T - trans_g @ rot_g @ R_pin.T @ rx_pi.T
+    score, hole_fit, ring_gap, needs_rz, R, t, finger_world = _score_attach_candidate(
+        R_static, t_static, stl_pins, holes, stl_base, ee_mesh, R_world_ee
+    )
+    if needs_rz:
+        rz = Rotation.from_euler("z", 180.0, degrees=True).as_matrix()
+        score2, hole_fit2, ring_gap2, _, R2, t2, fw2 = _score_attach_candidate(
+            rz @ R_static, rz @ t_static, stl_pins, holes, stl_base, ee_mesh, R_world_ee
+        )
+        if _attach_candidate_sort_key(
+            score2, hole_fit2, fw2, static_ref, ring_gap2
+        ) < _attach_candidate_sort_key(score, hole_fit, finger_world, static_ref, ring_gap):
+            score, hole_fit, ring_gap, R, t, finger_world = (
+                score2,
+                hole_fit2,
+                ring_gap2,
+                R2,
+                t2,
+                fw2,
+            )
+    else:
+        R, t = R_static, t_static
+    _consider(score, R, t, hole_fit, ring_gap, finger_world)
+
+    assert best is not None
+    _, R, t, hole_fit, ring_gap, finger_world = best
+
+    base_in_ee = stl_base.copy()
+    base_in_ee.vertices = base_in_ee.vertices @ R.T + t
+    rpy = Rotation.from_matrix(R).as_euler("xyz")
+    fd = R @ FINGER_TARGET
+    fd = fd / (np.linalg.norm(fd) + 1e-12)
+    static_angle_deg = None
+    if static_ref is not None:
+        static_angle_deg = round(
+            float(
+                np.degrees(
+                    np.arccos(float(np.clip(np.dot(finger_world, static_ref), -1.0, 1.0)))
+                )
+            ),
+            2,
+        )
+    return {
+        "attach_xyz": [round(float(x), 6) for x in t],
+        "attach_rpy": [round(float(x), 8) for x in rpy],
+        "attach_xyz_str": " ".join(f"{x:.6f}" for x in t),
+        "attach_rpy_str": " ".join(f"{x:.8f}" for x in rpy),
+        "attach_hole_fit_mm": round(hole_fit, 2),
+        "attach_ring_gap_mm": round(ring_gap, 3),
+        "attach_finger_dir": [round(float(x), 4) for x in fd],
+        "attach_finger_world_dir": [round(float(x), 4) for x in finger_world],
+        "attach_finger_dot_base_x": round(float(finger_world[0]), 4),
+        "attach_static_angle_deg": static_angle_deg,
+    }
 
 
 def relocalize_for_ee_link(
@@ -720,29 +1017,29 @@ def relocalize_for_ee_link(
         aligned_flange = _correct_finger_opening(aligned_flange)
 
     center_offset = _assembly_center_offset(merged_coarse, stl_base)
+    rot_g, trans_g = _gripper_frame_rt(groups, merged_coarse, stl_base)
 
-    aligned_base_plastic, aligned_base_metal = _movable_base_ee_material_meshes(
-        material_parts, jaw_labels, merged_coarse, stl_base, R, t, dz
+    # Movable base + fingers are built in the canonical gripper base_link frame
+    # (link_base.stl frame), NOT the per-EE-link pin-hole frame.  Finger stroke stays
+    # EE-independent; per-EE attach origin (below) maps those meshes onto the arm flange.
+    aligned_base_plastic, aligned_base_metal = _movable_base_gripper_frame(
+        material_parts, jaw_labels, rot_g, trans_g, center_offset
     )
-    left_finger_out, right_finger_out = _finger_meshes_from_static_material(
-        material_parts, jaw_labels, finger_yshift, merged_coarse, stl_base, R, t, dz
+    left_finger_out, right_finger_out = _finger_meshes_gripper_frame(
+        material_parts, jaw_labels, finger_yshift, rot_g, trans_g, center_offset
     )
-    finger_method = "ee_align_link_frame"
+    finger_method = "gripper_base_link_frame"
     static_plastic, static_metal = _static_ee_material_meshes(
         material_parts, merged_coarse, stl_base, R, t, dz
     )
 
     aligned = aligned_flange
+    # frame_rx_pi is intentionally always False: the combo URDF mount
+    # rpy="3.14159265 0 0" (Rx(pi)) already handles the EE-flange-to-gripper
+    # orientation at the kinematics level.  Applying an additional mesh-level
+    # Rx(pi) would double-rotate the base and invert finger Y, swapping the
+    # left/right finger visuals (see plan for link7 travel bug analysis).
     frame_rx_pi = False
-    if not _flange_above_plastic(aligned_base_plastic, aligned_base_metal):
-        frame_rx_pi = True
-        aligned_base_plastic = _rx_pi_base_frame(aligned_base_plastic)
-        aligned_base_metal = _rx_pi_base_frame(aligned_base_metal)
-        left_finger_out = _rx_pi_finger_link_frame(left_finger_out)
-        right_finger_out = _rx_pi_finger_link_frame(right_finger_out)
-        static_plastic = _rx_pi_base_frame(static_plastic)
-        static_metal = _rx_pi_base_frame(static_metal)
-        aligned = _rx_pi_base_frame(aligned_flange)
 
     aligned_base = trimesh.util.concatenate(
         [m for m in (aligned_base_plastic, aligned_base_metal) if m is not None]
@@ -818,13 +1115,7 @@ def relocalize_bio_gripper_g2(dry_run: bool = False) -> list[dict]:
     material_parts = _bake_bio_material_parts(src)
     groups = _partition_parts(parts)
 
-    ee_links = sorted(
-        {
-            p.ee_link
-            for p in ROBOT_PROFILES.values()
-            if p.supports_bio_gripper_g2 and p.bio_gripper_g2_visual_urdf
-        }
-    )
+    ee_links = sorted({p.ee_link for p in _bio_gripper_profiles()})
 
     report: list[dict] = []
 
@@ -844,8 +1135,12 @@ def relocalize_bio_gripper_g2(dry_run: bool = False) -> list[dict]:
         f"finger_yshift mm: left={finger_yshift['left']*1000:.1f} right={finger_yshift['right']*1000:.1f}"
     )
 
+    coarse = _cad_to_stl_coarse(merged_coarse, stl_base)
+    pin_verts = _pin_vertices_on_mesh(coarse, stl_pins)
+    rot_g, trans_g = _gripper_frame_rt(groups, merged_coarse, stl_base)
+
     for ee_link in ee_links:
-        ee_glb = _ee_glb_path(ee_link)
+        ee_glb = _canonical_ee_glb_path(ee_link)
         if not ee_glb.is_file():
             raise FileNotFoundError(f"Missing EE GLB for {ee_link}: {ee_glb}")
         aligned, movable, entry, static_plastic, static_metal = relocalize_for_ee_link(
@@ -879,6 +1174,33 @@ def relocalize_bio_gripper_g2(dry_run: bool = False) -> list[dict]:
                     continue
                 glb_name = BIO_LEFT_FINGER_GLB if name == "left_finger" else BIO_RIGHT_FINGER_GLB
                 export_opaque_doublesided_glb([mesh], ee_base_dir / glb_name, ARM_EE_METAL)
+
+    for profile in _bio_gripper_profiles():
+        ee_glb = _robot_ee_glb_path(profile)
+        ee_mesh = trimesh.load(ee_glb, force="mesh")
+        holes = _arm_locating_holes(ee_mesh)
+        canon_glb = _canonical_ee_glb_path(profile.ee_link)
+        if canon_glb == ee_glb:
+            canon_holes = holes
+        else:
+            canon_holes = _arm_locating_holes(trimesh.load(canon_glb, force="mesh"))
+        # Static-visual equivalence must use the same canonical EE pin-hole frame as the
+        # exported bio_gripper_g2_visual_{ee_link}.glb (xarm*_1305), not the robot-specific
+        # EE mesh (uf850 link6 differs from xarm6 link6).
+        _, R_pin, t_pin, _, _ = _pick_pin_hole_transform(coarse, pin_verts, canon_holes)
+        attach_entry = {
+            "robot_key": profile.key,
+            "ee_link": profile.ee_link,
+            **_attach_origin_for_ee(
+                stl_pins, holes, stl_base, ee_mesh, R_pin, t_pin, rot_g, trans_g, profile
+            ),
+        }
+        report.append(attach_entry)
+        print(
+            f"{profile.key} attach: hole_fit={attach_entry['attach_hole_fit_mm']:.1f}mm, "
+            f"ring_gap={attach_entry['attach_ring_gap_mm']:.3f}mm, "
+            f"finger_dot_base_x={attach_entry.get('attach_finger_dot_base_x')}"
+        )
 
     if not dry_run:
         METRICS_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

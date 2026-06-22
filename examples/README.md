@@ -9,7 +9,7 @@
 | `view_robot_glb.py` | **统一 GLB 查看器** — 支持全部机型和末端执行器 |
 
 ```bash
-python examples/view_robot_glb.py --robot xarm6_1305
+python examples/view_robot_glb.py --robot xarm6
 ```
 
 ## 机器人可视化

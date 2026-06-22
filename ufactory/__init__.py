@@ -10,6 +10,7 @@ from ufactory.robot_registry import (
     glb_output_name,
     joint_names,
     link_glb_stl_pairs,
+    robot_cli_choices,
 )
 
 from ufactory.paths import (
@@ -18,7 +19,9 @@ from ufactory.paths import (
     robot_visual_glb_urdf,
     kinematics_user_dir,
     # Per-robot convenience helpers
+    xarm5_urdf,
     xarm6_urdf,
+    xarm7_urdf,
     xarm6_1305_urdf,
     xarm6_1305_visual_glb_urdf,
     xarm5_1305_urdf,
@@ -57,3 +60,5 @@ from ufactory.glb_visual import (
     enable_glb_pbr_surfaces,
     glb_view_surface,
 )
+
+from ufactory.bio_gripper_g2 import BioGripperG2
