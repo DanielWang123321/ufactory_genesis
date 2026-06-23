@@ -41,9 +41,15 @@ from _packaging_scene import (
   build_packaging_scene,
   make_layout,
 )
+from _robot_viewer import start_deferred_viewer
 
 GRIPPER_OPEN = 0.0
 GRIPPER_CLOSE = 0.85
+GRIPPER_OPEN_GAP_M = 0.084  # drive=0 → ~84 mm two-finger gap
+GRIPPER_GAP_CALIBRATION_OFFSET_M = 0.0053  # linear model under-closes vs G2 pad kinematics
+GRASP_SQUEEZE_GAP_MARGIN = 0.0  # flush with block width; calibration offset handles pad error
+GRIPPER_SPEED_FACTOR = 5.0  # open/close 5× faster than original step counts
+GRIPPER_OPEN_STEPS = 150
 GRASP_CLOSE_STEPS = 50
 GRASP_CLOSE_MIN_STEPS = 47
 GRASP_SQUEEZE_STEPS = 80
@@ -54,6 +60,18 @@ GRASP_TABLE_CLEARANCE = 0.010
 
 SIM_DT = 0.02
 SETTLE_STEPS = 40
+SHOWCASE_CARTESIAN_SPEED_MMS = 100.0
+SHOWCASE_CARTESIAN_ACCEL_MMS2 = 1000.0
+TRANSIT_JOINT_BLEND_STEPS = 1  # kinematic cruise: 1 step per planned waypoint
+
+ALL_GRIPPER_JOINTS = (
+  "drive_joint",
+  "left_finger_joint",
+  "left_inner_knuckle_joint",
+  "right_outer_knuckle_joint",
+  "right_finger_joint",
+  "right_inner_knuckle_joint",
+)
 
 
 @dataclass
@@ -63,14 +81,197 @@ class ShowcaseRobotCtx:
   right_finger: object
   arm_dof_idx: list[int]
   gripper_dof_idx: list[int]
+  all_gripper_dof_idx: list[int]
   down_quat: torch.Tensor
   home_pos: list[float]
   home_qpos_saved: torch.Tensor
   finger_z_offset: float = 0.0
+  grasp_drive: float = GRIPPER_CLOSE
+
+
+def gripper_drive_for_gap(gap_m: float) -> float:
+  """Map desired two-finger gap (m) to drive_joint command."""
+  gap_m = max(0.0, min(GRIPPER_OPEN_GAP_M, gap_m))
+  return GRIPPER_CLOSE * (1.0 - gap_m / GRIPPER_OPEN_GAP_M)
+
+
+def grasp_gripper_drive(obj_size: tuple[float, float, float]) -> float:
+  """Partial close target for a block grasped with gripper pointing down (Y axis)."""
+  obj_width = obj_size[1]
+  target_gap = max(0.0, obj_width + GRASP_SQUEEZE_GAP_MARGIN - GRIPPER_GAP_CALIBRATION_OFFSET_M)
+  return gripper_drive_for_gap(target_gap)
+
+
+def stiffen_gripper_mimic_constraints(robot) -> None:
+  """Tighten mimic joint equality constraints so gripper linkages stay rigid."""
+  import numpy as np
+
+  stiff_sol_params = np.array([0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0])
+  mimic_keywords = ("finger", "knuckle")
+  for eq in robot.equalities:
+    if any(kw in eq.name for kw in mimic_keywords):
+      eq.set_sol_params(stiff_sol_params)
+
+
+def collect_gripper_snapshot(robot) -> dict:
+  """All gripper joint q/qd plus knuckle link poses — linkage whip diagnostics."""
+  joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
+  joints: dict[str, dict[str, float]] = {}
+  drive_q: float | None = None
+  max_qd = 0.0
+  max_mimic_err = 0.0
+  for name in ALL_GRIPPER_JOINTS:
+    joint = joint_map.get(name)
+    if joint is None:
+      continue
+    idx = joint.dofs_idx_local[0]
+    q = robot.get_dofs_position()[0, idx].item()
+    qd = robot.get_dofs_velocity()[0, idx].item()
+    joints[name] = {"q": q, "qd": qd}
+    max_qd = max(max_qd, abs(qd))
+    if name == "drive_joint":
+      drive_q = q
+  if drive_q is not None:
+    for name, state in joints.items():
+      if name != "drive_joint":
+        max_mimic_err = max(max_mimic_err, abs(state["q"] - drive_q))
+  knuckles: dict[str, list[float]] = {}
+  for link_name in (
+    "left_outer_knuckle",
+    "left_inner_knuckle",
+    "right_outer_knuckle",
+    "right_inner_knuckle",
+  ):
+    pos = robot.get_link(link_name).get_pos()[0].cpu().tolist()
+    knuckles[link_name] = pos
+  return {
+    "joints": joints,
+    "max_qd": max_qd,
+    "max_mimic_err": max_mimic_err,
+    "knuckles": knuckles,
+  }
+
+
+def collect_pose_snapshot(robot, layout) -> dict:
+  """Return link6 / finger poses and arm qpos for keyframe metadata."""
+  ik_link = robot.get_link("link6")
+  left_finger = robot.get_link("left_finger")
+  right_finger = robot.get_link("right_finger")
+  arm_dof_idx = [robot.get_joint(f"joint{i + 1}").dofs_idx_local[0] for i in range(6)]
+  gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]
+
+  link6 = ik_link.get_pos()[0].cpu().tolist()
+  left = left_finger.get_pos()[0].cpu().tolist()
+  right = right_finger.get_pos()[0].cpu().tolist()
+  finger_center_z = (left[2] + right[2]) / 2
+  finger_y_gap_mm = abs(left[1] - right[1]) * 1000.0
+  arm_q = robot.get_dofs_position()[0, arm_dof_idx].cpu().tolist()
+  grip_q = robot.get_dofs_position()[0, gripper_dof_idx[0]].item()
+  table_z = layout.table_top_z
+
+  return {
+    "link6_pos": link6,
+    "left_finger_pos": left,
+    "right_finger_pos": right,
+    "finger_center_z": finger_center_z,
+    "finger_y_gap_mm": finger_y_gap_mm,
+    "table_top_z": table_z,
+    "link6_above_table_mm": (link6[2] - table_z) * 1000.0,
+    "finger_above_table_mm": (finger_center_z - table_z) * 1000.0,
+    "arm_qpos_deg": [math.degrees(q) for q in arm_q],
+    "gripper_q": grip_q,
+    "gripper_detail": collect_gripper_snapshot(robot),
+  }
 
 
 def _scale_steps(steps: int, speed: float) -> int:
   return max(1, int(round(steps / max(0.25, speed))))
+
+
+def _scaled_cartesian_kinematics(speed_mult: float) -> tuple[float, float]:
+  mult = max(0.25, speed_mult)
+  return SHOWCASE_CARTESIAN_SPEED_MMS * mult, SHOWCASE_CARTESIAN_ACCEL_MMS2 * mult
+
+
+def _trapezoid_duration(dist_mm: float, speed_mms: float, accel_mms2: float) -> float:
+  """Total move time (s) for symmetric trapezoid/triangle velocity profile."""
+  if dist_mm <= 0:
+    return 0.0
+  t_a = speed_mms / accel_mms2
+  d_a = 0.5 * accel_mms2 * t_a * t_a
+  if dist_mm >= 2.0 * d_a:
+    return 2.0 * t_a + (dist_mm - 2.0 * d_a) / speed_mms
+  return 2.0 * math.sqrt(dist_mm / accel_mms2)
+
+
+def _trapezoid_arclength(t: float, dist_mm: float, speed_mms: float, accel_mms2: float) -> float:
+  """Arc length (mm) at time t along a symmetric trapezoid/triangle profile."""
+  if dist_mm <= 0:
+    return 0.0
+  t = max(0.0, t)
+  t_a = speed_mms / accel_mms2
+  d_a = 0.5 * accel_mms2 * t_a * t_a
+  if dist_mm >= 2.0 * d_a:
+    t_cruise = (dist_mm - 2.0 * d_a) / speed_mms
+    t_total = 2.0 * t_a + t_cruise
+    t = min(t, t_total)
+    if t <= t_a:
+      return 0.5 * accel_mms2 * t * t
+    if t <= t_a + t_cruise:
+      return d_a + speed_mms * (t - t_a)
+    t_d = t - t_a - t_cruise
+    return dist_mm - 0.5 * accel_mms2 * (t_a - t_d) ** 2
+  t_peak = math.sqrt(dist_mm / accel_mms2)
+  t_total = 2.0 * t_peak
+  t = min(t, t_total)
+  if t <= t_peak:
+    return 0.5 * accel_mms2 * t * t
+  t_d = t - t_peak
+  return dist_mm - 0.5 * accel_mms2 * t_d * t_d
+
+
+def _trapezoid_step_count(
+  dist_mm: float, speed_mult: float, dt: float = SIM_DT,
+) -> int:
+  if dist_mm <= 0:
+    return 1
+  speed_mms, accel_mms2 = _scaled_cartesian_kinematics(speed_mult)
+  duration = _trapezoid_duration(dist_mm, speed_mms, accel_mms2)
+  return max(1, int(math.ceil(duration / dt)))
+
+
+def _trapezoid_alphas(
+  dist_mm: float, speed_mult: float, dt: float = SIM_DT,
+) -> list[float]:
+  """Normalized path fractions [0, 1] at each sim step for trapezoid motion."""
+  if dist_mm <= 0:
+    return [1.0]
+  speed_mms, accel_mms2 = _scaled_cartesian_kinematics(speed_mult)
+  n = _trapezoid_step_count(dist_mm, speed_mult, dt)
+  alphas: list[float] = []
+  for i in range(1, n + 1):
+    s = _trapezoid_arclength(i * dt, dist_mm, speed_mms, accel_mms2)
+    alphas.append(min(1.0, s / dist_mm))
+  return alphas
+
+
+def _control_gripper(
+  robot,
+  grip_val: float,
+  all_gripper_dof_idx: list[int],
+) -> None:
+  """Drive all gripper DOFs to the same angle (movable visual demo pattern)."""
+  target = torch.full((1, len(all_gripper_dof_idx)), grip_val, device=gs.device, dtype=gs.tc_float)
+  robot.control_dofs_position(target, all_gripper_dof_idx)
+
+
+def _scale_gripper_steps(steps: int, speed: float) -> int:
+  return max(1, int(round(steps / (GRIPPER_SPEED_FACTOR * max(0.25, speed)))))
+
+
+def _scale_grasp_close_steps(steps: int, speed: float) -> int:
+  """Grasp close: arm-speed only (skip GRIPPER_SPEED_FACTOR to avoid linkage whip)."""
+  return max(40, int(round(steps / max(0.25, speed))))
 
 
 def _world_home(layout) -> list[float]:
@@ -104,15 +305,7 @@ def _setup_robot(robot, scene):
 
   arm_dof_idx = [robot.get_joint(f"joint{i + 1}").dofs_idx_local[0] for i in range(6)]
   gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]
-  all_gripper_joints = (
-    "drive_joint",
-    "left_finger_joint",
-    "left_inner_knuckle_joint",
-    "right_outer_knuckle_joint",
-    "right_finger_joint",
-    "right_inner_knuckle_joint",
-  )
-  all_gripper_dof_idx = [robot.get_joint(n).dofs_idx_local[0] for n in all_gripper_joints]
+  all_gripper_dof_idx = [robot.get_joint(n).dofs_idx_local[0] for n in ALL_GRIPPER_JOINTS]
 
   robot.set_dofs_kp(
     torch.tensor([3000, 3000, 2000, 2000, 1000, 1000], device=gs.device, dtype=gs.tc_float),
@@ -127,16 +320,16 @@ def _setup_robot(robot, scene):
     torch.tensor([50, 50, 32, 32, 32, 20], device=gs.device, dtype=gs.tc_float),
     arm_dof_idx,
   )
-  robot.set_dofs_kp(torch.tensor([2.0], device=gs.device, dtype=gs.tc_float), gripper_dof_idx)
-  robot.set_dofs_kv(torch.tensor([5.0], device=gs.device, dtype=gs.tc_float), gripper_dof_idx)
+  robot.set_dofs_kp(torch.tensor([30.0], device=gs.device, dtype=gs.tc_float), gripper_dof_idx)
+  robot.set_dofs_kv(torch.tensor([6.0], device=gs.device, dtype=gs.tc_float), gripper_dof_idx)
   robot.set_dofs_force_range(
-    torch.tensor([-1.0], device=gs.device, dtype=gs.tc_float),
-    torch.tensor([1.0], device=gs.device, dtype=gs.tc_float),
+    torch.tensor([-20.0], device=gs.device, dtype=gs.tc_float),
+    torch.tensor([20.0], device=gs.device, dtype=gs.tc_float),
     gripper_dof_idx,
   )
   n_grip = len(all_gripper_dof_idx)
   robot.set_dofs_damping(
-    torch.full((n_grip,), 0.1, device=gs.device, dtype=gs.tc_float),
+    torch.full((n_grip,), 0.05, device=gs.device, dtype=gs.tc_float),
     all_gripper_dof_idx,
   )
   robot.set_dofs_frictionloss(
@@ -146,10 +339,10 @@ def _setup_robot(robot, scene):
 
   down_quat = _world_down_quat()
 
-  return ik_link, left_finger, right_finger, arm_dof_idx, gripper_dof_idx, down_quat
+  return ik_link, left_finger, right_finger, arm_dof_idx, gripper_dof_idx, all_gripper_dof_idx, down_quat
 
 
-def _init_home_qpos(robot, ik_link, arm_dof_idx, gripper_dof_idx, down_quat, home_pos):
+def _init_home_qpos(robot, ik_link, arm_dof_idx, all_gripper_dof_idx, down_quat, home_pos):
   home_link6_pos = torch.tensor([home_pos], device=gs.device, dtype=gs.tc_float)
   init_qpos = torch.zeros(1, robot.n_dofs, device=gs.device, dtype=gs.tc_float)
   home_qpos_result = robot.inverse_kinematics(
@@ -161,7 +354,8 @@ def _init_home_qpos(robot, ik_link, arm_dof_idx, gripper_dof_idx, down_quat, hom
   )
   for i, idx in enumerate(arm_dof_idx):
     init_qpos[:, idx] = home_qpos_result[0, arm_dof_idx[i]]
-  init_qpos[:, gripper_dof_idx[0]] = GRIPPER_OPEN
+  for idx in all_gripper_dof_idx:
+    init_qpos[:, idx] = GRIPPER_OPEN
   robot.set_qpos(init_qpos)
   return init_qpos.clone()
 
@@ -174,34 +368,36 @@ def _measure_finger_offset(ik_link, left_finger, right_finger):
 
 def init_showcase_robot(robot, layout, scene) -> ShowcaseRobotCtx:
   """Apply PD gains, set home qpos via IK, and prime finger geometry."""
-  ik_link, left_finger, right_finger, arm_dof_idx, gripper_dof_idx, down_quat = _setup_robot(
+  ik_link, left_finger, right_finger, arm_dof_idx, gripper_dof_idx, all_gripper_dof_idx, down_quat = _setup_robot(
     robot, None
   )
   home_pos = _world_home(layout)
   home_qpos_saved = _init_home_qpos(
-    robot, ik_link, arm_dof_idx, gripper_dof_idx, down_quat, home_pos
+    robot, ik_link, arm_dof_idx, all_gripper_dof_idx, down_quat, home_pos
   )
   scene.step()
   finger_z_offset = _measure_finger_offset(ik_link, left_finger, right_finger)
+  grasp_drive = grasp_gripper_drive(layout.obj_size)
   return ShowcaseRobotCtx(
     ik_link=ik_link,
     left_finger=left_finger,
     right_finger=right_finger,
     arm_dof_idx=arm_dof_idx,
     gripper_dof_idx=gripper_dof_idx,
+    all_gripper_dof_idx=all_gripper_dof_idx,
     down_quat=down_quat,
     home_pos=home_pos,
     home_qpos_saved=home_qpos_saved,
     finger_z_offset=finger_z_offset,
+    grasp_drive=grasp_drive,
   )
 
 
 def hold_robot_home(robot, scene, ctx: ShowcaseRobotCtx, *, steps: int = 1) -> None:
   target_qpos = ctx.home_qpos_saved
-  grip_t = torch.tensor([[GRIPPER_OPEN]], device=gs.device, dtype=gs.tc_float)
   for _ in range(steps):
     robot.control_dofs_position(target_qpos[:, ctx.arm_dof_idx], ctx.arm_dof_idx)
-    robot.control_dofs_position(grip_t, ctx.gripper_dof_idx)
+    _control_gripper(robot, GRIPPER_OPEN, ctx.all_gripper_dof_idx)
     scene.step()
 
 
@@ -234,6 +430,7 @@ def run_pick_place_cycle(
   speed: float = 1.0,
   ctx: ShowcaseRobotCtx | None = None,
   stop_after_phase0: bool = False,
+  capture_hook: callable | None = None,
 ) -> ShowcaseRobotCtx:
   if ctx is None:
     ctx = init_showcase_robot(robot, layout, scene)
@@ -243,13 +440,15 @@ def run_pick_place_cycle(
   right_finger = ctx.right_finger
   arm_dof_idx = ctx.arm_dof_idx
   gripper_dof_idx = ctx.gripper_dof_idx
+  all_gripper_dof_idx = ctx.all_gripper_dof_idx
   down_quat = ctx.down_quat
   home_pos = ctx.home_pos
   home_qpos_saved = ctx.home_qpos_saved
 
   finger_z_offset = ctx.finger_z_offset
+  grasp_drive = grasp_gripper_drive(layout.obj_size)
+  ctx.grasp_drive = grasp_drive
   grasp_z = _grasp_link6_z(layout.table_top_z, finger_z_offset)
-  pre_grasp_z = grasp_z + 0.10
   btop = box_top_z(layout)
   release_z = btop + 0.10 + finger_z_offset  # finger center 100 mm above box top rim
   transfer_lift_z = release_z  # transit and release at same height
@@ -277,6 +476,23 @@ def run_pick_place_cycle(
     """[w, x, y, z] (Genesis) -> [x, y, z, w] (scipy)."""
     qn = q.cpu().numpy()
     return [qn[1], qn[2], qn[3], qn[0]]
+
+  def _robot_base_pose() -> tuple[torch.Tensor, torch.Tensor]:
+    base_pos = robot.get_pos()[0]
+    if base_pos.ndim == 2:
+      base_pos = base_pos[0]
+    base_quat = robot.get_quat()[0]
+    if base_quat.ndim == 2:
+      base_quat = base_quat[0]
+    return base_pos, base_quat
+
+  def _world_to_base_pos(world_pos: torch.Tensor) -> torch.Tensor:
+    base_pos, base_quat = _robot_base_pose()
+    return transform_by_quat(world_pos - base_pos, _quat_inv(base_quat))
+
+  def _base_to_world_pos(base_rel: torch.Tensor) -> torch.Tensor:
+    base_pos, base_quat = _robot_base_pose()
+    return base_pos + transform_by_quat(base_rel, base_quat)
 
   def _ee_base_pose() -> tuple[torch.Tensor, R]:
     """Return (pos_mm, rot) of link6 expressed in the robot base frame."""
@@ -346,51 +562,248 @@ def run_pick_place_cycle(
       f"Block: [{obj_pos[0]:.3f}, {obj_pos[1]:.3f}, {obj_pos[2]:.3f}]"
     )
 
-  def move_to(target_link6_pos, gripper_val, steps=100, label=""):
+  def move_to(target_link6_pos, gripper_val, label=""):
     target_t = torch.tensor([target_link6_pos], device=gs.device, dtype=gs.tc_float)
     start_pos = ik_link.get_pos().clone()
-    grip_t = torch.tensor([[gripper_val]], device=gs.device, dtype=gs.tc_float)
-    n = _scale_steps(steps, speed)
-    for s in range(n):
-      alpha = (s + 1) / n
+    dist_mm = torch.norm(target_t - start_pos).item() * 1000.0
+    for alpha in _trapezoid_alphas(dist_mm, speed):
       interp = start_pos + alpha * (target_t - start_pos)
       qpos = robot.inverse_kinematics(
         link=ik_link, pos=interp, quat=down_quat, dofs_idx_local=arm_dof_idx,
       )
       robot.control_dofs_position(qpos[:, arm_dof_idx], arm_dof_idx)
-      robot.control_dofs_position(grip_t, gripper_dof_idx)
+      _control_gripper(robot, gripper_val, all_gripper_dof_idx)
+      _sim_step()
+    if label:
+      print_state(label)
+      _maybe_capture(label)
+
+  def move_xy(xy, gripper_val, label=""):
+    """Move link6 in XY only; keep current Z."""
+    start_pos = ik_link.get_pos().clone()
+    target_t = torch.tensor(
+      [[xy[0], xy[1], start_pos[0, 2].item()]],
+      device=gs.device,
+      dtype=gs.tc_float,
+    )
+    delta = target_t - start_pos
+    dist_mm = torch.norm(delta[:, :2]).item() * 1000.0
+    for alpha in _trapezoid_alphas(dist_mm, speed):
+      interp = start_pos + alpha * delta
+      qpos = robot.inverse_kinematics(
+        link=ik_link, pos=interp, quat=down_quat, dofs_idx_local=arm_dof_idx,
+      )
+      robot.control_dofs_position(qpos[:, arm_dof_idx], arm_dof_idx)
+      _control_gripper(robot, gripper_val, all_gripper_dof_idx)
+      _sim_step()
+    if label:
+      print_state(label)
+      _maybe_capture(label)
+
+  def _ik_qpos_at_base_pose(
+    base_x: float, base_y: float, base_z_m: float, init_qpos,
+  ):
+    base_target = torch.tensor(
+      [base_x, base_y, base_z_m], device=gs.device, dtype=gs.tc_float,
+    )
+    world_target = _base_to_world_pos(base_target).unsqueeze(0)
+    result = robot.inverse_kinematics(
+      link=ik_link,
+      pos=world_target,
+      quat=down_quat,
+      dofs_idx_local=arm_dof_idx,
+      init_qpos=init_qpos,
+      return_error=True,
+      max_solver_iters=20,
+    )
+    if result is None:
+      return robot.inverse_kinematics(
+        link=ik_link,
+        pos=world_target,
+        quat=down_quat,
+        dofs_idx_local=arm_dof_idx,
+        init_qpos=init_qpos,
+      )
+    qpos, _ = result
+    return qpos
+
+  def _refine_base_z_at(world_xy, base_z_m: float, gripper_val, max_iters: int = 5) -> float:
+    """Endpoint-only Z correction (kinematic, no PD snap)."""
+    base_xy = _world_to_base_pos(
+      torch.tensor([world_xy[0], world_xy[1], 0.0], device=gs.device, dtype=gs.tc_float),
+    )[:2]
+    init_qpos = robot.get_dofs_position()
+    z_cmd = base_z_m
+    residual = 0.0
+    for _ in range(max_iters):
+      qpos = _ik_qpos_at_base_pose(base_xy[0].item(), base_xy[1].item(), z_cmd, init_qpos)
+      _move_arm_kinematic(qpos, gripper_val)
+      _sim_step()
+      init_qpos = robot.get_dofs_position()
+      actual_z = _ee_base_pose()[0][2].item() / 1000.0
+      residual = base_z_m - actual_z
+      if abs(residual) < 0.002:
+        return residual
+      z_cmd += residual
+    return residual
+
+  def _set_arm_kinematic(qpos, gripper_val) -> None:
+    """Kinematic arm pose; gripper follows caller (PD or kinematic)."""
+    robot.set_dofs_position(qpos[:, arm_dof_idx], arm_dof_idx, zero_velocity=True)
+    grip_target = torch.full(
+      (1, len(all_gripper_dof_idx)), gripper_val, device=gs.device, dtype=gs.tc_float,
+    )
+    robot.set_dofs_position(grip_target, all_gripper_dof_idx, zero_velocity=True)
+
+  def _move_arm_kinematic(interp_q, gripper_val) -> None:
+    """Kinematic arm/gripper pose — avoids PD overshoot jitter during scripted transit."""
+    _set_arm_kinematic(interp_q, gripper_val)
+
+  def move_xy_at_base_z(
+    world_xy, base_z_m: float, gripper_val, label="", refine_endpoint: bool = False,
+  ):
+    """Move link6 in XY at constant base-frame Z; kinematic trapezoid cruise."""
+    start_base_mm, _ = _ee_base_pose()
+    start_base = start_base_mm / 1000.0
+    dest_base_xy = _world_to_base_pos(
+      torch.tensor([world_xy[0], world_xy[1], 0.0], device=gs.device, dtype=gs.tc_float),
+    )[:2]
+    dx = dest_base_xy[0].item() - start_base[0].item()
+    dy = dest_base_xy[1].item() - start_base[1].item()
+    dist_mm = math.hypot(dx, dy) * 1000.0
+
+    prev_q = robot.get_dofs_position()
+    for alpha in _trapezoid_alphas(dist_mm, speed):
+      bx = start_base[0].item() + alpha * dx
+      by = start_base[1].item() + alpha * dy
+      q_tgt = _ik_qpos_at_base_pose(bx, by, base_z_m, prev_q)
+      blend = TRANSIT_JOINT_BLEND_STEPS
+      q0 = prev_q
+      for m in range(blend):
+        alpha_b = (m + 1) / blend
+        interp_q = q0 + alpha_b * (q_tgt - q0)
+        _move_arm_kinematic(interp_q, gripper_val)
+        _sim_step()
+      prev_q = q_tgt
+
+    if refine_endpoint:
+      _refine_base_z_at(world_xy, base_z_m, gripper_val)
+    if label:
+      print_state(label)
+      if capture_hook is not None:
+        q_snap = robot.get_dofs_position()
+        capture_hook(label)
+        _move_arm_kinematic(q_snap, gripper_val)
+
+  def _hold_kinematic_at_base_z(
+    world_xy, base_z_m: float, gripper_val, steps: int,
+  ) -> None:
+    """Kinematic hold at fixed base-frame pose — avoids PD sag under payload."""
+    _refine_base_z_at(world_xy, base_z_m, gripper_val, max_iters=5)
+    base_xy = _world_to_base_pos(
+      torch.tensor([world_xy[0], world_xy[1], 0.0], device=gs.device, dtype=gs.tc_float),
+    )[:2]
+    q_hold = _ik_qpos_at_base_pose(
+      base_xy[0].item(), base_xy[1].item(), base_z_m, robot.get_dofs_position(),
+    )
+    for _ in range(steps):
+      _move_arm_kinematic(q_hold, gripper_val)
+      _sim_step()
+
+  def hold_at_base_z(world_xy, base_z_m: float, gripper_val, steps=50, label=""):
+    n = _scale_steps(steps, speed)
+    _hold_kinematic_at_base_z(world_xy, base_z_m, gripper_val, n)
+    if label:
+      print_state(label)
+      _maybe_capture(label)
+
+  def open_gripper_at_base_z(world_xy, base_z_m: float, open_from: float, steps=GRIPPER_OPEN_STEPS, label=""):
+    _refine_base_z_at(world_xy, base_z_m, open_from, max_iters=5)
+    base_xy = _world_to_base_pos(
+      torch.tensor([world_xy[0], world_xy[1], 0.0], device=gs.device, dtype=gs.tc_float),
+    )[:2]
+    q_hold = _ik_qpos_at_base_pose(
+      base_xy[0].item(), base_xy[1].item(), base_z_m, robot.get_dofs_position(),
+    )
+    n = _scale_gripper_steps(steps, speed)
+    for s in range(n):
+      alpha = (s + 1) / n
+      grip_val = open_from + alpha * (GRIPPER_OPEN - open_from)
+      _set_arm_kinematic(q_hold, grip_val)
+      _control_gripper(robot, grip_val, all_gripper_dof_idx)
       _sim_step()
     if label:
       print_state(label)
 
+  def move_z(z, xy, gripper_val, label=""):
+    """Move link6 in Z only; XY fixed at xy."""
+    start_pos = ik_link.get_pos().clone()
+    target_t = torch.tensor([[xy[0], xy[1], z]], device=gs.device, dtype=gs.tc_float)
+    dist_mm = abs(target_t[0, 2].item() - start_pos[0, 2].item()) * 1000.0
+    delta = target_t - start_pos
+    for alpha in _trapezoid_alphas(dist_mm, speed):
+      interp = start_pos + alpha * delta
+      qpos = robot.inverse_kinematics(
+        link=ik_link, pos=interp, quat=down_quat, dofs_idx_local=arm_dof_idx,
+      )
+      robot.control_dofs_position(qpos[:, arm_dof_idx], arm_dof_idx)
+      _control_gripper(robot, gripper_val, all_gripper_dof_idx)
+      _sim_step()
+    if label:
+      print_state(label)
+      _maybe_capture(label)
+
   def hold(target_link6_pos, gripper_val, steps=50, label=""):
     target_t = torch.tensor([target_link6_pos], device=gs.device, dtype=gs.tc_float)
-    grip_t = torch.tensor([[gripper_val]], device=gs.device, dtype=gs.tc_float)
     target_qpos = robot.inverse_kinematics(
       link=ik_link, pos=target_t, quat=down_quat, dofs_idx_local=arm_dof_idx,
     )
     n = _scale_steps(steps, speed)
     for _ in range(n):
       robot.control_dofs_position(target_qpos[:, arm_dof_idx], arm_dof_idx)
-      robot.control_dofs_position(grip_t, gripper_dof_idx)
+      _control_gripper(robot, gripper_val, all_gripper_dof_idx)
       _sim_step()
     if label:
       print_state(label)
+      _maybe_capture(label)
 
-  def grasp_close(target_link6_pos, steps=GRASP_CLOSE_STEPS, label=""):
+  def _maybe_capture(tag: str) -> None:
+    if capture_hook is not None:
+      capture_hook(tag)
+
+  def grasp_close(target_link6_pos, close_target: float, steps=GRASP_CLOSE_STEPS, label=""):
     target_t = torch.tensor([target_link6_pos], device=gs.device, dtype=gs.tc_float)
     target_qpos = robot.inverse_kinematics(
       link=ik_link, pos=target_t, quat=down_quat, dofs_idx_local=arm_dof_idx,
     )
-    n = max(GRASP_CLOSE_MIN_STEPS, _scale_steps(steps, speed))
+    n = max(
+      _scale_grasp_close_steps(GRASP_CLOSE_MIN_STEPS, speed),
+      _scale_grasp_close_steps(steps, speed),
+    )
+    sample_idxs = {0, n // 4, n // 2, 3 * n // 4, n - 1}
     for s in range(n):
       alpha = (s + 1) / n
       robot.control_dofs_position(target_qpos[:, arm_dof_idx], arm_dof_idx)
-      grip_val = GRIPPER_OPEN + alpha * (GRIPPER_CLOSE - GRIPPER_OPEN)
-      robot.control_dofs_position(
-        torch.tensor([[grip_val]], device=gs.device, dtype=gs.tc_float),
-        gripper_dof_idx,
-      )
+      grip_val = GRIPPER_OPEN + alpha * (close_target - GRIPPER_OPEN)
+      _control_gripper(robot, grip_val, all_gripper_dof_idx)
+      _sim_step()
+      if s in sample_idxs:
+        _maybe_capture(f"grasp_close_step_{s}")
+    if label:
+      print_state(label)
+      _maybe_capture(label)
+
+  def grasp_open(target_link6_pos, open_from: float, steps=GRIPPER_OPEN_STEPS, label=""):
+    target_t = torch.tensor([target_link6_pos], device=gs.device, dtype=gs.tc_float)
+    target_qpos = robot.inverse_kinematics(
+      link=ik_link, pos=target_t, quat=down_quat, dofs_idx_local=arm_dof_idx,
+    )
+    n = _scale_gripper_steps(steps, speed)
+    for s in range(n):
+      alpha = (s + 1) / n
+      robot.control_dofs_position(target_qpos[:, arm_dof_idx], arm_dof_idx)
+      grip_val = open_from + alpha * (GRIPPER_OPEN - open_from)
+      _control_gripper(robot, grip_val, all_gripper_dof_idx)
       _sim_step()
     if label:
       print_state(label)
@@ -403,12 +816,12 @@ def run_pick_place_cycle(
       alpha = (s + 1) / n
       interp = start_qpos + alpha * (target_qpos - start_qpos)
       robot.control_dofs_position(interp[:, arm_dof_idx], arm_dof_idx)
-      robot.control_dofs_position(interp[:, gripper_dof_idx], gripper_dof_idx)
+      robot.control_dofs_position(interp[:, all_gripper_dof_idx], all_gripper_dof_idx)
       _sim_step()
     settle = _scale_steps(50, speed)
     for _ in range(settle):
       robot.control_dofs_position(target_qpos[:, arm_dof_idx], arm_dof_idx)
-      robot.control_dofs_position(target_qpos[:, gripper_dof_idx], gripper_dof_idx)
+      robot.control_dofs_position(target_qpos[:, all_gripper_dof_idx], all_gripper_dof_idx)
       _sim_step()
 
   print("\n[Phase 0] Idle")
@@ -416,50 +829,59 @@ def run_pick_place_cycle(
   if stop_after_phase0:
     return ctx
 
-  print("\n[Phase 1] Approach above block")
-  move_to([obj_xy[0], obj_xy[1], pre_grasp_z], GRIPPER_OPEN, steps=100, label="Pre-grasp")
+  print("\n[Phase 1] Transit XY above block")
+  move_xy(obj_xy, GRIPPER_OPEN, label="Above block XY")
 
   print("\n[Phase 2] Descend to grasp height")
-  move_to([obj_xy[0], obj_xy[1], grasp_z], GRIPPER_OPEN, steps=120, label="At block")
+  move_z(grasp_z, obj_xy, GRIPPER_OPEN, label="At block")
 
   print("\n[Phase 3] Settle before close")
   hold([obj_xy[0], obj_xy[1], grasp_z], GRIPPER_OPEN, steps=30, label="Settled")
 
   print("\n[Phase 4] Close gripper (physics grasp)")
-  grasp_close([obj_xy[0], obj_xy[1], grasp_z], label="Grasped")
+  target_gap_mm = max(0.0, (layout.obj_size[1] + GRASP_SQUEEZE_GAP_MARGIN - GRIPPER_GAP_CALIBRATION_OFFSET_M) * 1000.0)
+  print(
+    f"  Grasp drive: {grasp_drive:.3f} "
+    f"(target gap {target_gap_mm:.1f} mm for {layout.obj_size[1] * 1000:.0f} mm block)"
+  )
+  grasp_close([obj_xy[0], obj_xy[1], grasp_z], grasp_drive, label="Grasped")
 
   print("\n[Phase 4b] Squeeze hold")
-  hold([obj_xy[0], obj_xy[1], grasp_z], GRIPPER_CLOSE, steps=GRASP_SQUEEZE_STEPS, label="Squeezed")
+  hold([obj_xy[0], obj_xy[1], grasp_z], grasp_drive, steps=GRASP_SQUEEZE_STEPS, label="Squeezed")
 
   # Latch carry BEFORE lift so block follows fingers from the first upward motion
   _latch_carry()
   print("  Carry latched")
 
   print("\n[Phase 5] Lift to release height (100 mm above box)")
-  move_to([obj_xy[0], obj_xy[1], release_z], GRIPPER_CLOSE, steps=160, label="Lifted")
-  hold([obj_xy[0], obj_xy[1], release_z], GRIPPER_CLOSE, steps=20, label="Lift hold")
+  move_z(release_z, obj_xy, grasp_drive, label="Lifted")
+  hold([obj_xy[0], obj_xy[1], release_z], grasp_drive, steps=20, label="Lift hold")
+  cruise_base_z_m = _ee_base_pose()[0][2].item() / 1000.0
 
   print("\n[Phase 6] Transit to above box at release height")
-  mid_xy = [obj_xy[0], (obj_xy[1] + place_xy[1]) / 2]
-  move_to([mid_xy[0], mid_xy[1], release_z], GRIPPER_CLOSE, steps=220, label="Transit mid")
-  move_to([place_xy[0], place_xy[1], release_z], GRIPPER_CLOSE, steps=220, label="Above box")
+  move_xy_at_base_z(
+    place_xy, cruise_base_z_m, grasp_drive, label="Above box",
+    refine_endpoint=True,
+  )
 
   print("\n[Phase 7] Hold above box before release")
-  hold([place_xy[0], place_xy[1], release_z], GRIPPER_CLOSE, steps=30, label="Pre-release")
+  hold_at_base_z(place_xy, cruise_base_z_m, grasp_drive, steps=30, label="Pre-release")
 
   print("\n[Phase 8] Release block above box")
   _release_carry()
-  hold([place_xy[0], place_xy[1], release_z], GRIPPER_OPEN, steps=150, label="Released")
+  open_gripper_at_base_z(place_xy, cruise_base_z_m, grasp_drive, label="Released")
 
   print("\n[Phase 9] Brief hold after release")
-  hold([place_xy[0], place_xy[1], release_z], GRIPPER_OPEN, steps=30, label="Post-release")
+  hold_at_base_z(place_xy, cruise_base_z_m, GRIPPER_OPEN, steps=30, label="Post-release")
 
   print("\n[Phase 10] Return transit at release height")
-  move_to([obj_xy[0], obj_xy[1], release_z], GRIPPER_OPEN, steps=180, label="Above block return")
+  move_xy_at_base_z(obj_xy, cruise_base_z_m, GRIPPER_OPEN, label="Above block return")
 
-  print("\n[Phase 11] Restore home")
-  restore_home(steps=150)
-  print_state("Home restored")
+  print("\n[Phase 11] Transit XY above home at cruise height")
+  move_xy_at_base_z([home_pos[0], home_pos[1]], cruise_base_z_m, GRIPPER_OPEN, label="Above home XY")
+
+  print("\n[Phase 12] Descend to home")
+  move_z(home_pos[2], [home_pos[0], home_pos[1]], GRIPPER_OPEN, label="Home Z")
 
   final_obj = block.get_pos()[0]
   # Block drops from 100 mm above box; expected to land on box inner floor
@@ -514,44 +936,19 @@ def main() -> None:
 
   table_top_z = args.table_height if args.table_height is not None else make_layout().table_top_z
   scene, robot, block, layout = build_packaging_scene(
-    table_top_z, sim_dt=SIM_DT, build_scene=False,
+    table_top_z, sim_dt=SIM_DT, build_scene=False, show_viewer=False,
   )
   scene.build(n_envs=1)
 
-  # Immediately set home pose so the first rendered frame isn't all-zeros
-  _arm_joints_tmp = [robot.get_joint(f"joint{i+1}") for i in range(6)]
-  _arm_dof_tmp = [j.dofs_idx_local[0] for j in _arm_joints_tmp]
-  _grip_idx_tmp = robot.get_joint("drive_joint").dofs_idx_local[0]
-  _ik_link_tmp = robot.get_link("link6")
-  _home_pos_tmp = _world_home(layout)
-  _down_quat_tmp = _world_down_quat()
-
-  _init_qpos = torch.zeros(1, robot.n_dofs, device=gs.device, dtype=gs.tc_float)
-  _home_qpos = robot.inverse_kinematics(
-    link=_ik_link_tmp, pos=torch.tensor([_home_pos_tmp], device=gs.device, dtype=gs.tc_float),
-    quat=_down_quat_tmp, dofs_idx_local=_arm_dof_tmp, init_qpos=_init_qpos,
-  )
-  for _i, _idx in enumerate(_arm_dof_tmp):
-    _init_qpos[:, _idx] = _home_qpos[0, _arm_dof_tmp[_i]]
-  _init_qpos[:, _grip_idx_tmp] = GRIPPER_OPEN
-  for _ in range(3):
-    robot.set_qpos(_init_qpos)
-    scene.step()
-
-  # Tighten mimic joint equality constraints so gripper linkages stay rigid
-  import numpy as np
-  stiff_sol_params = np.array([0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0])
-  mimic_keywords = ("finger", "knuckle")
-  for eq in robot.equalities:
-    if any(kw in eq.name for kw in mimic_keywords):
-      eq.set_sol_params(stiff_sol_params)
-      print(f"  [mimic stiff] {eq.name}")
+  stiffen_gripper_mimic_constraints(robot)
 
   print("xArm6 + Gripper G2 packaging showcase — Ctrl+C to exit")
   print(f"  table_top_z={layout.table_top_z:.2f}m  speed={args.speed}  loop={args.loop}")
 
   ctx = init_showcase_robot(robot, layout, scene)
   hold_robot_home(robot, scene, ctx, steps=_scale_steps(SETTLE_STEPS, args.speed))
+
+  start_deferred_viewer(scene)
 
   if args.capture_keyframes:
     _reset_block(block, layout)
@@ -565,9 +962,14 @@ def main() -> None:
       run_pick_place_cycle(scene, robot, block, layout, speed=args.speed, ctx=ctx)
       if not args.loop:
         print("\nSingle cycle complete (--no-loop). Viewer stays open.")
-        while True:
-          scene.step()
-          time.sleep(SIM_DT)
+        try:
+          while True:
+            scene.step()
+            time.sleep(SIM_DT)
+        except gs.GenesisException as exc:
+          if "Viewer closed" not in str(exc):
+            raise
+        return
   except KeyboardInterrupt:
     pass
 

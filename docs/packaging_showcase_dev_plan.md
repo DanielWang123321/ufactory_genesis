@@ -1,6 +1,6 @@
 # Packaging Showcase — Development Plan
 
-Status: yellow table + long-edge layout applied (2025-06); initial pose bug fixed; red block applied.
+Status: yellow table + long-edge layout applied (2025-06); startup snap fixed via deferred viewer; red block applied.
 
 ## Current layout
 
@@ -17,9 +17,11 @@ Status: yellow table + long-edge layout applied (2025-06); initial pose bug fixe
 
 ### Initial pose bug (fixed)
 
-**Root cause:** After `scene.build()`, the arm stayed at URDF default qpos (all zeros). `main()` ran 40 `scene.step()` settle steps **before** `run_pick_place_cycle()` called `_init_home_qpos()`, so the viewer showed a collapsed / wrong pose on first startup.
+**Root cause (first fix, incomplete):** After `scene.build()`, the arm stayed at URDF default qpos (all zeros). `main()` ran settle steps before `init_showcase_robot()`, so the viewer showed a collapsed / wrong pose on first startup.
 
-**Fix:** `init_showcase_robot()` runs immediately after `build_packaging_scene()`; settle steps use `hold_robot_home()` so the arm stays at IK home while the block settles.
+**Root cause (startup snap, fixed 2025-06):** `show_viewer=True` during `scene.build()` rendered URDF zero qpos before IK home was applied. At q=0 the finger *center* is only ~27 mm above the table, but finger pads extend ~61 mm below center — visually penetrating the tabletop. IK home raises the TCP to ~1.05 m, producing a visible snap.
+
+**Fix:** Build headless (`show_viewer=False`), stiffen mimic constraints, run `init_showcase_robot()` + `hold_robot_home()`, then `start_deferred_viewer()` so the first visible frame is already at home. All six gripper mimic joints are set explicitly to `GRIPPER_OPEN` during init.
 
 ### Red block (done)
 
@@ -35,52 +37,81 @@ Robot mounted on the 1.2 m long edge (negative Y); workspace (block, box) on tab
 
 **Verify:** Run full pick-place cycle; physics grasp/place may need further tuning (target place error &lt; 60 mm).
 
+### Gripper open/close 5× speed (done)
+
+Default showcase uses `GRIPPER_SPEED_FACTOR=5.0`: linear `grasp_close` / `grasp_open` ramps and higher drive_joint PD (`kp=10`, `kv=25`, `force=±5 N`). Arm motion timing unchanged.
+
+### Object-aware partial close (done)
+
+Grasp/squeeze/carry use `grasp_gripper_drive()` with `GRIPPER_GAP_CALIBRATION_OFFSET_M` (block width − 5.3 mm → drive ≈ 0.60) for flush visual contact without finger penetration.
+
+### Pick approach axis separation (done)
+
+Grasp approach no longer uses `move_to` diagonal XYZ from home to pre-grasp. Sequence is:
+
+1. **Phase 1** `move_xy(obj_xy)` — horizontal transit at current Z (home height)
+2. **Phase 2** `move_z(grasp_z, obj_xy)` — vertical descent only
+
+Removed separate `pre_grasp_z` hover segment (was grasp+100 mm). Place/transit/return still use `move_to` diagonal interpolation.
+
+### Arm Cartesian speed + trapezoid accel (done)
+
+All arm Cartesian moves (`move_xy`, `move_z`, `move_xy_at_base_z`) use distance-driven trapezoid profiles:
+
+| Constant | Value |
+|----------|-------|
+| `SHOWCASE_CARTESIAN_SPEED_MMS` | 100 mm/s cruise |
+| `SHOWCASE_CARTESIAN_ACCEL_MMS2` | 1000 mm/s² accel/decel |
+
+`--speed` scales both v and a. Gripper open/close keeps `GRIPPER_SPEED_FACTOR` (independent timing). Hold/settle steps unchanged.
+
 ---
 
 ## Keyframe debug workflow
 
 Use to compare startup poses before/after layout or init changes.
 
-### Headless PNG capture (recommended)
+### Headless pose capture (recommended)
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
-conda run -n py313 python scripts/capture_showcase_keyframes.py
-# optional: --out-dir debug/showcase_keyframes --settle-steps 40
+python scripts/capture_showcase_keyframes.py
+# optional: --out-dir debug/showcase_keyframes --settle-steps 40 --png
 ```
 
-**Output:** `debug/showcase_keyframes/`
+**Output:** `debug/showcase_keyframes/keyframes.json` (always). PNG frames when `--png` is passed (requires BatchRenderer; may fail on tight GPU memory).
 
 | Frame | When |
 |-------|------|
 | `01_post_build` | Right after `scene.build()` — URDF zero qpos |
-| `02_post_settle_no_home` | After idle steps **without** home init (documents old bug) |
+| `02_post_stiffen_mimic` | After mimic equality stiffening, still zero qpos |
 | `03_post_init_home` | After `init_showcase_robot()` |
-| `04_after_phase0_hold` | After 40-step home hold |
+| `04_after_settle` | After home-hold settle steps |
 | `05_cycle_phase0_done` | After Phase 0 inside cycle |
 
-Metadata: `keyframes.json` (link6 position, arm qpos deg, gripper q).
+Metadata: `keyframes.json` (link6 position, finger Z above table mm, arm qpos deg, gripper q).
 
-### Interactive viewer
+**Expected:** `01_post_build` finger_above_table_mm ≈ +30 (pads visually in table); `03_post_init_home` ≈ +190 (home pose).
 
 ```bash
 python examples/xarm6/xarm6_g2_showcase.py --capture-keyframes --no-loop
 ```
 
-Runs init + settle + Phase 0 in the viewer; for PNGs use the headless script above.
+Runs init + settle + Phase 0 in the viewer (deferred open — first frame is home).
 
 ### What to look for
 
-- **02 vs 03:** Large joint change confirms delayed-init bug.
+- **01 vs 03:** Large finger Z jump confirms zero-qpos vs home (old startup snap).
 - **03 vs 04:** Should be stable (small PD tracking only).
-- **04 vs 05:** Phase 0 should not snap to a different pose if fix is correct.
+- **04 vs 05:** Phase 0 should not snap to a different pose.
+- **Interactive:** No gripper-through-table flash on window open.
 
 ---
 
 ## Suggested follow-ups
 
 1. Regenerate marketing / checklist screenshots with new layout  
-2. Optional: remove frame `02` from capture script once bug is well documented  
+2. Optional: PNG capture via `--png` when GPU memory allows BatchRenderer
 
 ## Related files
 

@@ -53,8 +53,10 @@ Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names
 | `xarm5_1305` | `xarm5` | xArm 5 | 5 | ✓ | ✓ | — | — |
 | `xarm6_1305` | `xarm6` | xArm 6 | 6 | ✓ | ✓ | — | — |
 | `xarm7_1305` | `xarm7` | xArm 7 | 7 | ✓ | ✓ | — | — |
-| `uf850` | UF850 | 6 | ✓ | ✓ | — | — |
-| `lite6` | Lite6 | 6 | — | — | ✓ | ✓ |
+| `uf850` | — | UF850 | 6 | ✓ | ✓ | — | — |
+| `lite6` | — | Lite6 | 6 | — | — | ✓ | ✓ |
+
+✓ = combo URDF available (static GLB visual); Gripper G2, Bio Gripper G2, and Lite6 Gripper also support `--movable` open/close animation.
 
 **Gripper G2** and **Bio Gripper G2** are shared xArm/UF850 accessories. **Lite6 Gripper** (parallel jaw) and **Lite6 Vacuum Gripper** are Lite6-only. End-effector flags are mutually exclusive.
 

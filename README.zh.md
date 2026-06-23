@@ -54,8 +54,10 @@ python examples/view_robot_glb.py --robot xarm6
 | `xarm5_1305` | `xarm5` | xArm 5 | 5 | ✓ | ✓ | — | — |
 | `xarm6_1305` | `xarm6` | xArm 6 | 6 | ✓ | ✓ | — | — |
 | `xarm7_1305` | `xarm7` | xArm 7 | 7 | ✓ | ✓ | — | — |
-| `uf850` | UF850 | 6 | ✓ | ✓ | — | — |
-| `lite6` | Lite6 | 6 | — | — | ✓ | ✓ |
+| `uf850` | — | UF850 | 6 | ✓ | ✓ | — | — |
+| `lite6` | — | Lite6 | 6 | — | — | ✓ | ✓ |
+
+✓ = 提供 combo URDF（静态 GLB visual）；Gripper G2、Bio Gripper G2、Lite6 Gripper 另支持 `--movable` 开合动画。
 
 **Gripper G2** 与 **Bio Gripper G2** 为 xArm/UF850 共用配件；**Lite6 Gripper**（平行夹爪）与 **Lite6 Vacuum Gripper**（真空吸盘）仅适用于 Lite6。加载末端时各配件互斥，一次只能选一种。
 

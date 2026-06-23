@@ -253,9 +253,15 @@ def build_packaging_scene(
   sim_dt: float = 0.02,
   show_viewer: bool = True,
   build_scene: bool = True,
+  renderer=None,
+  add_capture_camera: bool = False,
+  capture_res: tuple[int, int] = (1280, 720),
 ):
   layout = make_layout(table_top_z)
   cam_pos, cam_lookat = packaging_camera(table_top_z)
+  scene_kwargs: dict = {}
+  if renderer is not None:
+    scene_kwargs["renderer"] = renderer
   scene = gs.Scene(
     sim_options=gs.options.SimOptions(dt=sim_dt, substeps=8),
     rigid_options=gs.options.RigidOptions(
@@ -273,7 +279,11 @@ def build_packaging_scene(
       max_FPS=60,
     ),
     show_viewer=show_viewer,
+    **scene_kwargs,
   )
+
+  if add_capture_camera:
+    scene.add_camera(pos=cam_pos, lookat=cam_lookat, res=capture_res, fov=35)
 
   scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
 
