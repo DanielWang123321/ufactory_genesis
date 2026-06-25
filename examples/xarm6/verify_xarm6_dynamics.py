@@ -77,7 +77,7 @@ def build_scene(args):
             camera_pos=(1.5, -1.5, 1.5),
             camera_lookat=(0.0, 0.0, 0.4),
             camera_fov=40,
-            max_FPS=60,
+            refresh_rate=60,
         ),
         sim_options=gs.options.SimOptions(dt=SIM_DT),
         show_viewer=args.vis,

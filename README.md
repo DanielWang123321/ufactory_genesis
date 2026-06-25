@@ -3,8 +3,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.1.2-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.1.2-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.1.3-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
 UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, and RL environments.
@@ -27,12 +27,12 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 
 ## Quick Start
 
-Tested with Python 3.13, Genesis 1.1.2, PyTorch 2.12.
+Tested with Python 3.13, Genesis ≥1.2.0, PyTorch 2.12.
 
 ```bash
 # 1. Install Genesis (platform-specific: CPU / CUDA / macOS / AMD)
 #    Follow the official guide: https://genesis-world.readthedocs.io/
-pip install genesis-world==1.1.2
+pip install "genesis-world>=1.2.0"
 
 # 2. Install ufactory_genesis
 pip install -r requirements.txt

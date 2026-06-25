@@ -276,7 +276,7 @@ def build_packaging_scene(
       camera_pos=cam_pos,
       camera_lookat=cam_lookat,
       camera_fov=35,
-      max_FPS=60,
+      refresh_rate=60,
     ),
     show_viewer=show_viewer,
     **scene_kwargs,

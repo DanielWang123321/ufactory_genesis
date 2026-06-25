@@ -55,7 +55,7 @@ def main():
             enable_joint_limit=True,
         ),
         viewer_options=gs.options.ViewerOptions(
-            max_FPS=50,
+            refresh_rate=50,
             camera_pos=(1.2, -1.2, 1.1),
             camera_lookat=(0.3, 0.15, TABLE_HEIGHT + 0.1),
             camera_fov=40,

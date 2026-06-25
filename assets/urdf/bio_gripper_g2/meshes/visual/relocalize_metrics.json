@@ -16,7 +16,7 @@
       -16.22,
       -4.12
     ],
-    "stl_surface_mm": 36.67,
+    "stl_surface_mm": 36.01,
     "pin_verts_mm": [
       [
         40.17,
@@ -53,9 +53,9 @@
     "static_open_edge_ratio": 0.549,
     "base_open_edge_ratio": 0.1132,
     "base_extents_mm": [
-      96.58,
-      165.16,
-      51.68
+      96.65,
+      165.18,
+      51.39
     ],
     "left_open_edge_ratio": 0.2113,
     "right_open_edge_ratio": 0.2085,
@@ -80,7 +80,7 @@
       -16.22,
       -4.04
     ],
-    "stl_surface_mm": 34.85,
+    "stl_surface_mm": 36.31,
     "pin_verts_mm": [
       [
         41.14,
@@ -117,9 +117,9 @@
     "static_open_edge_ratio": 0.549,
     "base_open_edge_ratio": 0.1132,
     "base_extents_mm": [
-      96.9,
-      165.33,
-      51.63
+      96.61,
+      165.29,
+      52.01
     ],
     "left_open_edge_ratio": 0.2113,
     "right_open_edge_ratio": 0.2085,
@@ -131,30 +131,30 @@
     "ee_link": "link7",
     "output": "bio_gripper_g2_visual_link7.glb",
     "verts": 15958,
-    "hole_fit_mm": 2.0,
+    "hole_fit_mm": 5.55,
     "finger_dir": [
-      0.9657,
-      -0.0288,
-      0.2581
+      0.9577,
+      -0.0068,
+      -0.2877
     ],
-    "finger_dot_tcp": 0.9917,
-    "finger_y_abs": 0.0288,
-    "ring_gap_mm": 0.0,
+    "finger_dot_tcp": 0.7784,
+    "finger_y_abs": 0.0068,
+    "ring_gap_mm": 42.839,
     "xy_ring_gap_mm": [
-      -27.42,
-      10.56
+      -16.1,
+      -4.36
     ],
-    "stl_surface_mm": 18.95,
+    "stl_surface_mm": 39.58,
     "pin_verts_mm": [
       [
         41.05,
-        -0.05,
-        -1.56
+        -0.1,
+        -1.57
       ],
       [
         41.05,
-        -0.1,
-        -1.56
+        -0.05,
+        -1.57
       ]
     ],
     "holes_mm": [
@@ -170,7 +170,7 @@
       ]
     ],
     "pin_separation_mm": 45.26,
-    "z_shift_skipped_mm": -0.509,
+    "z_shift_skipped_mm": 42.839,
     "partition_counts": {
       "base": 1,
       "right_finger": 2,
@@ -181,9 +181,9 @@
     "static_open_edge_ratio": 0.549,
     "base_open_edge_ratio": 0.1132,
     "base_extents_mm": [
-      96.83,
-      165.22,
-      50.97
+      97.18,
+      165.46,
+      50.8
     ],
     "left_open_edge_ratio": 0.2113,
     "right_open_edge_ratio": 0.2085,
@@ -249,37 +249,37 @@
       -0.3773
     ],
     "attach_finger_dot_base_x": 0.9261,
-    "attach_static_angle_deg": 48.02
+    "attach_static_angle_deg": 36.78
   },
   {
     "robot_key": "uf850",
     "ee_link": "link6",
     "attach_xyz": [
-      0.034285,
-      0.000413,
-      -0.001674
+      0.034255,
+      0.000449,
+      -0.001869
     ],
     "attach_rpy": [
-      0.00018025,
-      0.01490249,
-      -0.00018304
+      0.00040363,
+      0.01305476,
+      -0.00292163
     ],
-    "attach_xyz_str": "0.034285 0.000413 -0.001674",
-    "attach_rpy_str": "0.00018025 0.01490249 -0.00018304",
+    "attach_xyz_str": "0.034255 0.000449 -0.001869",
+    "attach_rpy_str": "0.00040363 0.01305476 -0.00292163",
     "attach_hole_fit_mm": 12.42,
     "attach_ring_gap_mm": 0.0,
     "attach_finger_dir": [
-      0.9316,
-      -0.0002,
-      0.3635
+      0.9309,
+      -0.0029,
+      0.3652
     ],
     "attach_finger_world_dir": [
-      0.9316,
-      0.0002,
-      -0.3635
+      0.9309,
+      0.0029,
+      -0.3652
     ],
-    "attach_finger_dot_base_x": 0.9316,
-    "attach_static_angle_deg": 59.1
+    "attach_finger_dot_base_x": 0.9309,
+    "attach_static_angle_deg": 59.2
   },
   {
     "robot_key": "xarm6_1305",

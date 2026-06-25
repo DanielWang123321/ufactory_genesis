@@ -14,7 +14,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install Genesis (platform-specific: https://genesis-world.readthedocs.io/)
-pip install genesis-world==1.1.2
+pip install "genesis-world>=1.2.0"
 
 # Install in editable mode
 pip install -e .

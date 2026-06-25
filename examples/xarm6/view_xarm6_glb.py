@@ -12,7 +12,6 @@ Usage:
 """
 
 import argparse
-import json
 import sys
 import time
 from pathlib import Path
@@ -58,77 +57,6 @@ ALL_GRIPPER_JOINTS = (
     "right_finger_joint",
     "right_inner_knuckle_joint",
 )
-GRIPPER_LINKS = (
-    "xarm_gripper_base_link",
-    "left_outer_knuckle",
-    "left_finger",
-    "left_inner_knuckle",
-    "right_outer_knuckle",
-    "right_finger",
-    "right_inner_knuckle",
-)
-DEBUG_LOG = Path(__file__).resolve().parents[2] / ".cursor" / "debug-a21d90.log"
-
-
-def _debug_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    # #region agent log
-    payload = {
-        "sessionId": "a21d90",
-        "runId": "viewer-gripper",
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000),
-    }
-    with DEBUG_LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(payload) + "\n")
-    # #endregion
-
-
-def _try_resolve_link(robot, name: str):
-    available = {link.name.split("/")[-1]: link for link in robot.links}
-    return available.get(name)
-
-
-def _is_gripper_vgeom(link_name: str, mesh_path: str) -> bool:
-    if link_name in GRIPPER_LINKS:
-        return True
-    return link_name == "link6" and mesh_path.endswith("base.glb")
-
-
-def _log_gripper_vgeoms(robot) -> None:
-    # Genesis merges xarm_gripper_base_link into link6; use link6 as base reference.
-    base_link = _try_resolve_link(robot, "xarm_gripper_base_link") or _try_resolve_link(robot, "link6")
-    base_pos = _to_numpy3(base_link.get_pos()) if base_link is not None else np.zeros(3)
-    for vg in robot.vgeoms:
-        link_name = vg.link.name.split("/")[-1]
-        mesh_path = str((vg.metadata or {}).get("mesh_path", ""))
-        if not _is_gripper_vgeom(link_name, mesh_path):
-            continue
-        tm = vg.get_trimesh()
-        verts = tm.vertices
-        extent_mm = ((verts.max(0) - verts.min(0)) * 1000).tolist()
-        link = _try_resolve_link(robot, link_name)
-        rel_base_mm = None
-        if link is not None:
-            link_pos = _to_numpy3(link.get_pos())
-            mesh_world = link_pos + verts.mean(0)
-            rel_base_mm = [round(float(x), 2) for x in (mesh_world - base_pos) * 1000]
-        _debug_log(
-            "A",
-            "view_xarm6_glb.py:_log_gripper_vgeoms",
-            f"gripper vgeom {link_name}",
-            {
-                "link": link_name,
-                "verts": int(len(verts)),
-                "extent_mm": [round(float(x), 3) for x in extent_mm],
-                "mesh": Path(mesh_path).name if mesh_path else "",
-                "world_centroid_rel_base_mm": rel_base_mm,
-            },
-        )
-
-
 def _to_numpy3(pos) -> np.ndarray:
     if hasattr(pos, "cpu"):
         pos = pos.cpu().numpy()
@@ -200,7 +128,7 @@ def _ensure_fk_scratch(robot) -> None:
     if robot.n_qs == 0:
         return
 
-    # Genesis 1.1.2 forward_kinematics() reuses this IK scratch field but
+    # Genesis forward_kinematics() reuses this IK scratch field but
     # creates it lazily only from the IK path. Allocate just the field FK needs.
     import quadrants as qd
 
@@ -332,7 +260,7 @@ def main():
             camera_pos=(1.5, -1.5, 1.5),
             camera_lookat=(0.0, 0.0, 0.4),
             camera_fov=40,
-            max_FPS=60,
+            refresh_rate=60,
         ),
         sim_options=gs.options.SimOptions(dt=0.01),
         show_viewer=False,
@@ -351,9 +279,6 @@ def main():
     if args.show_tcp and not args.headless:
         tcp_marker = add_tcp_marker(scene)
     scene.build()
-
-    if args.gripper_g2 and args.movable:
-        _log_gripper_vgeoms(robot)
 
     print(f"DOFs: {robot.n_dofs}, Links: {robot.n_links}")
 

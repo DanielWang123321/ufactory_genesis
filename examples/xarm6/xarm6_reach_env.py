@@ -53,7 +53,7 @@ class XArm6ReachEnv:
                 rendered_envs_idx=list(range(min(10, self.num_envs)))
             ),
             viewer_options=gs.options.ViewerOptions(
-                max_FPS=int(0.5 / self.ctrl_dt),
+                refresh_rate=int(0.5 / self.ctrl_dt),
                 camera_pos=(1.5, -1.5, 1.5),
                 camera_lookat=(0.0, 0.0, 0.4),
                 camera_fov=40,

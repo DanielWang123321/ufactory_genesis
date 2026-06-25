@@ -274,37 +274,6 @@ def align_parts_to_stl(parts: list[trimesh.Trimesh], stl_ref: trimesh.Trimesh) -
             )
             aligned = _apply_translation(aligned, delta)
 
-    # #region agent log
-    combined = trimesh.util.concatenate(aligned)
-    _surf_after = mean_surface_distance(combined, stl_ref) * 1000
-    _ratios = _extent_ratios(combined, stl_ref)
-    try:
-        import time as _time
-
-        _log_path = Path(__file__).resolve().parents[1] / ".cursor" / "debug-abca17.log"
-        _payload = {
-            "sessionId": "abca17",
-            "runId": "relocalize",
-            "hypothesisId": "C",
-            "location": "relocalize_arm_glb:align_parts_to_stl",
-            "message": "alignment result",
-            "data": {
-                "surf_before_rigid_mm": round(surf_mm, 2),
-                "surf_after_mm": round(_surf_after, 2),
-                "normal_dot_after": round(mean_normal_dot(combined, stl_ref), 3),
-                "extent_ratio_min": round(float(_ratios.min()), 3),
-                "extent_ratio_max": round(float(_ratios.max()), 3),
-                **orient_meta,
-                **rigid_meta,
-            },
-            "timestamp": int(_time.time() * 1000),
-        }
-        with _log_path.open("a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_payload) + "\n")
-    except OSError:
-        pass
-    # #endregion
-
     return aligned
 
 

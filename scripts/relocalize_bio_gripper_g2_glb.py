@@ -722,6 +722,11 @@ def _pick_pin_hole_transform(
             score += 80.0
         score += abs(fd[1]) * 40.0
         score += (1.0 - float(fd @ FINGER_TARGET)) * 10.0
+        # link5/link6 canonical: finger_dir Z < 0 in EE frame before URDF Rx(pi).
+        # link7 previously picked the mirrored pin-hole solution (Z > 0), sinking
+        # the gripper into the flange in Genesis static preview.
+        if fd[2] > 0.0:
+            score += 100.0
         if best is None or score < best[0]:
             best = (score, aligned, R, t, hole_order, hole_fit, needs_rz_flip)
     assert best is not None
@@ -1010,6 +1015,18 @@ def relocalize_for_ee_link(
         raise RuntimeError(f"Degenerate pin pair on {ee_link}; pin verts collapsed")
 
     aligned_flange, R, t, holes, hole_fit = _pick_pin_hole_transform(coarse, pin_verts, holes)
+
+    # link7 EE flange hole layout admits a mirrored pin-hole solution (finger_dir
+    # Z > 0) that scores well on TCP alignment but sinks the static GLB into the
+    # arm flange after URDF Rx(pi).  Force the link5/6 hemisphere (finger_dir Z < 0).
+    fd = _finger_direction(aligned_flange)
+    if fd[2] > 0.0:
+      rx_pi = Rotation.from_euler("x", np.pi).as_matrix()
+      R = R @ rx_pi.T
+      aligned_flange = coarse.copy()
+      aligned_flange.vertices = coarse.vertices @ R.T + t
+      aligned_flange = _correct_finger_opening(aligned_flange)
+      hole_fit = _hole_fit_error_mm(aligned_flange, holes)
 
     dz = _z_shift_to_flange(aligned_flange, ee_mesh)
     if abs(dz) <= 0.002:

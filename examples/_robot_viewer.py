@@ -271,7 +271,7 @@ def run_glb_viewer(
       camera_pos=(1.5, -1.5, 1.5),
       camera_lookat=(0.0, 0.0, 0.4),
       camera_fov=40,
-      max_FPS=60,
+      refresh_rate=60,
     ),
     sim_options=gs.options.SimOptions(dt=0.01),
     show_viewer=False,
