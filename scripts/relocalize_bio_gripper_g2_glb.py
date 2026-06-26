@@ -5,16 +5,16 @@ Relocalize Bio Gripper G2 GLB for static and movable visual combo URDFs.
 Per EE link (link5 / link6 / link7):
   1. Genesis bake source CAD GLB (×0.1 m)
   2. Coarse CAD→STL (z +270°, centroid match link_base.stl)
-  3. Pin–hole Kabsch: gripper locating pins ↔ arm flange locating holes
-  4. Z-only outer-ring coplanar refine (same annulus as G2 gripper)
-  5. Export static merged mesh + per-EE bio_gripper_g2_base.glb
+  3. Build static merged mesh in canonical bio_gripper_g2_base_link frame
+  4. Build movable per-link GLBs in canonical gripper frames
+  5. Compute per-profile attach origins: locating pins ↔ arm flange locating holes
 
-Per EE link (movable visual GLBs in visual_glb/{ee_link}/):
+Per EE link (visual GLBs in visual_glb/{ee_link}/):
   bio_gripper_g2_base.glb, bio_gripper_g2_left_finger.glb, bio_gripper_g2_right_finger.glb
 
 Use bio_* GLB names to avoid Genesis basename clashes with arm link_base.glb / G2 fingers.
-CAD GLB's compressed vertices). Finger GLBs are EE-aligned CAD groups mapped into
-URDF finger link frames so they match the static merged visual with no per-visual flip.
+Finger GLBs are mapped into URDF finger link frames; the static monolithic GLB keeps
+the source CAD jaw posture but shares the same canonical base frame and attach origin.
 """
 
 from __future__ import annotations
@@ -196,6 +196,27 @@ def _subdivide_visual_mesh(mesh: trimesh.Trimesh, iterations: int) -> trimesh.Tr
     return out
 
 
+def _translated_mesh(mesh: trimesh.Trimesh | None, delta: np.ndarray) -> trimesh.Trimesh | None:
+    if mesh is None:
+        return None
+    out = mesh.copy()
+    out.vertices = out.vertices + delta
+    return out
+
+
+def _visual_pin_center_delta(
+    mesh: trimesh.Trimesh,
+    stl_pins: np.ndarray,
+) -> tuple[np.ndarray, float, float]:
+    """Translate CAD visual pins onto the collision/STL pin center in base frame."""
+    _, idx = cKDTree(mesh.vertices).query(stl_pins, k=1)
+    visual_pins = np.asarray(mesh.vertices[idx], dtype=np.float64)
+    delta = stl_pins.mean(axis=0) - visual_pins.mean(axis=0)
+    before = float(np.mean(np.linalg.norm(visual_pins - stl_pins, axis=1)) * 1000)
+    after = float(np.mean(np.linalg.norm(visual_pins + delta - stl_pins, axis=1)) * 1000)
+    return delta, before, after
+
+
 def _movable_base_gripper_frame(
     material_parts: list[tuple[trimesh.Trimesh, float]],
     jaw_labels: list[str | None],
@@ -207,9 +228,9 @@ def _movable_base_gripper_frame(
 
     Everything except the two moving jaw nodes (white-plastic shell plus all non-jaw
     metal: mount flange, housing rail, body screws, UFACTORY nameplate), expressed in
-    the link_base.stl frame.  The combo URDF mount joint (rpy Rx(pi)) orients this
-    base onto each arm flange, so the same base mesh works for every EE link and for
-    the standalone (rpy 0) gripper.
+    the link_base.stl frame.  The combo URDF per-profile attach origin maps this
+    canonical base frame onto each arm flange, so the same base mesh works for every
+    EE link and for the standalone gripper.
     """
     plastic_parts: list[trimesh.Trimesh] = []
     metal_parts: list[trimesh.Trimesh] = []
@@ -299,21 +320,22 @@ def _movable_base_meshes_material_split(
     return plastic, metal
 
 
-def _static_ee_material_meshes(
+def _static_gripper_frame_material_meshes(
     material_parts: list[tuple[trimesh.Trimesh, float]],
-    merged_coarse: trimesh.Trimesh,
-    stl_base: trimesh.Trimesh,
-    R: np.ndarray,
-    t: np.ndarray,
-    dz: float,
+    rot: np.ndarray,
+    trans: np.ndarray,
+    center_offset: np.ndarray,
 ) -> tuple[trimesh.Trimesh | None, trimesh.Trimesh | None]:
-    """Full gripper in EE link frame: plastic shell + all metal CAD parts."""
-    center_offset = _assembly_center_offset(merged_coarse, stl_base)
+    """Full static gripper in canonical bio_gripper_g2_base_link frame.
+
+    Unlike the movable finger GLBs, the static monolithic preview keeps the source CAD
+    jaw posture.  Only the assembly-level CAD→link_base.stl rigid alignment is applied;
+    the arm-specific mount is provided later by the generated URDF attach origin.
+    """
     plastic_parts: list[trimesh.Trimesh] = []
     metal_parts: list[trimesh.Trimesh] = []
     for part, metallic in material_parts:
-        coarse = _part_to_assembly_coarse(part, center_offset)
-        aligned = _apply_transform(coarse, R, t, dz)
+        aligned = _apply_rigid(_part_to_assembly_coarse(part, center_offset), rot, trans)
         if metallic <= 0.01:
             plastic_parts.append(aligned)
         elif metallic >= METAL_METALLIC_MIN:
@@ -471,14 +493,15 @@ def _correct_finger_opening(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
 
 
 def _kabsch(P: np.ndarray, H: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Rigid map for row-vector vertices: ``P @ R.T + t ≈ H``."""
     cp = P.mean(axis=0)
     ch = H.mean(axis=0)
     A = (P - cp).T @ (H - ch)
     U, _, Vt = np.linalg.svd(A)
-    R = U @ Vt
+    R = Vt.T @ U.T
     if np.linalg.det(R) < 0:
-        U[:, -1] *= -1
-        R = U @ Vt
+        Vt[-1, :] *= -1
+        R = Vt.T @ U.T
     t = ch - R @ cp
     return R, t
 
@@ -722,9 +745,8 @@ def _pick_pin_hole_transform(
             score += 80.0
         score += abs(fd[1]) * 40.0
         score += (1.0 - float(fd @ FINGER_TARGET)) * 10.0
-        # link5/link6 canonical: finger_dir Z < 0 in EE frame before URDF Rx(pi).
-        # link7 previously picked the mirrored pin-hole solution (Z > 0), sinking
-        # the gripper into the flange in Genesis static preview.
+        # Keep the same link5/link6 pin-hole hemisphere across canonical EE metrics.
+        # link7 previously picked the mirrored solution (finger_dir Z > 0).
         if fd[2] > 0.0:
             score += 100.0
         if best is None or score < best[0]:
@@ -833,22 +855,14 @@ def _attach_candidate_sort_key(
     score: float,
     hole_fit: float,
     finger_world: np.ndarray,
-    static_ref: np.ndarray | None,
     ring_gap: float = 0.0,
-) -> tuple[float, float, float, float, float, float]:
-    """Lower is better: world +X, low |world Y|, ring coplanarity, hole fit, static alignment, score."""
+) -> tuple[float, float, float, float, float]:
+    """Lower is better: world +X, low |world Y|, ring coplanarity, hole fit, score."""
     fx = float(finger_world[0])
     fy = abs(float(finger_world[1]))
     lateral = fy if fy > 0.05 else 0.0
-    angle = 0.0
-    if static_ref is not None:
-        angle = float(
-            np.degrees(
-                np.arccos(float(np.clip(np.dot(finger_world, static_ref), -1.0, 1.0)))
-            )
-        )
     ring_penalty = max(0.0, float(ring_gap) - 5.0)
-    return (-round(fx, 2), lateral, ring_penalty, hole_fit, angle, score)
+    return (-round(fx, 2), lateral, ring_penalty, hole_fit, score)
 
 
 def _attach_origin_for_ee(
@@ -856,26 +870,13 @@ def _attach_origin_for_ee(
     holes: np.ndarray,
     stl_base: trimesh.Trimesh,
     ee_mesh: trimesh.Trimesh,
-    R_pin: np.ndarray,
-    t_pin: np.ndarray,
-    rot_g: np.ndarray,
-    trans_g: np.ndarray,
     profile,
 ) -> dict:
-    """Compute URDF ``bio_gripper_g2_attach`` origin for movable arm combos.
-
-    Movable GLBs live in the canonical gripper ``base_link`` frame.  Pick the best of:
-
-    1. Direct pin-hole Kabsch (``stl_pins`` -> EE holes), scored like static alignment.
-    2. Static-visual equivalence: ``T_attach = Rx(pi) @ T_pin @ inv(T_gripper_frame)`` so
-       the movable base matches the static overlay pose on the same EE flange.
-    """
+    """Compute URDF attach origin from canonical gripper base frame to arm EE frame."""
     holes_canon = holes[np.argsort(holes[:, 1])]
-    rx_pi = Rotation.from_euler("x", np.pi, degrees=False).as_matrix()
     R_world_ee = _arm_ee_world_rt_at_zero(profile)
-    static_ref = _static_visual_finger_world_ref(profile)
     best: tuple[
-        tuple[float, float, float, float, float, float],
+        tuple[float, float, float, float, float],
         np.ndarray,
         np.ndarray,
         float,
@@ -892,7 +893,7 @@ def _attach_origin_for_ee(
         finger_world: np.ndarray,
     ) -> None:
         nonlocal best
-        key = _attach_candidate_sort_key(score, hole_fit, finger_world, static_ref, ring_gap)
+        key = _attach_candidate_sort_key(score, hole_fit, finger_world, ring_gap)
         if best is None or key < best[0]:
             best = (key, R, t, hole_fit, ring_gap, finger_world)
 
@@ -921,8 +922,8 @@ def _attach_origin_for_ee(
                 rz @ R, rz @ t, stl_pins, holes, stl_base, ee_mesh, R_world_ee
             )
             if _attach_candidate_sort_key(
-                score2, hole_fit2, fw2, static_ref, ring_gap2
-            ) < _attach_candidate_sort_key(score, hole_fit, finger_world, static_ref, ring_gap):
+                score2, hole_fit2, fw2, ring_gap2
+            ) < _attach_candidate_sort_key(score, hole_fit, finger_world, ring_gap):
                 score, hole_fit, ring_gap, R, t, finger_world = (
                     score2,
                     hole_fit2,
@@ -933,31 +934,6 @@ def _attach_origin_for_ee(
                 )
         _consider(score, R, t, hole_fit, ring_gap, finger_world)
 
-    R_static = rx_pi @ R_pin @ rot_g.T
-    t_static = t_pin @ rx_pi.T - trans_g @ rot_g @ R_pin.T @ rx_pi.T
-    score, hole_fit, ring_gap, needs_rz, R, t, finger_world = _score_attach_candidate(
-        R_static, t_static, stl_pins, holes, stl_base, ee_mesh, R_world_ee
-    )
-    if needs_rz:
-        rz = Rotation.from_euler("z", 180.0, degrees=True).as_matrix()
-        score2, hole_fit2, ring_gap2, _, R2, t2, fw2 = _score_attach_candidate(
-            rz @ R_static, rz @ t_static, stl_pins, holes, stl_base, ee_mesh, R_world_ee
-        )
-        if _attach_candidate_sort_key(
-            score2, hole_fit2, fw2, static_ref, ring_gap2
-        ) < _attach_candidate_sort_key(score, hole_fit, finger_world, static_ref, ring_gap):
-            score, hole_fit, ring_gap, R, t, finger_world = (
-                score2,
-                hole_fit2,
-                ring_gap2,
-                R2,
-                t2,
-                fw2,
-            )
-    else:
-        R, t = R_static, t_static
-    _consider(score, R, t, hole_fit, ring_gap, finger_world)
-
     assert best is not None
     _, R, t, hole_fit, ring_gap, finger_world = best
 
@@ -966,16 +942,6 @@ def _attach_origin_for_ee(
     rpy = Rotation.from_matrix(R).as_euler("xyz")
     fd = R @ FINGER_TARGET
     fd = fd / (np.linalg.norm(fd) + 1e-12)
-    static_angle_deg = None
-    if static_ref is not None:
-        static_angle_deg = round(
-            float(
-                np.degrees(
-                    np.arccos(float(np.clip(np.dot(finger_world, static_ref), -1.0, 1.0)))
-                )
-            ),
-            2,
-        )
     return {
         "attach_xyz": [round(float(x), 6) for x in t],
         "attach_rpy": [round(float(x), 8) for x in rpy],
@@ -986,7 +952,6 @@ def _attach_origin_for_ee(
         "attach_finger_dir": [round(float(x), 4) for x in fd],
         "attach_finger_world_dir": [round(float(x), 4) for x in finger_world],
         "attach_finger_dot_base_x": round(float(finger_world[0]), 4),
-        "attach_static_angle_deg": static_angle_deg,
     }
 
 
@@ -1017,8 +982,7 @@ def relocalize_for_ee_link(
     aligned_flange, R, t, holes, hole_fit = _pick_pin_hole_transform(coarse, pin_verts, holes)
 
     # link7 EE flange hole layout admits a mirrored pin-hole solution (finger_dir
-    # Z > 0) that scores well on TCP alignment but sinks the static GLB into the
-    # arm flange after URDF Rx(pi).  Force the link5/6 hemisphere (finger_dir Z < 0).
+    # Z > 0).  Force the link5/6 hemisphere for stable canonical metrics.
     fd = _finger_direction(aligned_flange)
     if fd[2] > 0.0:
       rx_pi = Rotation.from_euler("x", np.pi).as_matrix()
@@ -1042,20 +1006,28 @@ def relocalize_for_ee_link(
     aligned_base_plastic, aligned_base_metal = _movable_base_gripper_frame(
         material_parts, jaw_labels, rot_g, trans_g, center_offset
     )
+    aligned_base_pre_pin = trimesh.util.concatenate(
+        [m for m in (aligned_base_plastic, aligned_base_metal) if m is not None]
+    )
+    visual_pin_delta, visual_pin_fit_before, visual_pin_fit_after = _visual_pin_center_delta(
+        aligned_base_pre_pin, stl_pins
+    )
+    aligned_base_plastic = _translated_mesh(aligned_base_plastic, visual_pin_delta)
+    aligned_base_metal = _translated_mesh(aligned_base_metal, visual_pin_delta)
     left_finger_out, right_finger_out = _finger_meshes_gripper_frame(
         material_parts, jaw_labels, finger_yshift, rot_g, trans_g, center_offset
     )
     finger_method = "gripper_base_link_frame"
-    static_plastic, static_metal = _static_ee_material_meshes(
-        material_parts, merged_coarse, stl_base, R, t, dz
+    static_plastic, static_metal = _static_gripper_frame_material_meshes(
+        material_parts, rot_g, trans_g, center_offset
     )
+    static_plastic = _translated_mesh(static_plastic, visual_pin_delta)
+    static_metal = _translated_mesh(static_metal, visual_pin_delta)
 
     aligned = aligned_flange
-    # frame_rx_pi is intentionally always False: the combo URDF mount
-    # rpy="3.14159265 0 0" (Rx(pi)) already handles the EE-flange-to-gripper
-    # orientation at the kinematics level.  Applying an additional mesh-level
-    # Rx(pi) would double-rotate the base and invert finger Y, swapping the
-    # left/right finger visuals (see plan for link7 travel bug analysis).
+    # Retained as a metrics flag for compatibility; static and movable GLBs now stay
+    # in canonical gripper frames and the generated URDF attach origin provides the
+    # arm-specific mounting transform.
     frame_rx_pi = False
 
     aligned_base = trimesh.util.concatenate(
@@ -1074,7 +1046,10 @@ def relocalize_for_ee_link(
             [m for m in (aligned_base_plastic, aligned_base_metal) if m is not None]
         )
     ) if (aligned_base_plastic is not None or aligned_base_metal is not None) else {}
-    static_q = _mesh_quality_metrics(aligned)
+    static_mesh = trimesh.util.concatenate(
+        [m for m in (static_plastic, static_metal) if m is not None]
+    )
+    static_q = _mesh_quality_metrics(static_mesh)
     left_q = _mesh_quality_metrics(left_finger_out) if left_finger_out is not None else {}
     right_q = _mesh_quality_metrics(right_finger_out) if right_finger_out is not None else {}
 
@@ -1084,17 +1059,24 @@ def relocalize_for_ee_link(
     entry: dict = {
         "ee_link": ee_link,
         "output": f"bio_gripper_g2_visual_{ee_link}.glb",
-        "verts": int(aligned.vertices.shape[0]),
+        "static_frame": "bio_gripper_g2_base_link",
+        "verts": int(static_mesh.vertices.shape[0]),
         "hole_fit_mm": round(hole_fit, 2),
         "finger_dir": [round(float(x), 4) for x in fd],
         "finger_dot_tcp": round(float(fd @ FINGER_TARGET), 4),
         "finger_y_abs": round(float(abs(fd[1])), 4),
-        "ring_gap_mm": round(abs(z_ee - z_g) * 1000, 3),
-        "xy_ring_gap_mm": [round(float((xy_ee - xy_g)[0]) * 1000, 2), round(float((xy_ee - xy_g)[1]) * 1000, 2)],
-        "stl_surface_mm": round(mean_surface_distance(aligned, stl_base) * 1000, 2),
-        "pin_verts_mm": (pin_verts @ R.T + t * 1000).round(2).tolist(),
+        "pin_hole_preview_ring_gap_mm": round(abs(z_ee - z_g) * 1000, 3),
+        "pin_hole_preview_xy_gap_mm": [
+            round(float((xy_ee - xy_g)[0]) * 1000, 2),
+            round(float((xy_ee - xy_g)[1]) * 1000, 2),
+        ],
+        "stl_surface_mm": round(mean_surface_distance(static_mesh, stl_base) * 1000, 2),
+        "pin_verts_mm": ((pin_verts @ R.T + t) * 1000).round(2).tolist(),
         "holes_mm": (holes * 1000).round(2).tolist(),
         "pin_separation_mm": round(float(np.linalg.norm(pin_verts[0] - pin_verts[1]) * 1000), 2),
+        "visual_pin_delta_mm": [round(float(x) * 1000, 3) for x in visual_pin_delta],
+        "visual_pin_fit_before_mm": round(visual_pin_fit_before, 3),
+        "visual_pin_fit_after_mm": round(visual_pin_fit_after, 3),
         "z_shift_skipped_mm": round(float(dz * 1000), 3),
         "partition_counts": {k: len(v) for k, v in groups.items()},
         "finger_method": finger_method,
@@ -1152,10 +1134,6 @@ def relocalize_bio_gripper_g2(dry_run: bool = False) -> list[dict]:
         f"finger_yshift mm: left={finger_yshift['left']*1000:.1f} right={finger_yshift['right']*1000:.1f}"
     )
 
-    coarse = _cad_to_stl_coarse(merged_coarse, stl_base)
-    pin_verts = _pin_vertices_on_mesh(coarse, stl_pins)
-    rot_g, trans_g = _gripper_frame_rt(groups, merged_coarse, stl_base)
-
     for ee_link in ee_links:
         ee_glb = _canonical_ee_glb_path(ee_link)
         if not ee_glb.is_file():
@@ -1166,7 +1144,7 @@ def relocalize_bio_gripper_g2(dry_run: bool = False) -> list[dict]:
         report.append(entry)
         print(
             f"{entry['output']}: hole_fit={entry['hole_fit_mm']:.1f}mm, "
-            f"ring_gap={entry['ring_gap_mm']:.3f}mm, "
+            f"visual_pin_fit={entry['visual_pin_fit_after_mm']:.3f}mm, "
             f"pin_sep={entry['pin_separation_mm']:.1f}mm, "
             f"static_oer={entry.get('static_open_edge_ratio')}, "
             f"base_oer={entry.get('base_open_edge_ratio')}"
@@ -1196,20 +1174,11 @@ def relocalize_bio_gripper_g2(dry_run: bool = False) -> list[dict]:
         ee_glb = _robot_ee_glb_path(profile)
         ee_mesh = trimesh.load(ee_glb, force="mesh")
         holes = _arm_locating_holes(ee_mesh)
-        canon_glb = _canonical_ee_glb_path(profile.ee_link)
-        if canon_glb == ee_glb:
-            canon_holes = holes
-        else:
-            canon_holes = _arm_locating_holes(trimesh.load(canon_glb, force="mesh"))
-        # Static-visual equivalence must use the same canonical EE pin-hole frame as the
-        # exported bio_gripper_g2_visual_{ee_link}.glb (xarm*_1305), not the robot-specific
-        # EE mesh (uf850 link6 differs from xarm6 link6).
-        _, R_pin, t_pin, _, _ = _pick_pin_hole_transform(coarse, pin_verts, canon_holes)
         attach_entry = {
             "robot_key": profile.key,
             "ee_link": profile.ee_link,
             **_attach_origin_for_ee(
-                stl_pins, holes, stl_base, ee_mesh, R_pin, t_pin, rot_g, trans_g, profile
+                stl_pins, holes, stl_base, ee_mesh, profile
             ),
         }
         report.append(attach_entry)

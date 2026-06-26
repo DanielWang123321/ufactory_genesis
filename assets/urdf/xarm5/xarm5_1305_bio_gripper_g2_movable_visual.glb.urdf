@@ -181,7 +181,7 @@
   <joint name="bio_gripper_g2_attach" type="fixed">
     <parent link="link5" />
     <child link="bio_gripper_g2_base_link" />
-    <origin xyz="0.026044 -0.000488 -0.000697" rpy="0.00000000 0.00000000 0.00702875" />
+    <origin xyz="0.026044 -0.000867 -0.000697" rpy="0.00000000 0.00000000 -0.00702875" />
   </joint>
   <link name="bio_gripper_g2_base_link">
     <inertial>

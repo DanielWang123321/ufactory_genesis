@@ -78,4 +78,4 @@ python examples/bio_gripper_g2/view_bio_gripper_g2_movable.py
 python examples/view_robot_glb.py --robot xarm6_1305 --bio-gripper-g2 --movable --gripper-demo
 ```
 
-可动组合 URDF 的 `bio_gripper_g2_attach` 安装位姿由 `scripts/relocalize_bio_gripper_g2_glb.py` 写入 `meshes/visual/relocalize_metrics.json`（按 `robot_key` 索引，同 EE link 不同法兰如 uf850 单独计算），再由 `scripts/generate_bio_gripper_g2_combo_urdf.py` 生成到各机械臂组合 URDF。静态组合仍用硬编码 `Rx(pi)`。改安装或网格后需先 relocalize 再 generate。
+静态与可动组合 URDF 的 `bio_gripper_g2_attach` 安装位姿都由 `scripts/relocalize_bio_gripper_g2_glb.py` 写入 `meshes/visual/relocalize_metrics.json`（按 `robot_key` 索引，同 EE link 不同法兰如 uf850 单独计算），再由 `scripts/generate_bio_gripper_g2_combo_urdf.py` 生成到各机械臂组合 URDF。静态 monolithic GLB 与可动 base GLB 都保持在 canonical `bio_gripper_g2_base_link` frame；改安装或网格后需先 relocalize 再 generate。

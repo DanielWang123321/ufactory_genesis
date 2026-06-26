@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
+from scipy.spatial import cKDTree
 
 from ufactory.bio_gripper_g2 import CLOSED_GAP
 from ufactory.paths import BIO_GRIPPER_G2_ASSETS, bio_gripper_g2_movable_visual_urdf, robot_visual_glb_urdf
@@ -44,6 +45,7 @@ LEFT_LINK = "bio_gripper_g2_left_finger"
 RIGHT_LINK = "bio_gripper_g2_right_finger"
 VISUAL_LINK = "bio_gripper_g2_visual"
 BASE_JOINT = "bio_gripper_g2_attach"
+VISUAL_JOINT = "bio_gripper_g2_visual_fix"
 LEFT_JOINT = "bio_gripper_g2_left_finger_joint"
 RIGHT_JOINT = "bio_gripper_g2_right_finger_joint"
 TCP_LINK = "bio_gripper_g2_tcp_link"
@@ -170,15 +172,26 @@ def _movable_finger_errors(urdf: Path, root: ET.Element) -> list[str]:
   return errors
 
 
-def _attach_joint_rt(root: ET.Element) -> tuple[np.ndarray, np.ndarray, str]:
+def _joint_origin_values(root: ET.Element, joint_name: str) -> tuple[np.ndarray, np.ndarray, str, str]:
   for joint in root.findall("joint"):
-    if joint.get("name") != BASE_JOINT:
+    if joint.get("name") != joint_name:
       continue
     parent = joint.find("parent")
-    if parent is None:
+    child = joint.find("child")
+    if parent is None or child is None:
       break
-    return _origin_rt(joint.find("origin")), parent.get("link", "")
-  raise KeyError(f"missing joint {BASE_JOINT}")
+    origin = joint.find("origin")
+    xyz = np.fromstring(origin.get("xyz", "0 0 0") if origin is not None else "0 0 0", sep=" ", dtype=float)
+    rpy = np.fromstring(origin.get("rpy", "0 0 0") if origin is not None else "0 0 0", sep=" ", dtype=float)
+    return xyz, rpy, parent.get("link", ""), child.get("link", "")
+  raise KeyError(f"missing joint {joint_name}")
+
+
+def _joint_rt(root: ET.Element, joint_name: str) -> tuple[np.ndarray, np.ndarray, str, str]:
+  xyz, rpy, parent, child = _joint_origin_values(root, joint_name)
+  elem = ET.Element("origin", {"xyz": " ".join(str(x) for x in xyz), "rpy": " ".join(str(x) for x in rpy)})
+  R, t = _origin_rt(elem)
+  return R, t, parent, child
 
 
 def _robot_ee_glb_path(robot_key: str) -> Path:
@@ -252,12 +265,14 @@ def _movable_finger_world_errors(root: ET.Element, robot_key: str) -> list[str]:
   return errors
 
 
-def _movable_mount_errors(root: ET.Element, ee_link: str, robot_key: str) -> list[str]:
-  """Movable arm combo: pins in base frame must seat in EE holes after attach origin."""
+def _mount_errors(root: ET.Element, ee_link: str, robot_key: str) -> list[str]:
+  """Arm combo: pins in base frame must seat in EE holes after attach origin."""
   errors: list[str] = []
-  (R, t), parent = _attach_joint_rt(root)
+  R, t, parent, child = _joint_rt(root, BASE_JOINT)
   if parent != ee_link:
     errors.append(f"{BASE_JOINT} parent {parent!r} != expected {ee_link!r}")
+  if child != BASE_LINK:
+    errors.append(f"{BASE_JOINT} child {child!r} != expected {BASE_LINK!r}")
   stl_base = trimesh.load(_STL_BASE, force="mesh")
   stl_pins = _gripper_pin_points_stl(stl_base)
   ee_mesh = trimesh.load(_robot_ee_glb_path(robot_key), force="mesh")
@@ -278,6 +293,65 @@ def _movable_mount_errors(root: ET.Element, ee_link: str, robot_key: str) -> lis
   ring_gap_max = _attach_ring_gap_budget_mm(robot_key)
   if ring_gap > ring_gap_max:
     errors.append(f"attach ring gap {ring_gap:.2f} mm > {ring_gap_max:.1f} mm")
+  return errors
+
+
+def _legacy_mount_errors(root: ET.Element, *, movable: bool) -> list[str]:
+  """Reject the old static fallback: zero translation plus Rx(pi)."""
+  errors: list[str] = []
+  joint_names = [BASE_JOINT]
+  if not movable:
+    joint_names.append(VISUAL_JOINT)
+  for joint_name in joint_names:
+    xyz, rpy, _parent, _child = _joint_origin_values(root, joint_name)
+    is_zero_xyz = np.linalg.norm(xyz) < 1e-9
+    is_rx_pi = np.allclose(np.abs(rpy), np.array([np.pi, 0.0, 0.0]), atol=1e-6)
+    if is_zero_xyz and is_rx_pi:
+      errors.append(f"{joint_name} uses legacy zero-translation Rx(pi) mount")
+  return errors
+
+
+def _static_visual_mount_errors(root: ET.Element, ee_link: str) -> list[str]:
+  """Static visual overlay and hidden kinematic subtree must share the same attach origin."""
+  errors: list[str] = []
+  base_R, base_t, base_parent, _base_child = _joint_rt(root, BASE_JOINT)
+  visual_R, visual_t, visual_parent, visual_child = _joint_rt(root, VISUAL_JOINT)
+  if base_parent != ee_link:
+    errors.append(f"{BASE_JOINT} parent {base_parent!r} != expected {ee_link!r}")
+  if visual_parent != ee_link:
+    errors.append(f"{VISUAL_JOINT} parent {visual_parent!r} != expected {ee_link!r}")
+  if visual_child != VISUAL_LINK:
+    errors.append(f"{VISUAL_JOINT} child {visual_child!r} != expected {VISUAL_LINK!r}")
+  if not np.allclose(base_t, visual_t, atol=1e-9) or not np.allclose(base_R, visual_R, atol=1e-9):
+    errors.append(f"{VISUAL_JOINT} origin differs from {BASE_JOINT}")
+  return errors
+
+
+def _static_visual_pin_errors(urdf: Path, root: ET.Element, robot_key: str) -> list[str]:
+  """Static monolithic GLB's visible locating pins must land in the arm holes."""
+  errors: list[str] = []
+  mesh_ref, _visual_rt = _link_visual(root, VISUAL_LINK)
+  mesh = trimesh.load(_resolve_mesh(urdf, mesh_ref), force="mesh")
+  stl_base = trimesh.load(_STL_BASE, force="mesh")
+  stl_pins = _gripper_pin_points_stl(stl_base)
+  _, idx = cKDTree(mesh.vertices).query(stl_pins, k=1)
+  visual_pins = np.asarray(mesh.vertices[idx], dtype=float)
+  local_fit = float(np.mean(np.linalg.norm(visual_pins - stl_pins, axis=1)) * 1000)
+  if local_fit > 2.0:
+    errors.append(f"static visual pin/STL fit {local_fit:.2f} mm > 2.0 mm")
+
+  R, t, _parent, _child = _joint_rt(root, VISUAL_JOINT)
+  mapped = visual_pins @ R.T + t
+  ee_mesh = trimesh.load(_robot_ee_glb_path(robot_key), force="mesh")
+  holes = _arm_locating_holes(ee_mesh)
+  holes_canon = holes[np.argsort(holes[:, 1])]
+  hole_fit = min(
+    float(np.mean(np.linalg.norm(mapped - holes_canon, axis=1)) * 1000),
+    float(np.mean(np.linalg.norm(mapped - holes_canon[::-1], axis=1)) * 1000),
+  )
+  hole_fit_max = _attach_hole_fit_budget_mm(robot_key) + 2.0
+  if hole_fit > hole_fit_max:
+    errors.append(f"static visual pin-hole fit {hole_fit:.2f} mm > {hole_fit_max:.1f} mm")
   return errors
 
 
@@ -307,12 +381,18 @@ def _check_urdf(urdf: Path, *, movable: bool, standalone: bool, ee_link: str | N
     errors.append(f"missing joints {missing_joints}")
 
   try:
+    if not standalone and ee_link and robot_key:
+      errors.extend(_mount_errors(root, ee_link, robot_key))
+      errors.extend(_legacy_mount_errors(root, movable=movable))
     if movable:
       errors.extend(_movable_finger_errors(urdf, root))
       if not standalone and ee_link and robot_key:
-        errors.extend(_movable_mount_errors(root, ee_link, robot_key))
         errors.extend(_movable_finger_world_errors(root, robot_key))
     else:
+      if not standalone and ee_link:
+        errors.extend(_static_visual_mount_errors(root, ee_link))
+      if not standalone and robot_key:
+        errors.extend(_static_visual_pin_errors(urdf, root, robot_key))
       attach_rt = _link_world_rt(root, VISUAL_LINK)
       mesh_ref, visual_rt = _link_visual(root, VISUAL_LINK)
       plastic, metal = _mesh_parts(_resolve_mesh(urdf, mesh_ref), _compose(attach_rt, visual_rt))
