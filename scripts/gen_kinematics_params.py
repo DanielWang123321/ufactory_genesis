@@ -10,8 +10,8 @@ SN eligibility (no compensation file expected):
   - UF850: all units have compensation
 
 Usage:
-    python scripts/gen_kinematics_params.py 192.168.1.60 xi1305
-    python scripts/gen_kinematics_params.py 192.168.1.60 xi1305 --force
+    python scripts/gen_kinematics_params.py <robot-ip> <suffix>
+    python scripts/gen_kinematics_params.py <robot-ip> <suffix> --force
 """
 
 from __future__ import annotations

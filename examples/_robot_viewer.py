@@ -6,10 +6,13 @@ import sys
 import time
 
 import numpy as np
+import torch
 
 import genesis as gs
 from ufactory.bio_gripper_g2 import BioGripperG2
 from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.paths import robot_urdf, robot_visual_glb_urdf
+from ufactory.robot_params import get_robot_runtime_profile
 from ufactory.robot_registry import RobotModelSpec, joint_names
 
 from _bio_gripper_g2_demo import (
@@ -111,14 +114,96 @@ def start_deferred_viewer(scene) -> None:
   visualizer.reset()
 
 
-def setup_arm_pd(robot, dof_idx: list[int], dof: int) -> None:
-  kp = [3000, 3000, 2000, 2000, 1000, 1000, 800][:dof]
-  kv = [300, 300, 200, 200, 100, 100, 80][:dof]
-  force_lo = [-50, -50, -32, -32, -32, -20, -15][:dof]
-  force_hi = [50, 50, 32, 32, 32, 20, 15][:dof]
-  robot.set_dofs_kp(np.array(kp), dof_idx)
-  robot.set_dofs_kv(np.array(kv), dof_idx)
-  robot.set_dofs_force_range(np.array(force_lo), np.array(force_hi), dof_idx)
+def setup_arm_pd(robot, dof_idx: list[int], profile: RobotModelSpec) -> None:
+  runtime = get_robot_runtime_profile(profile.key)
+  robot.set_dofs_kp(np.array(runtime.arm.kp), dof_idx)
+  robot.set_dofs_kv(np.array(runtime.arm.kv), dof_idx)
+  robot.set_dofs_force_range(
+    np.array(runtime.arm.force_lower),
+    np.array(runtime.arm.force_upper),
+    dof_idx,
+  )
+
+
+def _to_numpy3(pos) -> np.ndarray:
+  if hasattr(pos, "cpu"):
+    pos = pos.cpu().numpy()
+  return np.asarray(pos).reshape(-1)[:3]
+
+
+def _link_world_positions(robot, link_names: tuple[str, ...]) -> dict[str, list[float]]:
+  available = {link.name.split("/")[-1]: link for link in robot.links}
+  out = {}
+  for name in link_names:
+    if name not in available:
+      continue
+    arr = _to_numpy3(available[name].get_pos())
+    out[name] = [float(x) for x in arr]
+  return out
+
+
+def _ensure_fk_scratch(robot) -> None:
+  if getattr(robot, "_IK_qpos_orig", None) is not None:
+    return
+  if robot.n_qs == 0:
+    return
+  try:
+    import quadrants as qd
+  except ImportError:
+    return
+  robot._IK_qpos_orig = qd.field(dtype=gs.qd_float, shape=(robot.n_qs, robot._solver._B))
+
+
+def _fk_link_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
+  _ensure_fk_scratch(robot)
+  qpos_t = torch.tensor(qpos_np, dtype=torch.float32, device=gs.device)
+  links_pos, _ = robot.forward_kinematics(qpos=qpos_t)
+  idx = int(ee_link.idx_local)
+  if links_pos.ndim == 2:
+    return links_pos[idx].cpu().numpy()
+  return links_pos[0, idx].cpu().numpy()
+
+
+def run_glb_diagnose(profile: RobotModelSpec, *, with_gripper_g2: bool = False) -> None:
+  """Headless GLB/STL link pose diagnostic for any supported arm."""
+  enable_glb_pbr_surfaces()
+  gs.init(backend=gs.gpu)
+  stl_path = robot_urdf(profile.key)
+  glb_path = robot_visual_glb_urdf(profile.key, with_gripper_g2=with_gripper_g2)
+  link_names = tuple(["link_base"] + [f"link{i}" for i in range(1, profile.dof + 1)])
+
+  def load_robot(urdf_path: str, use_glb: bool = False):
+    scene = gs.Scene(show_viewer=False, sim_options=gs.options.SimOptions(dt=0.01))
+    morph = gs.morphs.URDF(file=urdf_path, pos=(0.0, 0.0, 0.0), fixed=True, requires_jac_and_IK=True)
+    robot = scene.add_entity(morph, surface=glb_view_surface()) if use_glb else scene.add_entity(morph)
+    scene.build()
+    return robot, scene, _link_world_positions(robot, link_names)
+
+  _, _, stl_pos = load_robot(stl_path)
+  robot, scene, glb_pos = load_robot(glb_path, use_glb=True)
+
+  max_delta_mm = 0.0
+  for link in set(stl_pos) & set(glb_pos):
+    delta = float(np.linalg.norm(np.array(stl_pos[link]) - np.array(glb_pos[link])) * 1000)
+    max_delta_mm = max(max_delta_mm, delta)
+  print(f"max link pose delta STL vs GLB: {max_delta_mm:.3f} mm")
+
+  runtime = get_robot_runtime_profile(profile.key)
+  joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
+  arm_dof_idx = [joint_map[n].dofs_idx_local[0] for n in runtime.arm.joint_names if n in joint_map]
+  if arm_dof_idx:
+    home = np.asarray(runtime.arm.home_qpos, dtype=np.float64)
+    robot.set_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
+    for _ in range(5):
+      scene.step()
+  ee_link = resolve_robot_link(robot, runtime.arm.ee_link)
+  qpos = robot.get_dofs_position()
+  if hasattr(qpos, "cpu"):
+    qpos = qpos.cpu().numpy()
+  fk_pos = _fk_link_pos(robot, ee_link, np.asarray(qpos).reshape(-1))
+  ee_pos = _to_numpy3(ee_link.get_pos())
+  fk_delta_mm = float(np.linalg.norm(fk_pos - ee_pos) * 1000)
+  print(f"{runtime.arm.ee_link} get_pos vs forward_kinematics: {fk_delta_mm:.4f} mm")
 
 
 def _set_gripper_kinematic(robot, all_gripper_dof_idx: list[int], value: float) -> None:
@@ -216,8 +301,8 @@ def _kinematic_step(
     scene.step()
 
 
-# Match xArm-Python-SDK 2001-move_joint.py default speed=50 (deg/s).
-_ARM_DEMO_SPEED_DEG_S = 50.0
+# Genesis viewer joint demo: smooth playback at 50°/s equivalent in rad/s.
+_ARM_DEMO_SPEED_RAD_S = float(np.radians(50.0))
 _ARM_DEMO_DT = 0.01
 
 
@@ -236,7 +321,7 @@ class _ArmJointDemo:
     self._poses = poses
     self._n = n_dof
     self._idx = 0
-    self._max_step = np.radians(_ARM_DEMO_SPEED_DEG_S) * _ARM_DEMO_DT
+    self._max_step = _ARM_DEMO_SPEED_RAD_S * _ARM_DEMO_DT
     self.current = poses[0][:n_dof].copy()
     self.goal = poses[0][:n_dof].copy()
     self.finished = len(poses) <= 1
@@ -329,7 +414,7 @@ def run_glb_viewer(
       bio_gripper=bio_gripper,
     )
   if pd_demo and arm_dof_idx:
-    setup_arm_pd(robot, arm_dof_idx, profile.dof)
+    setup_arm_pd(robot, arm_dof_idx, profile)
     robot.set_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
     robot.control_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
   if gripper_demo and gripper_dof_idx:
@@ -373,7 +458,7 @@ def run_glb_viewer(
   if gripper_demo:
     print(f"Viewer: {profile.key} — gripper open/close demo")
   elif pd_demo:
-    print(f"Viewer: {profile.key} — joint motion demo ({_ARM_DEMO_SPEED_DEG_S:.0f} deg/s, once)")
+    print(f"Viewer: {profile.key} — joint motion demo ({_ARM_DEMO_SPEED_RAD_S:.4f} rad/s, once)")
   else:
     print(f"Viewer: {profile.key} ({profile.dof} DOF). Close window or Ctrl+C to exit.")
 

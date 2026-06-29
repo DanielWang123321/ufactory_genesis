@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, Optional
 
 from ufactory.paths import PROJECT_ROOT, kinematics_user_dir, xarm6_urdf
-from ufactory.robot_registry import RobotModelSpec, get_profile_key_for_robot_name, get_robot_profile
+from ufactory.robot_registry import get_robot_profile
 
 DEFAULT_XARM6_URDF = xarm6_urdf()
 
@@ -20,7 +21,7 @@ LITE6_KINEMATICS_MIN_SN_MODEL_CODE = 1006  # lite6: code < 1006 => no compensati
 def load_kinematics_yaml(
   kinematics_yaml_path: str,
   joint_count: int | None = None,
-) -> Dict[str, Dict[str, float]]:
+) -> dict[str, dict[str, float]]:
   """Load joint offsets from xArm kinematics YAML."""
   try:
     import yaml
@@ -66,7 +67,7 @@ def load_kinematics_yaml(
 
 def find_kinematics_yaml(
   kinematics_suffix: str,
-  kinematics_yaml_dir: Optional[str] = None,
+  kinematics_yaml_dir: str | None = None,
   robot_name: str = "xarm6",
 ) -> Path:
   """Find a kinematics yaml file from a suffix (e.g., xi1305 -> xarm6_kinematics_xi1305.yaml)."""
@@ -74,8 +75,7 @@ def find_kinematics_yaml(
   if not suffix:
     raise ValueError("kinematics_suffix is empty")
 
-  profile_key = get_profile_key_for_robot_name(robot_name)
-  profile = get_robot_profile(profile_key)
+  profile = get_robot_profile(robot_name)
   prefix = profile.kinematics_prefix
 
   search_dirs = [Path.cwd(), kinematics_user_dir(profile.robot_name)]
@@ -104,9 +104,10 @@ def find_kinematics_yaml(
 
 def build_calibrated_urdf(
   base_urdf_path: str,
-  kinematics: Dict[str, Dict[str, float]],
-  suffix: Optional[str] = None,
+  kinematics: dict[str, dict[str, float]],
+  suffix: str | None = None,
   joint_count: int | None = None,
+  output_dir: str | None = None,
 ) -> str:
   """Generate a patched URDF with calibrated joint origins."""
   base = Path(base_urdf_path).expanduser().resolve()
@@ -117,19 +118,37 @@ def build_calibrated_urdf(
   if suffix:
     safe_suffix = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in suffix) or "calib"
 
-  output_path = base.with_name(f"{base.stem}_{safe_suffix}_calib.urdf")
+  digest_src = {
+    "base": str(base),
+    "base_sha256": hashlib.sha256(base.read_bytes()).hexdigest(),
+    "kinematics": kinematics,
+    "joint_count": joint_count,
+  }
+  digest = hashlib.sha256(json.dumps(digest_src, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+  if output_dir is None:
+    out_dir = PROJECT_ROOT / ".cache" / "ufactory" / "urdf"
+  else:
+    out_dir = Path(output_dir).expanduser().resolve()
+  out_dir.mkdir(parents=True, exist_ok=True)
+  output_path = out_dir / f"{base.stem}_{safe_suffix}_{digest}_calib.urdf"
   tree = ET.parse(str(base))
   root = tree.getroot()
 
+  # Cached URDFs live outside the asset directory, so relative mesh paths must
+  # remain anchored to the original URDF location.
+  for mesh in root.findall(".//mesh"):
+    filename = mesh.get("filename")
+    if not filename or filename.startswith(("package://", "file://")):
+      continue
+    mesh_path = Path(filename)
+    if not mesh_path.is_absolute():
+      mesh.set("filename", str((base.parent / mesh_path).resolve()))
+
+  joints = {joint.get("name"): joint for joint in root.findall("joint")}
   n = joint_count or len(kinematics)
   for i in range(1, n + 1):
     joint_name = f"joint{i}"
-    target = None
-    for joint in root.findall("joint"):
-      if joint.get("name") == joint_name:
-        target = joint
-        break
-
+    target = joints.get(joint_name)
     if target is None:
       continue
 
@@ -157,20 +176,20 @@ def build_calibrated_urdf(
 
 
 def prepare_robot_model_for_verification(
-  robot_model: Optional[str],
-  kinematics_yaml: Optional[str],
-  kinematics_suffix: Optional[str],
-  kinematics_yaml_dir: Optional[str] = None,
-  default_base_urdf: Optional[str] = None,
+  robot_model: str | None,
+  kinematics_yaml: str | None,
+  kinematics_suffix: str | None,
+  kinematics_yaml_dir: str | None = None,
+  default_base_urdf: str | None = None,
   robot_name: str = "xarm6",
   joint_count: int | None = None,
-) -> tuple[str, Optional[str]]:
+  output_dir: str | None = None,
+) -> tuple[str, str | None]:
   """Resolve robot model and apply kinematic calibration if requested.
 
   Returns (urdf_path, kinematics_yaml_path_or_none).
   """
-  profile_key = get_profile_key_for_robot_name(robot_name)
-  profile = get_robot_profile(profile_key)
+  profile = get_robot_profile(robot_name)
   dof = joint_count or profile.dof
   base_default = default_base_urdf or str(profile.assets_dir / profile.default_urdf)
   model_path = Path(robot_model).expanduser().resolve() if robot_model else Path(base_default)
@@ -188,22 +207,18 @@ def prepare_robot_model_for_verification(
     load_kinematics_yaml(str(yaml_path), joint_count=dof),
     suffix=kinematics_suffix or yaml_path.stem,
     joint_count=dof,
+    output_dir=output_dir,
   )
   return calibrated, str(yaml_path)
 
 
-def parse_sn_model_code(sn: str) -> Optional[int]:
+def parse_sn_model_code(sn: str) -> int | None:
   """Parse the 4-digit model code from SN positions 3-6 (1-based).
 
   Example: ``XI130506D43A0A`` -> ``1305``.
   """
-  cleaned = (sn or "").strip().upper()
-  if len(cleaned) < 6:
-    return None
-  digits = cleaned[2:6]
-  if not digits.isdigit():
-    return None
-  return int(digits)
+  digits = (sn or "").strip().upper()[2:6]
+  return int(digits) if len(digits) == 4 and digits.isdigit() else None
 
 
 def robot_name_from_firmware(robot_dof: int, robot_type: int) -> str:
@@ -250,8 +265,8 @@ def validate_kinematics_calibration_request(
   sn: str,
   robot_name: str,
   *,
-  kinematics_yaml: Optional[str] = None,
-  kinematics_suffix: Optional[str] = None,
+  kinematics_yaml: str | None = None,
+  kinematics_suffix: str | None = None,
 ) -> None:
   """Raise ValueError if calibration files are requested but SN rules them out."""
   wants_calib = kinematics_yaml is not None or kinematics_suffix is not None
@@ -274,8 +289,8 @@ def log_kinematics_sn_status(
   sn: str,
   robot_name: str,
   *,
-  kinematics_yaml: Optional[str] = None,
-  kinematics_suffix: Optional[str] = None,
+  kinematics_yaml: str | None = None,
+  kinematics_suffix: str | None = None,
 ) -> None:
   """Print SN / calibration eligibility and warn on likely misconfiguration."""
   model_code = parse_sn_model_code(sn)

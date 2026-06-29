@@ -99,19 +99,12 @@ class BioGripperG2:
     @property
     def drive_dof_idx(self) -> list[int]:
         """DOF index of the drive joint (right finger)."""
-        if self._right_joint is None:
-            return []
-        return [self._right_joint.dofs_idx_local[0]]
+        return [] if self._right_joint is None else [self._right_joint.dofs_idx_local[0]]
 
     @property
     def all_dof_idx(self) -> list[int]:
         """DOF indices of both finger joints (drive + mimic)."""
-        idx: list[int] = []
-        if self._right_joint is not None:
-            idx.append(self._right_joint.dofs_idx_local[0])
-        if self._left_joint is not None:
-            idx.append(self._left_joint.dofs_idx_local[0])
-        return idx
+        return [joint.dofs_idx_local[0] for joint in (self._right_joint, self._left_joint) if joint is not None]
 
     # -- helpers ------------------------------------------------------------
 
@@ -193,18 +186,9 @@ class BioGripperG2:
         ``right_value`` is used for the right-finger DOF;
         ``-right_value`` for the left-finger DOF (mirrored opening).
         """
-        values: list[float] = []
-        for dof_i in active_dof_idx:
-            if (
-                self._right_joint is not None
-                and dof_i == self._right_joint.dofs_idx_local[0]
-            ):
-                values.append(right_value)
-            elif (
-                self._left_joint is not None
-                and dof_i == self._left_joint.dofs_idx_local[0]
-            ):
-                values.append(-right_value)
-            else:
-                values.append(0.0)
-        return np.array(values, dtype=np.float64)
+        values = {}
+        if self._right_joint is not None:
+            values[self._right_joint.dofs_idx_local[0]] = right_value
+        if self._left_joint is not None:
+            values[self._left_joint.dofs_idx_local[0]] = -right_value
+        return np.array([values.get(dof_i, 0.0) for dof_i in active_dof_idx], dtype=np.float64)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,39 +44,32 @@ def _assets(robot: str) -> Path:
   return PROJECT_ROOT / "assets" / "urdf" / robot
 
 
-ROBOT_PROFILES: Dict[str, RobotModelSpec] = {
-  "xarm5_1305": RobotModelSpec(
-    key="xarm5_1305",
-    robot_name="xarm5",
+def _xarm_profile(dof: int, *, glb_src_base_name: str = "link0.glb") -> RobotModelSpec:
+  robot = f"xarm{dof}"
+  key = f"{robot}_1305"
+  return RobotModelSpec(
+    key=key,
+    robot_name=robot,
     variant="1305",
-    dof=5,
-    ee_link="link5",
-    assets_dir=_assets("xarm5"),
-    mesh_variant="xarm5_1305",
-    default_urdf="xarm5_1305.urdf",
-    visual_glb_urdf="xarm5_1305_visual.glb.urdf",
-    kinematics_prefix="xarm5",
-    bio_gripper_g2_visual_urdf="xarm5_1305_bio_gripper_g2_visual.glb.urdf",
-    bio_gripper_g2_movable_visual_urdf="xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    gripper_g2_visual_urdf="xarm5_1305_g2_visual.urdf",
-    gripper_g2_movable_visual_urdf="xarm5_1305_g2_movable_visual.urdf",
-  ),
-  "xarm7_1305": RobotModelSpec(
-    key="xarm7_1305",
-    robot_name="xarm7",
-    variant="1305",
-    dof=7,
-    ee_link="link7",
-    assets_dir=_assets("xarm7"),
-    mesh_variant="xarm7_1305",
-    default_urdf="xarm7_1305.urdf",
-    visual_glb_urdf="xarm7_1305_visual.glb.urdf",
-    kinematics_prefix="xarm7",
-    bio_gripper_g2_visual_urdf="xarm7_1305_bio_gripper_g2_visual.glb.urdf",
-    bio_gripper_g2_movable_visual_urdf="xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    gripper_g2_visual_urdf="xarm7_1305_g2_visual.urdf",
-    gripper_g2_movable_visual_urdf="xarm7_1305_g2_movable_visual.urdf",
-  ),
+    dof=dof,
+    ee_link=f"link{dof}",
+    assets_dir=_assets(robot),
+    mesh_variant=key,
+    default_urdf=f"{key}.urdf",
+    visual_glb_urdf=f"{key}_visual.glb.urdf",
+    kinematics_prefix=robot,
+    bio_gripper_g2_visual_urdf=f"{key}_bio_gripper_g2_visual.glb.urdf",
+    bio_gripper_g2_movable_visual_urdf=f"{key}_bio_gripper_g2_movable_visual.glb.urdf",
+    gripper_g2_visual_urdf=f"{key}_g2_visual.urdf",
+    gripper_g2_movable_visual_urdf=f"{key}_g2_movable_visual.urdf",
+    glb_src_base_name=glb_src_base_name,
+    glb_out_base_name="link_base.glb",
+  )
+
+
+ROBOT_PROFILES: dict[str, RobotModelSpec] = {
+  "xarm5_1305": _xarm_profile(5),
+  "xarm7_1305": _xarm_profile(7),
   "lite6": RobotModelSpec(
     key="lite6",
     robot_name="lite6",
@@ -118,52 +110,28 @@ ROBOT_PROFILES: Dict[str, RobotModelSpec] = {
     gripper_g2_visual_urdf="uf850_g2_visual.urdf",
     gripper_g2_movable_visual_urdf="uf850_g2_movable_visual.urdf",
   ),
-  "xarm6_1305": RobotModelSpec(
-    key="xarm6_1305",
-    robot_name="xarm6",
-    variant="1305",
-    dof=6,
-    ee_link="link6",
-    assets_dir=_assets("xarm6"),
-    mesh_variant="xarm6_1305",
-    default_urdf="xarm6_1305.urdf",
-    visual_glb_urdf="xarm6_1305_visual.glb.urdf",
-    kinematics_prefix="xarm6",
-    bio_gripper_g2_visual_urdf="xarm6_1305_bio_gripper_g2_visual.glb.urdf",
-    bio_gripper_g2_movable_visual_urdf="xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    gripper_g2_visual_urdf="xarm6_1305_g2_visual.urdf",
-    gripper_g2_movable_visual_urdf="xarm6_1305_g2_movable_visual.urdf",
-    glb_src_base_name="link_base.glb",
-    glb_out_base_name="link_base.glb",
-  ),
+  "xarm6_1305": _xarm_profile(6, glb_src_base_name="link_base.glb"),
 }
 
 
 def get_robot_profile(key: str) -> RobotModelSpec:
-  resolved = get_profile_key_for_robot_name(key)
-  return ROBOT_PROFILES[resolved]
+  return ROBOT_PROFILES[get_profile_key_for_robot_name(key)]
 
 
-def link_glb_stl_pairs(profile: RobotModelSpec) -> Tuple[Tuple[str, str], ...]:
+def link_glb_stl_pairs(profile: RobotModelSpec) -> tuple[tuple[str, str], ...]:
   """Map source GLB filenames to STL reference names for relocalization."""
-  pairs: list[Tuple[str, str]] = []
-  pairs.append((profile.glb_src_base_name, profile.stl_base_name))
-  for i in range(1, profile.dof + 1):
-    pairs.append((f"link{i}.glb", f"link{i}.stl"))
-  return tuple(pairs)
+  return ((profile.glb_src_base_name, profile.stl_base_name), *((f"link{i}.glb", f"link{i}.stl") for i in range(1, profile.dof + 1)))
 
 
 def glb_output_name(profile: RobotModelSpec, src_glb: str) -> str:
-  if src_glb == profile.glb_src_base_name:
-    return profile.glb_out_base_name
-  return src_glb
+  return profile.glb_out_base_name if src_glb == profile.glb_src_base_name else src_glb
 
 
-def arm_link_names(profile: RobotModelSpec) -> Tuple[str, ...]:
-  return tuple(["link_base"] + [f"link{i}" for i in range(1, profile.dof + 1)])
+def arm_link_names(profile: RobotModelSpec) -> tuple[str, ...]:
+  return ("link_base", *(f"link{i}" for i in range(1, profile.dof + 1)))
 
 
-def joint_names(profile: RobotModelSpec) -> Tuple[str, ...]:
+def joint_names(profile: RobotModelSpec) -> tuple[str, ...]:
   return tuple(f"joint{i}" for i in range(1, profile.dof + 1))
 
 
@@ -179,8 +147,6 @@ def get_profile_key_for_robot_name(robot_name: str) -> str:
   if preferred in ROBOT_PROFILES:
     return preferred
   matches = [key for key, profile in ROBOT_PROFILES.items() if profile.robot_name == robot_name]
-  if len(matches) == 1:
-    return matches[0]
   if matches:
     return sorted(matches)[0]
   raise KeyError(f"Unknown robot: {robot_name}")

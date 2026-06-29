@@ -12,7 +12,7 @@ import _bootstrap  # noqa: F401
 import genesis as gs
 from ufactory.kinematics import prepare_robot_model_for_verification
 from ufactory.paths import robot_urdf
-from ufactory.robot_registry import get_profile_key_for_robot_name, get_robot_profile, joint_names, robot_cli_choices
+from ufactory.robot_registry import get_robot_profile, joint_names, robot_cli_choices
 
 
 def quat_to_rpy(quat):
@@ -38,6 +38,16 @@ def resolve_entity_name(entity, requested_name: str, kind: str) -> str:
   raise KeyError(f"{kind} not found: {requested_name}")
 
 
+def _ensure_fk_scratch(robot) -> None:
+  if getattr(robot, "_IK_qpos_orig", None) is not None:
+    return
+  if robot.n_qs == 0:
+    return
+  import quadrants as qd
+
+  robot._IK_qpos_orig = qd.field(dtype=gs.qd_float, shape=(robot.n_qs, robot._solver._B))
+
+
 def run_tests(profile_key: str, urdf_path: str, vis: bool) -> None:
   profile = get_robot_profile(profile_key)
   jnames = joint_names(profile)
@@ -61,6 +71,7 @@ def run_tests(profile_key: str, urdf_path: str, vis: bool) -> None:
   ee_link_name = resolve_entity_name(robot, ee, "link")
   ee_link = next(l for l in robot.links if resolve_entity_name(robot, l.name, "link") == ee_link_name)
   q_t = torch.tensor(q, dtype=torch.float32, device=gs.device)
+  _ensure_fk_scratch(robot)
   links_pos, _ = robot.forward_kinematics(qpos=q_t)
   idx = int(ee_link.idx_local)
   fk_pos = links_pos[idx].cpu().numpy() if links_pos.ndim == 2 else links_pos[0, idx].cpu().numpy()
@@ -88,7 +99,6 @@ def main() -> None:
   args = parser.parse_args()
 
   profile = get_robot_profile(args.robot)
-  profile_key = get_profile_key_for_robot_name(args.robot)
   default_urdf = args.urdf or robot_urdf(args.robot)
   urdf_path, _ = prepare_robot_model_for_verification(
     default_urdf,
@@ -97,8 +107,8 @@ def main() -> None:
     robot_name=profile.robot_name,
     joint_count=profile.dof,
   )
-  run_tests(profile_key, urdf_path, args.vis)
-  print(f"\nAll checks passed for {profile_key}")
+  run_tests(profile.key, urdf_path, args.vis)
+  print(f"\nAll checks passed for {profile.key}")
 
 
 if __name__ == "__main__":

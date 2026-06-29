@@ -7,7 +7,7 @@ Usage:
     source ~/envs/py312/bin/activate
     python examples/xarm6/verify_xarm6.py -v                           # with viewer
     python examples/xarm6/verify_xarm6.py                              # headless
-    python examples/xarm6/verify_xarm6.py --real-ip 192.168.1.60       # + real robot IK comparison
+    python examples/xarm6/verify_xarm6.py --real-ip <robot-ip>         # + real robot IK comparison
 """
 
 import argparse
@@ -489,6 +489,15 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
     print("Part B: Real Robot FK/IK Comparison DONE!")
     print("=" * 60)
 
+    return {
+        "ik_fail_count": ik_fail_count,
+        "max_joint_diff_deg": max_joint_diff_deg,
+        "max_gs_verify_err_mm": max_gs_verify_err_mm,
+        "max_sdk_verify_err_mm": max_sdk_verify_err_mm,
+        "max_fk_pos_diff_mm": max_fk_pos_diff_mm,
+        "max_fk_rpy_diff_deg": max_fk_rpy_diff_deg,
+    }
+
 
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Verification")
@@ -514,7 +523,7 @@ def main():
         help="Directory used to auto-find kinematics yaml when only suffix is provided.",
     )
     parser.add_argument("--real-ip", type=str, default=None,
-                        help="Real xArm IP for IK comparison (e.g., 192.168.1.60)")
+                        help="Real xArm IP for IK comparison")
     parser.add_argument(
         "--skip-ik",
         action="store_true",
@@ -529,12 +538,31 @@ def main():
         args.kinematics_yaml_dir,
     )
     xarm6, ee_link, _, _ = run_genesis_tests(args, robot_model)
+    part_b_summary = None
+    part_b_status = "SKIPPED"
 
     if args.real_ip:
         if args.skip_ik:
             print("[INFO] --skip-ik enabled, skip real robot IK comparison.")
         else:
-            run_real_robot_comparison(xarm6, ee_link, args.real_ip)
+            part_b_summary = run_real_robot_comparison(xarm6, ee_link, args.real_ip)
+            part_b_status = "PASS" if part_b_summary["ik_fail_count"] == 0 else "CHECK"
+
+    print("\n" + "=" * 60)
+    print("FINAL SUMMARY")
+    print("=" * 60)
+    print("Part A Genesis verification : PASS")
+    if args.real_ip:
+        print(f"Part B real FK/IK comparison : {part_b_status}")
+        if part_b_summary:
+            print(f"  FK max pos diff            : {part_b_summary['max_fk_pos_diff_mm']:.4f} mm")
+            print(f"  FK max RPY diff            : {part_b_summary['max_fk_rpy_diff_deg']:.4f} deg")
+            print(f"  IK fail count              : {part_b_summary['ik_fail_count']}")
+            print(f"  IK max GS verify err       : {part_b_summary['max_gs_verify_err_mm']:.4f} mm")
+            print(f"  IK max SDK verify err      : {part_b_summary['max_sdk_verify_err_mm']:.4f} mm")
+    else:
+        print("Part B real FK/IK comparison : SKIPPED")
+    print(f"Overall                      : {'PASS' if part_b_status != 'CHECK' else 'CHECK'}")
 
 
 if __name__ == "__main__":

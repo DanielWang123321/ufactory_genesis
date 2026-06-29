@@ -9,14 +9,12 @@ Usage:
     python examples/xarm6/xarm6_g2_showcase.py
     python examples/xarm6/xarm6_g2_showcase.py --no-loop --speed 1.5
     python examples/xarm6/xarm6_g2_showcase.py --capture-keyframes
-    python scripts/capture_showcase_keyframes.py   # headless keyframes
 """
 
 from __future__ import annotations
 
 import argparse
 import math
-import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,10 +26,6 @@ import genesis as gs
 from genesis.utils.geom import transform_by_quat, transform_quat_by_quat, xyz_to_quat
 from scipy.spatial.transform import Rotation as R
 
-EXAMPLES_ROOT = Path(__file__).resolve().parents[1]
-if str(EXAMPLES_ROOT) not in sys.path:
-  sys.path.insert(0, str(EXAMPLES_ROOT))
-
 from _packaging_scene import (
   HOME_RPY_DEG,
   HOME_XY,
@@ -42,6 +36,7 @@ from _packaging_scene import (
   make_layout,
 )
 from _robot_viewer import start_deferred_viewer
+from ufactory.robot_params import get_robot_runtime_profile
 
 GRIPPER_OPEN = 0.0
 GRIPPER_CLOSE = 0.85
@@ -154,10 +149,11 @@ def collect_gripper_snapshot(robot) -> dict:
 
 def collect_pose_snapshot(robot, layout) -> dict:
   """Return link6 / finger poses and arm qpos for keyframe metadata."""
-  ik_link = robot.get_link("link6")
+  runtime = get_robot_runtime_profile("xarm6")
+  ik_link = robot.get_link(runtime.arm.ee_link)
   left_finger = robot.get_link("left_finger")
   right_finger = robot.get_link("right_finger")
-  arm_dof_idx = [robot.get_joint(f"joint{i + 1}").dofs_idx_local[0] for i in range(6)]
+  arm_dof_idx = [robot.get_joint(name).dofs_idx_local[0] for name in runtime.arm.joint_names]
   gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]
 
   link6 = ik_link.get_pos()[0].cpu().tolist()
@@ -299,25 +295,26 @@ def _world_down_quat() -> torch.Tensor:
 
 
 def _setup_robot(robot, scene):
-  ik_link = robot.get_link("link6")
+  runtime = get_robot_runtime_profile("xarm6")
+  ik_link = robot.get_link(runtime.arm.ee_link)
   left_finger = robot.get_link("left_finger")
   right_finger = robot.get_link("right_finger")
 
-  arm_dof_idx = [robot.get_joint(f"joint{i + 1}").dofs_idx_local[0] for i in range(6)]
+  arm_dof_idx = [robot.get_joint(name).dofs_idx_local[0] for name in runtime.arm.joint_names]
   gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]
   all_gripper_dof_idx = [robot.get_joint(n).dofs_idx_local[0] for n in ALL_GRIPPER_JOINTS]
 
   robot.set_dofs_kp(
-    torch.tensor([3000, 3000, 2000, 2000, 1000, 1000], device=gs.device, dtype=gs.tc_float),
+    torch.tensor(runtime.arm.kp, device=gs.device, dtype=gs.tc_float),
     arm_dof_idx,
   )
   robot.set_dofs_kv(
-    torch.tensor([300, 300, 200, 200, 100, 100], device=gs.device, dtype=gs.tc_float),
+    torch.tensor(runtime.arm.kv, device=gs.device, dtype=gs.tc_float),
     arm_dof_idx,
   )
   robot.set_dofs_force_range(
-    torch.tensor([-50, -50, -32, -32, -32, -20], device=gs.device, dtype=gs.tc_float),
-    torch.tensor([50, 50, 32, 32, 32, 20], device=gs.device, dtype=gs.tc_float),
+    torch.tensor(runtime.arm.force_lower, device=gs.device, dtype=gs.tc_float),
+    torch.tensor(runtime.arm.force_upper, device=gs.device, dtype=gs.tc_float),
     arm_dof_idx,
   )
   robot.set_dofs_kp(torch.tensor([30.0], device=gs.device, dtype=gs.tc_float), gripper_dof_idx)
@@ -897,14 +894,13 @@ def run_pick_place_cycle(
 
 def _capture_keyframes_interactive(scene, robot, block, layout, speed: float, ctx: ShowcaseRobotCtx) -> None:
   """Capture startup keyframes using the interactive viewer camera."""
-  out_dir = EXAMPLES_ROOT.parent / "debug" / "showcase_keyframes"
+  out_dir = Path(__file__).resolve().parents[2] / "debug" / "showcase_keyframes"
   out_dir.mkdir(parents=True, exist_ok=True)
   print(f"\nCapturing keyframes to {out_dir} (viewer open; inspect then Ctrl+C)")
 
   hold_robot_home(robot, scene, ctx, steps=_scale_steps(SETTLE_STEPS, speed))
   run_pick_place_cycle(scene, robot, block, layout, speed=speed, ctx=ctx, stop_after_phase0=True)
-  print(f"\nKeyframe workflow complete. For headless PNGs run:\n"
-        f"  python scripts/capture_showcase_keyframes.py")
+  print("\nKeyframe workflow complete.")
 
 
 def main() -> None:

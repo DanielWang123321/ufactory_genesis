@@ -4,12 +4,14 @@ __pycache__/
 .pytest_cache/
 .claude/
 .cursor/
+.kilo
 experience/
 logs/
 debug/
 data/
 dev/
 outputs/
+reports/
 assets/urdf/*/kinematics/user/*.yaml
 assets/urdf/*/*_calib.urdf
 *.patch
@@ -23,9 +25,9 @@ scripts/capture_*.py
 examples/xarm6/check_collision_mesh.py
 examples/xarm6/run_fk_alignment_cycle.py
 examples/xarm6/xarm6_grasp_place_diag.py
-.qoder
 .codex
 .agents
 .cache
 .venv
 uv.lock
+worklog.md

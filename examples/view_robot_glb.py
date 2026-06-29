@@ -3,16 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-EXAMPLES_ROOT = Path(__file__).resolve().parent
-if str(EXAMPLES_ROOT) not in sys.path:
-  sys.path.insert(0, str(EXAMPLES_ROOT))
-
-from _robot_viewer import run_glb_viewer
+from _robot_viewer import run_glb_diagnose, run_glb_viewer
 from ufactory.paths import robot_visual_glb_urdf
 from ufactory.robot_registry import get_robot_profile, robot_cli_choices
 
@@ -51,10 +45,11 @@ def main() -> None:
     help="Cycle gripper open/close (requires --movable with a gripper flag)",
   )
   parser.add_argument("--headless", action="store_true")
+  parser.add_argument("--diagnose", action="store_true", help="Headless STL/GLB link-pose diagnostic")
   parser.add_argument(
     "--pd",
     action="store_true",
-    help="Joint motion demo (smooth 50 deg/s waypoints; visual only, not stiff PD)",
+    help="Joint motion demo (smooth ~0.873 rad/s waypoints; visual only, not stiff PD)",
   )
   parser.add_argument(
     "--show-tcp",
@@ -84,6 +79,10 @@ def main() -> None:
     parser.error(f"{args.robot} does not support Lite6 Gripper")
   if args.lite6_vacuum_gripper and not profile.supports_lite6_vacuum_gripper:
     parser.error(f"{args.robot} does not support Lite6 Vacuum Gripper")
+
+  if args.diagnose:
+    run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2)
+    return
 
   urdf_path = robot_visual_glb_urdf(
     args.robot,

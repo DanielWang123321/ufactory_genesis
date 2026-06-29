@@ -39,6 +39,14 @@ python examples/view_robot_glb.py --robot xarm6
 | `verify_robot.py` | 通用 FK/PD 冒烟测试（所有机型） |
 | `fk_verify_robot.py` | 通用 FK 验证（可与真机对比） |
 | `ik_verify_robot.py` | 通用 IK 验证（可与真机对比） |
+| `packaging_showcase.py` | 通用展示场景入口（当前支持 xArm6 + Gripper G2） |
+
+动力学验证使用安装后的 console scripts：
+
+```bash
+dynamics-sim-check --robot xarm6 --random-count 5
+dynamics-hardware-check --robot xarm6 --ip <ip>
+```
 
 ## xArm 6 — 参考实现
 
@@ -49,9 +57,8 @@ xArm 6 拥有最完整的示例覆盖：
 |------|------|
 | `xarm6/verify_xarm6.py` | FK + PD 冒烟测试 |
 | `xarm6/verify_xarm6_dynamics.py` | 动力学验证 |
-| `xarm6/fk_verify.py` | FK 与真机 SDK 对比 |
-| `xarm6/ik_verify.py` | IK 与真机 SDK 对比 |
-| `xarm6/run_fk_alignment_cycle.py` | FK 对齐循环 |
+| `xarm6/fk_verify.py` | 兼容入口，等价于通用 FK 验证默认 `--robot xarm6` |
+| `xarm6/ik_verify.py` | 兼容入口，等价于通用 IK 验证默认 `--robot xarm6` |
 
 ### 强化学习
 | 文件 | 说明 |

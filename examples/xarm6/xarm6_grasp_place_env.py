@@ -17,12 +17,9 @@ import os
 
 import torch
 
-import _bootstrap  # noqa: F401
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
-from ufactory.paths import xarm6_urdf
-
-XARM6_GRIPPER_URDF = xarm6_urdf("xarm6_with_gripper.urdf")
+import _bootstrap  # noqa: F401
 
 
 class XArm6GraspPlaceEnv:
@@ -91,7 +88,7 @@ class XArm6GraspPlaceEnv:
         # Robot (xArm6 + gripper), base mounted at table height
         self.robot = self.scene.add_entity(
             gs.morphs.URDF(
-                file=XARM6_GRIPPER_URDF,
+                file=robot_cfg["urdf_path"],
                 pos=(0.0, 0.0, self.table_height),
                 fixed=True,
                 requires_jac_and_IK=True,

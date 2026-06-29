@@ -1,6 +1,8 @@
-import subprocess, sys
-from pathlib import Path
+import sys
+
 import _bootstrap  # noqa: F401
+from verify_robot import main
+
 if __name__ == "__main__":
-  s = Path(__file__).resolve().parents[1] / "verify_robot.py"
-  raise SystemExit(subprocess.call([sys.executable, str(s), "--robot", "xarm7", *sys.argv[1:]]))
+  sys.argv = [sys.argv[0], "--robot", "xarm7", *sys.argv[1:]]
+  main()

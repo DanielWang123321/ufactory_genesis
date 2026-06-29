@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.1.4"
+version = "0.1.5"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -30,6 +30,17 @@ classifiers = [
 Homepage = "https://github.com/DanielWang123321/ufactory_genesis"
 Repository = "https://github.com/DanielWang123321/ufactory_genesis"
 Issues = "https://github.com/DanielWang123321/ufactory_genesis/issues"
+
+[project.optional-dependencies]
+dynamics = [
+    "pin>=3.0.0",
+]
+
+[project.scripts]
+dynamics-sim-check = "ufactory.dynamics_validation:cli_sim_check"
+dynamics-sim-collision-check = "ufactory.dynamics_validation:cli_sim_collision_check"
+dynamics-hardware-check = "ufactory.dynamics_validation:cli_hardware_check"
+dynamics-report-compare = "ufactory.dynamics_validation:cli_report_compare"
 
 # NOTE: This project is designed for editable install (pip install -e .).
 # Assets (URDF, STL, GLB) live outside the Python package in assets/ and

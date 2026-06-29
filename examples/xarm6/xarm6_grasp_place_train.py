@@ -38,6 +38,8 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
+from ufactory.paths import robot_urdf
+from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from xarm6_grasp_place_env import XArm6GraspPlaceEnv
@@ -87,24 +89,11 @@ def get_train_cfg(exp_name, max_iterations):
     }
 
 
-def get_task_cfgs():
-    env_cfg = {
-        "num_envs": 10,
-        "num_obs": 22,
-        "num_actions": 4,  # delta_pos(3) + gripper(1)
-        "action_scales": [0.05, 0.05, 0.05, 1.0],
-        "episode_length_s": 10.0,
-        "ctrl_dt": 0.02,
-        "table_height": 0.4,
-        "obj_size": [0.04, 0.04, 0.04],
-        # Object spawn bounds (front half of table, closer to robot)
-        "obj_spawn_lower": [0.28, -0.05, 0.0],
-        "obj_spawn_upper": [0.32, 0.05, 0.0],
-        # Target placement bounds (back half of table, separated from object)
-        "target_spawn_lower": [0.40, -0.10, 0.0],
-        "target_spawn_upper": [0.55, 0.10, 0.0],
-        "substeps": 4,
-    }
+def get_task_cfgs(robot: str = "xarm6"):
+    runtime = get_robot_runtime_profile(robot)
+    if not runtime.task.grasp_place_supported or runtime.gripper_g2 is None:
+        raise ValueError(f"{runtime.model.key} has no grasp-place task profile")
+    env_cfg = {"num_envs": 10, **runtime.task.grasp_place_env_defaults}
     reward_cfg = {
         "reach": 4.0,
         "align": 3.0,
@@ -117,31 +106,26 @@ def get_task_cfgs():
         "action_penalty": 0.0005,
         "table_collision": 5.0,
     }
+    gripper = runtime.gripper_g2
     robot_cfg = {
-        "ik_link_name": "link6",
-        "gripper_link_names": ["left_finger", "right_finger"],
-        "arm_joint_names": [
-            "joint1", "joint2", "joint3",
-            "joint4", "joint5", "joint6",
-        ],
-        "gripper_joint_name": "drive_joint",
-        "default_qpos": [0.0, -0.5, 0.0, 0.0, 0.5, 0.0],
-        "default_gripper_pos": 0.0,  # start with gripper open
-        "kp": [3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0],
-        "kv": [300.0, 300.0, 200.0, 200.0, 100.0, 100.0],
-        "force_lower": [-50.0, -50.0, -32.0, -32.0, -32.0, -20.0],
-        "force_upper": [50.0, 50.0, 32.0, 32.0, 32.0, 20.0],
-        "gripper_kp": 20.0,
-        "gripper_kv": 5.0,
-        "gripper_force_lower": -5.0,
-        "gripper_force_upper": 5.0,
-        "all_gripper_joint_names": [
-            "drive_joint",
-            "left_finger_joint", "left_inner_knuckle_joint",
-            "right_outer_knuckle_joint", "right_finger_joint", "right_inner_knuckle_joint",
-        ],
-        "gripper_damping": 0.1,
-        "gripper_frictionloss": 0.0,
+        "urdf_path": robot_urdf(runtime.model.key, "xarm6_with_gripper.urdf"),
+        "ik_link_name": runtime.arm.ee_link,
+        "gripper_link_names": list(gripper.finger_link_names),
+        "arm_joint_names": list(runtime.arm.joint_names),
+        "gripper_joint_name": gripper.drive_joint,
+        "default_qpos": list(runtime.arm.default_qpos),
+        "default_gripper_pos": gripper.open_pos,
+        "kp": list(runtime.arm.kp),
+        "kv": list(runtime.arm.kv),
+        "force_lower": list(runtime.arm.force_lower),
+        "force_upper": list(runtime.arm.force_upper),
+        "gripper_kp": gripper.kp,
+        "gripper_kv": gripper.kv,
+        "gripper_force_lower": gripper.force_lower,
+        "gripper_force_upper": gripper.force_upper,
+        "all_gripper_joint_names": list(gripper.all_joint_names),
+        "gripper_damping": gripper.damping,
+        "gripper_frictionloss": gripper.frictionloss,
         "collision_monitor_links": ["link3", "link4", "link5"],
     }
     return env_cfg, reward_cfg, robot_cfg
@@ -149,6 +133,7 @@ def get_task_cfgs():
 
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Grasp-Place RL Training")
+    parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
     parser.add_argument("-e", "--exp_name", type=str, default="xarm6-grasp-place")
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-B", "--num_envs", type=int, default=2048)
@@ -156,7 +141,7 @@ def main():
     args = parser.parse_args()
 
     # === Configs ===
-    env_cfg, reward_cfg, robot_cfg = get_task_cfgs()
+    env_cfg, reward_cfg, robot_cfg = get_task_cfgs(args.robot)
     train_cfg = get_train_cfg(args.exp_name, args.max_iterations)
 
     # === Log dir ===

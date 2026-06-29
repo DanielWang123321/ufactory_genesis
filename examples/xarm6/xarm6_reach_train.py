@@ -37,6 +37,8 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
+from ufactory.paths import robot_urdf
+from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
 
 # Allow importing from same directory
 import sys
@@ -89,40 +91,29 @@ def get_train_cfg(exp_name, max_iterations):
     }
 
 
-def get_task_cfgs():
-    env_cfg = {
-        "num_envs": 10,  # overridden by CLI -B
-        "num_obs": 18,  # joint_pos(6) + joint_vel(6) + ee_pos(3) + target_rel(3)
-        "num_actions": 6,  # delta joint positions
-        "action_scale": 0.05,  # radians per action unit
-        "episode_length_s": 5.0,
-        "ctrl_dt": 0.02,
-        # Workspace bounds for target sampling (meters, in robot base frame)
-        "target_pos_lower": [0.15, -0.3, 0.05],
-        "target_pos_upper": [0.55, 0.3, 0.50],
-    }
+def get_task_cfgs(robot: str = "xarm6"):
+    runtime = get_robot_runtime_profile(robot)
+    env_cfg = {"num_envs": 10, **runtime.task.reach_env_defaults}
     reward_cfg = {
         "reach": 1.0,
         "action_penalty": 0.001,
     }
     robot_cfg = {
-        "ee_link_name": "link6",
-        "joint_names": [
-            "joint1", "joint2", "joint3",
-            "joint4", "joint5", "joint6",
-        ],
-        "default_qpos": [0.0, -0.5, 0.0, 0.0, 0.5, 0.0],
-        # PD gains (initial estimates based on torque limits)
-        "kp": [3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0],
-        "kv": [300.0, 300.0, 200.0, 200.0, 100.0, 100.0],
-        "force_lower": [-50.0, -50.0, -32.0, -32.0, -32.0, -20.0],
-        "force_upper": [50.0, 50.0, 32.0, 32.0, 32.0, 20.0],
+        "urdf_path": robot_urdf(runtime.model.key),
+        "ee_link_name": runtime.arm.ee_link,
+        "joint_names": list(runtime.arm.joint_names),
+        "default_qpos": list(runtime.arm.default_qpos),
+        "kp": list(runtime.arm.kp),
+        "kv": list(runtime.arm.kv),
+        "force_lower": list(runtime.arm.force_lower),
+        "force_upper": list(runtime.arm.force_upper),
     }
     return env_cfg, reward_cfg, robot_cfg
 
 
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Reach Task RL Training")
+    parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
     parser.add_argument("-e", "--exp_name", type=str, default="xarm6-reach")
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-B", "--num_envs", type=int, default=2048)
@@ -130,7 +121,7 @@ def main():
     args = parser.parse_args()
 
     # === Configs ===
-    env_cfg, reward_cfg, robot_cfg = get_task_cfgs()
+    env_cfg, reward_cfg, robot_cfg = get_task_cfgs(args.robot)
     train_cfg = get_train_cfg(args.exp_name, args.max_iterations)
 
     # === Log dir ===
