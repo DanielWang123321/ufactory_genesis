@@ -14,6 +14,7 @@ from ufactory.kinematics import (
     get_robot_sn,
     log_kinematics_sn_status,
     prepare_robot_model_for_verification,
+    resolve_kinematics_suffix,
     validate_kinematics_calibration_request,
 )
 from ufactory.paths import robot_urdf
@@ -111,17 +112,29 @@ def _connect_sdk(ip: str):
 def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, str, str | None]:
     arm = _connect_sdk(args.ip)
     sn = get_robot_sn(arm)
+    cli_suffix = args.kinematics_suffix
+    resolved_suffix = resolve_kinematics_suffix(
+        kinematics_suffix=cli_suffix,
+        kinematics_yaml=args.kinematics_yaml,
+        sn=sn,
+        robot_name=runtime.model.robot_name,
+    )
+    if resolved_suffix and not cli_suffix and args.kinematics_yaml is None:
+        print(f"kinematics_suffix: {resolved_suffix} (auto from SN {sn})")
+    args.kinematics_suffix = resolved_suffix
     validate_kinematics_calibration_request(
         sn,
         runtime.model.robot_name,
         kinematics_yaml=args.kinematics_yaml,
         kinematics_suffix=args.kinematics_suffix,
+        allow_sn_override=getattr(args, "force_kinematics", False),
     )
     log_kinematics_sn_status(
         sn,
         runtime.model.robot_name,
         kinematics_yaml=args.kinematics_yaml,
         kinematics_suffix=args.kinematics_suffix,
+        allow_sn_override=getattr(args, "force_kinematics", False),
     )
     arm.motion_enable(enable=True)
     arm.set_mode(0)
@@ -156,11 +169,12 @@ def run_fk_validation(args) -> int:
         code, pose = arm.get_forward_kinematics(q.tolist(), input_is_radian=True, return_is_radian=True)
         if code != 0:
             raise RuntimeError(f"SDK FK failed for {name}: code={code}")
-        sdk_pos = np.asarray(pose[:3], dtype=np.float64)
+        sdk_pos_mm = np.asarray(pose[:3], dtype=np.float64)
         sdk_rpy = np.asarray(pose[3:6], dtype=np.float64)
         g_pos, g_quat = genesis_fk(robot, q, int(ee_link.idx_local))
+        g_pos_mm = np.asarray(g_pos, dtype=np.float64) * 1000.0
         g_rpy = np.asarray(quat_to_rpy(g_quat), dtype=np.float64)
-        pos_mm = float(np.linalg.norm((g_pos - sdk_pos) * 1000.0))
+        pos_mm = float(np.linalg.norm(g_pos_mm - sdk_pos_mm))
         rpy_deg = max(angle_diff_deg(a, b) for a, b in zip(g_rpy, sdk_rpy))
         ok = pos_mm < PASS_POS_MM and rpy_deg < PASS_RPY_DEG
         print(f"{'PASS' if ok else 'FAIL'} {name}: pos={pos_mm:.2f}mm rpy={rpy_deg:.2f}deg")
@@ -194,8 +208,9 @@ def run_ik_validation(args) -> int:
         if code != 0:
             print(f"SKIP ik_{i}: SDK FK code={code}")
             continue
-        target_pos = np.asarray(pose[:3], dtype=np.float64)
+        target_pos_mm = np.asarray(pose[:3], dtype=np.float64)
         target_rpy = np.asarray(pose[3:6], dtype=np.float64)
+        target_pos = target_pos_mm / 1000.0
         target_quat = np.asarray(rpy_to_quat(*target_rpy), dtype=np.float64)
         init_q = torch.tensor(q_seed, dtype=torch.float32, device=gs.device)
         result = robot.inverse_kinematics(
@@ -218,7 +233,7 @@ def run_ik_validation(args) -> int:
             print(f"FAIL ik_{i}: SDK FK(solution) code={code2}")
             failed += 1
             continue
-        pos_mm = float(np.linalg.norm((np.asarray(pose2[:3]) - target_pos) * 1000.0))
+        pos_mm = float(np.linalg.norm(np.asarray(pose2[:3], dtype=np.float64) - target_pos_mm))
         rpy_deg = max(angle_diff_deg(a, b) for a, b in zip(pose2[3:6], target_rpy))
         ok = pos_mm < PASS_POS_MM and rpy_deg < PASS_RPY_DEG
         print(f"{'PASS' if ok else 'FAIL'} ik_{i}: pos={pos_mm:.2f}mm rpy={rpy_deg:.2f}deg")
@@ -239,6 +254,11 @@ def _add_common_args(parser: argparse.ArgumentParser, *, default_robot: str, req
     parser.add_argument("--kinematics-suffix", default=None)
     parser.add_argument("--kinematics-yaml", default=None)
     parser.add_argument("--kinematics-yaml-dir", default=None)
+    parser.add_argument(
+        "--force-kinematics",
+        action="store_true",
+        help="Use kinematics YAML/suffix even when SN rules out factory compensation",
+    )
     parser.add_argument("--backend", choices=("cpu", "gpu"), default="cpu")
     parser.add_argument("-v", "--vis", action="store_true")
 

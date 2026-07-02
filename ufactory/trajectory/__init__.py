@@ -1,0 +1,111 @@
+"""Time-parameterized trajectory planning pipeline for xArm6 grasp-place.
+
+Provides a firmware-aligned (LSPB / trapezoidal) trajectory kernel that is
+replayed identically in Genesis (PD) and on the real xArm (MODE_SERVO),
+giving sim-to-real alignment by construction (same absolute target stream per
+tick). The runtime profile/segment kernel is pure NumPy; heavy simulation and
+real-robot executors are imported lazily.
+
+Public surface
+---------------
+* :func:`build_pickplace_program`
+* :func:`replay_sim`
+* :func:`replay_real`
+* :class:`Program`, :class:`Segment`, :class:`JointLimits`
+* :class:`RealExecutorConfig`, :class:`ServoLimits`, :class:`ServoStreamStats`
+"""
+
+from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
+
+__all__ = [
+    "build_pickplace_program",
+    "replay_sim",
+    "replay_real",
+    "TrajKinematicMirror",
+    "KinematicCarryTracker",
+    "Program",
+    "Segment",
+    "JointLimits",
+    "SimReport",
+    "PhaseStatus",
+    "RealExecutorConfig",
+    "ServoLimits",
+    "ServoStreamStats",
+    "TrajectorySafetyError",
+    "EXECUTOR_SERVO_J",
+    "EXECUTOR_SERVO_CART",
+    "REAL_EXECUTORS",
+    "compute_servo_stream_stats",
+    "validate_servo_stream",
+    "check_segment_safety",
+    "make_movej",
+    "make_movel",
+    "make_gripper",
+    "joint_lspb_samples",
+    "linear_cartesian_samples",
+    "gap_lspb_samples",
+    "lspb_duration",
+    "joint_limits",
+    "linear_limits_from_joint",
+    "profile",
+    "segments",
+    "sim_executor",
+    "real_executor",
+    "mirror_executor",
+]
+
+_LAZY_ATTRS = {
+    # profile.py: pure NumPy, no Genesis import.
+    "joint_lspb_samples": ("ufactory.trajectory.profile", "joint_lspb_samples"),
+    "linear_cartesian_samples": ("ufactory.trajectory.profile", "linear_cartesian_samples"),
+    "gap_lspb_samples": ("ufactory.trajectory.profile", "gap_lspb_samples"),
+    "lspb_duration": ("ufactory.trajectory.profile", "lspb_duration"),
+    "joint_limits": ("ufactory.trajectory.profile", "joint_limits"),
+    "linear_limits_from_joint": ("ufactory.trajectory.profile", "linear_limits_from_joint"),
+    # segments.py: pure NumPy program assembly.
+    "JointLimits": ("ufactory.trajectory.segments", "JointLimits"),
+    "Program": ("ufactory.trajectory.segments", "Program"),
+    "Segment": ("ufactory.trajectory.segments", "Segment"),
+    "build_pickplace_program": ("ufactory.trajectory.segments", "build_pickplace_program"),
+    "make_movej": ("ufactory.trajectory.segments", "make_movej"),
+    "make_movel": ("ufactory.trajectory.segments", "make_movel"),
+    "make_gripper": ("ufactory.trajectory.segments", "make_gripper"),
+    # sim_executor.py: imports Genesis.
+    "SimReport": ("ufactory.trajectory.sim_executor", "SimReport"),
+    "PhaseStatus": ("ufactory.trajectory.sim_executor", "PhaseStatus"),
+    "replay_sim": ("ufactory.trajectory.sim_executor", "replay_sim"),
+    # real_executor.py: imports real-robot helpers and optional SDK only on connect.
+    "EXECUTOR_SERVO_CART": ("ufactory.trajectory.real_executor", "EXECUTOR_SERVO_CART"),
+    "EXECUTOR_SERVO_J": ("ufactory.trajectory.real_executor", "EXECUTOR_SERVO_J"),
+    "REAL_EXECUTORS": ("ufactory.trajectory.real_executor", "REAL_EXECUTORS"),
+    "RealExecutorConfig": ("ufactory.trajectory.real_executor", "RealExecutorConfig"),
+    "ServoLimits": ("ufactory.trajectory.real_executor", "ServoLimits"),
+    "ServoStreamStats": ("ufactory.trajectory.real_executor", "ServoStreamStats"),
+    "TrajectorySafetyError": ("ufactory.trajectory.real_executor", "TrajectorySafetyError"),
+    "compute_servo_stream_stats": ("ufactory.trajectory.real_executor", "compute_servo_stream_stats"),
+    "validate_servo_stream": ("ufactory.trajectory.real_executor", "validate_servo_stream"),
+    "check_segment_safety": ("ufactory.trajectory.real_executor", "check_segment_safety"),
+    "replay_real": ("ufactory.trajectory.real_executor", "replay_real"),
+    "TrajKinematicMirror": ("ufactory.trajectory.mirror_executor", "TrajKinematicMirror"),
+    "KinematicCarryTracker": ("ufactory.trajectory.mirror_executor", "KinematicCarryTracker"),
+    # Submodules for ``from ufactory.trajectory import profile`` compatibility.
+    "profile": ("ufactory.trajectory.profile", None),
+    "segments": ("ufactory.trajectory.segments", None),
+    "sim_executor": ("ufactory.trajectory.sim_executor", None),
+    "real_executor": ("ufactory.trajectory.real_executor", None),
+    "mirror_executor": ("ufactory.trajectory.mirror_executor", None),
+}
+
+
+def __getattr__(name: str) -> Any:
+    target = _LAZY_ATTRS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr_name = target
+    module = import_module(module_name)
+    value = module if attr_name is None else getattr(module, attr_name)
+    globals()[name] = value
+    return value

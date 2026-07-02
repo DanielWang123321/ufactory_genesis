@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.1.3-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.1.6-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -36,6 +36,11 @@ pip install "genesis-world>=1.2.0"
 # 2. Install ufactory_genesis
 pip install -r requirements.txt
 pip install -e .
+
+# Optional extras:
+#   pip install -e ".[real]"      # xArm SDK / real robot commands
+#   pip install -e ".[rl]"        # RL training/evaluation examples
+#   pip install -e ".[showcase]"  # packaging showcase scipy dependency
 
 export NUMBA_CACHE_DIR=~/.cache/numba
 
@@ -213,11 +218,11 @@ Per-unit firmware calibration eligibility (SN positions 3–6, four-digit model 
 Example SN: `XI130506D43A0A` → model code `1305` (xArm6, calibration required).
 
 ```bash
-python scripts/gen_kinematics_params.py <ip> <suffix>   # skips old SNs automatically
-python examples/fk_verify_robot.py --robot xarm6 --ip <ip> --kinematics-suffix <suffix>
-python examples/ik_verify_robot.py --robot lite6 --ip <ip> --kinematics-suffix <suffix>
+python scripts/gen_kinematics_params.py <ip>   # suffix defaults to last 6 SN chars; skips old SNs
+python examples/fk_verify_robot.py --robot xarm6 --ip <ip>
+python examples/ik_verify_robot.py --robot lite6 --ip <ip>
 dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-hardware-check --robot xarm6 --ip <ip> --kinematics-suffix <suffix>
+dynamics-hardware-check --robot xarm6 --ip <ip>
 dynamics-sim-collision-check --ip <ip>   # simulation-mode chained self-collision pre-check
 ```
 
@@ -230,10 +235,11 @@ xArm 6 is the reference robot in this repo, with compatibility wrappers under `e
 ```
 ufactory/             # Core Python package (robot registry, paths, kinematics, GLB)
 assets/urdf/          # Robot URDFs, STL collision, GLB visual meshes
+assets/configs/       # Runtime YAML configs (dynamics validation poses, etc.)
 assets/scenes/        # Simulation scene assets (textures, props)
 examples/             # Usage examples (viewer, FK/IK, RL)
-scripts/              # Asset generation and maintenance scripts
-tests/                # Pytest test suite
+scripts/              # User-facing helper scripts (calibration, textures, hold observe)
+tests/                # Contributor pytest suite (not end-user onboarding)
 ```
 
 ## Contributing

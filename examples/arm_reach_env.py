@@ -7,6 +7,7 @@ import math
 import torch
 
 import genesis as gs
+from ufactory.deploy.action_postprocess import effective_max_joint_delta_rad, reach_action_delta_torch
 
 
 class ArmReachEnv:
@@ -31,6 +32,14 @@ class ArmReachEnv:
         self.env_cfg = env_cfg
         self.reward_scales = reward_cfg.copy()
         self.action_scale = env_cfg["action_scale"]
+        self.action_clip = env_cfg.get("action_clip", 1.0)
+        self.max_joint_delta_rad = effective_max_joint_delta_rad(
+            action_scale=self.action_scale,
+            action_clip=self.action_clip,
+            ctrl_dt=self.ctrl_dt,
+            servo_speed_rad_s=env_cfg.get("servo_speed_rad_s"),
+            max_joint_delta_rad=env_cfg.get("max_joint_delta_rad"),
+        )
 
         self.scene = gs.Scene(
             sim_options=gs.options.SimOptions(dt=self.ctrl_dt, substeps=2),
@@ -122,7 +131,15 @@ class ArmReachEnv:
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         self.episode_length_buf += 1
         current_qpos = self.robot.get_dofs_position(self.dof_idx)
-        self.robot.control_dofs_position(current_qpos + actions * self.action_scale, self.dof_idx)
+        if actions.shape != current_qpos.shape:
+            raise ValueError(f"Action shape {tuple(actions.shape)} does not match qpos shape {tuple(current_qpos.shape)}")
+        joint_delta = reach_action_delta_torch(
+            actions,
+            action_scale=self.action_scale,
+            action_clip=self.action_clip,
+            max_joint_delta_rad=self.max_joint_delta_rad,
+        )
+        self.robot.control_dofs_position(current_qpos + joint_delta, self.dof_idx)
         self.scene.step()
 
         self.reset_buf = self.episode_length_buf > self.max_episode_length
@@ -161,4 +178,3 @@ class ArmReachEnv:
     def _reward_action_penalty(self) -> torch.Tensor:
         joint_vel = self.robot.get_dofs_velocity(self.dof_idx)
         return -torch.sum(joint_vel**2, dim=-1)
-

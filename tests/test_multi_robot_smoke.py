@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
 NUMBA_CACHE_DIR = os.path.expanduser("~/.cache/numba")

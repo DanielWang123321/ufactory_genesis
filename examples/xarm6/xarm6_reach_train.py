@@ -37,6 +37,7 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
+from ufactory.deploy.reach_config import EXECUTOR_ONLINE_JOINT, EXECUTOR_SERVO_J, REACH_EXECUTORS
 from ufactory.paths import robot_urdf
 from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
 
@@ -91,9 +92,22 @@ def get_train_cfg(exp_name, max_iterations):
     }
 
 
-def get_task_cfgs(robot: str = "xarm6"):
+def _apply_executor_action_contract(env_cfg: dict, executor: str) -> None:
+    env_cfg["executor"] = executor
+    if executor == EXECUTOR_ONLINE_JOINT:
+        env_cfg.pop("servo_speed_rad_s", None)
+        env_cfg["max_joint_delta_rad"] = abs(float(env_cfg["action_scale"])) * abs(float(env_cfg.get("action_clip", 1.0)))
+        return
+    if executor == EXECUTOR_SERVO_J:
+        env_cfg.pop("max_joint_delta_rad", None)
+        return
+    raise ValueError(f"Unknown reach executor: {executor}")
+
+
+def get_task_cfgs(robot: str = "xarm6", executor: str = EXECUTOR_SERVO_J):
     runtime = get_robot_runtime_profile(robot)
     env_cfg = {"num_envs": 10, **runtime.task.reach_env_defaults}
+    _apply_executor_action_contract(env_cfg, executor)
     reward_cfg = {
         "reach": 1.0,
         "action_penalty": 0.001,
@@ -118,10 +132,17 @@ def main():
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-B", "--num_envs", type=int, default=2048)
     parser.add_argument("--max_iterations", type=int, default=300)
+    parser.add_argument(
+        "--executor",
+        choices=REACH_EXECUTORS,
+        default=EXECUTOR_SERVO_J,
+        help="Action contract to train against; online-joint uses the full policy delta limit",
+    )
     args = parser.parse_args()
 
     # === Configs ===
-    env_cfg, reward_cfg, robot_cfg = get_task_cfgs(args.robot)
+    env_cfg, reward_cfg, robot_cfg = get_task_cfgs(args.robot, executor=args.executor)
+    env_cfg["num_envs"] = args.num_envs
     train_cfg = get_train_cfg(args.exp_name, args.max_iterations)
 
     # === Log dir ===
@@ -142,7 +163,6 @@ def main():
     )
 
     # === Create environment ===
-    env_cfg["num_envs"] = args.num_envs
     env = XArm6ReachEnv(
         env_cfg=env_cfg,
         reward_cfg=reward_cfg,

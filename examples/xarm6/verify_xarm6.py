@@ -19,7 +19,7 @@ import torch
 
 import _bootstrap  # noqa: F401
 import genesis as gs
-from ufactory.kinematics import prepare_robot_model_for_verification
+from ufactory.kinematics import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
 
 # Joint/link names (URDF style, with fallback for namespaced names)
 JOINT_NAMES = (
@@ -530,6 +530,17 @@ def main():
         help="Skip real-robot IK comparison and only run pure Genesis tests.",
     )
     args = parser.parse_args()
+
+    if args.real_ip and args.kinematics_yaml is None:
+        cli_suffix = args.kinematics_suffix
+        suffix, sn = resolve_kinematics_suffix_from_ip(
+            args.real_ip,
+            "xarm6",
+            kinematics_suffix=cli_suffix,
+        )
+        args.kinematics_suffix = suffix
+        if suffix and not cli_suffix:
+            print(f"kinematics_suffix: {suffix} (auto from SN {sn})")
 
     robot_model, _ = prepare_robot_model_for_verification(
         args.robot_model,

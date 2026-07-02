@@ -11,6 +11,7 @@ import pytest
 from ufactory.real_robot_session import (
     MOVE_STRATEGY_AXIS_SEQUENTIAL,
     MOVE_STRATEGY_DIRECT,
+    HoldTimeSeriesSample,
     RealRobotSession,
     RobotMotionError,
     build_axis_sequential_waypoints,
@@ -160,3 +161,38 @@ def test_direct_move_default_speed_is_40_deg_s_equivalent(monkeypatch):
     session.move_to([0.1, 0.0, 0.0, 0.0, 0.0, 0.0])
 
     assert arm.set_servo_angle.call_args.kwargs["speed"] == DEFAULT_DYNAMICS_MOVE_SPEED_RAD_S
+
+
+def test_collect_hold_timeseries_records_current_and_tau(monkeypatch):
+    clock = {"t": 0.0}
+
+    def fake_monotonic():
+        return clock["t"]
+
+    def fake_sleep(dt):
+        clock["t"] += dt
+
+    monkeypatch.setattr("ufactory.real_robot_session.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("ufactory.real_robot_session.time.sleep", fake_sleep)
+    tick = {"n": 0}
+    arm = _make_mock_arm(np.zeros(6))
+
+    def get_joint_states(*, is_radian=True, num=3):
+        del is_radian, num
+        n = tick["n"]
+        tick["n"] += 1
+        tau = np.full(6, -10.0 - float(n), dtype=np.float64)
+        return 0, [np.zeros(6).tolist(), np.zeros(6).tolist(), tau.tolist()]
+
+    arm.get_joint_states.side_effect = get_joint_states
+    arm.currents = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.0]
+    arm.get_joints_torque.return_value = (0, np.zeros(6).tolist())
+    session = _make_session(arm)
+
+    samples = session.collect_hold_timeseries(duration_s=0.25, poll_s=0.1)
+
+    assert len(samples) == 4
+    assert isinstance(samples[0], HoldTimeSeriesSample)
+    assert samples[0].current.tolist() == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    assert samples[1].tau[0] == pytest.approx(-11.0)
+    assert samples[3].tau[0] == pytest.approx(-13.0)

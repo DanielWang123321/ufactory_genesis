@@ -34,6 +34,16 @@ SETTLE_POLL_S = 0.1
 
 
 @dataclass
+class HoldTimeSeriesSample:
+    t_s: float
+    q: np.ndarray
+    qvel: np.ndarray
+    tau: np.ndarray
+    current: np.ndarray
+    tau_direct: np.ndarray | None = None
+
+
+@dataclass
 class RealRobotSample:
     q: np.ndarray
     qvel: np.ndarray
@@ -217,6 +227,10 @@ class RealRobotSession:
             return None
         return np.asarray(tau[: self.dof], dtype=np.float64)
 
+    def get_joint_currents(self) -> np.ndarray:
+        """Read per-joint servo current from the SDK report stream."""
+        return np.asarray(self.arm.currents[: self.dof], dtype=np.float64)
+
     def wait_until_settled(
         self,
         *,
@@ -290,6 +304,52 @@ class RealRobotSession:
             temperature=None,
             runtime_s=None,
         )
+
+    def collect_hold_timeseries(
+        self,
+        *,
+        duration_s: float = 60.0,
+        poll_s: float = SETTLE_POLL_S,
+    ) -> list[HoldTimeSeriesSample]:
+        """Poll torque/current while holding position; ``t_s=0`` at first sample."""
+        start = time.monotonic()
+        deadline = start + max(0.0, duration_s)
+        samples: list[HoldTimeSeriesSample] = []
+        while True:
+            t_s = time.monotonic() - start
+            q, qvel, tau = self.get_joint_states()
+            current = self.get_joint_currents()
+            tau_direct = self.get_joints_torque()
+            samples.append(
+                HoldTimeSeriesSample(
+                    t_s=t_s,
+                    q=q,
+                    qvel=qvel,
+                    tau=tau,
+                    current=current,
+                    tau_direct=tau_direct,
+                )
+            )
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(poll_s)
+        return samples
+
+    def observe_at_hold(
+        self,
+        q: Sequence[float],
+        *,
+        speed_rad_s: float = DEFAULT_DYNAMICS_MOVE_SPEED_RAD_S,
+        move_strategy: str = MOVE_STRATEGY_DIRECT,
+        post_move_wait_s: float = 1.5,
+        duration_s: float = 60.0,
+        poll_s: float = SETTLE_POLL_S,
+    ) -> list[HoldTimeSeriesSample]:
+        """Move to ``q``, wait, settle, then record a hold time series."""
+        self.move_to(q, speed_rad_s=speed_rad_s, wait=True, move_strategy=move_strategy)
+        time.sleep(post_move_wait_s)
+        self.wait_until_settled(poll_s=poll_s)
+        return self.collect_hold_timeseries(duration_s=duration_s, poll_s=poll_s)
 
     def move_to(
         self,

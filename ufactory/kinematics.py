@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -16,6 +17,8 @@ DEFAULT_XARM6_URDF = xarm6_urdf()
 XARM_KINEMATICS_MIN_SN_MODEL_CODE = 1304  # xarm5/6/7: code < 1304 => no compensation
 LITE6_KINEMATICS_MIN_SN_MODEL_CODE = 1006  # lite6: code < 1006 => no compensation
 # UF850: all units have per-unit kinematics compensation in firmware
+
+DEFAULT_KINEMATICS_SUFFIX_ENV = "XARM_KINEMATICS_SUFFIX"
 
 
 def load_kinematics_yaml(
@@ -70,7 +73,7 @@ def find_kinematics_yaml(
   kinematics_yaml_dir: str | None = None,
   robot_name: str = "xarm6",
 ) -> Path:
-  """Find a kinematics yaml file from a suffix (e.g., xi1305 -> xarm6_kinematics_xi1305.yaml)."""
+  """Find a kinematics yaml file from a suffix (e.g., D43A0A -> xarm6_kinematics_D43A0A.yaml)."""
   suffix = (kinematics_suffix or "").strip()
   if not suffix:
     raise ValueError("kinematics_suffix is empty")
@@ -261,12 +264,88 @@ def get_robot_sn(arm) -> str:
   return str(fallback).strip() if fallback else ""
 
 
+def kinematics_suffix_from_sn(sn: str) -> str:
+  """Return default kinematics YAML suffix: last 6 characters of SN (case preserved)."""
+  normalized = (sn or "").strip()
+  if len(normalized) < 6:
+    raise ValueError(f"SN too short for kinematics suffix: {sn!r}")
+  return normalized[-6:]
+
+
+def resolve_kinematics_suffix(
+  *,
+  kinematics_suffix: str | None = None,
+  kinematics_yaml: str | None = None,
+  sn: str | None = None,
+  robot_name: str | None = None,
+  env_suffix: str | None = None,
+) -> str | None:
+  """Resolve kinematics suffix from CLI, env, or SN (when eligible)."""
+  if kinematics_yaml is not None:
+    explicit = (kinematics_suffix or "").strip() or None
+    return explicit
+
+  explicit = (kinematics_suffix or "").strip() or None
+  if explicit:
+    return explicit
+
+  env_value = (env_suffix if env_suffix is not None else os.environ.get(DEFAULT_KINEMATICS_SUFFIX_ENV) or "").strip()
+  if env_value:
+    return env_value
+
+  if sn and robot_name and has_per_unit_kinematics_calibration(sn, robot_name):
+    return kinematics_suffix_from_sn(sn)
+  return None
+
+
+def fetch_robot_sn_from_ip(ip: str) -> str:
+  """Connect briefly to the control box and read the robot SN."""
+  from xarm.wrapper import XArmAPI
+
+  arm = XArmAPI(ip, is_radian=True)
+  try:
+    connect = getattr(arm, "connect", None)
+    if connect is not None:
+      connect()
+    if not arm.connected:
+      raise RuntimeError(f"cannot connect to {ip}")
+    sn = get_robot_sn(arm)
+    if not sn:
+      raise RuntimeError(f"empty SN from {ip}")
+    return sn
+  finally:
+    disconnect = getattr(arm, "disconnect", None)
+    if disconnect is not None:
+      disconnect()
+
+
+def resolve_kinematics_suffix_from_ip(
+  ip: str,
+  robot_name: str,
+  *,
+  kinematics_suffix: str | None = None,
+  kinematics_yaml: str | None = None,
+  env_suffix: str | None = None,
+) -> tuple[str | None, str]:
+  """Resolve suffix using robot IP; returns ``(suffix, sn)``."""
+  sn = fetch_robot_sn_from_ip(ip)
+  suffix = resolve_kinematics_suffix(
+    kinematics_suffix=kinematics_suffix,
+    kinematics_yaml=kinematics_yaml,
+    sn=sn,
+    robot_name=robot_name,
+    env_suffix=env_suffix,
+  )
+  return suffix, sn
+
+
 def validate_kinematics_calibration_request(
   sn: str,
   robot_name: str,
   *,
   kinematics_yaml: str | None = None,
   kinematics_suffix: str | None = None,
+  allow_sn_override: bool = False,
 ) -> None:
   """Raise ValueError if calibration files are requested but SN rules them out."""
   wants_calib = kinematics_yaml is not None or kinematics_suffix is not None
@@ -279,9 +358,18 @@ def validate_kinematics_calibration_request(
     rule = f"Lite6 SN model code {code_str} < {LITE6_KINEMATICS_MIN_SN_MODEL_CODE}"
   else:
     rule = f"xArm SN model code {code_str} < {XARM_KINEMATICS_MIN_SN_MODEL_CODE}"
+
+  if allow_sn_override:
+    print(
+      f"[WARN] {rule}: SN rule overridden; using requested kinematics YAML/suffix anyway "
+      "(e.g. POE calibration written to firmware after factory)."
+    )
+    return
+
   raise ValueError(
     f"{rule}: this unit has no per-unit kinematics compensation in firmware. "
-    "Do not pass --kinematics-suffix/--kinematics-yaml; use the nominal URDF only."
+    "Do not pass --kinematics-suffix/--kinematics-yaml; use the nominal URDF only. "
+    "Pass --force / --force-kinematics to override after verifying exported YAML."
   )
 
 
@@ -291,6 +379,7 @@ def log_kinematics_sn_status(
   *,
   kinematics_yaml: str | None = None,
   kinematics_suffix: str | None = None,
+  allow_sn_override: bool = False,
 ) -> None:
   """Print SN / calibration eligibility and warn on likely misconfiguration."""
   model_code = parse_sn_model_code(sn)
@@ -313,6 +402,7 @@ def log_kinematics_sn_status(
         sn, robot_name,
         kinematics_yaml=kinematics_yaml,
         kinematics_suffix=kinematics_suffix,
+        allow_sn_override=allow_sn_override,
       )
   else:
     print(
@@ -322,5 +412,5 @@ def log_kinematics_sn_status(
     if not wants_calib:
       print(
         "[WARN] No --kinematics-suffix/--kinematics-yaml: URDF may not match "
-        "firmware calibration. Run: python scripts/gen_kinematics_params.py <ip> <suffix>"
+        "firmware calibration. Run: python scripts/gen_kinematics_params.py <ip>"
       )

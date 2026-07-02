@@ -116,7 +116,9 @@ from ufactory.dynamics_validation import (
 )
 
 from ufactory.xarm_control import (
+    MODE_CART_ONLINE_PLANNING,
     MODE_CART_VEL,
+    MODE_JOINT_ONLINE_PLANNING,
     MODE_JOINT_VEL,
     MODE_POSITION,
     MODE_SERVO,

@@ -5,6 +5,25 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] — 2026-07-02
+
+### Added
+
+- **Asset integrity tests**: public URDF mesh references must resolve, xArm6 1305 collision meshes must use collision OBJ files, and raw/source GLB intermediates must stay out of the public file set.
+- Optional dependency extras: `real` for xArm SDK, `rl` for rsl-rl training/evaluation, and `showcase` for the packaging showcase scipy dependency.
+
+### Changed
+
+- Public source tree slimmed for GitHub release: final GLB visual assets remain bundled, while raw/source GLBs and relocalize metrics are no longer part of the public surface.
+- Default `requirements.txt` now contains only baseline simulation/viewer dependencies; advanced real-robot and RL dependencies are opt-in extras.
+- xArm6 1305 URDF collision entries now reference `meshes/xarm6_1305/collision/*.obj` instead of reusing visual STL meshes.
+- Standalone Gripper G2 and Bio Gripper G2 URDFs now point to repository-local mesh paths so all public URDF mesh references resolve.
+
+### Removed
+
+- Public asset-regeneration scripts (`vendor_*`, `relocalize_*`, `generate_*_combo_urdf.py`, `verify_*_assets.py`) from `scripts/`; generated final URDF/GLB assets remain available.
+- `ufactory.dynamics_pose_selection`, `scripts/select_dynamics_calib_poses.py`, and their tests; default validation poses now live in `assets/configs/dynamics_validation_pose.yaml` and are loaded through `ufactory.dynamics.poses_config`.
+
 ## [0.1.5] — 2026-06-29
 
 ### Added
@@ -78,7 +97,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - Diagnostic and keyframe-capture scripts moved from `scripts/` and `examples/xarm6/` to `dev/diagnostics/` (gitignored)
-- Lerobot experimental code moved to `dev/lerobot/` (gitignored)
 
 ## [0.1.0] — 2026-06-18
 

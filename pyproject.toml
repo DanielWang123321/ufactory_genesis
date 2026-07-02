@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.1.5"
+version = "0.1.6"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -15,6 +15,10 @@ maintainers = [
     {name = "UFACTORY"},
 ]
 keywords = ["ufactory", "xarm", "genesis", "simulation", "robotics", "urdf", "robot-learning"]
+dependencies = [
+    "numpy",
+    "pyyaml",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -32,15 +36,37 @@ Repository = "https://github.com/DanielWang123321/ufactory_genesis"
 Issues = "https://github.com/DanielWang123321/ufactory_genesis/issues"
 
 [project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
 dynamics = [
+    "matplotlib>=3.8",
     "pin>=3.0.0",
+]
+real = [
+    "xarm-python-sdk",
+]
+rl = [
+    "rsl-rl-lib==2.2.4",
+    "tensorboard",
+]
+showcase = [
+    "scipy>=1.11",
+]
+# Optional trajectory-planning backend. The runtime trajectory kernel in
+# ``ufactory.trajectory.profile`` is a self-contained NumPy LSPB implementation
+# (it does not require this extra); installing it makes the reference
+# ``roboticstoolbox-python`` tooling available for richer analysis.
+trajectory = [
+    "roboticstoolbox-python",
 ]
 
 [project.scripts]
-dynamics-sim-check = "ufactory.dynamics_validation:cli_sim_check"
-dynamics-sim-collision-check = "ufactory.dynamics_validation:cli_sim_collision_check"
-dynamics-hardware-check = "ufactory.dynamics_validation:cli_hardware_check"
-dynamics-report-compare = "ufactory.dynamics_validation:cli_report_compare"
+dynamics-sim-check = "ufactory.dynamics.cli:cli_sim_check"
+dynamics-sim-collision-check = "ufactory.dynamics.cli:cli_sim_collision_check"
+dynamics-hardware-check = "ufactory.dynamics.cli:cli_hardware_check"
+dynamics-report-compare = "ufactory.dynamics.cli:cli_report_compare"
+observe-hold-current = "ufactory.dynamics.observe:cli_observe_hold_current"
 
 # NOTE: This project is designed for editable install (pip install -e .).
 # Assets (URDF, STL, GLB) live outside the Python package in assets/ and
@@ -52,7 +78,12 @@ where = ["."]
 include = ["ufactory*"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
 norecursedirs = ["dev"]
 markers = [
     "hardware: tests requiring xArm SDK or real robot network",
+    "gpu: in-process Genesis GPU simulation",
+    "integration: end-to-end subprocess smoke tests (examples, short RL runs)",
+    "display: subprocess tests requiring DISPLAY for visual dry-run",
 ]

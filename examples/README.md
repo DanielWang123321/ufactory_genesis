@@ -64,7 +64,13 @@ xArm 6 拥有最完整的示例覆盖：
 | 文件 | 说明 |
 |------|------|
 | `xarm6/xarm6_reach_env.py` / `_train.py` | Reach 任务环境与训练 |
+| `xarm6/xarm6_reach_deploy.py` | Reach 真机部署（align / smoke / replay / deploy） |
 | `xarm6/xarm6_grasp_place_env.py` / `_train.py` / `_eval.py` | Grasp-place 任务 |
+
+### 轨迹规划
+| 文件 | 说明 |
+|------|------|
+| `xarm6/xarm6_grasp_place_traj.py` | LSPB 轨迹规划抓取-放置；默认 sim；real 支持 dry-run / MODE_SERVO；`--visual` 在 real 路径下为运动学镜像 |
 
 ### 展示场景
 | 文件 | 说明 |

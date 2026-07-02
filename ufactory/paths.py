@@ -13,6 +13,10 @@ GRIPPER_G2_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "gripper_g2"
 LITE6_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper"
 LITE6_VACUUM_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper"
 
+ASSETS_CONFIGS_DIR = PROJECT_ROOT / "assets" / "configs"
+DYNAMICS_VALIDATION_POSES_YAML = ASSETS_CONFIGS_DIR / "dynamics_validation_pose.yaml"
+
+
 def _existing_path(path: Path) -> str:
   if not path.exists():
     raise FileNotFoundError(path)

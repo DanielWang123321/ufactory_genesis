@@ -14,6 +14,12 @@ outputs/
 reports/
 assets/urdf/*/kinematics/user/*.yaml
 assets/urdf/*/*_calib.urdf
+assets/urdf/**/visual_glb_raw/
+assets/urdf/**/visual_glb_src/
+assets/urdf/**/relocalize_metrics.json
+assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2.glb
+assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb
+assets/urdf/lite6_gripper/meshes/collision/gripper_lite.stl
 *.patch
 .DS_Store
 agents.md
@@ -22,6 +28,10 @@ scripts/generate_visual_grid.py
 scripts/diagnose_*.py
 scripts/analyze_gripper_assembly.py
 scripts/capture_*.py
+scripts/relocalize_*.py
+scripts/vendor_robot_assets.py
+scripts/generate_*_combo_urdf.py
+scripts/verify_*_assets.py
 examples/xarm6/check_collision_mesh.py
 examples/xarm6/run_fk_alignment_cycle.py
 examples/xarm6/xarm6_grasp_place_diag.py
@@ -31,3 +41,5 @@ examples/xarm6/xarm6_grasp_place_diag.py
 .venv
 uv.lock
 worklog.md
+dev_docs
+versions.md

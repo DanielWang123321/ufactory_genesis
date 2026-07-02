@@ -1,18 +1,4 @@
-"""
-xArm 6 Grasp-Place Task - RL Training Script using PPO (rsl-rl-lib).
-
-Usage:
-    source ~/envs/py312/bin/activate
-
-    # Smoke test (1 env, with viewer)
-    python examples/xarm6/xarm6_grasp_place_train.py -B 1 --max_iterations 5 -v
-
-    # Small-scale training
-    python examples/xarm6/xarm6_grasp_place_train.py -B 10 --max_iterations 50
-
-    # Full training (2048 parallel envs)
-    python examples/xarm6/xarm6_grasp_place_train.py -B 2048 --max_iterations 1000
-"""
+"""Train xArm6 + Gripper G2 grasp-place with PPO."""
 
 import argparse
 import os
@@ -105,10 +91,12 @@ def get_task_cfgs(robot: str = "xarm6"):
         "success": 10.0,
         "action_penalty": 0.0005,
         "table_collision": 5.0,
+        "workspace_violation": 2.0,
     }
     gripper = runtime.gripper_g2
     robot_cfg = {
         "urdf_path": robot_urdf(runtime.model.key, "xarm6_with_gripper.urdf"),
+        "base_pos": [0.0, 0.0, env_cfg["table_height"]],
         "ik_link_name": runtime.arm.ee_link,
         "gripper_link_names": list(gripper.finger_link_names),
         "arm_joint_names": list(runtime.arm.joint_names),
@@ -134,7 +122,7 @@ def get_task_cfgs(robot: str = "xarm6"):
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Grasp-Place RL Training")
     parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
-    parser.add_argument("-e", "--exp_name", type=str, default="xarm6-grasp-place")
+    parser.add_argument("-e", "--exp_name", type=str, default="xarm6-grasp-place-joint-g2")
     parser.add_argument("-v", "--vis", action="store_true", default=False)
     parser.add_argument("-B", "--num_envs", type=int, default=2048)
     parser.add_argument("--max_iterations", type=int, default=3000)
@@ -142,6 +130,7 @@ def main():
 
     # === Configs ===
     env_cfg, reward_cfg, robot_cfg = get_task_cfgs(args.robot)
+    env_cfg["num_envs"] = args.num_envs
     train_cfg = get_train_cfg(args.exp_name, args.max_iterations)
 
     # === Log dir ===
@@ -162,7 +151,6 @@ def main():
     )
 
     # === Create environment ===
-    env_cfg["num_envs"] = args.num_envs
     env = XArm6GraspPlaceEnv(
         env_cfg=env_cfg,
         reward_cfg=reward_cfg,
@@ -172,6 +160,7 @@ def main():
 
     # === CSV logging ===
     env.csv_log_path = str(log_dir / "metrics.csv")
+    env.write_metrics_snapshot()
 
     # === Train with PPO ===
     runner = OnPolicyRunner(env, train_cfg, str(log_dir), device=gs.device)

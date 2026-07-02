@@ -1,29 +1,11 @@
-"""
-xArm 6 Grasp-Place - Evaluation / Visualization Script.
-
-Load a trained checkpoint and visualize the policy in the Genesis viewer.
-
-Usage:
-    source ~/envs/py312/bin/activate
-
-    # Visualize latest checkpoint
-    python examples/xarm6/xarm6_grasp_place_eval.py
-
-    # Visualize specific checkpoint
-    python examples/xarm6/xarm6_grasp_place_eval.py --checkpoint logs/xarm6-grasp-place/model_2500.pt
-
-    # Multiple envs side by side
-    python examples/xarm6/xarm6_grasp_place_eval.py -B 4
-
-    # Headless evaluation when no display is available
-    python examples/xarm6/xarm6_grasp_place_eval.py --headless --episodes 1
-"""
+"""Evaluate an xArm6 + Gripper G2 grasp-place checkpoint."""
 
 import argparse
 import csv
 import os
 import pickle
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -109,11 +91,20 @@ def load_runner_checkpoint(runner: OnPolicyRunner, ckpt_path: Path, load_optimiz
     return loaded_dict.get("infos", {})
 
 
+def resolve_report_csv(report_csv: str | None) -> Path | None:
+    if not report_csv:
+        return None
+    if report_csv == "auto":
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return Path("reports") / f"grasp_place_eval_{stamp}.csv"
+    return Path(report_csv)
+
+
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Grasp-Place Evaluation")
     parser.add_argument(
         "--checkpoint", type=str, default=None,
-        help="Path to model checkpoint (.pt). Default: latest in logs/xarm6-grasp-place/",
+        help="Path to model checkpoint (.pt). Default: latest in the experiment log dir",
     )
     parser.add_argument(
         "-B", "--num_envs", type=int, default=1,
@@ -124,7 +115,7 @@ def main():
         help="Number of episodes to run (0 = infinite)",
     )
     parser.add_argument(
-        "-e", "--exp_name", type=str, default="xarm6-grasp-place",
+        "-e", "--exp_name", type=str, default="xarm6-grasp-place-joint-g2",
         help="Experiment name (for finding log dir)",
     )
     parser.add_argument(
@@ -134,6 +125,10 @@ def main():
     parser.add_argument(
         "--headless", action="store_true", default=False,
         help="Run evaluation without opening the Genesis viewer",
+    )
+    parser.add_argument(
+        "--report-csv", default=None,
+        help="Optional episode CSV path; use 'auto' for reports/grasp_place_eval_<timestamp>.csv",
     )
     args = parser.parse_args()
 
@@ -209,42 +204,91 @@ def main():
     episode_count = 0
     step_count = 0
     total_reward = torch.zeros(args.num_envs, device=gs.device)
+    episode_steps = torch.zeros(args.num_envs, dtype=torch.int32, device=gs.device)
     episode_rewards = []
 
     grasp_count = 0
+    lift_count = 0
     place_count = 0
+    success_count = 0
 
-    while True:
-        with torch.no_grad():
-            actions = policy(obs)
-        obs, reward, done, extras = env.step(actions)
-        total_reward += reward
-        step_count += 1
+    report_path = resolve_report_csv(args.report_csv)
+    report_file = None
+    report_writer = None
+    if report_path is not None:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_file = report_path.open("w", newline="")
+        report_writer = csv.DictWriter(
+            report_file,
+            fieldnames=[
+                "episode",
+                "reward",
+                "steps",
+                "grasped",
+                "lifted",
+                "placed",
+                "success",
+                "curriculum_stage",
+            ],
+        )
+        report_writer.writeheader()
+        print(f"Report CSV: {report_path}")
 
-        # Check for finished episodes
-        done_envs = done.nonzero(as_tuple=True)[0]
-        if len(done_envs) > 0:
-            for idx in done_envs:
-                ep_reward = total_reward[idx].item()
-                ep_grasped = extras["episode_grasp_success"][idx].item()
-                ep_placed = extras["episode_place_success"][idx].item()
-                episode_rewards.append(ep_reward)
-                episode_count += 1
-                grasp_count += int(ep_grasped)
-                place_count += int(ep_placed)
+    try:
+        while True:
+            with torch.no_grad():
+                actions = policy(obs)
+            obs, reward, done, extras = env.step(actions)
+            total_reward += reward
+            episode_steps += 1
+            step_count += 1
 
-                print(
-                    f"  Episode {episode_count}: "
-                    f"reward={ep_reward:.1f}, "
-                    f"grasped={'Yes' if ep_grasped else 'No'}, "
-                    f"placed={'Yes' if ep_placed else 'No'}"
-                )
+            done_envs = done.nonzero(as_tuple=True)[0]
+            if len(done_envs) > 0:
+                for idx_t in done_envs:
+                    idx = int(idx_t.item())
+                    ep_reward = total_reward[idx].item()
+                    ep_steps = int(episode_steps[idx].item())
+                    ep_grasped = bool(extras["episode_grasp_success"][idx].item())
+                    ep_lifted = bool(extras["episode_lift_success"][idx].item())
+                    ep_placed = bool(extras["episode_place_success"][idx].item())
+                    ep_success = bool(extras["episode_success"][idx].item())
+                    episode_rewards.append(ep_reward)
+                    episode_count += 1
+                    grasp_count += int(ep_grasped)
+                    lift_count += int(ep_lifted)
+                    place_count += int(ep_placed)
+                    success_count += int(ep_success)
 
-            total_reward[done_envs] = 0.0
+                    row = {
+                        "episode": episode_count,
+                        "reward": ep_reward,
+                        "steps": ep_steps,
+                        "grasped": int(ep_grasped),
+                        "lifted": int(ep_lifted),
+                        "placed": int(ep_placed),
+                        "success": int(ep_success),
+                        "curriculum_stage": env.curriculum_stage,
+                    }
+                    if report_writer is not None:
+                        report_writer.writerow(row)
+                    print(
+                        f"  Episode {episode_count}: "
+                        f"reward={ep_reward:.1f}, steps={ep_steps}, "
+                        f"grasped={'Yes' if ep_grasped else 'No'}, "
+                        f"lifted={'Yes' if ep_lifted else 'No'}, "
+                        f"placed={'Yes' if ep_placed else 'No'}, "
+                        f"success={'Yes' if ep_success else 'No'}"
+                    )
 
-            # Check episode limit
-            if args.episodes > 0 and episode_count >= args.episodes:
-                break
+                total_reward[done_envs] = 0.0
+                episode_steps[done_envs] = 0
+
+                if args.episodes > 0 and episode_count >= args.episodes:
+                    break
+    finally:
+        if report_file is not None:
+            report_file.close()
 
     # Summary
     if episode_rewards:
@@ -253,7 +297,9 @@ def main():
         print(f"Evaluation Summary ({episode_count} episodes):")
         print(f"  Avg reward:       {avg_reward:.1f}")
         print(f"  Grasp success:    {grasp_count}/{episode_count} ({100*grasp_count/episode_count:.1f}%)")
+        print(f"  Lift success:     {lift_count}/{episode_count} ({100*lift_count/episode_count:.1f}%)")
         print(f"  Place success:    {place_count}/{episode_count} ({100*place_count/episode_count:.1f}%)")
+        print(f"  Full success:     {success_count}/{episode_count} ({100*success_count/episode_count:.1f}%)")
         print(f"{'='*60}")
 
 

@@ -10,8 +10,10 @@ SN eligibility (no compensation file expected):
   - UF850: all units have compensation
 
 Usage:
-    python scripts/gen_kinematics_params.py <robot-ip> <suffix>
-    python scripts/gen_kinematics_params.py <robot-ip> <suffix> --force
+    python scripts/gen_kinematics_params.py <robot-ip> [suffix]
+    python scripts/gen_kinematics_params.py <robot-ip> [suffix] --force
+
+When suffix is omitted, defaults to the last 6 characters of the robot SN.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ if str(_REPO_ROOT) not in sys.path:
 from ufactory.kinematics import (  # noqa: E402
   get_robot_sn,
   has_per_unit_kinematics_calibration,
+  kinematics_suffix_from_sn,
   log_kinematics_sn_status,
   parse_sn_model_code,
   robot_name_from_firmware,
@@ -75,12 +78,17 @@ def _fetch_kinematics_bytes(robot_ip: str) -> bytes:
 def main() -> int:
   parser = argparse.ArgumentParser(description="Extract per-unit kinematics YAML from control box")
   parser.add_argument("robot_ip", help="Robot IP address")
-  parser.add_argument("kinematics_suffix", help="Suffix for output YAML filename")
+  parser.add_argument(
+    "kinematics_suffix",
+    nargs="?",
+    default=None,
+    help="Suffix for output YAML filename (default: last 6 characters of SN)",
+  )
   parser.add_argument("output_dir", nargs="?", default=None, help="Optional output directory")
   parser.add_argument(
     "--force",
     action="store_true",
-    help="Fetch even when SN indicates no per-unit compensation (usually pointless)",
+    help="Export even when SN indicates no factory compensation (e.g. POE calibration in firmware)",
   )
   args = parser.parse_args()
 
@@ -93,6 +101,10 @@ def main() -> int:
   sn = get_robot_sn(arm)
   arm.disconnect()
 
+  if not args.kinematics_suffix:
+    args.kinematics_suffix = kinematics_suffix_from_sn(sn)
+    print(f"kinematics_suffix: {args.kinematics_suffix} (auto from SN {sn})")
+
   recv_data = _fetch_kinematics_bytes(args.robot_ip)
   if not (len(recv_data) == 179 and recv_data[8]):
     valid = 0 if len(recv_data) < 9 else recv_data[8]
@@ -104,7 +116,12 @@ def main() -> int:
   robot_name = robot_name_from_firmware(robot_dof, robot_type)
 
   print(f"robot_name     : {robot_name}")
-  log_kinematics_sn_status(sn, robot_name, kinematics_suffix=args.kinematics_suffix)
+  log_kinematics_sn_status(
+    sn,
+    robot_name,
+    kinematics_suffix=args.kinematics_suffix,
+    allow_sn_override=args.force,
+  )
 
   if not args.force and not has_per_unit_kinematics_calibration(sn, robot_name):
     model_code = parse_sn_model_code(sn)

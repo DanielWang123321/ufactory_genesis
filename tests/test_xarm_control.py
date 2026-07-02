@@ -9,10 +9,13 @@ import pytest
 from ufactory.xarm_control import (
     MODE_POSITION,
     MODE_SERVO,
+    REPORT_STATE_SLEEPING,
     REPORT_STATE_STOPPING,
     STATE_MOTION,
     assert_motion_ready,
     prepare_arm_for_motion,
+    prepare_gripper_g2_for_motion,
+    wait_for_servo_motion_ready,
 )
 
 
@@ -96,3 +99,55 @@ def test_assert_motion_ready_rejects_error():
     arm = _make_arm(state=0, error_code=5)
     with pytest.raises(RuntimeError, match="active error"):
         assert_motion_ready(arm)
+
+
+def test_wait_for_servo_motion_ready_accepts_sleeping_state():
+    arm = _make_arm(state=REPORT_STATE_SLEEPING, mode=MODE_SERVO)
+    arm.get_state.return_value = (0, REPORT_STATE_SLEEPING)
+    wait_for_servo_motion_ready(arm, timeout_s=0.1, poll_s=0.01)
+
+
+def test_wait_for_servo_motion_ready_rejects_stopping():
+    arm = _make_arm(state=REPORT_STATE_STOPPING, mode=MODE_SERVO)
+    arm.get_state.return_value = (0, REPORT_STATE_STOPPING)
+    with pytest.raises(RuntimeError, match="not ready"):
+        wait_for_servo_motion_ready(arm, timeout_s=0.05, poll_s=0.01)
+
+
+def _make_gripper_arm(*, err_code: int = 0):
+    arm = MagicMock()
+    arm.get_gripper_err_code.return_value = (0, err_code)
+    arm.clean_gripper_error.return_value = 0
+    arm.set_gripper_enable.return_value = 0
+    arm.set_gripper_mode.return_value = 0
+    return arm
+
+
+def test_prepare_gripper_g2_for_motion_happy_path():
+    arm = _make_gripper_arm(err_code=0)
+    prepare_gripper_g2_for_motion(arm, poll_s=0.0)
+
+    arm.clean_gripper_error.assert_not_called()
+    arm.set_gripper_enable.assert_called_with(True)
+    arm.set_gripper_mode.assert_called_with(0)
+
+
+def test_prepare_gripper_g2_for_motion_cleans_error_first():
+    arm = _make_gripper_arm(err_code=5)
+    prepare_gripper_g2_for_motion(arm, poll_s=0.0)
+    arm.clean_gripper_error.assert_called()
+
+
+def test_prepare_gripper_g2_for_motion_fails_after_retries():
+    arm = _make_gripper_arm(err_code=0)
+    arm.set_gripper_enable.return_value = 1
+    with pytest.raises(RuntimeError, match="Gripper G2"):
+        prepare_gripper_g2_for_motion(arm, retries=2, poll_s=0.0)
+    assert arm.set_gripper_enable.call_count == 2
+
+
+def test_prepare_gripper_g2_for_motion_retries_on_mode_failure():
+    arm = _make_gripper_arm(err_code=0)
+    arm.set_gripper_mode.side_effect = [1, 0]
+    prepare_gripper_g2_for_motion(arm, retries=2, poll_s=0.0)
+    assert arm.set_gripper_mode.call_count == 2

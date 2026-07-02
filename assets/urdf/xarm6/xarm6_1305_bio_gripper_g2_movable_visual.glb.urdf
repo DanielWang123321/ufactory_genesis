@@ -22,7 +22,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link_base.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link_base.obj" />
       </geometry>
     </collision>
   </link>
@@ -46,7 +46,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link1.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link1.obj" />
       </geometry>
     </collision>
   </link>
@@ -73,7 +73,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link2.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link2.obj" />
       </geometry>
     </collision>
   </link>
@@ -100,7 +100,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link3.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link3.obj" />
       </geometry>
     </collision>
   </link>
@@ -127,7 +127,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link4.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link4.obj" />
       </geometry>
     </collision>
   </link>
@@ -154,7 +154,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link5.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link5.obj" />
       </geometry>
     </collision>
   </link>
@@ -181,7 +181,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link6.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/link6.obj" />
       </geometry>
     </collision>
   </link>

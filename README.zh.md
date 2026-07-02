@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.1.3-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.1.6-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -37,6 +37,11 @@ pip install "genesis-world>=1.2.0"
 # 2. 安装 ufactory_genesis
 pip install -r requirements.txt
 pip install -e .
+
+# 可选依赖：
+#   pip install -e ".[real]"      # xArm SDK / 真机命令
+#   pip install -e ".[rl]"        # RL 训练与评估示例
+#   pip install -e ".[showcase]"  # 物理装箱展示 scipy 依赖
 
 export NUMBA_CACHE_DIR=~/.cache/numba
 
@@ -235,16 +240,25 @@ ufactory.robot_visual_glb_urdf("xarm6", with_gripper_g2=True, movable=True)
 示例 SN：`XI130506D43A0A` → 型号码 `1305`（xArm6，需标定）。
 
 ```bash
-# 仅当 SN 规则允许时才会导出；旧款 xArm 会提示跳过
-python scripts/gen_kinematics_params.py <ip> <suffix>
+# 仅当 SN 规则允许时才会导出；suffix 默认为 SN 最后 6 字符
+python scripts/gen_kinematics_params.py <ip>
 
-# 通用 FK/IK 验证（--robot 见上表「支持机型」）
-python examples/fk_verify_robot.py --robot xarm6 --ip <ip> --kinematics-suffix <suffix>
-python examples/ik_verify_robot.py --robot lite6 --ip <ip> --kinematics-suffix <suffix>
+# 通用 FK/IK 验证（--robot 见上表「支持机型」；带 --ip 时自动解析 suffix）
+python examples/fk_verify_robot.py --robot xarm6 --ip <ip>
+python examples/ik_verify_robot.py --robot lite6 --ip <ip>
 dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-hardware-check --robot xarm6 --ip <ip> --kinematics-suffix <suffix>
-dynamics-sim-collision-check --ip <ip>   # 仿真模式串联自碰撞预检
+dynamics-sim-check --robot uf850 --random-count 0 --z-min-mm 0 --require-reference
+dynamics-sim-check --robot lite6 --random-count 0 --z-min-mm 0 --require-reference
+dynamics-sim-check --robot xarm5 --random-count 0 --z-min-mm 0 --require-reference
+dynamics-sim-check --robot xarm7 --random-count 0 --z-min-mm 0 --require-reference
+dynamics-hardware-check --robot xarm6 --ip <ip>
+dynamics-hardware-check --robot uf850 --ip 192.168.1.55 --z-min-mm 0
+dynamics-sim-collision-check --robot uf850 --ip 192.168.1.55   # 仿真模式串联自碰撞预检
 ```
+
+UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自
+[`assets/configs/dynamics_validation_pose.yaml`](assets/configs/dynamics_validation_pose.yaml)（每机型 20 点均匀插值）；
+可通过 `ufactory.dynamics.poses_config` 读取和扩展。
 
 ## xArm 6
 
@@ -255,10 +269,11 @@ xArm 6 是本仓库参考机型，`examples/xarm6/` 保留兼容入口；新的�
 ```
 ufactory/             # 核心 Python 包（机器人注册、路径、运动学、GLB）
 assets/urdf/          # 各机型 URDF、STL 碰撞、GLB 视觉 mesh
+assets/configs/       # 运行时 YAML 配置（动力学验证点位等）
 assets/scenes/        # 仿真场景资产（贴图、道具）
 examples/             # 使用示例（预览、FK/IK、RL）
-scripts/              # 资产生成与维护脚本
-tests/                # Pytest 测试集
+scripts/              # 用户可用辅助脚本（标定、贴图、hold 电流观察）
+tests/                # 贡献者 Pytest 回归（非用户上手路径）
 ```
 
 ## 参与贡献

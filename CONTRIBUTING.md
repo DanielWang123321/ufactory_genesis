@@ -16,25 +16,55 @@ source .venv/bin/activate
 # Install Genesis (platform-specific: https://genesis-world.readthedocs.io/)
 pip install "genesis-world>=1.2.0"
 
-# Install in editable mode
-pip install -e .
+# Install in editable mode with contributor test tools
+pip install -e ".[dev]"
+
+# Optional: Pinocchio for dynamics unit tests in the fast tier
+pip install -e ".[dynamics,dev]"
+
+# Optional: real robot / RL / showcase workflows
+pip install -e ".[real]"
+pip install -e ".[rl]"
+pip install -e ".[showcase]"
 ```
+
+The `tests/` suite is for **contributors and maintainers**, not end-user onboarding. Library users should start from `examples/` and the dynamics CLI entry points.
 
 ## Running Tests
 
+Three tiers (orthogonal pytest markers):
+
+| Tier | Command | When |
+|------|---------|------|
+| **fast** (default for PRs) | `pytest -m "not hardware and not gpu and not integration and not display"` | Daily development; completes in seconds |
+| **sim** | `pytest -m "not hardware"` | Pre-release; requires GPU + Genesis; may take tens of minutes and write `logs/xarm6-*` |
+| **hardware** | `XARM_IP=<robot-ip> pytest -m hardware` | Real robot acceptance |
+
 ```bash
-# Unit and smoke tests (no hardware required)
+# Fast tier (default PR gate)
+pytest -m "not hardware and not gpu and not integration and not display"
+
+# Full simulation regression (no real robot)
 pytest -m "not hardware"
 
-# All tests including hardware tests (requires real robot + xArm SDK)
-pytest
+# Hardware acceptance (requires xArm SDK + robot on the network)
+XARM_IP=192.168.1.65 pytest -m hardware
 ```
 
-Tests are organized by:
-- `test_*_smoke.py` — End-to-end simulation smoke tests (headless, no hardware)
-- `test_kinematics_sn.py` — Unit tests for kinematics calibration logic
-- `test_robot_viewer_controls.py` — Unit tests for viewer control logic (mocked)
-- Tests marked `@pytest.mark.hardware` — Require a real UFACTORY robot on the network
+### Markers
+
+| Marker | Meaning |
+|--------|---------|
+| `hardware` | Real UFACTORY robot + xArm SDK (`XARM_IP`) |
+| `gpu` | In-process Genesis GPU simulation |
+| `integration` | Subprocess smoke tests (`examples/`, short RL runs) |
+| `display` | Visual subprocess dry-run (`DISPLAY` required) |
+
+### Layout
+
+- Unmarked files — unit / mock tests (fast tier)
+- `test_*_smoke.py` — integration smoke tests
+- `test_dynamics_*.py` — dynamics validation helpers and regressions
 
 ## Code Style
 
@@ -43,15 +73,11 @@ Tests are organized by:
 - Keep docstrings concise but informative
 - Follow the existing patterns in the codebase
 
-## Asset Pipeline
+## Asset Policy
 
-Robot URDF assets are generated via a multi-step pipeline:
+The public release contains final URDF, STL/OBJ collision meshes, and GLB visual meshes needed by users and tests. Raw/source GLBs, relocalize metrics, and vendor/combo generation scripts are internal maintenance material and are ignored from the public source tree.
 
-1. **Vendor** — `scripts/vendor_robot_assets.py` clones `xarm_ros2` and generates base URDFs + STL meshes
-2. **Relocalize** — `scripts/relocalize_*_glb.py` align CAD GLB meshes to URDF reference frames
-3. **Generate Combo** — `scripts/generate_*_combo_urdf.py` create arm+gripper combined URDFs
-
-> **Note:** Template URDFs in `assets/urdf/gripper_g2/gripper_g2.urdf` and similar files are xacro-generated artifacts — their mesh paths are replaced during combo generation. Do not load them directly.
+Before release, run the fast tier plus the asset integrity tests. They verify every public URDF mesh reference resolves and prevent raw/source GLB intermediates from returning to the public file set.
 
 ## Project Structure
 
@@ -60,15 +86,15 @@ Robot URDF assets are generated via a multi-step pipeline:
 | `ufactory/` | Core Python package (robot registry, paths, kinematics, GLB visuals) |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `examples/` | Usage examples (viewer, FK/IK verification, RL) |
-| `scripts/` | Asset generation and maintenance scripts |
-| `tests/` | Pytest test suite |
-| `docs/` | Additional documentation |
+| `scripts/` | User-facing helper scripts |
+| `tests/` | Contributor pytest suite (not required for library use) |
 
 ## Pull Request Process
 
 1. Fork the repository and create a feature branch
 2. Make your changes, following the code style
-3. Run `pytest -m "not hardware"` to verify no regressions
+3. Run the **fast** tier to verify no regressions:
+   `pytest -m "not hardware and not gpu and not integration and not display"`
 4. Update documentation if needed
 5. Submit a PR with a clear description of the change
 
