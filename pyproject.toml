@@ -53,12 +53,11 @@ rl = [
 showcase = [
     "scipy>=1.11",
 ]
-# Optional trajectory-planning backend. The runtime trajectory kernel in
-# ``ufactory.trajectory.profile`` is a self-contained NumPy LSPB implementation
-# (it does not require this extra); installing it makes the reference
-# ``roboticstoolbox-python`` tooling available for richer analysis.
+# Optional trajectory-planning reference backend. The default planner/profile
+# stack is pure NumPy; installing this extra enables roboticstoolbox-based
+# comparison and future advanced planning adapters.
 trajectory = [
-    "roboticstoolbox-python",
+    "roboticstoolbox-python>=1.3.0",
 ]
 
 [project.scripts]

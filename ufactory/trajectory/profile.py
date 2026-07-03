@@ -1,4 +1,4 @@
-"""Time-parameterized trajectory profiles for the xArm6 grasp-place pipeline.
+"""Time-parameterized trajectory profiles for UFACTORY trajectory programs.
 
 The runtime kernel here is a self-contained NumPy implementation of the
 *linear-segment-with-parabolic-blends* (LSPB / trapezoidal) velocity law and a
@@ -18,7 +18,7 @@ All profile math in this module is plain NumPy and has zero hard dependency.
 Unit policy
 ------------
 * joint space (``MoveJ``): rad / rad·s⁻¹ / rad·s⁻²
-* Cartesian task space (``MoveL``, link6/flange in robot base frame):
+* Cartesian task space (``MoveL``, flange / configured EE in robot base frame):
   m / m·s⁻¹ / m·s⁻²
 * gripper gap (``Gripper``): m (two-finger physical gap)
 """
@@ -151,11 +151,11 @@ def linear_cartesian_samples(
     v_max: float,
     a_max: float,
 ) -> tuple[np.ndarray, int, float]:
-    """Cartesian straight-line LSPB profile (link6 in robot base frame).
+    """Cartesian straight-line LSPB profile (EE xyz in robot base frame).
 
     Path is the straight segment ``p0 -> p1``; scalar progress along the line
-    follows an LSPB velocity law (trapezoidal/triangular). Orientation is held
-    constant (v1: gripper-down), so only ``xyz`` is parameterized. Returns
+    follows an LSPB velocity law (trapezoidal/triangular). Orientation is owned
+    by the executor or task template, so only ``xyz`` is parameterized. Returns
     ``(P[N, 3], N, duration_s)`` with the last row equal to ``p1``.
     """
     p0 = np.asarray(p0, dtype=np.float64).reshape(3)
@@ -222,7 +222,7 @@ def linear_limits_from_joint(
 ) -> tuple[float, float]:
     """Derive (v_lin m/s, a_lin m/s²) from joint (speed, mvacc) via a working reach.
 
-    The xArm6 working radius is ~0.5 m; a task-relevant linear reach is used so
+    A task-relevant linear reach is used so
     a single ``--speed-rad-s`` / ``--mvacc-rad-s2`` CLI pair drives both MoveJ
     and MoveL while staying physically reasonable.
     """
