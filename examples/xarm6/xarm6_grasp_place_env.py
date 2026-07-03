@@ -25,8 +25,8 @@ import torch
 import _bootstrap  # noqa: F401
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
-from ufactory.frames import base_to_world_pos, world_to_base_pos
-from ufactory.gripper_g2 import (
+from ufactory.manipulation.frames import base_to_world_pos, world_to_base_pos
+from ufactory.grippers.g2 import (
     GRIPPER_G2_OPEN_GAP_M,
     GRIPPER_G2_SIM_CLOSE_DRIVE,
 )

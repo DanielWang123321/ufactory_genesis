@@ -11,7 +11,7 @@ import numpy as np
 from ufactory.deploy.action_postprocess import ReachActionCommand, process_reach_action_np
 from ufactory.deploy.reach_config import EXECUTOR_ONLINE_JOINT, EXECUTOR_SERVO_J, ReachDeployConfig
 from ufactory.deploy.safety import SafetyGuard
-from ufactory.xarm_control import SERVO_CMD_RETRIES, SERVO_CMD_RETRY_S, STATE_NOT_READY_SDK
+from ufactory.hardware.xarm import SERVO_CMD_RETRIES, SERVO_CMD_RETRY_S, STATE_NOT_READY_SDK
 
 
 def build_servo_joint_command(

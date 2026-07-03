@@ -8,7 +8,7 @@ from itertools import count
 
 import genesis as gs
 
-from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 
 CAMERA_POS = (0.22, -0.28, 0.18)
 CAMERA_LOOKAT = (0.0, 0.0, 0.14)

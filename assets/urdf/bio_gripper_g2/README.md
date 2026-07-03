@@ -9,7 +9,7 @@
 - 驱动关节为右指 prismatic dof，左指 `mimic ×-1` 对称跟随。
 - **关节零位 = 闭合（71 mm）**，dof 增大到 `0.0395 m` 时张开到 150 mm（单指行程 39.5 mm）。
 - 间距与关节值近似线性：`gap ≈ 0.071 + 2 × right_joint_value`（米）。
-- 这些数值集中在 `ufactory/bio_gripper_g2.py`（`CLOSE_POS=0`、`OPEN_POS=0.0395`、`STROKE=0.0395`、`CLOSED_GAP=0.071`、`OPEN_GAP=0.150`）以及模板 URDF 的关节 `limit` 中。
+- 这些数值集中在 `ufactory/grippers/bio_g2.py`（`CLOSE_POS=0`、`OPEN_POS=0.0395`、`STROKE=0.0395`、`CLOSED_GAP=0.071`、`OPEN_GAP=0.150`）以及模板 URDF 的关节 `limit` 中。
 
 ## 模板 URDF
 
@@ -35,7 +35,7 @@ bio_gripper_g2/
 同一份可动夹爪定义有两种加载入口：
 
 ```python
-from ufactory.paths import (
+from ufactory.robots.paths import (
     bio_gripper_g2_movable_visual_urdf,  # 独立（无机械臂）
     robot_visual_glb_urdf,               # 搭配机械臂
 )
@@ -50,10 +50,10 @@ urdf = robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=True, movable=Tru
 
 ## 控制（公共模块）
 
-两种加载方式都用同一个控制类 `ufactory.bio_gripper_g2.BioGripperG2`，它会自动发现夹爪关节并镜像左指：
+两种加载方式都用同一个控制类 `ufactory.grippers.bio_g2.BioGripperG2`，它会自动发现夹爪关节并镜像左指：
 
 ```python
-from ufactory.bio_gripper_g2 import BioGripperG2
+from ufactory.grippers.bio_g2 import BioGripperG2
 
 gripper = BioGripperG2(robot)        # robot 为加载上述任一 URDF 得到的 entity
 if gripper.found:

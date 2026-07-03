@@ -1,12 +1,12 @@
 """Bio Gripper G2 parallel open/close demo helpers for Genesis viewers.
 
-Thin backward-compatible wrapper around :class:`ufactory.bio_gripper_g2.BioGripperG2`.
+Thin backward-compatible wrapper around :class:`ufactory.grippers.bio_g2.BioGripperG2`.
 Prefer the class for new code; this module is kept for existing callers.
 """
 
 from __future__ import annotations
 
-from ufactory.bio_gripper_g2 import (
+from ufactory.grippers.bio_g2 import (
     BioGripperG2,
     CLOSED_GAP,
     CLOSE_POS,

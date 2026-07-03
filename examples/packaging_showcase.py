@@ -9,7 +9,7 @@ import argparse
 import sys
 
 import _bootstrap  # noqa: F401
-from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
 
 
 def main() -> None:

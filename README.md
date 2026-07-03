@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.1.6-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.0-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -26,7 +26,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 
 ## Quick Start
 
-Tested with Python 3.13, Genesis ≥1.2.0, PyTorch 2.12.
+Tested with Python 3.13, Genesis 1.2.0, PyTorch 2.10.0+cu128.
 
 ```bash
 # 1. Install Genesis (platform-specific: CPU / CUDA / macOS / AMD)
@@ -104,104 +104,46 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 
 ## API Quick Reference
 
+v0.2.0 uses functional subpackages. The root namespace is intentionally small:
+
 ```python
 import ufactory
 ```
 
-### Robot Registry
-
-| Function / Object | Description |
-|-------------------|-------------|
-| `ufactory.ROBOT_PROFILES` | Dict of all supported robot `RobotModelSpec` entries |
-| `ufactory.get_robot_profile(key)` | Get `RobotModelSpec` by profile key or short name (`xarm6`) |
-| `ufactory.get_profile_key_for_robot_name(name)` | Resolve robot name to profile key (`xarm6` → `xarm6_1305`) |
-| `ufactory.robot_cli_choices()` | Sorted `--robot` choices (keys + short aliases) |
-| `ufactory.arm_link_names(profile)` | Link name tuple for a robot profile |
-| `ufactory.joint_names(profile)` | Joint name tuple for a robot profile |
-
-### Paths
-
-#### Core (generic APIs)
-
-| Function | Description |
+| Root API | Description |
 |----------|-------------|
-| `ufactory.robot_urdf(key, name=None)` | Absolute path to default URDF by profile key or short name |
-| `ufactory.robot_visual_glb_urdf(key, with_*=..., movable=...)` | URDF with GLB visuals; end-effector flags are mutually exclusive — see source for `movable` constraints |
-| `ufactory.robot_assets(name)` | `Path` to robot asset directory |
-| `ufactory.kinematics_user_dir(robot_name)` | Per-unit calibration YAML directory: `assets/urdf/<robot>/kinematics/user/` |
+| `ufactory.ROBOT_PROFILES` | Supported robot profile registry |
+| `ufactory.get_robot_profile(key)` | Resolve a robot profile by key or short name |
+| `ufactory.robot_cli_choices()` | Sorted `--robot` choices |
+| `ufactory.robot_urdf(key, name=None)` | Absolute path to a default or named URDF |
+| `ufactory.robot_visual_glb_urdf(key, with_*=..., movable=...)` | Absolute path to GLB visual URDFs |
+| `ufactory.robot_assets(name)` | Robot asset directory |
+| `ufactory.kinematics_user_dir(robot_name)` | Per-unit calibration YAML directory |
+| `ufactory.get_robot_runtime_profile(key)` | Typed runtime profile |
+
+Advanced APIs are imported from their owning modules:
+
+| Domain | Canonical import |
+|--------|------------------|
+| Robot registry, paths, runtime profiles | `ufactory.robots.registry`, `ufactory.robots.paths`, `ufactory.robots.runtime` |
+| Kinematics calibration and FK/IK validation | `ufactory.kinematics.calibration`, `ufactory.kinematics.validation` |
+| Dynamics simulation and hardware validation | `ufactory.dynamics` |
+| Real robot SDK/session helpers | `ufactory.hardware.xarm`, `ufactory.hardware.session`, `ufactory.hardware.observe` |
+| Gripper command conversions/controllers | `ufactory.grippers.g2`, `ufactory.grippers.bio_g2` |
+| Trajectory and manipulation helpers | `ufactory.trajectory`, `ufactory.manipulation.frames` |
+| GLB visualization helpers | `ufactory.visualization.glb` |
+| Policy deployment helpers | `ufactory.deploy` |
 
 ```python
-# Recommended: generic entry points (same as examples with --robot xarm6)
-ufactory.robot_urdf("xarm6")
-ufactory.robot_visual_glb_urdf("xarm6", with_gripper_g2=True, movable=True)
+from ufactory.kinematics.calibration import build_calibrated_urdf
+from ufactory.dynamics import dynamics_default_configs
+from ufactory.grippers.g2 import gripper_g2_gap_m_to_sdk_pos_mm
+from ufactory.visualization.glb import enable_glb_pbr_surfaces
 ```
 
-#### Arm convenience (xArm 5/6/7)
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.xarm5_urdf(name="xarm5_1305.urdf")` | Default xArm 5 URDF |
-| `ufactory.xarm6_urdf(name="xarm6_1305.urdf")` | Default xArm 6 URDF |
-| `ufactory.xarm7_urdf(name="xarm7_1305.urdf")` | Default xArm 7 URDF |
-| `ufactory.xarm5_1305_urdf()` | Thin wrapper around `robot_urdf("xarm5_1305")` |
-| `ufactory.xarm6_1305_urdf()` | Same as `xarm6_urdf()` |
-| `ufactory.xarm7_1305_urdf()` | Thin wrapper around `robot_urdf("xarm7_1305")` |
-| `ufactory.xarm5_1305_visual_glb_urdf(with_bio_gripper_g2=False)` | xArm 5 GLB visual URDF |
-| `ufactory.xarm6_1305_visual_glb_urdf(with_bio_gripper_g2, with_gripper_g2, movable)` | xArm 6 GLB visual URDF (Gripper G2 / Bio G2 / movable) |
-| `ufactory.xarm7_1305_visual_glb_urdf(with_bio_gripper_g2=False)` | xArm 7 GLB visual URDF |
-
-#### Lite6 convenience
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.lite6_urdf()` | Default Lite6 URDF |
-| `ufactory.lite6_visual_glb_urdf(with_lite6_gripper, with_lite6_vacuum_gripper, movable)` | Lite6 GLB visual URDF with gripper options |
-| `ufactory.lite6_with_gripper_urdf()` | Physics combo URDF with parallel gripper |
-| `ufactory.lite6_with_vacuum_gripper_urdf()` | Physics combo URDF with vacuum gripper |
-| `ufactory.lite6_gripper_movable_visual_urdf()` | Standalone gripper-only movable visual URDF (no arm) |
-
-#### UF850 convenience
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.uf850_urdf()` | Default UF850 URDF |
-| `ufactory.uf850_visual_glb_urdf(with_bio_gripper_g2=False)` | UF850 GLB visual URDF |
-
-#### Standalone gripper assets
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.gripper_g2_movable_visual_urdf()` | Gripper G2 standalone movable visual URDF |
-| `ufactory.gripper_g2_static_glb(ee_link="link6")` | Gripper G2 static assembly GLB |
-| `ufactory.gripper_g2_base_glb(ee_link="link6")` | Gripper G2 base GLB (movable mode) |
-| `ufactory.gripper_g2_shared_glb(name)` | Gripper G2 shared link GLB |
-| `ufactory.bio_gripper_g2_movable_visual_urdf()` | Bio Gripper G2 standalone movable visual URDF |
-| `ufactory.bio_gripper_g2_glb(ee_link="link6")` | Bio Gripper G2 static GLB |
-
-> Full signatures and parameter constraints: [`ufactory/paths.py`](ufactory/paths.py). Package-level exports: [`ufactory/__init__.py`](ufactory/__init__.py).
-
-### Runtime Profiles
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.get_robot_runtime_profile(key)` | Typed runtime profile: arm PD, torque limits, validation poses, task capabilities |
-| `ufactory.dynamics_default_configs(key)` | Profile-specific dynamics validation poses |
-
-### Kinematic Calibration
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.load_kinematics_yaml(path)` | Load joint offsets from kinematics YAML |
-| `ufactory.build_calibrated_urdf(base, kinematics)` | Generate URDF with calibrated joint origins |
-| `ufactory.parse_sn_model_code(sn)` | Extract 4-digit model code from serial number |
-| `ufactory.has_per_unit_kinematics_calibration(sn, name)` | Check if SN-based calibration applies |
-
-### GLB PBR Visuals
-
-| Function | Description |
-|----------|-------------|
-| `ufactory.enable_glb_pbr_surfaces()` | Monkey-patch Genesis to preserve PBR materials from GLB |
-| `ufactory.glb_view_surface()` | Default double-sided surface for non-GLB geometries |
+Old root modules such as `ufactory.paths`, `ufactory.robot_params`,
+`ufactory.kinematics_validation`, `ufactory.real_robot_session`, and
+`ufactory.dynamics_validation` were removed in v0.2.0.
 
 ## Real-Robot Kinematic Calibration (SN Rules)
 
@@ -233,13 +175,19 @@ xArm 6 is the reference robot in this repo, with compatibility wrappers under `e
 ## Project Layout
 
 ```
-ufactory/             # Core Python package (robot registry, paths, kinematics, GLB)
-assets/urdf/          # Robot URDFs, STL collision, GLB visual meshes
-assets/configs/       # Runtime YAML configs (dynamics validation poses, etc.)
-assets/scenes/        # Simulation scene assets (textures, props)
-examples/             # Usage examples (viewer, FK/IK, RL)
-scripts/              # User-facing helper scripts (calibration, textures, hold observe)
-tests/                # Contributor pytest suite (not end-user onboarding)
+ufactory/robots/          # Registry, asset paths, runtime profiles
+ufactory/kinematics/      # Calibration and FK/IK validation helpers
+ufactory/dynamics/        # Dynamics simulation, validation, reports, CLIs
+ufactory/hardware/        # xArm SDK/session and hold-current observation
+ufactory/grippers/        # Gripper conversions and controllers
+ufactory/trajectory/      # Trajectory profiles, segments, sim/real executors
+ufactory/manipulation/    # Task frame helpers
+ufactory/visualization/   # GLB/PBR visualization helpers
+ufactory/deploy/          # Policy deployment helpers
+assets/                   # URDF, mesh, config, and scene assets
+examples/                 # Usage examples (viewer, FK/IK, RL)
+scripts/                  # User-facing helper scripts
+tests/                    # Contributor pytest suite
 ```
 
 ## Contributing

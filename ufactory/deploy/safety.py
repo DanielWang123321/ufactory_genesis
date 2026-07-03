@@ -7,11 +7,11 @@ from typing import Any
 
 import numpy as np
 
-from ufactory.dynamics_validation import parse_joint_limits
+from ufactory.dynamics import parse_joint_limits
 from ufactory.deploy.action_postprocess import process_reach_action_np
-from ufactory.paths import robot_urdf
-from ufactory.robot_params import RobotRuntimeProfile, get_robot_runtime_profile
-from ufactory.xarm_control import assert_motion_ready
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
+from ufactory.hardware.xarm import assert_motion_ready
 
 from ufactory.deploy.reach_config import ReachDeployConfig
 

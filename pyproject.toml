@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.1.6"
+version = "0.2.0"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -66,7 +66,7 @@ dynamics-sim-check = "ufactory.dynamics.cli:cli_sim_check"
 dynamics-sim-collision-check = "ufactory.dynamics.cli:cli_sim_collision_check"
 dynamics-hardware-check = "ufactory.dynamics.cli:cli_hardware_check"
 dynamics-report-compare = "ufactory.dynamics.cli:cli_report_compare"
-observe-hold-current = "ufactory.dynamics.observe:cli_observe_hold_current"
+observe-hold-current = "ufactory.hardware.observe:cli_observe_hold_current"
 
 # NOTE: This project is designed for editable install (pip install -e .).
 # Assets (URDF, STL, GLB) live outside the Python package in assets/ and

@@ -38,8 +38,8 @@ from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
 from ufactory.deploy.reach_config import EXECUTOR_ONLINE_JOINT, EXECUTOR_SERVO_J, REACH_EXECUTORS
-from ufactory.paths import robot_urdf
-from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
 
 # Allow importing from same directory
 import sys

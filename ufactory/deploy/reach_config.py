@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from ufactory.deploy.action_postprocess import effective_max_joint_delta_rad
-from ufactory.robot_params import RobotRuntimeProfile, get_robot_runtime_profile
+from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
 
 # Servo streaming defaults (rad / rad/s / rad/s^2).
 DEFAULT_SERVO_SPEED_RAD_S = 0.5

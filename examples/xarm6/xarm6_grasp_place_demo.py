@@ -26,7 +26,7 @@ import torch
 import _bootstrap  # noqa: F401
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
-from ufactory.paths import xarm6_urdf
+from ufactory.robots.paths import xarm6_urdf
 
 XARM6_GRIPPER_URDF = xarm6_urdf("xarm6_with_gripper.urdf")
 TABLE_HEIGHT = 0.4        # meters

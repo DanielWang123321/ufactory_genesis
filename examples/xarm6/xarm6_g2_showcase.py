@@ -36,7 +36,7 @@ from _packaging_scene import (
   make_layout,
 )
 from _robot_viewer import start_deferred_viewer
-from ufactory.robot_params import get_robot_runtime_profile
+from ufactory.robots.runtime import get_robot_runtime_profile
 
 GRIPPER_OPEN = 0.0
 GRIPPER_CLOSE = 0.85
@@ -925,7 +925,7 @@ def main() -> None:
   )
   args = parser.parse_args()
 
-  from ufactory.glb_visual import enable_glb_pbr_surfaces
+  from ufactory.visualization.glb import enable_glb_pbr_surfaces
 
   enable_glb_pbr_surfaces()
   gs.init(backend=gs.gpu, precision="32", logging_level="warning", seed=1)

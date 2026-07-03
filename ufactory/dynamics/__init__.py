@@ -1,8 +1,7 @@
 """Dynamics validation subpackage (probe / reference / analysis / report / cli / poses).
 
-Public API surface re-exported here so ``from ufactory.dynamics import X`` works
-for the symbols downstream code historically consumed from the
-``dynamics_validation``/``dynamics_static_analysis`` modules (which are kept as thin back-compat re-export shims).
+Public dynamics APIs are re-exported here for ``from ufactory.dynamics import X``.
+The pre-v0.2 top-level compatibility modules were removed.
 """
 
 from __future__ import annotations

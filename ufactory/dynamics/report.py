@@ -34,7 +34,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from ufactory.dynamics.analysis import StaticLayerResult
-    from ufactory.robot_params import RobotRuntimeProfile
+    from ufactory.robots.runtime import RobotRuntimeProfile
 
 SIM_DT = 0.01
 SIM_SUBSTEPS = 1

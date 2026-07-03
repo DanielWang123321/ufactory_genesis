@@ -62,9 +62,20 @@ XARM_IP=192.168.1.65 pytest -m hardware
 
 ### Layout
 
+Tests are grouped under `tests/` by `ufactory` module:
+
+| Subdirectory | Module | Examples |
+|--------------|--------|----------|
+| `tests/robots/` | `ufactory.robots`, kinematics SN, assets | `test_robot_registry.py`, `test_asset_integrity.py` |
+| `tests/dynamics/` | `ufactory.dynamics` | `test_dynamics_validation.py`, `test_dynamics_sim_regression.py` |
+| `tests/hardware/` | `ufactory.hardware` | `test_real_robot_session.py`, `test_xarm6_smoke.py` |
+| `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
+| `tests/deploy/` | `ufactory.deploy` | `test_deploy.py` |
+| `tests/manipulation/` | `ufactory.manipulation` | `test_grasp_place_contract.py` |
+
 - Unmarked files — unit / mock tests (fast tier)
 - `test_*_smoke.py` — integration smoke tests
-- `test_dynamics_*.py` — dynamics validation helpers and regressions
+- `tests/dynamics/test_dynamics_*.py` — dynamics validation helpers and regressions
 
 ## Code Style
 
@@ -83,7 +94,13 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 
 | Directory | Purpose |
 |-----------|---------|
-| `ufactory/` | Core Python package (robot registry, paths, kinematics, GLB visuals) |
+| `ufactory/robots/` | Robot registry, asset paths, and runtime profiles |
+| `ufactory/kinematics/` | Calibration and Genesis FK/IK validation helpers |
+| `ufactory/dynamics/` | Dynamics simulation, validation, reports, and CLIs |
+| `ufactory/hardware/` | xArm SDK/session helpers and hold-current observation |
+| `ufactory/grippers/` | Gripper command conversions and controllers |
+| `ufactory/trajectory/`, `ufactory/manipulation/`, `ufactory/deploy/` | Trajectory, task, and policy deployment helpers |
+| `ufactory/visualization/` | GLB/PBR visualization helpers |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `examples/` | Usage examples (viewer, FK/IK verification, RL) |
 | `scripts/` | User-facing helper scripts |

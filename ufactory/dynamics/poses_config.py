@@ -15,8 +15,8 @@ from typing import Any, Sequence
 import numpy as np
 import yaml
 
-from ufactory.paths import DYNAMICS_VALIDATION_POSES_YAML
-from ufactory.robot_registry import get_robot_profile
+from ufactory.robots.paths import DYNAMICS_VALIDATION_POSES_YAML
+from ufactory.robots.registry import get_robot_profile
 
 NamedPoseTuple = tuple[tuple[str, tuple[float, ...]], ...]
 

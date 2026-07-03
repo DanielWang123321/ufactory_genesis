@@ -24,8 +24,8 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
-from ufactory.paths import robot_urdf
-from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from xarm6_grasp_place_env import XArm6GraspPlaceEnv

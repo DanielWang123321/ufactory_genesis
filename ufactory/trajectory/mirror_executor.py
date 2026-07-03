@@ -13,8 +13,8 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
-from ufactory.gripper_g2 import GRIPPER_G2_OPEN_GAP_M, gripper_g2_sim_drive_to_gap_m
-from ufactory.trajectory.ik import solve_link6_ik
+from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M, gripper_g2_sim_drive_to_gap_m
+from ufactory.kinematics.genesis import solve_link6_ik
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
 

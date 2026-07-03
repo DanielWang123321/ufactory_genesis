@@ -14,7 +14,7 @@ import numpy as np
 
 from ufactory.dynamics.report import SafePose
 from ufactory.dynamics.poses_config import dynamics_pose_tuples
-from ufactory.robot_params import (
+from ufactory.robots.runtime import (
     XARM6_EFFORT,
     XARM6_KP,
     XARM6_KV,

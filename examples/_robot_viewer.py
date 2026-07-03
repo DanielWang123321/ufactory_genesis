@@ -9,11 +9,11 @@ import numpy as np
 import torch
 
 import genesis as gs
-from ufactory.bio_gripper_g2 import BioGripperG2
-from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
-from ufactory.paths import robot_urdf, robot_visual_glb_urdf
-from ufactory.robot_params import get_robot_runtime_profile
-from ufactory.robot_registry import RobotModelSpec, joint_names
+from ufactory.grippers.bio_g2 import BioGripperG2
+from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
+from ufactory.robots.runtime import get_robot_runtime_profile
+from ufactory.robots.registry import RobotModelSpec, joint_names
 
 from _bio_gripper_g2_demo import (
   BIO_GRIPPER_G2_OPEN,

@@ -31,7 +31,9 @@ from ufactory.dynamics.analysis import (
     StaticPoseAnalysis,
     build_dynamics_sample,
     build_static_pose_analysis,
+    evaluate_pd_hold_gate,
     format_torque_row,
+    genesis_sample_for_torque_compare,
     parse_strict_static_layers,
     static_layer_l2,
     summarize_static_layers,
@@ -60,8 +62,8 @@ from ufactory.dynamics.poses import (
     parse_joint_limits,
     SafePose,
 )
-from ufactory.paths import robot_urdf
-from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
 
 
 def _select_poses(
@@ -208,6 +210,11 @@ def print_static_layer_summary(
     return counts, strict_fail
 
 
+_PD_HOLD_TORQUE_DEF = (
+    "In Genesis simulation, joint torques computed by the PD controller to maintain target joint angles."
+)
+
+
 def _run_genesis_samples(
     scene,
     robot,
@@ -219,6 +226,7 @@ def _run_genesis_samples(
 ):
     runtime = runtime_profile or get_robot_runtime_profile("xarm6")
     out: dict[str, Any] = {}
+    print(f"  pd_hold_tau = PD hold torque ({_PD_HOLD_TORQUE_DEF})")
     for pose in safe_poses:
         sample = genesis_pd_hold_torque_at_q(robot, scene, dof_idx, pose.q, runtime_profile=runtime)
         out[pose.name] = sample
@@ -284,7 +292,7 @@ def _hardware_path_reasons_by_waypoint(
     z_min_mm: float,
     move_strategy: str,
 ) -> list[str]:
-    from ufactory.real_robot_session import build_motion_waypoints
+    from ufactory.hardware.session import build_motion_waypoints
 
     waypoints = build_motion_waypoints(start_q, target_q, strategy=move_strategy)
     reasons: list[str] = []
@@ -315,20 +323,22 @@ def _hardware_path_reasons_by_waypoint(
 
 
 def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
-    from ufactory.kinematics import (
+    from ufactory.kinematics.calibration import (
         get_robot_sn,
         log_kinematics_sn_status,
         prepare_robot_model_for_verification,
         validate_kinematics_calibration_request,
     )
-    from ufactory.real_robot_session import (
+    from ufactory.hardware.session import (
         MOVE_STRATEGIES,
         MOVE_STRATEGY_DIRECT,
         RealRobotSession,
         RobotMotionError,
     )
 
-    parser = argparse.ArgumentParser(description="UFACTORY Genesis vs real static torque validation")
+    parser = argparse.ArgumentParser(
+        description=f"UFACTORY Genesis vs real static torque validation. PD hold torque: {_PD_HOLD_TORQUE_DEF}"
+    )
     parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
     parser.add_argument("--ip", type=str, default=None, help="xArm IP (required unless --dry-run)")
     parser.add_argument("--dry-run", action="store_true", help="Genesis torques + safe poses only")
@@ -340,6 +350,11 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
         "--force-kinematics",
         action="store_true",
         help="Use --kinematics-suffix/yaml even when SN rules out factory compensation",
+    )
+    parser.add_argument(
+        "--nominal-urdf",
+        action="store_true",
+        help="Use nominal URDF only (skip per-unit kinematics YAML even when --ip is set)",
     )
     parser.add_argument("--robot-model", type=str, default=None)
     parser.add_argument("--calibrated-output-dir", type=str, default=None)
@@ -398,8 +413,8 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
         print(f"[WARN] z_min={args.z_min_mm:.1f} mm is a low-margin hardware mode")
 
     resolved_sn: str | None = None
-    if args.ip and args.kinematics_yaml is None:
-        from ufactory.kinematics import resolve_kinematics_suffix_from_ip
+    if args.ip and args.kinematics_yaml is None and not args.nominal_urdf:
+        from ufactory.kinematics.calibration import resolve_kinematics_suffix_from_ip
 
         suffix, sn = resolve_kinematics_suffix_from_ip(
             args.ip,
@@ -425,6 +440,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
 
     print("=" * 78)
     print(f"{runtime.model.key} Static Dynamics Validation: Genesis PD hold vs Real Robot")
+    print(f"PD hold torque: {_PD_HOLD_TORQUE_DEF}")
     print("=" * 78)
     print(f"URDF : {urdf_path_str}")
     if kinematics_yaml_path:
@@ -472,7 +488,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
     if reference is None:
         print("[WARN] Pinocchio reference unavailable; continuing without independent G(q)/M(q)")
 
-    print("\n--- Genesis PD hold torques ---")
+    print("\n--- Genesis PD hold torques (torques to maintain target joint angles) ---")
     genesis_data = _run_genesis_samples(scene, robot, ee_link, dof_idx, safe_poses, reference, runtime)
 
     session: RealRobotSession | None = None
@@ -583,9 +599,18 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                             )
                         )
                         continue
-                    if not genesis_sample.settled or genesis_sample.saturated:
+                    gate = evaluate_pd_hold_gate(
+                        genesis_sample,
+                        pose.q,
+                        runtime_profile=runtime,
+                        reference=reference,
+                    )
+                    if gate.block_hardware:
                         status = ValidationStatus.NOT_SETTLED if not genesis_sample.settled else ValidationStatus.SATURATED
-                        print(f"  [{pose.name}] repeat {repeat_i + 1}: {status.value}; not moving hardware")
+                        print(
+                            f"  [{pose.name}] repeat {repeat_i + 1}: {status.value}; "
+                            f"Genesis PD hold gate failed (not settled or saturated); not moving hardware"
+                        )
                         results.append(
                             DynamicsSample(
                                 pose=pose.name,
@@ -603,6 +628,13 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                             )
                         )
                         continue
+
+                    genesis_for_compare = genesis_sample_for_torque_compare(genesis_sample, gate)
+                    if gate.reason == "pd_tracking_saturation":
+                        print(
+                            f"  [{pose.name}] Genesis PD tracking saturation at joints "
+                            f"{list(gate.tracking_limited_joints)}; pin_G(target) used for theory torque"
+                        )
 
                     print(f"  Moving to [{pose.name}] repeat {repeat_i + 1}/{args.repeats} ...")
                     try:
@@ -634,10 +666,10 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                         )
                         hardware_abort = True
                         break
-                    ref_g = reference.gravity(genesis_sample.q_actual) if reference is not None else None
+                    ref_g = reference.gravity(real.q) if reference is not None else None
                     sample = build_dynamics_sample(
                         pose,
-                        genesis_sample,
+                        genesis_for_compare,
                         runtime_profile=runtime,
                         tau_real=real.tau,
                         tau_real_median=real.tau_median,
@@ -712,15 +744,22 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
 
 
 def cli_sim_check(argv: Sequence[str] | None = None) -> int:
-    from ufactory.kinematics import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
+    from ufactory.kinematics.calibration import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
 
-    parser = argparse.ArgumentParser(description="UFACTORY Genesis dynamics simulation regression")
+    parser = argparse.ArgumentParser(
+        description=f"UFACTORY Genesis dynamics simulation regression. PD hold torque: {_PD_HOLD_TORQUE_DEF}"
+    )
     parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
     parser.add_argument("--ip", type=str, default=None, help="Optional robot IP to auto-resolve kinematics suffix from SN")
     parser.add_argument("--robot-model", type=str, default=None)
     parser.add_argument("--kinematics-suffix", type=str, default=None)
     parser.add_argument("--kinematics-yaml", type=str, default=None)
     parser.add_argument("--kinematics-yaml-dir", type=str, default=None)
+    parser.add_argument(
+        "--nominal-urdf",
+        action="store_true",
+        help="Use nominal URDF only (skip per-unit kinematics YAML even when --ip is set)",
+    )
     parser.add_argument("--calibrated-output-dir", type=str, default=None)
     parser.add_argument("--z-min-mm", type=float, default=None)
     parser.add_argument("--random-count", type=int, default=100)
@@ -750,7 +789,7 @@ def cli_sim_check(argv: Sequence[str] | None = None) -> int:
         args.z_min_mm = runtime.dynamics.default_z_min_mm
 
     resolved_sn: str | None = None
-    if args.ip and args.kinematics_yaml is None:
+    if args.ip and args.kinematics_yaml is None and not args.nominal_urdf:
         suffix, sn = resolve_kinematics_suffix_from_ip(
             args.ip,
             runtime.model.robot_name,
@@ -866,7 +905,7 @@ def run_sim_collision_chain(
     move_strategy: str,
 ) -> list[SimCollisionResult]:
     """Move through poses in order without returning home between them."""
-    from ufactory.real_robot_session import RobotMotionError
+    from ufactory.hardware.session import RobotMotionError
 
     results: list[SimCollisionResult] = []
     for name, q in poses:
@@ -930,7 +969,7 @@ def write_sim_collision_report(results: Sequence[SimCollisionResult], path: Path
 
 
 def cli_sim_collision_check(argv: Sequence[str] | None = None) -> int:
-    from ufactory.real_robot_session import MOVE_STRATEGIES, MOVE_STRATEGY_DIRECT, RealRobotSession
+    from ufactory.hardware.session import MOVE_STRATEGIES, MOVE_STRATEGY_DIRECT, RealRobotSession
 
     parser = argparse.ArgumentParser(
         description="xArm simulation-mode chained self-collision check for dynamics poses",

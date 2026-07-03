@@ -1,12 +1,12 @@
 # `ufactory.dynamics` — xArm 动力学验证子包
 
-v0.1.6 中，动力学验证实现从三个遗留模块迁移到六个职责聚焦的子模块；旧模块名保留为 re-export 垫片。
+v0.2.0 中，动力学验证公开入口统一为 `ufactory.dynamics` 子包；旧顶层兼容模块已删除。
 
 ## 模块职责
 
 | 模块 | 职责 |
 | --- | --- |
-| `probe` | Genesis 场景构建；PD-hold 采样（armature + frictionloss 回读）；EE z 表；pre-snap-home；plane morph；6 个去硬编码物理检查（自由落体 / 重力补偿 / PD 阶跃 / 能量 / 质量矩阵 / 物理参数）。 |
+| `probe` | Genesis 场景构建；PD 持位采样（Genesis 仿真里，为维持目标关节角，PD 控制器算出的关节力矩；含 armature + frictionloss 回读）；EE z 表；pre-snap-home；plane morph；6 个去硬编码物理检查（自由落体 / 重力补偿 / PD 阶跃 / 能量 / 质量矩阵 / 物理参数）。 |
 | `reference` | Pinocchio 独立 CRBA + 重力 oracle 后端；armature 对齐质量辅助函数。 |
 | `analysis` | L2a/L2b/L3a/L3b 静态分层机（重构后 L2b oracle = `pd_hold_tau vs pin_G(q_actual)`）；URDF 动力学验证；力矩对比 / 分类 / `build_dynamics_sample`。 |
 | `report` | `DynamicsRunConfig` / `GenesisDynamicsSample` / `DynamicsSample` / `ValidationStatus`；JSONL/CSV 报告写入+读取+对比；仿真/运行时常量。 |
@@ -69,7 +69,7 @@ rc = cli_hardware_check([
 
 ## 测试
 
-`tests/test_dynamics_*.py` 覆盖本子包。贡献者安装与分档运行见仓库根 [CONTRIBUTING.md](../../CONTRIBUTING.md)：
+`tests/dynamics/test_dynamics_*.py` 覆盖本子包。贡献者安装与分档运行见仓库根 [CONTRIBUTING.md](../../CONTRIBUTING.md)：
 
 ```bash
 pip install -e ".[dynamics,dev]"

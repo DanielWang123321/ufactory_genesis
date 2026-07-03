@@ -28,7 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
   sys.path.insert(0, str(_REPO_ROOT))
 
-from ufactory.kinematics import (  # noqa: E402
+from ufactory.kinematics.calibration import (  # noqa: E402
   get_robot_sn,
   has_per_unit_kinematics_calibration,
   kinematics_suffix_from_sn,
@@ -147,12 +147,12 @@ def main() -> int:
   for i in range(robot_dof):
     joint_param = {}
     kinematics["joint{}".format(i + 1)] = joint_param
-    joint_param["x"] = params[i * 6]
-    joint_param["y"] = params[i * 6 + 1]
-    joint_param["z"] = params[i * 6 + 2]
-    joint_param["roll"] = params[i * 6 + 3]
-    joint_param["pitch"] = params[i * 6 + 4]
-    joint_param["yaw"] = params[i * 6 + 5]
+    for axis_idx, axis in enumerate(("x", "y", "z", "roll", "pitch", "yaw")):
+      value = float(params[i * 6 + axis_idx])
+      # xArm5 firmware may return mm-scale outliers on prismatic-like offsets.
+      if axis in ("x", "y", "z") and abs(value) > 1.0:
+        value /= 1000.0
+      joint_param[axis] = value
 
   with open(output_file, "w", encoding="utf-8") as f:
     try:

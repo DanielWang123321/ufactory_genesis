@@ -16,7 +16,7 @@ import torch
 
 import genesis as gs
 
-from ufactory.gripper_g2 import GRIPPER_G2_OPEN_GAP_M
+from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M
 from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment

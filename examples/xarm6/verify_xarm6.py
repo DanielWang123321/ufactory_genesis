@@ -19,7 +19,7 @@ import torch
 
 import _bootstrap  # noqa: F401
 import genesis as gs
-from ufactory.kinematics import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
+from ufactory.kinematics.calibration import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
 
 # Joint/link names (URDF style, with fallback for namespaced names)
 JOINT_NAMES = (

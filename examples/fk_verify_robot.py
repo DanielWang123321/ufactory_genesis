@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 import _bootstrap  # noqa: F401
-from ufactory.kinematics_validation import cli_fk
+from ufactory.kinematics.validation import cli_fk
 
 
 if __name__ == "__main__":

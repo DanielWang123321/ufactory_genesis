@@ -1,5 +1,8 @@
 """Genesis probe functions: scene build + controlled PD-hold sampling.
 
+PD hold torque: in Genesis simulation, joint torques computed by the PD
+controller to maintain target joint angles.
+
 All Genesis-touching code lives here so that the analysis/reference/report layers
 stay simulator-free and unit-testable in isolation. Probe functions return
 plain-data samples (see :class:`ufactory.dynamics.report.GenesisDynamicsSample`)
@@ -27,7 +30,7 @@ from ufactory.dynamics.report import (
 from ufactory.dynamics.poses import _XARM6_RUNTIME
 
 if TYPE_CHECKING:
-    from ufactory.robot_params import RobotRuntimeProfile
+    from ufactory.robots.runtime import RobotRuntimeProfile
 
 
 def _to_np(tensor_or_array) -> np.ndarray:
@@ -189,6 +192,9 @@ def genesis_pd_hold_torque_at_q(
     capture_contacts: bool = False,
 ) -> GenesisDynamicsSample:
     """Hold ``target_q`` with Genesis PD and return explicitly named physics quantities.
+
+    PD hold torque: in Genesis simulation, joint torques computed by the PD
+    controller to maintain target joint angles (``get_dofs_control_force``).
 
     ``capture_contacts=True`` additionally records active self-contact pairs at the
     settled state (see :func:`capture_self_contacts`); off by default since it costs

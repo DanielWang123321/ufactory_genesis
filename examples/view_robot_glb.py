@@ -7,8 +7,8 @@ import argparse
 import _bootstrap  # noqa: F401
 
 from _robot_viewer import run_glb_diagnose, run_glb_viewer
-from ufactory.paths import robot_visual_glb_urdf
-from ufactory.robot_registry import get_robot_profile, robot_cli_choices
+from ufactory.robots.paths import robot_visual_glb_urdf
+from ufactory.robots.registry import get_robot_profile, robot_cli_choices
 
 
 def main() -> None:

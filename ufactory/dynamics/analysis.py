@@ -25,7 +25,9 @@ import numpy as np
 from ufactory.dynamics.report import (
     ABS_ERR_LIMITS,
     L2_ERR_LIMIT,
+    POS_ERR_TOL,
     REL_ERR_LIMIT,
+    SATURATION_MARGIN,
     GenesisDynamicsSample,
     DynamicsSample,
     TorqueCompareResult,
@@ -43,13 +45,95 @@ from ufactory.dynamics.poses import (
 )
 
 if TYPE_CHECKING:
-    from ufactory.robot_params import RobotRuntimeProfile
+    from ufactory.robots.runtime import RobotRuntimeProfile
 
 LAYER_L2A = "L2a"
 LAYER_L2B = "L2b"
 LAYER_L3A = "L3a"
 LAYER_L3B = "L3b"
 STATIC_LAYERS = (LAYER_L2A, LAYER_L2B, LAYER_L3A, LAYER_L3B)
+
+# PD saturated at effort limit because of tracking error while |pin_G| stays modest.
+PD_TRACKING_POS_ERR_RAD = 0.02
+PD_TRACKING_PIN_GRAVITY_FRACTION = 0.25
+
+
+@dataclass(frozen=True)
+class PdHoldGateDecision:
+    block_hardware: bool
+    reason: str
+    tracking_limited_joints: tuple[int, ...] = ()
+    pin_gravity_theory: np.ndarray | None = None
+
+
+def evaluate_pd_hold_gate(
+    genesis_sample: GenesisDynamicsSample,
+    target_q: np.ndarray,
+    *,
+    runtime_profile: RobotRuntimeProfile,
+    reference: Any | None = None,
+) -> PdHoldGateDecision:
+    """Return whether Genesis PD-hold failure should block real-robot motion."""
+    if genesis_sample.settled and not genesis_sample.saturated:
+        return PdHoldGateDecision(block_hardware=False, reason="ok")
+
+    target = np.asarray(target_q, dtype=np.float64).reshape(-1)
+    limits = np.asarray(runtime_profile.arm.effort_limits, dtype=np.float64)
+    tau = np.asarray(genesis_sample.pd_hold_tau, dtype=np.float64).reshape(-1)
+    q_actual = np.asarray(genesis_sample.q_actual, dtype=np.float64).reshape(-1)
+    per_joint_pos_err = np.abs(q_actual - target)
+    saturated_mask = np.abs(tau) >= limits * SATURATION_MARGIN
+    if not saturated_mask.any() or reference is None:
+        reason = "not_settled" if not genesis_sample.settled else "saturated"
+        return PdHoldGateDecision(block_hardware=True, reason=reason)
+
+    try:
+        pin_at_actual = np.asarray(reference.gravity(q_actual), dtype=np.float64).reshape(-1)
+        pin_at_target = np.asarray(reference.gravity(target), dtype=np.float64).reshape(-1)
+    except Exception:
+        reason = "not_settled" if not genesis_sample.settled else "saturated"
+        return PdHoldGateDecision(block_hardware=True, reason=reason)
+
+    tracking_limited: list[int] = []
+    for i in range(len(limits)):
+        if not saturated_mask[i]:
+            continue
+        if (
+            per_joint_pos_err[i] > PD_TRACKING_POS_ERR_RAD
+            and abs(pin_at_actual[i]) < limits[i] * PD_TRACKING_PIN_GRAVITY_FRACTION
+        ):
+            tracking_limited.append(i)
+
+    saturated_indices = {i for i in range(len(limits)) if saturated_mask[i]}
+    if saturated_indices and saturated_indices == set(tracking_limited):
+        worst_idx = int(np.argmax(per_joint_pos_err))
+        if worst_idx in tracking_limited and per_joint_pos_err[worst_idx] > POS_ERR_TOL:
+            return PdHoldGateDecision(
+                block_hardware=False,
+                reason="pd_tracking_saturation",
+                tracking_limited_joints=tuple(tracking_limited),
+                pin_gravity_theory=pin_at_target,
+            )
+
+    reason = "not_settled" if not genesis_sample.settled else "saturated"
+    return PdHoldGateDecision(block_hardware=True, reason=reason)
+
+
+def genesis_sample_for_torque_compare(
+    genesis_sample: GenesisDynamicsSample,
+    gate: PdHoldGateDecision,
+) -> GenesisDynamicsSample:
+    """Use pin_G(q_target) as theory torque when PD saturation is tracking-limited."""
+    from dataclasses import replace
+
+    if gate.pin_gravity_theory is None:
+        return genesis_sample
+    return replace(
+        genesis_sample,
+        pd_hold_tau=np.asarray(gate.pin_gravity_theory, dtype=np.float64).copy(),
+        settled=True,
+        saturated=False,
+    )
 
 
 @dataclass(frozen=True)

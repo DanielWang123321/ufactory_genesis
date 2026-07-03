@@ -7,7 +7,7 @@ energy dissipation and mass-matrix plausibility (Tests 5-10, continuing the
 numbering from verify_xarm6.py which has Tests 1-4).
 
 No hardcoded mass/PD tables: gains and effort limits come from
-``ufactory.robot_params`` and link masses from Genesis ``get_mass`` / ``link``.
+``ufactory.robots.runtime`` and link masses from Genesis ``get_mass`` / ``link``.
 
 Usage:
     /opt/conda_envs/py313/bin/python examples/xarm6/verify_xarm6_dynamics.py        # headless (URDF default)
@@ -27,8 +27,8 @@ from ufactory.dynamics import (
     test_mass_parameters,
     test_pd_step_response,
 )
-from ufactory.paths import xarm6_urdf
-from ufactory.robot_params import get_robot_runtime_profile
+from ufactory.robots.paths import xarm6_urdf
+from ufactory.robots.runtime import get_robot_runtime_profile
 
 
 def main() -> int:

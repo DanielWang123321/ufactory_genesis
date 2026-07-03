@@ -33,7 +33,7 @@ gripper_g2/
 机械臂场景使用组合 URDF：
 
 ```python
-from ufactory.paths import robot_visual_glb_urdf
+from ufactory.robots.paths import robot_visual_glb_urdf
 
 # 静态 GLB
 urdf = robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=True)

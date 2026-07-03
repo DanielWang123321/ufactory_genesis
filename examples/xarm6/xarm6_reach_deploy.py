@@ -45,10 +45,10 @@ from ufactory.deploy.obs_align import cli_align
 from ufactory.deploy.policy_runner import ReachPolicyRunner
 from ufactory.deploy.reach_config import REACH_EXECUTORS
 from ufactory.deploy.session import ReachDeploySession
-from ufactory.real_robot_session import MOVE_STRATEGY_DIRECT
-from ufactory.kinematics import resolve_kinematics_suffix_from_ip
-from ufactory.robot_params import get_robot_runtime_profile
-from ufactory.xarm_control import MODE_POSITION
+from ufactory.hardware.session import MOVE_STRATEGY_DIRECT
+from ufactory.kinematics.calibration import resolve_kinematics_suffix_from_ip
+from ufactory.robots.runtime import get_robot_runtime_profile
+from ufactory.hardware.xarm import MODE_POSITION
 
 ACTION_CONTRACT_CHECKPOINT = "checkpoint"
 ACTION_CONTRACT_RUNTIME = "runtime"

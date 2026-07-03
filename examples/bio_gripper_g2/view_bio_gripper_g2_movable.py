@@ -5,8 +5,8 @@ from __future__ import annotations
 import _bootstrap  # noqa: F401
 
 from _standalone_gripper_viewer import run_standalone_gripper_viewer
-from ufactory.bio_gripper_g2 import BioGripperG2
-from ufactory.paths import bio_gripper_g2_movable_visual_urdf
+from ufactory.grippers.bio_g2 import BioGripperG2
+from ufactory.robots.paths import bio_gripper_g2_movable_visual_urdf
 
 
 def _controller(robot):

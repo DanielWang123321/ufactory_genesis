@@ -11,7 +11,7 @@ from _lite6_gripper_demo import (
     setup_lite6_gripper_pd,
 )
 from _standalone_gripper_viewer import run_standalone_gripper_viewer
-from ufactory.paths import lite6_gripper_movable_visual_urdf
+from ufactory.robots.paths import lite6_gripper_movable_visual_urdf
 
 
 def _controller(robot):

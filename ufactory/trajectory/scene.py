@@ -16,9 +16,9 @@ import torch
 
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
-from ufactory.glb_visual import enable_glb_pbr_surfaces, glb_view_surface
-from ufactory.gripper_g2 import GRIPPER_G2_OPEN_GAP_M
-from ufactory.paths import robot_visual_glb_urdf, xarm6_urdf
+from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M
+from ufactory.robots.paths import robot_visual_glb_urdf, xarm6_urdf
 
 TABLE_HEIGHT = 0.4  # meters; robot base sits on the table surface
 DEFAULT_ROBOT_BASE_POS = (0.30, 0.00, TABLE_HEIGHT)

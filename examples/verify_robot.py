@@ -10,9 +10,9 @@ import torch
 
 import _bootstrap  # noqa: F401
 import genesis as gs
-from ufactory.kinematics import prepare_robot_model_for_verification
-from ufactory.paths import robot_urdf
-from ufactory.robot_registry import get_robot_profile, joint_names, robot_cli_choices
+from ufactory.kinematics.calibration import prepare_robot_model_for_verification
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.registry import get_robot_profile, joint_names, robot_cli_choices
 
 
 def quat_to_rpy(quat):

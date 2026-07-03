@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.1.6-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.0-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -27,7 +27,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 
 ## 快速开始
 
-已在 Python 3.13、Genesis ≥1.2.0、PyTorch 2.12 下验证。
+已在 Python 3.13、Genesis 1.2.0、PyTorch 2.10.0+cu128 下验证。
 
 ```bash
 # 1. 安装 Genesis（按平台选择：CPU / CUDA / macOS / AMD）
@@ -126,104 +126,46 @@ python examples/xarm6/xarm6_g2_showcase.py --no-loop --speed 1.5
 
 ## API 快速参考
 
+v0.2.0 采用按功能域划分的子包。根命名空间刻意保持精简：
+
 ```python
 import ufactory
 ```
 
-### 机器人注册表
+| 根 API | 说明 |
+|--------|------|
+| `ufactory.ROBOT_PROFILES` | 支持机型注册表 |
+| `ufactory.get_robot_profile(key)` | 按 profile key 或短名解析机型 |
+| `ufactory.robot_cli_choices()` | 排序后的 `--robot` 选项 |
+| `ufactory.robot_urdf(key, name=None)` | 默认或指定 URDF 的绝对路径 |
+| `ufactory.robot_visual_glb_urdf(key, with_*=..., movable=...)` | GLB 视觉 URDF 绝对路径 |
+| `ufactory.robot_assets(name)` | 机器人资产目录 |
+| `ufactory.kinematics_user_dir(robot_name)` | 逐台标定 YAML 目录 |
+| `ufactory.get_robot_runtime_profile(key)` | typed runtime profile |
 
-| 函数 / 对象 | 说明 |
-|------------|------|
-| `ufactory.ROBOT_PROFILES` | 所有支持机型的 `RobotModelSpec` 字典 |
-| `ufactory.get_robot_profile(key)` | 按 profile key 或短名（`xarm6`）获取 `RobotModelSpec` |
-| `ufactory.get_profile_key_for_robot_name(name)` | 机器人名称解析为 profile key（`xarm6` → `xarm6_1305`） |
-| `ufactory.robot_cli_choices()` | 排序后的 `--robot` 选项（键名 + 短名别名） |
-| `ufactory.arm_link_names(profile)` | 获取某机型的连杆名称元组 |
-| `ufactory.joint_names(profile)` | 获取某机型的关节名称元组 |
+高级 API 从所属功能模块导入：
 
-### 路径工具
-
-#### 通用 API
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.robot_urdf(key, name=None)` | 按 profile key 或短名获取默认 URDF 绝对路径 |
-| `ufactory.robot_visual_glb_urdf(key, with_*=..., movable=...)` | 带 GLB 视觉的 URDF；末端选项互斥，`movable` 约束见源码 |
-| `ufactory.robot_assets(name)` | 机器人资产目录 `Path` |
-| `ufactory.kinematics_user_dir(robot_name)` | 逐台标定 YAML 目录：`assets/urdf/<robot>/kinematics/user/` |
+| 功能域 | 规范导入路径 |
+|--------|--------------|
+| 机器人注册、路径、运行参数 | `ufactory.robots.registry`, `ufactory.robots.paths`, `ufactory.robots.runtime` |
+| 运动学校准与 FK/IK 验证 | `ufactory.kinematics.calibration`, `ufactory.kinematics.validation` |
+| 动力学仿真与真机验证 | `ufactory.dynamics` |
+| 真机 SDK/session/hold 观测 | `ufactory.hardware.xarm`, `ufactory.hardware.session`, `ufactory.hardware.observe` |
+| 夹爪命令转换与控制器 | `ufactory.grippers.g2`, `ufactory.grippers.bio_g2` |
+| 轨迹与抓放辅助 | `ufactory.trajectory`, `ufactory.manipulation.frames` |
+| GLB 可视化 | `ufactory.visualization.glb` |
+| 策略部署 | `ufactory.deploy` |
 
 ```python
-# 推荐：通用入口（与 examples 中 --robot xarm6 一致）
-ufactory.robot_urdf("xarm6")
-ufactory.robot_visual_glb_urdf("xarm6", with_gripper_g2=True, movable=True)
+from ufactory.kinematics.calibration import build_calibrated_urdf
+from ufactory.dynamics import dynamics_default_configs
+from ufactory.grippers.g2 import gripper_g2_gap_m_to_sdk_pos_mm
+from ufactory.visualization.glb import enable_glb_pbr_surfaces
 ```
 
-#### xArm 5/6/7 便捷函数
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.xarm5_urdf(name="xarm5_1305.urdf")` | 默认 xArm 5 URDF |
-| `ufactory.xarm6_urdf(name="xarm6_1305.urdf")` | 默认 xArm 6 URDF |
-| `ufactory.xarm7_urdf(name="xarm7_1305.urdf")` | 默认 xArm 7 URDF |
-| `ufactory.xarm5_1305_urdf()` | `robot_urdf("xarm5_1305")` 薄封装 |
-| `ufactory.xarm6_1305_urdf()` | 同 `xarm6_urdf()` |
-| `ufactory.xarm7_1305_urdf()` | `robot_urdf("xarm7_1305")` 薄封装 |
-| `ufactory.xarm5_1305_visual_glb_urdf(with_bio_gripper_g2=False)` | xArm 5 GLB 视觉 URDF |
-| `ufactory.xarm6_1305_visual_glb_urdf(with_bio_gripper_g2, with_gripper_g2, movable)` | xArm 6 GLB 视觉 URDF（支持 G2 / Bio G2 / movable） |
-| `ufactory.xarm7_1305_visual_glb_urdf(with_bio_gripper_g2=False)` | xArm 7 GLB 视觉 URDF |
-
-#### Lite6 便捷函数
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.lite6_urdf()` | 默认 Lite6 URDF |
-| `ufactory.lite6_visual_glb_urdf(with_lite6_gripper, with_lite6_vacuum_gripper, movable)` | Lite6 GLB 视觉 URDF，支持夹爪选项 |
-| `ufactory.lite6_with_gripper_urdf()` | 带平行夹爪的**物理**组合 URDF |
-| `ufactory.lite6_with_vacuum_gripper_urdf()` | 带真空吸盘的**物理**组合 URDF |
-| `ufactory.lite6_gripper_movable_visual_urdf()` | 独立夹爪可动视觉 URDF（无机械臂） |
-
-#### UF850 便捷函数
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.uf850_urdf()` | 默认 UF850 URDF |
-| `ufactory.uf850_visual_glb_urdf(with_bio_gripper_g2=False)` | UF850 GLB 视觉 URDF |
-
-#### 独立夹爪资产
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.gripper_g2_movable_visual_urdf()` | Gripper G2 独立可动视觉 URDF |
-| `ufactory.gripper_g2_static_glb(ee_link="link6")` | Gripper G2 静态整体 GLB |
-| `ufactory.gripper_g2_base_glb(ee_link="link6")` | Gripper G2 基座 GLB（movable 模式） |
-| `ufactory.gripper_g2_shared_glb(name)` | Gripper G2 共享连杆 GLB |
-| `ufactory.bio_gripper_g2_movable_visual_urdf()` | Bio Gripper G2 独立可动视觉 URDF |
-| `ufactory.bio_gripper_g2_glb(ee_link="link6")` | Bio Gripper G2 静态 GLB |
-
-> 完整签名与参数约束见 [`ufactory/paths.py`](ufactory/paths.py)；包级导出见 [`ufactory/__init__.py`](ufactory/__init__.py)。
-
-### 运行参数 Profile
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.get_robot_runtime_profile(key)` | typed runtime profile：机械臂 PD、力矩限制、验证姿态、任务能力 |
-| `ufactory.dynamics_default_configs(key)` | 按机型返回动力学验证姿态 |
-
-### 运动学校准
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.load_kinematics_yaml(path)` | 从运动学 YAML 加载关节偏移 |
-| `ufactory.build_calibrated_urdf(base, kinematics)` | 生成含标定关节原点的 URDF |
-| `ufactory.parse_sn_model_code(sn)` | 从序列号提取 4 位型号码 |
-| `ufactory.has_per_unit_kinematics_calibration(sn, name)` | 判断某 SN 是否需要逐台标定 |
-
-### GLB PBR 视觉
-
-| 函数 | 说明 |
-|------|------|
-| `ufactory.enable_glb_pbr_surfaces()` | 修补 Genesis 以保留 GLB 的 PBR 材质 |
-| `ufactory.glb_view_surface()` | 非 GLB 几何体的默认双面渲染表面 |
+v0.2.0 已移除旧根模块入口，例如 `ufactory.paths`、`ufactory.robot_params`、
+`ufactory.kinematics_validation`、`ufactory.real_robot_session` 和
+`ufactory.dynamics_validation`。
 
 ## 真机运动学校准（按 SN 判断）
 
@@ -267,13 +209,19 @@ xArm 6 是本仓库参考机型，`examples/xarm6/` 保留兼容入口；新的�
 ## 项目结构
 
 ```
-ufactory/             # 核心 Python 包（机器人注册、路径、运动学、GLB）
-assets/urdf/          # 各机型 URDF、STL 碰撞、GLB 视觉 mesh
-assets/configs/       # 运行时 YAML 配置（动力学验证点位等）
-assets/scenes/        # 仿真场景资产（贴图、道具）
-examples/             # 使用示例（预览、FK/IK、RL）
-scripts/              # 用户可用辅助脚本（标定、贴图、hold 电流观察）
-tests/                # 贡献者 Pytest 回归（非用户上手路径）
+ufactory/robots/          # 机型注册、资产路径、运行参数
+ufactory/kinematics/      # 运动学校准与 FK/IK 验证
+ufactory/dynamics/        # 动力学仿真、验证、报告与 CLI
+ufactory/hardware/        # xArm SDK/session 与 hold 电流观察
+ufactory/grippers/        # 夹爪命令转换与控制器
+ufactory/trajectory/      # 轨迹 profile、segment、仿真/真机执行器
+ufactory/manipulation/    # 任务坐标系辅助
+ufactory/visualization/   # GLB/PBR 可视化辅助
+ufactory/deploy/          # 策略部署辅助
+assets/                   # URDF、mesh、配置与场景资产
+examples/                 # 使用示例（预览、FK/IK、RL）
+scripts/                  # 用户可用辅助脚本
+tests/                    # 贡献者 Pytest 回归
 ```
 
 ## 参与贡献

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import genesis as gs
-from ufactory.glb_visual import glb_view_surface
-from ufactory.paths import robot_visual_glb_urdf
+from ufactory.visualization.glb import glb_view_surface
+from ufactory.robots.paths import robot_visual_glb_urdf
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEXTURE_DIR = REPO_ROOT / "assets" / "scenes" / "packaging_showcase" / "textures"

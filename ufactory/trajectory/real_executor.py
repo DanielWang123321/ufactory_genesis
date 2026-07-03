@@ -20,10 +20,10 @@ from pathlib import Path
 
 import numpy as np
 
-from ufactory import xarm_control as xc
-from ufactory.dynamics_validation import parse_joint_limits
-from ufactory.gripper_g2 import gripper_g2_gap_m_to_sdk_pos_mm
-from ufactory.paths import xarm6_urdf
+from ufactory.hardware import xarm as xc
+from ufactory.dynamics import parse_joint_limits
+from ufactory.grippers.g2 import gripper_g2_gap_m_to_sdk_pos_mm
+from ufactory.robots.paths import xarm6_urdf
 from ufactory.trajectory.segments import Program, Segment
 
 EXECUTOR_SERVO_J = "servo-j"

@@ -7,8 +7,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ufactory.kinematics import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
-from ufactory.kinematics_validation import (
+from ufactory.kinematics.calibration import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
+from ufactory.kinematics.validation import (
     PASS_POS_MM,
     PASS_RPY_DEG,
     angle_diff_deg,
@@ -19,9 +19,9 @@ from ufactory.kinematics_validation import (
     _connect_sdk,
 )
 from ufactory.deploy.sdk_units import MM_PER_M, sdk_position_m, sdk_position_mm
-from ufactory.dynamics_validation import xarm6_default_dynamics_configs
-from ufactory.paths import robot_urdf
-from ufactory.robot_params import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.dynamics import xarm6_default_dynamics_configs
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
 
 
 def _dynamics_pose_configs(_runtime) -> list[tuple[str, np.ndarray]]:

@@ -48,9 +48,9 @@ from pathlib import Path
 import numpy as np
 
 import _bootstrap  # noqa: F401
-from ufactory.gripper_g2 import GRIPPER_G2_OPEN_GAP_M
-from ufactory.kinematics import resolve_kinematics_suffix_from_ip
-from ufactory.robot_params import get_robot_runtime_profile
+from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M
+from ufactory.kinematics.calibration import resolve_kinematics_suffix_from_ip
+from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.trajectory import (
     KinematicCarryTracker,
     RealExecutorConfig,

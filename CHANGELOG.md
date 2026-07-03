@@ -5,11 +5,40 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-07-03
+
+### Added
+
+- **Five-robot dynamics validation**: xArm5, xArm6, xArm7, Lite6, and UF850 hardware-verified against Genesis PD hold (20 calibration poses each).
+- **xArm5/6/7 collision meshes**: vendor simplified collision hulls converted from OBJ to STL (geometry-equivalent; aligns with firmware STL collision format).
+- **Tests reorganized by module**: `tests/robots/`, `tests/dynamics/`, `tests/hardware/`, `tests/trajectory/`, `tests/deploy/`, `tests/manipulation/`.
+- **`test_public_api_layout.py`**: asserts canonical subpackage imports and that legacy root modules raise `ModuleNotFoundError`.
+- **`test_xarm5_collision_mesh_equivalence.py`**: git OBJ vs working-tree STL Hausdorff/volume equivalence.
+- **`test_xarm5_pose4_stl_collision.py`**: documents link3↔link5 Genesis self-contact and `pd_tracking_saturation` gate bypass.
+- **`assets/urdf/xarm{5,6,7}/README.md`**: collision/visual mesh layout notes.
+
+### Changed
+
+- **Breaking package layout**: public Python modules are now grouped by function domain: `ufactory.robots`, `ufactory.kinematics`, `ufactory.dynamics`, `ufactory.hardware`, `ufactory.grippers`, `ufactory.trajectory`, `ufactory.manipulation`, `ufactory.visualization`, and `ufactory.deploy`.
+- The root `ufactory` namespace now exposes only core robot convenience APIs: profile lookup, generic URDF/asset paths, and runtime profile lookup.
+- Five-robot arm dynamics URDFs now reference `collision/*.stl` instead of `collision/*.obj`.
+- `observe-hold-current` console entry point targets `ufactory.hardware.observe`; dynamics CLI entry points remain under `ufactory.dynamics.cli`.
+- Dynamics report schema v3: explicit per-joint torque units (`*_nm`), `status_reason`, `worst_joint`, `worst_abs_err_nm`; reports archived under `reports/dyn_ver_<SN>/`.
+
+### Removed
+
+- Legacy root modules were removed with no compatibility wrappers: `ufactory.paths`, `ufactory.robot_registry`, `ufactory.robot_params`, `ufactory.kinematics_validation`, `ufactory.real_robot_session`, `ufactory.xarm_control`, `ufactory.gripper_g2`, `ufactory.bio_gripper_g2`, `ufactory.glb_visual`, `ufactory.dynamics_validation`, `ufactory.dynamics_static_analysis`, and `ufactory.dynamics_verify`.
+- xArm5/6/7 `collision/*.obj` meshes (replaced by equivalent STL).
+
+### Known Issues
+
+- **xArm5 pose 4 (Genesis)**: link3↔link5 self-contact persists in kinematic and PD-hold modes (mesh geometry overlap in simulation). Real robot and SDK collision checks pass; `pd_tracking_saturation` gate allows hardware validation when Pinocchio gravity at the target is nominal.
+
 ## [0.1.6] — 2026-07-02
 
 ### Added
 
-- **Asset integrity tests**: public URDF mesh references must resolve, xArm6 1305 collision meshes must use collision OBJ files, and raw/source GLB intermediates must stay out of the public file set.
+- **Asset integrity tests**: public URDF mesh references must resolve, dynamics URDF collision meshes must use `collision/*.stl` (not visual or OBJ), and raw/source GLB intermediates must stay out of the public file set.
 - Optional dependency extras: `real` for xArm SDK, `rl` for rsl-rl training/evaluation, and `showcase` for the packaging showcase scipy dependency.
 
 ### Changed
@@ -28,11 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`ufactory.robot_params`**: typed runtime profiles (joint PD, torque limits, dynamics poses, task capabilities)
-- **`ufactory.dynamics_validation`**: Genesis PD hold vs real-robot static torque validation; CLIs `dynamics-sim-check`, `dynamics-hardware-check`, `dynamics-sim-collision-check`, `dynamics-report-compare`
-- **`ufactory.real_robot_session`** and **`ufactory.xarm_control`**: real-robot connection, rad/rad/s motion, hold sampling
+- **Runtime profiles**: typed runtime profiles (joint PD, torque limits, dynamics poses, task capabilities)
+- **Dynamics validation**: Genesis PD hold vs real-robot static torque validation; CLIs `dynamics-sim-check`, `dynamics-hardware-check`, `dynamics-sim-collision-check`, `dynamics-report-compare`
+- **Real-robot helpers**: real-robot connection, rad/rad/s motion, hold sampling
 - **`ufactory.dynamics_pose_selection`** and **`scripts/select_dynamics_calib_poses.py`**: EE y hemisphere stratified calibration pose selection
-- **`ufactory.kinematics_validation`**: shared FK/IK verification CLI for generic robot examples
+- **`ufactory.kinematics.validation`**: shared FK/IK verification CLI for generic robot examples
 - Generic examples: `packaging_showcase.py`, `fk_verify_robot.py`, `ik_verify_robot.py`, `arm_reach_env.py`, `grasp_place_env.py`; expanded test suite
 
 ### Changed
@@ -66,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`BioGripperG2` controller module** (`ufactory/bio_gripper_g2.py`) for reusable open/close control across all supported arms
+- **`BioGripperG2` controller module** for reusable open/close control across all supported arms
 - **Per-robot `bio_gripper_g2_attach` origins** computed during relocalize and written into combo URDFs
 - **`robot_cli_choices()`** and short-name aliases: `xarm5` / `xarm6` / `xarm7` resolve to `*_1305` profiles
 - **`tests/test_robot_registry.py`** for profile resolution and default URDF paths

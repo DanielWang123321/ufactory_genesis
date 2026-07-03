@@ -13,9 +13,9 @@ from ufactory.deploy.obs_adapter import build_reach_obs
 from ufactory.deploy.reach_config import EXECUTOR_ONLINE_JOINT, EXECUTOR_SERVO_J, ReachDeployConfig
 from ufactory.deploy.sdk_units import sdk_position_m
 from ufactory.deploy.safety import SafetyGuard
-from ufactory.real_robot_session import RealRobotSession
-from ufactory.robot_params import RobotRuntimeProfile, get_robot_runtime_profile
-from ufactory.xarm_control import (
+from ufactory.hardware.session import RealRobotSession
+from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
+from ufactory.hardware.xarm import (
     MODE_JOINT_ONLINE_PLANNING,
     MODE_POSITION,
     MODE_SERVO,
