@@ -8,10 +8,17 @@ import numpy as np
 import pytest
 
 from ufactory.trajectory import (
+    CartesianWaypoint,
+    JointWaypoint,
+    RealExecutorConfig,
     ServoLimits,
     TrajectorySafetyError,
+    TrajectoryPlannerConfig,
     build_pickplace_program,
     check_segment_safety,
+    plan_cartesian_waypoints,
+    plan_joint_waypoints,
+    replay_real,
     validate_servo_stream,
 )
 from ufactory.trajectory.real_executor import _segment_servo_targets
@@ -56,6 +63,28 @@ def test_default_grasp_place_program_passes_servo_stream_limits_at_50hz():
     max_xyz_acc = max(s.max_acc for s in stats if s.kind == "c")
     assert max_xyz_speed == pytest.approx(142.47, abs=0.2)
     assert max_xyz_acc == pytest.approx(800.0, abs=0.5)
+
+
+def test_replay_real_rejects_movel_program_with_servo_j():
+    program = plan_cartesian_waypoints(
+        TrajectoryPlannerConfig(robot_key="xarm6", rate=50.0),
+        [0.30, 0.00, 0.30],
+        [CartesianWaypoint([0.30, 0.10, 0.30], label="line")],
+    )
+
+    with pytest.raises(TrajectorySafetyError, match="cannot replay MoveL"):
+        replay_real(program, RealExecutorConfig(executor="servo-j", dry_run=True, rate=50.0))
+
+
+def test_replay_real_rejects_movej_program_with_servo_cartesian():
+    program = plan_joint_waypoints(
+        TrajectoryPlannerConfig(robot_key="xarm6", rate=50.0),
+        np.zeros(6),
+        [JointWaypoint(np.zeros(6), label="joint")],
+    )
+
+    with pytest.raises(TrajectorySafetyError, match="cannot replay MoveJ"):
+        replay_real(program, RealExecutorConfig(executor="servo-cartesian", dry_run=True, rate=50.0))
 
 
 def test_full_sample_joint_limit_check_catches_middle_sample_violation():

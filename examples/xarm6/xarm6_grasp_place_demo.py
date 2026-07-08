@@ -30,7 +30,7 @@ from ufactory.robots.paths import xarm6_urdf
 
 XARM6_GRIPPER_URDF = xarm6_urdf("xarm6_with_gripper.urdf")
 TABLE_HEIGHT = 0.4        # meters
-OBJ_SIZE = [0.04, 0.04, 0.04]
+OBJ_SIZE = [0.030, 0.030, 0.030]
 
 # Task parameters (mm → m)
 OBJ_XY = [0.30, 0.00]    # cube spawn position (world frame)

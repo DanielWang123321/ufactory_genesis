@@ -56,13 +56,26 @@ class DynamicsValidationParams:
 
 @dataclass(frozen=True)
 class GripperControlParams:
-    """Optional gripper-control parameters for task and showcase examples."""
+    """Optional gripper-control parameters for task and showcase examples.
 
+    ``open_pos``/``close_pos`` are the Genesis drive-DOF values (native units:
+    radians for Gripper G2's angled ``drive_joint``, metres for Lite6's
+    prismatic ``finger_joint1``) at the fully-open/fully-closed physical
+    two-finger gap. ``closed_gap_m``/``open_gap_m`` describe that physical gap
+    range. The two families use opposite sign conventions (G2: open=0.0 <
+    close=0.85; Lite6: close=0.0 < open=0.0089), so callers must always
+    interpolate through ``open_pos``/``close_pos`` rather than assuming
+    "larger drive = more closed".
+    """
+
+    family: str
     drive_joint: str
     all_joint_names: tuple[str, ...]
     finger_link_names: tuple[str, str]
     open_pos: float
     close_pos: float
+    closed_gap_m: float
+    open_gap_m: float
     kp: float
     kv: float
     force_lower: float
@@ -89,8 +102,13 @@ class RobotRuntimeProfile:
     model: RobotModelSpec
     arm: ArmControlParams
     dynamics: DynamicsValidationParams
-    gripper_g2: GripperControlParams | None = None
+    gripper: GripperControlParams | None = None
     task: TaskProfile = field(default_factory=TaskProfile)
+
+    @property
+    def gripper_g2(self) -> GripperControlParams | None:
+        """Deprecated alias for :attr:`gripper` (kept for existing callers)."""
+        return self.gripper
 
 
 XARM6_KP: FloatTuple = (3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0)
@@ -101,6 +119,7 @@ ABS_ERR_FRACTION = 0.10
 _HARDWARE_DYNAMICS_KEYS = frozenset({"xarm5_1305", "xarm6_1305", "uf850", "lite6", "xarm7_1305"})
 
 G2_GRIPPER_PARAMS = GripperControlParams(
+    family="g2",
     drive_joint="drive_joint",
     all_joint_names=(
         "drive_joint",
@@ -113,11 +132,30 @@ G2_GRIPPER_PARAMS = GripperControlParams(
     finger_link_names=("left_finger", "right_finger"),
     open_pos=0.0,
     close_pos=0.85,
+    closed_gap_m=0.0,
+    open_gap_m=0.084,
     kp=20.0,
     kv=5.0,
     force_lower=-5.0,
     force_upper=5.0,
     damping=0.1,
+    frictionloss=0.0,
+)
+
+LITE6_GRIPPER_PARAMS = GripperControlParams(
+    family="lite6",
+    drive_joint="finger_joint1",
+    all_joint_names=("finger_joint1", "finger_joint2"),
+    finger_link_names=("uflite_finger1", "uflite_finger2"),
+    open_pos=0.0089,
+    close_pos=0.0,
+    closed_gap_m=0.020,
+    open_gap_m=0.038,
+    kp=500.0,
+    kv=50.0,
+    force_lower=-20.0,
+    force_upper=20.0,
+    damping=0.05,
     frictionloss=0.0,
 )
 
@@ -262,7 +300,7 @@ def _task_profile(profile: RobotModelSpec) -> TaskProfile:
         "episode_length_s": 10.0,
         "ctrl_dt": 0.02,
         "table_height": 0.4,
-        "obj_size": [0.04, 0.04, 0.04],
+        "obj_size": [0.030, 0.030, 0.030],
         "fixed_obj_pos": [0.30, 0.00, 0.02],
         "fixed_target_pos": [0.42, 0.00, 0.02],
         "default_ee_pos": [0.30, 0.00, 0.30],
@@ -282,11 +320,19 @@ def _task_profile(profile: RobotModelSpec) -> TaskProfile:
     }
     return TaskProfile(
         reach_supported=True,
-        grasp_place_supported=profile.key == "xarm6_1305",
+        grasp_place_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
         showcase_supported=profile.key == "xarm6_1305",
         reach_env_defaults=reach_env_defaults,
         grasp_place_env_defaults=grasp_defaults,
     )
+
+
+def _gripper_params_for(profile: RobotModelSpec) -> GripperControlParams | None:
+    if profile.supports_gripper_g2:
+        return G2_GRIPPER_PARAMS
+    if profile.supports_lite6_gripper:
+        return LITE6_GRIPPER_PARAMS
+    return None
 
 
 def _build_runtime_profile(profile: RobotModelSpec) -> RobotRuntimeProfile:
@@ -295,7 +341,7 @@ def _build_runtime_profile(profile: RobotModelSpec) -> RobotRuntimeProfile:
         model=profile,
         arm=arm,
         dynamics=_dynamics_params(profile, arm),
-        gripper_g2=G2_GRIPPER_PARAMS if profile.supports_gripper_g2 else None,
+        gripper=_gripper_params_for(profile),
         task=_task_profile(profile),
     )
 

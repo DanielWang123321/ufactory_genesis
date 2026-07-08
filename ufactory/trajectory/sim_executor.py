@@ -16,10 +16,20 @@ import torch
 
 import genesis as gs
 
-from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M
-from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive
+from ufactory.trajectory.mirror_executor import gap_m_from_drive, resolve_tick_arm_q, resolve_tick_grip_drive
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
+from ufactory.grippers.lite6 import snap_object_to_lite6_glb_grasp
+
+# 6.9 mm: matches the prior Gripper-G2-only tuning (0.07 drive-radians at the
+# G2's 0.85-radian/84mm drive-to-gap ratio), expressed in physical gap units
+# and normalized by each gripper's effective open-close travel.
+DEFAULT_GRIPPER_HOLD_BIAS_GAP_M = 0.0069
+DEFAULT_GRASP_WELD_ATTACH_DIST_M = 0.08
+LITE6_GEOMETRIC_GRASP_TOLERANCE_M = 0.0015
+_APPROACH_FREEZE_LABEL = "descend"
+_RELEASE_LABEL = "release"
+_PLACE_STANDOFF_LABEL = "place-standoff"
 
 
 @dataclass
@@ -50,14 +60,20 @@ def replay_sim(
     ctx: TrajSceneContext,
     *,
     gripper_holds_after_grasp: bool = True,
+    gripper_hold_bias_gap_m: float = DEFAULT_GRIPPER_HOLD_BIAS_GAP_M,
+    stabilize_grasp_weld: bool = True,
+    grasp_weld_attach_dist_m: float = DEFAULT_GRASP_WELD_ATTACH_DIST_M,
     on_phase: Callable[[PhaseStatus, Segment], None] | None = None,
 ) -> SimReport:
     """Replay ``program`` in the Genesis scene and return a SimReport.
 
     MoveJ segments stream arm joint targets directly; MoveL segments solve
     link6 IK per tick (base->world). Gripper segments stream the drive value.
-    The current gripper drive is held constant during arm MoveJ/MoveL segments
-    (open before grasp, closed after).
+    During the close segment, the planned target may intentionally be smaller
+    than the object width to create contact. Once the close finishes, subsequent
+    arm segments hold the actually reached drive value plus a small bias instead
+    of continuing to chase the over-closed target. This keeps a clamp load while
+    avoiding persistent finger penetration into the cube.
     """
     robot = ctx.robot
     scene = ctx.scene
@@ -67,8 +83,32 @@ def replay_sim(
     rate = float(program.rate)
     report = SimReport(total_duration=program.total_duration, total_ticks=program.total_ticks)
 
-    current_grip_drive = drive_for_gap_m(GRIPPER_G2_OPEN_GAP_M)
+    gripper = ctx.gripper
+    current_grip_drive = drive_for_gap_m(gripper.open_gap_m, gripper)
     last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy() if len(ctx.home_qpos) else None
+    grasp_welded = False
+    spawn_obj_pos = ctx.obj.get_pos()[0].clone()
+    spawn_obj_quat = ctx.obj.get_quat()[0].clone()
+    release_freeze_pos: torch.Tensor | None = None
+    release_freeze_quat: torch.Tensor | None = None
+
+    def _table_object_center_z() -> float:
+        return float(ctx.base_pos_world[2] + ctx.obj_size[2] / 2)
+
+    def _snap_object_to_table() -> None:
+        pos = ctx.obj.get_pos()[0].clone()
+        pos[2] = _table_object_center_z()
+        ctx.obj.set_pos(pos.unsqueeze(0), zero_velocity=True)
+
+    def _restore_spawn_object() -> None:
+        ctx.obj.set_pos(spawn_obj_pos.unsqueeze(0), zero_velocity=True)
+        ctx.obj.set_quat(spawn_obj_quat.unsqueeze(0), zero_velocity=True)
+
+    def _restore_release_frozen_object() -> None:
+        if release_freeze_pos is None or release_freeze_quat is None:
+            return
+        ctx.obj.set_pos(release_freeze_pos.unsqueeze(0), zero_velocity=True)
+        ctx.obj.set_quat(release_freeze_quat.unsqueeze(0), zero_velocity=True)
 
     for si, seg in enumerate(program.segments):
         samples, n = seg.samples(rate)
@@ -79,14 +119,80 @@ def replay_sim(
             v_max=seg.v_max, a_max=seg.a_max,
         )
         if seg.kind == "gripper":
+            is_closing = (
+                gripper_holds_after_grasp
+                and seg.gap_start is not None
+                and seg.gap_end is not None
+                and seg.gap_end < seg.gap_start
+            )
+            is_opening = (
+                seg.gap_start is not None
+                and seg.gap_end is not None
+                and seg.gap_end > seg.gap_start
+            )
+            if is_opening and seg.label == _RELEASE_LABEL:
+                _snap_object_to_table()
+                release_freeze_pos = ctx.obj.get_pos()[0].clone()
+                release_freeze_quat = ctx.obj.get_quat()[0].clone()
+            if is_opening and grasp_welded:
+                _delete_grasp_weld(ctx)
+                grasp_welded = False
             for t in range(n):
-                current_grip_drive = resolve_tick_grip_drive(samples, t)
+                current_grip_drive = resolve_tick_grip_drive(samples, t, gripper)
                 _step(robot, scene, arm_idx, grip_idx, last_q_arm, grip_drive=current_grip_drive)
+                if is_opening and seg.label == _RELEASE_LABEL:
+                    _restore_release_frozen_object()
+            if is_opening and seg.label == _RELEASE_LABEL:
+                release_freeze_pos = None
+                release_freeze_quat = None
+            if is_closing:
+                # Work in a "closedness" fraction (0=open, 1=closed) rather
+                # than the raw drive-DOF: this is monotonic in the same
+                # direction for both Gripper G2 (open=0.0 < close=0.85) and
+                # Lite6 (close=0.0 < open=0.0089), so the "hold a bit past
+                # actual contact, but never past the originally planned
+                # closedness" logic generalizes unchanged across grippers.
+                actual_drive = _current_drive(robot, grip_idx)
+                actual_closedness = _closedness_fraction(actual_drive, gripper)
+                target_closedness = _closedness_fraction(current_grip_drive, gripper)
+                gap_span = float(gripper.open_gap_m) - float(getattr(gripper, "closed_gap_m", 0.0))
+                bias_closedness = float(gripper_hold_bias_gap_m) / max(gap_span, 1e-9)
+                hold_closedness = min(target_closedness, actual_closedness + bias_closedness)
+                current_grip_drive = gripper.open_pos + hold_closedness * (gripper.close_pos - gripper.open_pos)
+                if (
+                    getattr(gripper, "family", None) == "lite6"
+                    and seg.gap_end is not None
+                    and _has_bilateral_finger_object_contact(ctx)
+                ):
+                    snap_object_to_lite6_glb_grasp(ctx)
+                if stabilize_grasp_weld and _should_weld_grasp(ctx, float(grasp_weld_attach_dist_m)):
+                    _add_grasp_weld(ctx)
+                    grasp_welded = True
         else:
             for t in range(n):
                 q_arm = resolve_tick_arm_q(ctx, seg, samples, t)
                 last_q_arm = q_arm
                 _step(robot, scene, arm_idx, grip_idx, q_arm, grip_drive=current_grip_drive)
+                if (
+                    not grasp_welded
+                    and seg.kind == "movel"
+                    and seg.label == _APPROACH_FREEZE_LABEL
+                ):
+                    obj_pos = ctx.obj.get_pos()[0]
+                    if float(torch.norm(obj_pos - spawn_obj_pos)) <= float(DEFAULT_GRASP_WELD_ATTACH_DIST_M):
+                        _restore_spawn_object()
+                if getattr(ctx.gripper, "family", None) == "lite6" and seg.kind == "movel" and seg.label == _PLACE_STANDOFF_LABEL:
+                    _snap_object_to_table()
+                if (
+                    getattr(ctx.gripper, "family", None) == "lite6"
+                    and seg.kind == "movel"
+                    and seg.label == "place-descend"
+                    and t == n - 1
+                ):
+                    _snap_object_to_table()
+                    if grasp_welded:
+                        _delete_grasp_weld(ctx)
+                        grasp_welded = False
 
         # End-side error vs the segment target (both in world frame).
         if seg.kind == "movel" and seg.pose_end is not None:
@@ -107,7 +213,8 @@ def replay_sim(
     obj_pos = ctx.obj.get_pos()[0]
     obj_half_z = ctx.obj_size[2] / 2
     place_target_world = np.array(ctx.base_to_world([ctx.place_xy[0], ctx.place_xy[1], obj_half_z]))
-    report.place_error_mm = float(torch.norm(obj_pos - torch.as_tensor(place_target_world, device=gs.device, dtype=gs.tc_float)).item() * 1000.0)
+    place_target_t = torch.as_tensor(place_target_world, device=obj_pos.device, dtype=obj_pos.dtype)
+    report.place_error_mm = float(torch.norm(obj_pos - place_target_t).item() * 1000.0)
     final_link6 = np.array([ik_link.get_pos()[0][i].item() for i in range(3)])
     home_world = np.array(ctx.base_to_world(ctx.home_pos_base))
     report.home_drift_mm = float(np.linalg.norm(final_link6 - home_world) * 1000.0)
@@ -122,3 +229,137 @@ def _step(robot, scene, arm_idx, grip_idx, q_arm_target, grip_drive):
     g_t = torch.as_tensor([[float(grip_drive)]], device=gs.device, dtype=gs.tc_float)
     robot.control_dofs_position(g_t, grip_idx)
     scene.step()
+
+
+def _current_drive(robot, grip_idx) -> float:
+    q = robot.get_dofs_position(grip_idx)
+    return float(q.reshape(-1)[0].item())
+
+
+def _closedness_fraction(drive: float, gripper) -> float:
+    """Map a drive-DOF value to a closedness fraction in [0, 1] (0=open, 1=closed).
+
+    Sign-convention-agnostic: works whether ``open_pos < close_pos`` (Gripper
+    G2) or ``close_pos < open_pos`` (Lite6).
+    """
+    span = gripper.close_pos - gripper.open_pos
+    if span == 0:
+        return 0.0
+    frac = (float(drive) - gripper.open_pos) / span
+    return max(0.0, min(1.0, frac))
+
+
+def _should_weld_grasp(ctx: TrajSceneContext, attach_dist_m: float) -> bool:
+    required = ("left_finger", "right_finger", "obj")
+    if any(getattr(ctx, name, None) is None for name in required):
+        return False
+    if getattr(getattr(ctx, "gripper", None), "family", None) == "lite6":
+        if not _has_lite6_grasp_condition(ctx):
+            return False
+    left = ctx.left_finger.get_pos()[0]
+    right = ctx.right_finger.get_pos()[0]
+    finger_center = (left + right) / 2
+    obj_pos = ctx.obj.get_pos()[0]
+    return bool(torch.norm(obj_pos - finger_center).item() <= float(attach_dist_m))
+
+
+def _has_lite6_grasp_condition(ctx: TrajSceneContext) -> bool:
+    finger_idx = {int(ctx.left_finger.idx), int(ctx.right_finger.idx)}
+    contact_fingers = _object_finger_contact_links(
+        ctx,
+        finger_idx,
+        min_force_n=1e-4,
+    )
+    if contact_fingers:
+        return finger_idx.issubset(contact_fingers)
+    return _has_lite6_geometric_grasp(ctx)
+
+
+def _has_lite6_geometric_grasp(
+    ctx: TrajSceneContext,
+    *,
+    tolerance_m: float = LITE6_GEOMETRIC_GRASP_TOLERANCE_M,
+) -> bool:
+    """Approximate the real Lite6 binary close stopping on the object faces."""
+    try:
+        drive = _current_drive(ctx.robot, ctx.gripper_dof_idx)
+        physical_gap = gap_m_from_drive(drive, ctx.gripper)
+        obj_width = float(ctx.obj_size[1])
+    except Exception:
+        return False
+    return physical_gap <= obj_width + float(tolerance_m)
+
+
+def _has_bilateral_finger_object_contact(ctx: TrajSceneContext, *, min_force_n: float = 1e-4) -> bool:
+    """Return true when the object is physically contacted by both gripper fingers."""
+    required = ("left_finger", "right_finger", "obj", "robot")
+    if any(getattr(ctx, name, None) is None for name in required):
+        return False
+    finger_idx = {int(ctx.left_finger.idx), int(ctx.right_finger.idx)}
+    contact_fingers = _object_finger_contact_links(ctx, finger_idx, min_force_n=min_force_n)
+    return finger_idx.issubset(contact_fingers)
+
+
+def _object_finger_contact_links(
+    ctx: TrajSceneContext,
+    finger_idx: set[int],
+    *,
+    min_force_n: float,
+) -> set[int]:
+    try:
+        contacts = ctx.obj.get_contacts(with_entity=ctx.robot, exclude_self_contact=True)
+    except Exception:
+        return set()
+    link_a = _contact_to_numpy(contacts.get("link_a", np.zeros(0)))
+    link_b = _contact_to_numpy(contacts.get("link_b", np.zeros(0)))
+    if link_a.size == 0 or link_b.size == 0:
+        return set()
+    valid = _contact_to_numpy(contacts.get("valid_mask", np.ones(link_a.shape, dtype=bool))).astype(bool).reshape(-1)
+    link_a = link_a.reshape(-1)
+    link_b = link_b.reshape(-1)
+    if valid.size != link_a.size:
+        valid = np.ones(link_a.shape, dtype=bool)
+    force_a = _contact_to_numpy(contacts.get("force_a", np.zeros((*link_a.shape, 3), dtype=np.float64)))
+    if force_a.size == 0:
+        force_a = np.zeros((link_a.size, 3), dtype=np.float64)
+    force_a = force_a.reshape((-1, force_a.shape[-1]))
+    if force_a.shape[0] != link_a.size:
+        force_a = np.zeros((link_a.size, 3), dtype=np.float64)
+
+    out: set[int] = set()
+    for a_raw, b_raw, force_vec, is_valid in zip(link_a, link_b, force_a, valid):
+        if not bool(is_valid):
+            continue
+        a = int(a_raw)
+        b = int(b_raw)
+        touched = a if a in finger_idx else b if b in finger_idx else None
+        if touched is None:
+            continue
+        if float(np.linalg.norm(np.asarray(force_vec, dtype=np.float64))) < float(min_force_n):
+            continue
+        out.add(touched)
+    return out
+
+
+def _contact_to_numpy(value) -> np.ndarray:
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().numpy()
+    elif hasattr(value, "cpu"):
+        value = value.cpu().numpy()
+    return np.asarray(value)
+
+
+def _add_grasp_weld(ctx: TrajSceneContext) -> None:
+    solver = getattr(ctx.robot, "_solver", None)
+    obj_links = getattr(ctx.obj, "links", None)
+    if solver is None or not obj_links:
+        return
+    solver.add_weld_constraint(ctx.ik_link.idx, obj_links[0].idx)
+
+
+def _delete_grasp_weld(ctx: TrajSceneContext) -> None:
+    solver = getattr(ctx.robot, "_solver", None)
+    obj_links = getattr(ctx.obj, "links", None)
+    if solver is None or not obj_links:
+        return
+    solver.delete_weld_constraint(ctx.ik_link.idx, obj_links[0].idx)

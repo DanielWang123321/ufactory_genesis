@@ -3,11 +3,11 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.0-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.1-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
-UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化、运动学校准与强化学习环境。
+UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化、运动学校准、轨迹抓放示例与强化学习环境。
 
 [English](README.md) | [贡献指南](CONTRIBUTING.md) | [变更日志](CHANGELOG.md)
 
@@ -16,6 +16,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 - [快速开始](#快速开始)
 - [支持机型](#支持机型)
 - [GLB 视觉预览](#glb-视觉预览)
+- [轨迹抓放](#轨迹抓放)
 - [展示场景](#展示场景xarm6--gripper-g2-物理装箱)
 - [API 快速参考](#api-快速参考)
 - [真机运动学校准](#真机运动学校准按-sn-判断)
@@ -67,7 +68,7 @@ python examples/view_robot_glb.py --robot xarm6
 
 ## GLB 视觉预览
 
-GLB 用于高精度 PBR 渲染；碰撞与物理仍走 STL 网格。统一入口：
+GLB 用于高精度 PBR 渲染；注册机械臂连杆使用 visual STL 作为碰撞网格。Gripper G2 与 Lite6 Gripper 保留随包 STL 路径，但文件内容与 xarm_ros2 上游 visual STL 一致；Bio Gripper G2 与 Lite6 Vacuum 使用 visual STL 碰撞网格。统一入口：
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -103,6 +104,35 @@ python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 | `--pd` | 机械臂 | 关节演示（50°/s 平滑插值，非高增益 PD） |
 | `--show-tcp` | 机械臂 | 显示 EE 法兰红色 TCP 调试标记（默认隐藏） |
 
+## 轨迹抓放
+
+v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。下面这些入口都会调用 `examples/_grasp_place_traj.py`，先生成混合笛卡尔路点程序，再按 LSPB 轨迹采样执行。
+
+| 机型 | 命令 | 说明 |
+|------|------|------|
+| xArm5 | `python examples/xarm5/xarm5_grasp_place_traj.py --headless --rate 50` | 仅仿真和 dry-run |
+| xArm6 | `python examples/xarm6/xarm6_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo-cartesian` |
+| xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机机械臂运动 |
+| UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机机械臂运动 |
+| Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 反装夹爪，30 mm 方块 |
+
+同一组脚本也支持 Genesis 可视化和真机安全 dry-run：
+
+```bash
+# Genesis 三维窗口，GLB visual + STL collision。
+python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
+
+# 真机路径 dry-run：只打印分段和 servo 安全检查，不运动机械臂。
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo-cartesian --dry-run --rate 50 --z-min-mm 0
+
+# 真机机械臂执行；确认物理夹爪安装并测试正常后，才添加 --real-gripper。
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo-cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+```
+
+更多命令、镜像模式和 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。
+
 ## 展示场景（xArm6 + Gripper G2 物理装箱）
 
 黄色桌面（臂固定在桌面长边）、真实物理抓取红色木块、放入开口快递纸箱。GLB 高模 G2 可动 combo + 碰撞/惯性一体。首次运行需生成纸箱贴图：
@@ -126,7 +156,7 @@ python examples/xarm6/xarm6_g2_showcase.py --no-loop --speed 1.5
 
 ## API 快速参考
 
-v0.2.0 采用按功能域划分的子包。根命名空间刻意保持精简：
+项目采用按功能域划分的子包。根命名空间刻意保持精简：
 
 ```python
 import ufactory

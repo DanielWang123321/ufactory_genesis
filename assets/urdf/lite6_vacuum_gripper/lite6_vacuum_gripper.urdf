@@ -29,14 +29,14 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/collision/vacuum_gripper_lite.stl"/>
+        <mesh filename="meshes/visual/vacuum_gripper_lite.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="White"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/collision/vacuum_gripper_lite.stl"/>
+        <mesh filename="meshes/visual/vacuum_gripper_lite.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>

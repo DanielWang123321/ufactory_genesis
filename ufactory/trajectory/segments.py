@@ -1,18 +1,16 @@
-"""Trajectory segments and pick-place program assembly for the xArm6 pipeline.
+"""Trajectory segments and program assembly for UFACTORY trajectory planning.
 
 A :class:`Program` is an ordered list of :class:`Segment` instances. Each
 segment resolves, at a given ``rate`` (Hz), to a dense stream of absolute
 targets that the sim and real executors replay tick-for-tick:
 
 * :class:`MoveJSegment`  - joint-space LSPB (trapezoidal) motion.
-* :class:`MoveLSegment`  - Cartesian straight-line motion of link6 (gripper-down).
-* :class:`GripperSegment` - Gripper G2 gap open/close at a fixed link6 pose.
+* :class:`MoveLSegment`  - Cartesian straight-line motion of the configured EE.
+* :class:`GripperSegment` - gripper gap open/close at a fixed EE pose.
 
-All link6 Cartesian targets are in the **robot base frame** (link6/flange,
-``tcp_offset=0``). The real executor (``set_servo_cartesian``) consumes these
-directly; the sim executor converts base->world (adds the robot-base world
-position) before Genesis IK. With the base at table height the difference is a
-pure ``[0, 0, table_height]`` z translation.
+Cartesian targets are in the **robot base frame** (flange / ``tcp_offset=0``).
+The real executor consumes these directly; the sim executor converts base to
+world before Genesis IK.
 """
 
 from __future__ import annotations
@@ -202,6 +200,8 @@ class Program:
     segments: list[Segment] = field(default_factory=list)
     rate: float = 50.0
     limits: JointLimits | None = None
+    robot_key: str | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
 
     @property
     def total_duration(self) -> float:
@@ -225,14 +225,15 @@ def build_pickplace_program(
     speed_rad_s: float,
     mvacc_rad_s2: float,
     waypoints: list[dict],
+    robot_key: str | None = None,
 ) -> Program:
     """Assemble a Program from an ordered list of move/grip waypoints.
 
     ``waypoints`` entries are dicts with ``"type"`` in
     ``{"movej", "movel", "gripper"}`` plus the corresponding fields:
 
-    * ``movej`` -> ``q_start`` / ``q_end`` (rad, length-6)
-    * ``movel`` -> ``pose_start`` / ``pose_end`` (link6 base xyz, m, length-3)
+    * ``movej`` -> ``q_start`` / ``q_end`` (rad)
+    * ``movel`` -> ``pose_start`` / ``pose_end`` (base-frame EE xyz, m)
     * ``gripper`` -> ``gap_start`` / ``gap_end`` (m), ``duration`` (s, optional)
 
     Motor ``v_max`` / ``a_max`` come from a shared :class:`JointLimits` derived
@@ -261,4 +262,4 @@ def build_pickplace_program(
             )
         else:
             raise ValueError(f"unknown waypoint type: {t}")
-    return Program(segments=segments, rate=rate, limits=limits)
+    return Program(segments=segments, rate=rate, limits=limits, robot_key=robot_key)

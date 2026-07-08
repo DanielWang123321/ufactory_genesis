@@ -29,14 +29,14 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/visual/link_base.stl"/>
+        <mesh filename="meshes/visual/bio_gripper_g2_link_base.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="White"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/visual/link_base.stl"/>
+        <mesh filename="meshes/visual/bio_gripper_g2_link_base.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
@@ -49,14 +49,14 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/visual/left_finger.stl"/>
+        <mesh filename="meshes/visual/bio_gripper_g2_left_finger.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="White"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/visual/left_finger.stl"/>
+        <mesh filename="meshes/visual/bio_gripper_g2_left_finger.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
@@ -77,14 +77,14 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/visual/right_finger.stl"/>
+        <mesh filename="meshes/visual/bio_gripper_g2_right_finger.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <material name="White"/>
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/visual/right_finger.stl"/>
+        <mesh filename="meshes/visual/bio_gripper_g2_right_finger.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>

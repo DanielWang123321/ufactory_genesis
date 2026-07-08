@@ -6,8 +6,8 @@
 
 ```
 meshes/xarm7_1305/
-├── collision/*.stl   # 动力学/Genesis 自碰撞（vendor 简化壳，由 OBJ 转为 STL）
-└── visual/*.stl      # 仅视觉
+├── collision/*.stl   # vendor 简化壳（历史/对比资源）
+└── visual/*.stl      # 注册 URDF 的 arm collision 与 STL 视觉资源
 ```
 
-`<collision>` 必须引用 `collision/`，不得指向 `visual/`。
+注册机型 URDF 的机械臂连杆 `<collision>` 使用 `visual/*.stl`；末端配件按各自资源保留独立 collision STL。

@@ -1,4 +1,4 @@
-"""Unit tests for the real Gripper G2 SDK integration (mocked XArmAPI)."""
+"""Unit tests for real gripper SDK integration (mocked XArmAPI)."""
 
 from __future__ import annotations
 
@@ -29,16 +29,21 @@ def _make_gripper_arm():
 
 
 @pytest.mark.parametrize(
-    "dry_run,sdk_sim_validate,expected",
+    "dry_run,sdk_sim_validate,real_gripper,expected",
     [
-        (True, False, False),
-        (False, True, False),
-        (True, True, False),
-        (False, False, True),
+        (True, False, True, False),
+        (False, True, True, False),
+        (True, True, True, False),
+        (False, False, False, False),
+        (False, False, True, True),
     ],
 )
-def test_gripper_motion_enabled_gating(dry_run, sdk_sim_validate, expected):
-    cfg = RealExecutorConfig(dry_run=dry_run, sdk_sim_validate=sdk_sim_validate)
+def test_gripper_motion_enabled_gating(dry_run, sdk_sim_validate, real_gripper, expected):
+    cfg = RealExecutorConfig(
+        dry_run=dry_run,
+        sdk_sim_validate=sdk_sim_validate,
+        real_gripper=real_gripper,
+    )
     assert _gripper_motion_enabled(cfg) is expected
 
 
@@ -63,7 +68,7 @@ def test_gripper_g2_target_speed_clamped_to_maximum():
 def test_run_gripper_segment_sends_sdk_command_for_real_motion(monkeypatch):
     monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
     arm = _make_gripper_arm()
-    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, rate=50.0)
+    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, real_gripper=True, rate=50.0)
     seg = _grip_segment()
 
     _run_gripper_segment(seg, cfg, arm)
@@ -87,6 +92,17 @@ def test_run_gripper_segment_skips_sdk_command_during_dry_run(monkeypatch):
     arm.set_gripper_g2_position.assert_not_called()
 
 
+def test_run_gripper_segment_skips_sdk_command_when_real_gripper_not_enabled(monkeypatch):
+    monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
+    arm = _make_gripper_arm()
+    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, real_gripper=False, rate=50.0)
+    seg = _grip_segment()
+
+    _run_gripper_segment(seg, cfg, arm)
+
+    arm.set_gripper_g2_position.assert_not_called()
+
+
 def test_run_gripper_segment_skips_sdk_command_during_sdk_sim_validate(monkeypatch):
     """--sdk-sim-validate keeps cfg.dry_run False but must not move the physical gripper."""
     monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
@@ -103,7 +119,7 @@ def test_run_gripper_segment_raises_on_sdk_failure_code(monkeypatch):
     monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
     arm = _make_gripper_arm()
     arm.set_gripper_g2_position.return_value = 1
-    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, rate=50.0)
+    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, real_gripper=True, rate=50.0)
     seg = _grip_segment()
 
     with pytest.raises(RuntimeError, match="set_gripper_g2_position failed"):
@@ -114,10 +130,30 @@ def test_run_gripper_segment_warns_but_does_not_raise_on_position_mismatch(monke
     monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
     arm = _make_gripper_arm()
     arm.get_gripper_g2_position.return_value = (0, 40.0)  # target was 24mm; 16mm off, over tolerance
-    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, rate=50.0)
+    cfg = RealExecutorConfig(dry_run=False, sdk_sim_validate=False, real_gripper=True, rate=50.0)
     seg = _grip_segment()
 
     _run_gripper_segment(seg, cfg, arm)  # must not raise
 
     captured = capsys.readouterr()
     assert "WARNING" in captured.out
+
+
+def test_run_lite6_gripper_segment_close_and_open_commands(monkeypatch):
+    monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
+    arm = MagicMock()
+    arm.close_lite6_gripper.return_value = 0
+    arm.open_lite6_gripper.return_value = 0
+    cfg = RealExecutorConfig(
+        robot_key="lite6",
+        dry_run=False,
+        sdk_sim_validate=False,
+        real_gripper=True,
+        rate=50.0,
+    )
+
+    _run_gripper_segment(_grip_segment(gap_start=0.038, gap_end=0.028), cfg, arm)
+    _run_gripper_segment(_grip_segment(gap_start=0.028, gap_end=0.038, label="release"), cfg, arm)
+
+    arm.close_lite6_gripper.assert_called_once_with(sync=False)
+    arm.open_lite6_gripper.assert_called_once_with(sync=False)

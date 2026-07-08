@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.0"
+version = "0.2.1"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -53,12 +53,11 @@ rl = [
 showcase = [
     "scipy>=1.11",
 ]
-# Optional trajectory-planning backend. The runtime trajectory kernel in
-# ``ufactory.trajectory.profile`` is a self-contained NumPy LSPB implementation
-# (it does not require this extra); installing it makes the reference
-# ``roboticstoolbox-python`` tooling available for richer analysis.
+# Optional trajectory-planning reference backend. The default planner/profile
+# stack is pure NumPy; installing this extra enables roboticstoolbox-based
+# comparison and future advanced planning adapters.
 trajectory = [
-    "roboticstoolbox-python",
+    "roboticstoolbox-python>=1.3.0",
 ]
 
 [project.scripts]
@@ -86,4 +85,5 @@ markers = [
     "gpu: in-process Genesis GPU simulation",
     "integration: end-to-end subprocess smoke tests (examples, short RL runs)",
     "display: subprocess tests requiring DISPLAY for visual dry-run",
+    "slow: long-running dev/ref_scripts capture tests",
 ]

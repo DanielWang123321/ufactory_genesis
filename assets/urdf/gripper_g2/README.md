@@ -4,9 +4,9 @@
 
 ## 模板 URDF
 
-`gripper_g2.urdf` 是从 xarm_ros2 的 xacro 生成的 standalone 模板文件；v0.1.6 中 mesh 路径已改为本仓库内的 `meshes/collision/*.stl`，可用于基础结构解析。
+`gripper_g2.urdf` 是从 xarm_ros2 的 xacro 生成的 standalone 模板文件；v0.1.6 中 mesh 路径已改为本仓库内的 `meshes/collision/*.stl`，可用于基础结构解析。它保留 vendor 的外部父 link，不作为 Genesis standalone 查看入口。
 
-实际机械臂搭配仍应优先使用 `robot_visual_glb_urdf(..., with_gripper_g2=True)` 返回的组合 URDF。
+Genesis standalone collision 检查使用 `gripper_g2_movable_visual.urdf`：文件名保留 visual 历史命名，但 `view_accessory_collision.py` 以 `vis_mode="collision"` 渲染 `<collision>` 中的 STL。实际机械臂搭配仍应优先使用 `robot_visual_glb_urdf(..., with_gripper_g2=True)` 返回的组合 URDF。
 
 ## 目录结构
 
@@ -40,4 +40,18 @@ urdf = robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=True)
 
 # 可动 GLB
 urdf = robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=True, movable=True)
+```
+
+## Collision 检查
+
+```bash
+# 仅夹爪，STL collision 网格循环开合
+python dev/ref_scripts/view_accessory_collision.py --accessory gripper-g2 --movable --gripper-demo
+
+# xArm6 + Gripper G2，STL collision 网格循环开合
+python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --gripper-g2 --movable --gripper-demo
+
+# 固定开/合两态对比
+python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --gripper-g2 --movable --gripper-state open
+python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --gripper-g2 --movable --gripper-state closed
 ```

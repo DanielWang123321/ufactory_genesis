@@ -17,6 +17,10 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(EXAMPLES_ROOT) not in sys.path:
   sys.path.insert(0, str(EXAMPLES_ROOT))
 
+from ufactory.grippers.lite6 import (  # noqa: E402
+  LITE6_GRIPPER_SIM_CLOSED_DRIVE,
+  LITE6_GRIPPER_SIM_OPEN_DRIVE,
+)
 from ufactory.robots.registry import get_robot_profile  # noqa: E402
 
 
@@ -177,3 +181,12 @@ def test_kinematic_step_reholds_before_visual_update(monkeypatch):
   assert scene.step_calls == [{"update_visualizer": False}]
   assert scene.visualizer.update_calls == [{"force": False}]
   assert robot.calls[-1] == ("set_position", (0, 1, 2, 3, 4), True)
+
+
+def test_lite6_viewer_gripper_demo_uses_reversed_open_close_semantics():
+  lite6_demo = importlib.import_module("_lite6_gripper_demo")
+
+  assert lite6_demo.LITE6_GRIPPER_CLOSE == LITE6_GRIPPER_SIM_CLOSED_DRIVE
+  assert lite6_demo.LITE6_GRIPPER_OPEN == LITE6_GRIPPER_SIM_OPEN_DRIVE
+  assert lite6_demo.lite6_gripper_demo_target(0) == LITE6_GRIPPER_SIM_OPEN_DRIVE
+  assert lite6_demo.lite6_gripper_demo_target(lite6_demo.LITE6_GRIPPER_HOLD_STEPS) == LITE6_GRIPPER_SIM_CLOSED_DRIVE

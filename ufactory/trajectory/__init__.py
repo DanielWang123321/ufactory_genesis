@@ -1,4 +1,4 @@
-"""Time-parameterized trajectory planning pipeline for xArm6 grasp-place.
+"""Time-parameterized trajectory planning for UFACTORY robots.
 
 Provides a firmware-aligned (LSPB / trapezoidal) trajectory kernel that is
 replayed identically in Genesis (PD) and on the real xArm (MODE_SERVO),
@@ -8,6 +8,10 @@ real-robot executors are imported lazily.
 
 Public surface
 ---------------
+* :class:`TrajectoryPlannerConfig`
+* :class:`JointWaypoint`, :class:`CartesianWaypoint`
+* :func:`plan_joint_waypoints`, :func:`plan_cartesian_waypoints`,
+  :func:`plan_mixed_waypoints`
 * :func:`build_pickplace_program`
 * :func:`replay_sim`
 * :func:`replay_real`
@@ -22,6 +26,18 @@ from typing import Any
 
 __all__ = [
     "build_pickplace_program",
+    "TrajectoryPlannerConfig",
+    "JointWaypoint",
+    "CartesianWaypoint",
+    "plan_joint_waypoints",
+    "plan_cartesian_waypoints",
+    "plan_mixed_waypoints",
+    "validate_program",
+    "validate_segment",
+    "validate_joint_vector",
+    "validate_cartesian_xyz",
+    "OptionalTrajectoryDependencyError",
+    "require_roboticstoolbox",
     "replay_sim",
     "replay_real",
     "TrajKinematicMirror",
@@ -52,6 +68,9 @@ __all__ = [
     "linear_limits_from_joint",
     "profile",
     "segments",
+    "planner",
+    "validation",
+    "backends",
     "sim_executor",
     "real_executor",
     "mirror_executor",
@@ -73,6 +92,21 @@ _LAZY_ATTRS = {
     "make_movej": ("ufactory.trajectory.segments", "make_movej"),
     "make_movel": ("ufactory.trajectory.segments", "make_movel"),
     "make_gripper": ("ufactory.trajectory.segments", "make_gripper"),
+    # planner.py: robot-aware waypoint planning, no heavy optional backend import.
+    "TrajectoryPlannerConfig": ("ufactory.trajectory.planner", "TrajectoryPlannerConfig"),
+    "JointWaypoint": ("ufactory.trajectory.planner", "JointWaypoint"),
+    "CartesianWaypoint": ("ufactory.trajectory.planner", "CartesianWaypoint"),
+    "plan_joint_waypoints": ("ufactory.trajectory.planner", "plan_joint_waypoints"),
+    "plan_cartesian_waypoints": ("ufactory.trajectory.planner", "plan_cartesian_waypoints"),
+    "plan_mixed_waypoints": ("ufactory.trajectory.planner", "plan_mixed_waypoints"),
+    # validation.py: generic Program/Segment contract checks.
+    "validate_program": ("ufactory.trajectory.validation", "validate_program"),
+    "validate_segment": ("ufactory.trajectory.validation", "validate_segment"),
+    "validate_joint_vector": ("ufactory.trajectory.validation", "validate_joint_vector"),
+    "validate_cartesian_xyz": ("ufactory.trajectory.validation", "validate_cartesian_xyz"),
+    # backends.py: optional third-party loaders.
+    "OptionalTrajectoryDependencyError": ("ufactory.trajectory.backends", "OptionalTrajectoryDependencyError"),
+    "require_roboticstoolbox": ("ufactory.trajectory.backends", "require_roboticstoolbox"),
     # sim_executor.py: imports Genesis.
     "SimReport": ("ufactory.trajectory.sim_executor", "SimReport"),
     "PhaseStatus": ("ufactory.trajectory.sim_executor", "PhaseStatus"),
@@ -94,6 +128,9 @@ _LAZY_ATTRS = {
     # Submodules for ``from ufactory.trajectory import profile`` compatibility.
     "profile": ("ufactory.trajectory.profile", None),
     "segments": ("ufactory.trajectory.segments", None),
+    "planner": ("ufactory.trajectory.planner", None),
+    "validation": ("ufactory.trajectory.validation", None),
+    "backends": ("ufactory.trajectory.backends", None),
     "sim_executor": ("ufactory.trajectory.sim_executor", None),
     "real_executor": ("ufactory.trajectory.real_executor", None),
     "mirror_executor": ("ufactory.trajectory.mirror_executor", None),

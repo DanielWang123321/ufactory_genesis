@@ -23,13 +23,18 @@ import numpy as np
 from ufactory.hardware import xarm as xc
 from ufactory.dynamics import parse_joint_limits
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sdk_pos_mm
-from ufactory.robots.paths import xarm6_urdf
+from ufactory.robots.paths import robot_urdf
+from ufactory.robots.registry import get_robot_profile, joint_names
+from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.trajectory.segments import Program, Segment
 
 EXECUTOR_SERVO_J = "servo-j"
 EXECUTOR_SERVO_CART = "servo-cartesian"
 REAL_EXECUTORS = (EXECUTOR_SERVO_J, EXECUTOR_SERVO_CART)
 
+# Kept for backwards compatibility; xArm6-specific default. Multi-robot
+# callers should rely on ``_arm_joint_limits(robot_key)`` instead, which
+# resolves joint names/URDF per robot.
 ARM_JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
 
 # xArm SDK set_gripper_g2_position valid speed range (mm/s).
@@ -93,7 +98,8 @@ class ServoStreamStats:
 
 @dataclass
 class RealExecutorConfig:
-    executor: str = EXECUTOR_SERVO_J
+    executor: str = EXECUTOR_SERVO_CART
+    robot_key: str = "xarm6_1305"
     rate: float = 50.0
     # Used to generate the host-side LSPB trajectory. For servo APIs these are
     # not relied on as firmware safety caps.
@@ -116,6 +122,7 @@ class RealExecutorConfig:
     preposition_orient_tolerance_rad: float = 0.05
     sdk_sim_validate: bool = False
     sdk_sim_report_csv: str | None = None
+    real_gripper: bool = False
 
     @classmethod
     def normalize_executor(cls, executor: str) -> str:
@@ -134,10 +141,16 @@ class _PreparedSegment:
     stats: ServoStreamStats
 
 
-def _arm_joint_limits():
-    """Return (lower, upper) rad joint limits for the xArm6 arm joints."""
-    urdf = xarm6_urdf("xarm6_with_gripper.urdf")
-    return parse_joint_limits(urdf, list(ARM_JOINT_NAMES))
+def _arm_joint_limits(robot_key: str = "xarm6_1305"):
+    """Return (lower, upper) rad joint limits for ``robot_key``'s arm joints.
+
+    Uses the robot's default (gripper-less) dynamics URDF: the gripper
+    attachment does not change the arm joint limits, and only xArm6/Lite6 have
+    a dedicated ``*_with_gripper.urdf`` variant.
+    """
+    profile = get_robot_profile(robot_key)
+    urdf = robot_urdf(profile.key)
+    return parse_joint_limits(urdf, list(joint_names(profile)))
 
 
 def _segment_servo_targets(seg: Segment, rate: float) -> tuple[str, np.ndarray, np.ndarray]:
@@ -339,6 +352,23 @@ def _first_arm_segment(program: Program) -> Segment | None:
     return None
 
 
+def _validate_executor_matches_program(program: Program, cfg: RealExecutorConfig) -> None:
+    """Reject programs whose arm segment type does not match the selected SDK servo API."""
+    for seg in program.segments:
+        if seg.kind == "gripper":
+            continue
+        if cfg.executor == EXECUTOR_SERVO_J and seg.kind == "movel":
+            raise TrajectorySafetyError(
+                f"executor={EXECUTOR_SERVO_J!r} cannot replay MoveL segment {seg.label!r}; "
+                f"use --executor {EXECUTOR_SERVO_CART}"
+            )
+        if cfg.executor == EXECUTOR_SERVO_CART and seg.kind == "movej":
+            raise TrajectorySafetyError(
+                f"executor={EXECUTOR_SERVO_CART!r} cannot replay MoveJ segment {seg.label!r}; "
+                f"use --executor {EXECUTOR_SERVO_J}"
+            )
+
+
 def _connect_arm(cfg: RealExecutorConfig):
     """Create an XArmAPI arm. Motion mode is set after optional prepositioning."""
     from xarm.wrapper.xarm_api import XArmAPI  # local import: optional SDK path
@@ -365,7 +395,8 @@ def replay_real(
 ) -> None:
     """Replay ``program`` on the xArm, SDK simulation, or as a dry-run digest."""
     cfg.executor = RealExecutorConfig.normalize_executor(cfg.executor)
-    lower, upper = _arm_joint_limits()
+    _validate_executor_matches_program(program, cfg)
+    lower, upper = _arm_joint_limits(cfg.robot_key)
     prepared: dict[int, _PreparedSegment] = {}
     for seg in program.segments:
         prep = _prepare_segment(seg, cfg, lower, upper)
@@ -391,7 +422,8 @@ def replay_real(
             if on_preposition_complete is not None:
                 on_preposition_complete()
             xc.prepare_arm_for_motion(arm, mode=xc.MODE_SERVO)
-            if _gripper_motion_enabled(cfg):
+            gripper = get_robot_runtime_profile(cfg.robot_key).gripper
+            if _gripper_motion_enabled(cfg) and gripper is not None and gripper.family == "g2":
                 xc.prepare_gripper_g2_for_motion(arm)
 
         if cfg.sdk_sim_report_csv:
@@ -548,16 +580,15 @@ def _run_arm_segment(
 
 
 def _gripper_motion_enabled(cfg: RealExecutorConfig) -> bool:
-    """Real Gripper G2 SDK commands fire only for true real motion.
+    """Real gripper SDK commands fire only when explicitly enabled.
 
     ``--sdk-sim-validate`` sets ``cfg.dry_run = False`` to stream the arm's
     servo targets against the controller's simulated-robot mode, but that flag
-    does not cover the gripper: a real ``set_gripper_g2_position`` call would
-    still move the physical gripper hardware. Gate on both flags so
-    sdk-sim-validate stays free of physical side effects, matching its
-    existing "arm does not move" contract.
+    does not cover the gripper: a real gripper command would still move the
+    physical hardware. Gate on ``real_gripper`` as well so physical gripper
+    motion is opt-in and SDK simulation stays side-effect-free.
     """
-    return not cfg.dry_run and not cfg.sdk_sim_validate
+    return bool(cfg.real_gripper) and not cfg.dry_run and not cfg.sdk_sim_validate
 
 
 def _gripper_g2_target_speed_mm_s(seg: Segment) -> float:
@@ -588,6 +619,8 @@ def _run_gripper_segment(
             reason = "dry-run"
         elif cfg.sdk_sim_validate:
             reason = "sdk-sim-validate keeps the physical gripper idle"
+        elif not cfg.real_gripper:
+            reason = "--real-gripper not set"
         else:
             reason = "no arm connection"
         print(
@@ -601,6 +634,21 @@ def _run_gripper_segment(
             _pace(n, cfg.rate)
         return
 
+    gripper = get_robot_runtime_profile(cfg.robot_key).gripper
+    if gripper is not None and gripper.family == "lite6":
+        _run_lite6_gripper_segment(seg, cfg, arm, n, on_tick=on_tick)
+        return
+    _run_gripper_g2_segment(seg, cfg, arm, n, on_tick=on_tick)
+
+
+def _run_gripper_g2_segment(
+    seg: Segment,
+    cfg: RealExecutorConfig,
+    arm,
+    n: int,
+    *,
+    on_tick: Callable[[Segment, int], None] | None = None,
+) -> None:
     target_mm = gripper_g2_gap_m_to_sdk_pos_mm(seg.gap_end)
     speed_mm_s = _gripper_g2_target_speed_mm_s(seg)
     code = arm.set_gripper_g2_position(target_mm, speed=speed_mm_s, wait=False)
@@ -625,6 +673,43 @@ def _run_gripper_segment(
     err_mm = abs(float(reported_mm) - target_mm)
     status = "OK" if err_mm <= GRIPPER_G2_POSITION_WARN_TOLERANCE_MM else "WARNING"
     print(f"    gripper reached {reported_mm:.1f}mm (target {target_mm:.1f}mm, err={err_mm:.1f}mm) {status}")
+
+
+def _run_lite6_gripper_segment(
+    seg: Segment,
+    cfg: RealExecutorConfig,
+    arm,
+    n: int,
+    *,
+    on_tick: Callable[[Segment, int], None] | None = None,
+) -> None:
+    """Drive the Lite6 gripper via its two digital-IO SDK commands.
+
+    Unlike Gripper G2, the Lite6 parallel gripper's SDK surface
+    (``open_lite6_gripper`` / ``close_lite6_gripper``) has no continuous
+    position control: it is a binary open/close actuator. Any gripper segment
+    is mapped to whichever endpoint the gap is moving *toward*
+    (``gap_end``), fired once at segment start, then paced for the planned
+    duration so sim-to-real timing stays aligned even though hardware motion
+    is open-loop.
+    """
+    closing = seg.gap_end is not None and seg.gap_start is not None and seg.gap_end < seg.gap_start
+    if closing:
+        code = arm.close_lite6_gripper(sync=False)
+        action = "close_lite6_gripper"
+    else:
+        code = arm.open_lite6_gripper(sync=False)
+        action = "open_lite6_gripper"
+    if code != 0:
+        raise RuntimeError(f"{action} failed code={code} segment={seg.label!r}")
+    print(
+        f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm -> {seg.gap_end * 1000:.1f}mm "
+        f"over {seg.duration:.2f}s (N={n}; {action}(); Lite6 gripper is binary open/close, no position feedback)"
+    )
+    if on_tick is not None:
+        _pace_ticks(n, cfg.rate, lambda t: on_tick(seg, t))
+    else:
+        _pace(n, cfg.rate)
 
 
 def _read_reported_target(arm, kind: str) -> np.ndarray | None:

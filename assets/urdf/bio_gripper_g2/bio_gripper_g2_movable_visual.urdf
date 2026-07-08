@@ -19,9 +19,9 @@
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="-0.022475 -0.000830 -0.004696" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/link_base.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_link_base.stl" />
       </geometry>
     </collision>
   </link>
@@ -38,9 +38,9 @@
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="-0.012870 -0.011316 -0.002219" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/left_finger.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_left_finger.stl" />
       </geometry>
     </collision>
   </link>
@@ -65,9 +65,9 @@
       </geometry>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="-0.013790 0.011745 -0.001039" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/right_finger.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_right_finger.stl" />
       </geometry>
     </collision>
   </link>

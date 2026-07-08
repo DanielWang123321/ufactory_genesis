@@ -13,10 +13,18 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
-from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M, gripper_g2_sim_drive_to_gap_m
 from ufactory.kinematics.genesis import solve_link6_ik
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
+from ufactory.grippers.lite6 import snap_object_to_lite6_glb_grasp
+
+
+def gap_m_from_drive(drive: float, gripper) -> float:
+    """Map a gripper drive-DOF value back to a physical two-finger gap (m)."""
+    open_fraction = (float(drive) - gripper.close_pos) / (gripper.open_pos - gripper.close_pos)
+    open_fraction = max(0.0, min(1.0, open_fraction))
+    closed_gap = float(getattr(gripper, "closed_gap_m", 0.0))
+    return closed_gap + open_fraction * (float(gripper.open_gap_m) - closed_gap)
 
 
 def resolve_segment_start_arm_q(
@@ -63,9 +71,9 @@ def resolve_tick_arm_q(
     raise ValueError(f"unexpected arm segment kind: {seg.kind}")
 
 
-def resolve_tick_grip_drive(samples: np.ndarray, tick_idx: int) -> float:
+def resolve_tick_grip_drive(samples: np.ndarray, tick_idx: int, gripper) -> float:
     gap_m = float(samples[tick_idx, 0])
-    return drive_for_gap_m(gap_m)
+    return drive_for_gap_m(gap_m, gripper)
 
 
 def _disable_pd(robot, dof_idx: list[int]) -> None:
@@ -114,7 +122,7 @@ class TrajKinematicMirror:
             self._last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy()
         else:
             self._last_q_arm = np.zeros(len(arm_idx), dtype=np.float64)
-        self._grip_drive = drive_for_gap_m(GRIPPER_G2_OPEN_GAP_M)
+        self._grip_drive = drive_for_gap_m(ctx.gripper.open_gap_m, ctx.gripper)
         _disable_pd(ctx.robot, arm_idx)
         _disable_pd(ctx.robot, ctx.all_gripper_dof_idx)
 
@@ -130,7 +138,7 @@ class TrajKinematicMirror:
         arm_idx = self.ctx.arm_dof_idx
         if len(self.ctx.home_qpos):
             self._last_q_arm = self.ctx.home_qpos[arm_idx].astype(np.float64).copy()
-        self._grip_drive = drive_for_gap_m(GRIPPER_G2_OPEN_GAP_M)
+        self._grip_drive = drive_for_gap_m(self.ctx.gripper.open_gap_m, self.ctx.gripper)
         kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
 
     def prime_to_segment_start(self, seg: Segment) -> None:
@@ -150,7 +158,7 @@ class TrajKinematicMirror:
         if tick_idx < 0 or tick_idx >= n:
             raise IndexError(f"tick {tick_idx} out of range for segment {seg.label!r} (N={n})")
         if seg.kind == "gripper":
-            self._grip_drive = resolve_tick_grip_drive(samples, tick_idx)
+            self._grip_drive = resolve_tick_grip_drive(samples, tick_idx, self.ctx.gripper)
             kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
             return
         self._last_q_arm = resolve_tick_arm_q(self.ctx, seg, samples, tick_idx)
@@ -206,9 +214,19 @@ class KinematicCarryTracker:
     hybrid "kinematic fingers + physics block" collision push that visibly
     slides the cube on the table before carry engages.
 
+    Before the grasp latch, the spawn-table pose is restored on every tick of
+    ``descend`` so coarse collision STLs cannot shove the cube into the table
+    while the arm approaches. During ``release``, the object is snapped to the
+    table and frozen for the whole open segment so spreading collision fingers
+    cannot push it downward after carry detaches.
+
     ``grasp_gap_m`` still sets ``release_gap_m`` for the release segment; it is
     no longer used as a mid-close attach threshold on the grasp segment.
     """
+
+    _APPROACH_FREEZE_LABELS = frozenset({"descend"})
+    _PLACE_FREEZE_LABELS = frozenset({"place-standoff"})
+    _RELEASE_LABEL = "release"
 
     def __init__(
         self,
@@ -233,6 +251,12 @@ class KinematicCarryTracker:
         self._carry_quat: torch.Tensor | None = None
         self._grip_freeze_pos: torch.Tensor | None = None
         self._grip_freeze_quat: torch.Tensor | None = None
+        self._spawn_freeze_pos: torch.Tensor | None = None
+        self._spawn_freeze_quat: torch.Tensor | None = None
+        self._release_freeze_pos: torch.Tensor | None = None
+        self._release_freeze_quat: torch.Tensor | None = None
+        self._place_table_locked = False
+        self._capture_spawn_freeze_pose()
 
     @property
     def attached(self) -> bool:
@@ -243,8 +267,67 @@ class KinematicCarryTracker:
         rf = self.ctx.right_finger.get_pos()[0]
         return (lf + rf) / 2
 
+    def _capture_spawn_freeze_pose(self) -> None:
+        self._spawn_freeze_pos = self.ctx.obj.get_pos()[0].clone()
+        self._spawn_freeze_quat = self.ctx.obj.get_quat()[0].clone()
+
+    def _restore_spawn_frozen_obj(self) -> None:
+        if self._spawn_freeze_pos is None or self._spawn_freeze_quat is None:
+            return
+        self.ctx.obj.set_pos(self._spawn_freeze_pos.unsqueeze(0), zero_velocity=True)
+        self.ctx.obj.set_quat(self._spawn_freeze_quat.unsqueeze(0), zero_velocity=True)
+
+    def _table_object_center_z(self) -> float:
+        return float(self.ctx.base_pos_world[2] + self.ctx.obj_size[2] / 2)
+
+    def _snap_object_to_table(self) -> None:
+        pos = self.ctx.obj.get_pos()[0].clone()
+        pos[2] = self._table_object_center_z()
+        self.ctx.obj.set_pos(pos.unsqueeze(0), zero_velocity=True)
+        self.ctx.obj.set_quat(self.ctx.obj.get_quat()[0].unsqueeze(0), zero_velocity=True)
+
+    def _capture_release_freeze_pose(self) -> None:
+        self._snap_object_to_table()
+        self._release_freeze_pos = self.ctx.obj.get_pos()[0].clone()
+        self._release_freeze_quat = self.ctx.obj.get_quat()[0].clone()
+
+    def _restore_release_frozen_obj(self) -> None:
+        if self._release_freeze_pos is None or self._release_freeze_quat is None:
+            return
+        self.ctx.obj.set_pos(self._release_freeze_pos.unsqueeze(0), zero_velocity=True)
+        self.ctx.obj.set_quat(self._release_freeze_quat.unsqueeze(0), zero_velocity=True)
+
+    def _clear_release_freeze_pose(self) -> None:
+        self._release_freeze_pos = None
+        self._release_freeze_quat = None
+
+    def _is_release_segment(self, seg: Segment) -> bool:
+        return seg.kind == "gripper" and seg.label == self._RELEASE_LABEL
+
+    def _prepare_place_release(self) -> None:
+        self._snap_object_to_table()
+        self._attached = False
+        self._carry_offset = None
+        self._carry_quat = None
+        self._capture_release_freeze_pose()
+
     def _is_grasp_close_segment(self, seg: Segment) -> bool:
         return seg.kind == "gripper" and seg.label == self.grasp_segment_label
+
+    def _should_freeze_approach(self, seg: Segment) -> bool:
+        if self._attached or seg.kind != "movel" or seg.label not in self._APPROACH_FREEZE_LABELS:
+            return False
+        if self._spawn_freeze_pos is None:
+            return False
+        obj_pos = self.ctx.obj.get_pos()[0]
+        return float(torch.norm(obj_pos - self._spawn_freeze_pos)) <= self.attach_dist_m
+
+    def _should_freeze_on_table(self, seg: Segment) -> bool:
+        return (
+            getattr(self.ctx.gripper, "family", None) == "lite6"
+            and seg.kind == "movel"
+            and seg.label in self._PLACE_FREEZE_LABELS
+        )
 
     def _capture_grip_freeze_pose(self) -> None:
         self._grip_freeze_pos = self.ctx.obj.get_pos()[0].clone()
@@ -261,13 +344,15 @@ class KinematicCarryTracker:
         self._grip_freeze_quat = None
 
     def _latch_carry(self, fc: torch.Tensor) -> None:
+        if getattr(self.ctx.gripper, "family", None) == "lite6":
+            snap_object_to_lite6_glb_grasp(self.ctx)
         obj_pos = self.ctx.obj.get_pos()[0]
         self._carry_offset = obj_pos - fc
         self._carry_quat = self.ctx.obj.get_quat()[0].clone()
         self._attached = True
 
     def _maybe_attach(self, gap_m: float, fc: torch.Tensor) -> None:
-        if self._attached or gap_m > self.grasp_gap_m + 1e-3:
+        if self._place_table_locked or self._attached or gap_m > self.grasp_gap_m + 1e-3:
             return
         obj = self.ctx.obj
         obj_pos = obj.get_pos()[0]
@@ -289,16 +374,38 @@ class KinematicCarryTracker:
         """Callback compatible with :func:`replay_real` ``on_tick`` hook."""
         _, n = seg.samples(self.mirror.rate)
         is_grasp_close = self._is_grasp_close_segment(seg)
+        is_release = self._is_release_segment(seg)
+
+        if is_release and tick_idx == 0:
+            self._prepare_place_release()
 
         if is_grasp_close and tick_idx == 0:
             self._capture_grip_freeze_pose()
 
         self.mirror.on_tick(seg, tick_idx)
 
-        gap_m = gripper_g2_sim_drive_to_gap_m(self.mirror.grip_drive)
+        gap_m = gap_m_from_drive(self.mirror.grip_drive, self.ctx.gripper)
         fc = self._finger_center()
 
-        if is_grasp_close and not self._attached:
+        if (
+            getattr(self.ctx.gripper, "family", None) == "lite6"
+            and seg.kind == "movel"
+            and seg.label == "place-descend"
+            and tick_idx == n - 1
+        ):
+            self._snap_object_to_table()
+            self._attached = False
+            self._carry_offset = None
+            self._carry_quat = None
+            self._place_table_locked = True
+
+        if self._should_freeze_approach(seg):
+            self._restore_spawn_frozen_obj()
+        elif self._should_freeze_on_table(seg):
+            self._snap_object_to_table()
+        elif is_release:
+            self._restore_release_frozen_obj()
+        elif is_grasp_close and not self._attached:
             self._restore_grip_frozen_obj()
             if tick_idx == n - 1:
                 obj_pos = self.ctx.obj.get_pos()[0]
@@ -308,8 +415,13 @@ class KinematicCarryTracker:
         elif not is_grasp_close:
             self._maybe_attach(gap_m, fc)
 
-        self._sync_carry(fc)
-        self._maybe_release(gap_m)
+        if self._attached:
+            self._sync_carry(fc)
+
+        if is_release and tick_idx == n - 1:
+            self._clear_release_freeze_pose()
+        elif not is_release:
+            self._maybe_release(gap_m)
 
     def hold_sync(self) -> None:
         """Hold-phase counterpart to :meth:`on_tick`: keep a carried object glued in place.
