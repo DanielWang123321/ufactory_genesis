@@ -70,9 +70,9 @@ def _args(*, visual: bool) -> SimpleNamespace:
         z_min_mm=0.0,
         substeps=2,
         visual_model="glb",
-        grip_gap_mm=24.7,
+        grip_gap_mm=22.0,
         sim_grip_hold_bias_gap_mm=6.9,
-        sim_grasp_weld=True,
+        sim_grasp_weld=False,
         visual=visual,
         visual_start_hold_s=0.5,
     )

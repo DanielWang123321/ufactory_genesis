@@ -194,8 +194,12 @@ def gap_lspb_samples(
     """
     d = abs(float(gap_end) - float(gap_start))
     duration = float(duration_s)
-    if d < _EPS or duration <= _EPS:
+    if duration <= _EPS:
         return np.array([[float(gap_end)]], dtype=np.float64), 1, 0.0
+    if d < _EPS:
+        n = max(1, int(round(duration * rate)))
+        duration = float(n) / float(rate)
+        return np.full((n, 1), float(gap_end), dtype=np.float64), n, duration
     n = max(1, int(round(duration * rate)))
     duration = float(n) / float(rate)
     u = _sample_grid(n)

@@ -77,8 +77,13 @@ xArm 6 拥有最完整的示例覆盖：
 | `xarm7/xarm7_grasp_place_traj.py` | 共享路点/LSPB 抓放入口，xArm7 + Gripper G2 场景 |
 | `uf850/uf850_grasp_place_traj.py` | 共享路点/LSPB 抓放入口，UF850 + Gripper G2 场景 |
 | `lite6/lite6_grasp_place_traj.py` | 共享路点/LSPB 抓放入口，Lite6 反装夹爪场景 |
+| `g2_contact_grasp_diagnose.py` | Gripper G2 对 30 mm 方块的接触预紧扫参诊断 |
+| `lite6_contact_grasp_diagnose.py` | Lite6 反装夹爪对 30 mm 方块的侧向间隙与双指接触诊断 |
+| `lite6_gripper_cube_diagnose.py` | 独立 Lite6 夹爪 + 方块接触诊断，可对比 raw 与 processed 碰撞 |
 
-五个入口都调用共享的 `examples/_grasp_place_traj.py`。该模块生成混合路点程序，按 LSPB 采样后执行抓放序列（`home->pregrasp` → 抓取 → 搬运 → 放置 → 回零）。
+五个入口都调用共享的 `examples/_grasp_place_traj.py`。该模块生成混合路点程序，按 LSPB 采样后执行抓放序列（`home->pregrasp` → 抓取 → 搬运 → 放置 → 回零）；Lite6 会在 `release` 前额外插入 `place-settle`。
+
+默认仿真是接触摩擦抓取：只有当 Genesis 刚体接触摩擦能够抵抗重力时，方块才会被夹起并搬运。默认不使用距离 weld、几何 snap、方块冻结或强制移动方块；运行头部会显示 `sim_grasp_weld=False`。Lite6 使用原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，默认只保留 0.8 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让开爪发生在桌面高度。`python examples/lite6_gripper_cube_diagnose.py --collision-mode both` 可在不加载机械臂的情况下隔离检查该接触几何。`--sim-grasp-weld` 仅用于显式 debug 对比，并且必须已有双指真实接触才会触发。
 
 **1. Genesis 仿真**
 
@@ -99,7 +104,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py \
 
 **3. Genesis 镜像 + 真机执行**
 
-连接真机并按同一条规划轨迹运动；Genesis 三维窗口同步显示轨迹与夹持状态。上机前请确认机械臂与夹爪均已就绪：
+连接真机并按同一条规划轨迹运动；Genesis 三维窗口以运动学镜像方式同步显示轨迹与夹持状态，不是接触仿真。上机前请确认机械臂与夹爪均已就绪：
 
 > **上机前请确认**：机械臂已上电、使能，周围无人员与障碍物；工作空间满足安全高度限制；已完成正/逆运动学对齐检查（`xarm6_reach_deploy.py --mode align`）；急停按钮随手可及。物理夹爪命令默认关闭，仅在夹爪已安装且确认可正常开合后添加 `--real-gripper`。
 

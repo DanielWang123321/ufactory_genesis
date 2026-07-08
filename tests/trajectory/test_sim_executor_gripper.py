@@ -14,6 +14,7 @@ from ufactory.trajectory.segments import Program, Segment
 from ufactory.trajectory.scene import (
     LITE6_FINGER_CLOSE_DESCENT,
     LITE6_FINGER_PAD_BELOW_FC,
+    LITE6_GRASP_LINK6_Z_EXTRA_M,
     LITE6_GRASP_TABLE_CLEARANCE,
     LITE6_OBJ_SIZE,
     default_grasp_gap_m,
@@ -41,24 +42,34 @@ def test_drive_gap_mapping_round_trips_physical_range(gripper, closed_gap, open_
     assert gap_m_from_drive(open_drive, gripper) == pytest.approx(open_gap)
 
 
-def test_default_grasp_gaps_match_visible_default_object_widths():
-    assert default_grasp_gap_m("xarm5") == pytest.approx(0.0247)
-    assert default_grasp_gap_m("xarm6") == pytest.approx(0.0247)
-    assert default_grasp_gap_m("xarm7") == pytest.approx(0.0247)
-    assert default_grasp_gap_m("uf850") == pytest.approx(0.0247)
-    assert default_grasp_gap_m("lite6") == pytest.approx(0.0298)
+def test_default_grasp_gaps_match_contact_preload_targets():
+    assert default_grasp_gap_m("xarm5") == pytest.approx(0.022)
+    assert default_grasp_gap_m("xarm6") == pytest.approx(0.022)
+    assert default_grasp_gap_m("xarm7") == pytest.approx(0.022)
+    assert default_grasp_gap_m("uf850") == pytest.approx(0.022)
+    assert default_grasp_gap_m("lite6") == pytest.approx(0.020)
 
 
 def test_lite6_default_grasp_height_targets_flat_finger_pad():
     heights = dry_heights("lite6")
-    fingertip_clearance = LITE6_GRASP_TABLE_CLEARANCE + LITE6_FINGER_CLOSE_DESCENT
-    obj_center_finger_z = LITE6_FINGER_PAD_BELOW_FC - (LITE6_OBJ_SIZE[2] / 2.0 - fingertip_clearance)
-    obj_lower_finger_z = obj_center_finger_z - LITE6_OBJ_SIZE[2] / 2.0
+    # link6 height = table clearance + fingertip-plate length + link6->fc offset.
+    assert heights.grasp_link6_z == pytest.approx(0.0963)
 
-    assert heights.grasp_link6_z == pytest.approx(0.0873)
-    assert fingertip_clearance == pytest.approx(0.006)
-    assert obj_center_finger_z == pytest.approx(0.018)
-    assert -0.003 <= obj_lower_finger_z <= 0.007
+    # Finger-center (fc) height above the table.
+    fc_above_table = (
+        LITE6_GRASP_TABLE_CLEARANCE
+        + LITE6_FINGER_CLOSE_DESCENT
+        + LITE6_FINGER_PAD_BELOW_FC
+        + LITE6_GRASP_LINK6_Z_EXTRA_M
+    )
+    assert fc_above_table == pytest.approx(0.042)
+
+    # Positive clearance keeps the low boss/stop region above the cube top while
+    # the large flat inner pad still spans the cube sides.
+    cube_top_below_fc = fc_above_table - LITE6_OBJ_SIZE[2]
+    assert cube_top_below_fc == pytest.approx(0.012)
+    boss_reach_below_fc = 0.0065
+    assert cube_top_below_fc > boss_reach_below_fc
 
 
 class _FakeRobot:
@@ -199,7 +210,7 @@ def test_replay_sim_holds_contact_limited_gripper_drive_after_close(monkeypatch)
     assert robot.grip_commands[-1] < overclosed_target
 
 
-def test_replay_sim_adds_and_deletes_grasp_weld_for_near_object(monkeypatch):
+def test_replay_sim_does_not_weld_by_default_even_with_bilateral_contact(monkeypatch):
     monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
     monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
 
@@ -207,10 +218,10 @@ def test_replay_sim_adds_and_deletes_grasp_weld_for_near_object(monkeypatch):
     ctx = _FakeCtx(
         robot=robot,
         scene=_FakeScene(),
-        obj=_FakeObj(pos=(0.0, 0.0, 0.05), link_idx=20),
+        obj=_FakeObjWithContacts(contacts=(10, 11)),
         ik_link=_FakeLink(idx=10),
-        left_finger=_FakeLink(pos=(0.0, -0.02, 0.0)),
-        right_finger=_FakeLink(pos=(0.0, 0.02, 0.0)),
+        left_finger=_FakeLink(idx=10, pos=(0.0, -0.02, 0.0)),
+        right_finger=_FakeLink(idx=11, pos=(0.0, 0.02, 0.0)),
         arm_dof_idx=[0],
         gripper_dof_idx=[1],
         home_qpos=np.zeros(2),
@@ -226,12 +237,55 @@ def test_replay_sim_adds_and_deletes_grasp_weld_for_near_object(monkeypatch):
 
     replay_sim(program, ctx)
 
-    assert robot._solver.added == [(10, 20)]
-    assert robot._solver.deleted == [(10, 20)]
+    assert robot._solver.added == []
+    assert robot._solver.deleted == []
 
 
-def test_lite6_grasp_weld_requires_bilateral_finger_contact():
+def test_replay_sim_adds_and_deletes_debug_grasp_weld_after_bilateral_contact(monkeypatch):
+    monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
+
     robot = _FakeRobot(contact_limited_drive=0.45)
+    ctx = _FakeCtx(
+        robot=robot,
+        scene=_FakeScene(),
+        obj=_FakeObjWithContacts(contacts=(10, 11)),
+        ik_link=_FakeLink(idx=30),
+        left_finger=_FakeLink(idx=10, pos=(0.0, -0.02, 0.0)),
+        right_finger=_FakeLink(idx=11, pos=(0.0, 0.02, 0.0)),
+        arm_dof_idx=[0],
+        gripper_dof_idx=[1],
+        home_qpos=np.zeros(2),
+    )
+    program = Program(
+        rate=50.0,
+        segments=[
+            Segment(kind="gripper", duration=0.02, v_max=0.0, a_max=0.0, gap_start=0.084, gap_end=0.024),
+            Segment(kind="movej", duration=0.02, v_max=1.0, a_max=1.0, q_start=np.zeros(1), q_end=np.zeros(1)),
+            Segment(kind="gripper", duration=0.02, v_max=0.0, a_max=0.0, gap_start=0.024, gap_end=0.084),
+        ],
+    )
+
+    replay_sim(program, ctx, stabilize_grasp_weld=True)
+
+    assert robot._solver.added == [(30, 20)]
+    assert robot._solver.deleted == [(30, 20)]
+
+
+def test_debug_grasp_weld_requires_bilateral_finger_contact():
+    robot = _FakeRobot(contact_limited_drive=0.45)
+    no_contact = _FakeCtx(
+        robot=robot,
+        scene=_FakeScene(),
+        obj=_FakeObjWithContacts(contacts=()),
+        ik_link=_FakeLink(idx=30),
+        left_finger=_FakeLink(idx=10, pos=(0.0, -0.02, 0.0)),
+        right_finger=_FakeLink(idx=11, pos=(0.0, 0.02, 0.0)),
+        arm_dof_idx=[0],
+        gripper_dof_idx=[1],
+        home_qpos=np.zeros(2),
+        gripper=LITE6_GRIPPER_PARAMS,
+    )
     near_left_only = _FakeCtx(
         robot=robot,
         scene=_FakeScene(),
@@ -257,24 +311,6 @@ def test_lite6_grasp_weld_requires_bilateral_finger_contact():
         gripper=LITE6_GRIPPER_PARAMS,
     )
 
+    assert sim_executor._should_weld_grasp(no_contact, 0.08) is False
     assert sim_executor._should_weld_grasp(near_left_only, 0.08) is False
     assert sim_executor._should_weld_grasp(near_both, 0.08) is True
-
-
-def test_lite6_geometric_grasp_allows_contact_free_weld():
-    robot = _FakeRobot(contact_limited_drive=0.45)
-    robot.drive = drive_for_gap_m(0.030, LITE6_GRIPPER_PARAMS)
-    ctx = _FakeCtx(
-        robot=robot,
-        scene=_FakeScene(),
-        obj=_FakeObjWithContacts(contacts=()),
-        ik_link=_FakeLink(idx=30),
-        left_finger=_FakeLink(idx=10, pos=(0.0, -0.02, 0.0)),
-        right_finger=_FakeLink(idx=11, pos=(0.0, 0.02, 0.0)),
-        arm_dof_idx=[0],
-        gripper_dof_idx=[1],
-        home_qpos=np.zeros(2),
-        gripper=LITE6_GRIPPER_PARAMS,
-    )
-
-    assert sim_executor._should_weld_grasp(ctx, 0.08) is True

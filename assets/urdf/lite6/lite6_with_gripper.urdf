@@ -241,11 +241,11 @@
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger1.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="Black" />
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger1.stl" />
       </geometry>
@@ -268,11 +268,11 @@
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger2.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 -0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="Black" />
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 -0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger2.stl" />
       </geometry>

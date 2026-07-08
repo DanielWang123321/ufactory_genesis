@@ -157,3 +157,27 @@ def test_run_lite6_gripper_segment_close_and_open_commands(monkeypatch):
 
     arm.close_lite6_gripper.assert_called_once_with(sync=False)
     arm.open_lite6_gripper.assert_called_once_with(sync=False)
+
+
+def test_run_lite6_gripper_segment_holds_identical_gap_without_io_command(monkeypatch):
+    monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
+    arm = MagicMock()
+    cfg = RealExecutorConfig(
+        robot_key="lite6",
+        dry_run=False,
+        sdk_sim_validate=False,
+        real_gripper=True,
+        rate=50.0,
+    )
+    ticks: list[int] = []
+
+    _run_gripper_segment(
+        _grip_segment(gap_start=0.020, gap_end=0.020, duration=0.18, label="place-settle"),
+        cfg,
+        arm,
+        on_tick=lambda _seg, tick: ticks.append(tick),
+    )
+
+    arm.close_lite6_gripper.assert_not_called()
+    arm.open_lite6_gripper.assert_not_called()
+    assert ticks == list(range(9))

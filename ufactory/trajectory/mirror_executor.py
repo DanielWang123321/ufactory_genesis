@@ -225,7 +225,7 @@ class KinematicCarryTracker:
     """
 
     _APPROACH_FREEZE_LABELS = frozenset({"descend"})
-    _PLACE_FREEZE_LABELS = frozenset({"place-standoff"})
+    _PLACE_FREEZE_LABELS = frozenset()
     _RELEASE_LABEL = "release"
 
     def __init__(

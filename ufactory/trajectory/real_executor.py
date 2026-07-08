@@ -693,6 +693,20 @@ def _run_lite6_gripper_segment(
     duration so sim-to-real timing stays aligned even though hardware motion
     is open-loop.
     """
+    if (
+        seg.gap_end is not None
+        and seg.gap_start is not None
+        and abs(float(seg.gap_end) - float(seg.gap_start)) < 1e-12
+    ):
+        print(
+            f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm hold "
+            f"over {seg.duration:.2f}s (N={n}; Lite6 gripper unchanged)"
+        )
+        if on_tick is not None:
+            _pace_ticks(n, cfg.rate, lambda t: on_tick(seg, t))
+        else:
+            _pace(n, cfg.rate)
+        return
     closing = seg.gap_end is not None and seg.gap_start is not None and seg.gap_end < seg.gap_start
     if closing:
         code = arm.close_lite6_gripper(sync=False)

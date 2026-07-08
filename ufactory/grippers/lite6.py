@@ -27,13 +27,14 @@ LITE6_GRIPPER_OPEN_GAP_M = 0.038
 LITE6_GRIPPER_SIM_CLOSED_DRIVE = 0.0
 LITE6_GRIPPER_SIM_OPEN_DRIVE = LITE6_GRIPPER_FINGER_TRAVEL_M
 
-# Legacy binary-close offset. The default sim grasp now targets the object width
-# and uses a geometric weld to model the real firmware stopping on contact.
+# Deprecated legacy binary-close offset retained for compatibility. The default
+# trajectory sim now uses the physical 20 mm minimum gap with rigid contact and
+# friction, without geometric weld/snap in the sim executor.
 LITE6_GRIPPER_GAP_CALIBRATION_OFFSET_M = 0.010
 
 _FINGER_MESH_DIR = Path(__file__).resolve().parents[2] / "assets" / "urdf" / "lite6_gripper" / "meshes" / "collision"
-_FINGER1_VISUAL_ORIGIN_M = np.asarray((0.0, 0.010, 0.0), dtype=np.float64)
-_FINGER2_VISUAL_ORIGIN_M = np.asarray((0.0, -0.010, 0.0), dtype=np.float64)
+_FINGER1_VISUAL_ORIGIN_M = np.asarray((0.0, 0.0, 0.0), dtype=np.float64)
+_FINGER2_VISUAL_ORIGIN_M = np.asarray((0.0, 0.0, 0.0), dtype=np.float64)
 _FINGER1_VERTS: np.ndarray | None = None
 _FINGER2_VERTS: np.ndarray | None = None
 
@@ -91,6 +92,16 @@ def _link_world_vertices(link, mesh_vertices: np.ndarray) -> np.ndarray:
     return mesh_vertices @ rot.T + pos
 
 
+def _finger_close_axis(ctx) -> np.ndarray:
+    left = ctx.left_finger.get_pos()[0].detach().cpu().numpy()
+    right = ctx.right_finger.get_pos()[0].detach().cpu().numpy()
+    axis = right - left
+    norm = float(np.linalg.norm(axis))
+    if norm <= 1e-9:
+        return np.asarray((0.0, 1.0, 0.0), dtype=np.float64)
+    return axis / norm
+
+
 def _lite6_glb_inner_contact_geometry(ctx, obj_pos=None) -> tuple[float, float, float, float]:
     if obj_pos is None:
         obj_pos = ctx.obj.get_pos()[0].detach().cpu().numpy()
@@ -107,15 +118,18 @@ def _lite6_glb_inner_contact_geometry(ctx, obj_pos=None) -> tuple[float, float, 
     band2 = w2[(w2[:, 2] >= z0) & (w2[:, 2] <= z1)]
     if len(band1) == 0 or len(band2) == 0:
         return 0.0, 0.0, 0.0, 0.0
-    if float(band1[:, 1].mean()) <= float(band2[:, 1].mean()):
-        neg_band, pos_band = band1, band2
+    axis = _finger_close_axis(ctx)
+    rel1 = (band1 - obj_pos) @ axis
+    rel2 = (band2 - obj_pos) @ axis
+    if float(rel1.mean()) <= float(rel2.mean()):
+        neg_proj, pos_proj = rel1, rel2
     else:
-        neg_band, pos_band = band2, band1
-    inner_neg_y = float(neg_band[:, 1].max())
-    inner_pos_y = float(pos_band[:, 1].min())
-    gap_neg = float(oy0 - inner_neg_y)
-    gap_pos = float(inner_pos_y - oy1)
-    return inner_neg_y, inner_pos_y, gap_neg, gap_pos
+        neg_proj, pos_proj = rel2, rel1
+    inner_neg = float(neg_proj.max())
+    inner_pos = float(pos_proj.min())
+    gap_neg = float(-half_y - inner_neg)
+    gap_pos = float(inner_pos - half_y)
+    return inner_neg, inner_pos, gap_neg, gap_pos
 
 
 def measure_lite6_glb_side_clearance_m(ctx, obj_pos=None) -> tuple[float, float]:

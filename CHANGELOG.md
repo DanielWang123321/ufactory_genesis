@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-07-08
+
+### Added
+
+- Contact-friction grasp diagnostics for Gripper G2 (`g2_contact_grasp_diagnose.py`), Lite6 reversed gripper (`lite6_contact_grasp_diagnose.py`), and standalone Lite6 gripper+cube collision (`lite6_gripper_cube_diagnose.py`).
+- Lite6 `place-settle` segment: a 0.18 s closed-gripper hold before release so the block opens at table height.
+- `gap_lspb_samples` support for holding an identical gripper gap over a requested duration (used by `place-settle`).
+
+### Changed
+
+- Grasp-place simulation now defaults to rigid-body contact and friction (`sim_grasp_weld=False`); distance weld, geometric snap, block freeze, and forced block motion are removed from the default path.
+- Gripper G2 default grasp gap is now 22 mm for contact preload on the 30 mm cube.
+- Lite6 grasp-place uses raw STL finger collision (no Genesis convex proxy), contact-latched close after bilateral finger contact, and a 0.8 mm default sim hold bias.
+- Lite6 finger visual/collision origins are reset to zero so the flat pad grips the cube instead of the finger root/limit area.
+
+### Fixed
+
+- Lite6 grasping on the finger limit area instead of the fingertip pad.
+- Lite6 premature top-surface contact from processed convex collision proxies.
+- Lite6 block sliding during lift/transit and pressing into the table during place.
+- Lite6 place bounce and mid-air release after removing `place-standoff`.
+- Gripper G2 over-tight preload causing visible carry jitter; default gap tuned to 22 mm.
+- Lite6 headless real dry-run now includes `place-settle` because `dry_heights()` exposes gripper metadata.
+
 ## [0.2.1] — 2026-07-08
 
 ### Added

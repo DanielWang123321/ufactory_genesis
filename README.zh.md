@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.1-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.2-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -28,7 +28,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 
 ## 快速开始
 
-已在 Python 3.13、Genesis 1.2.0、PyTorch 2.10.0+cu128 下验证。
+最低要求 `genesis-world>=1.2.0`；当前已在 Python 3.13、Genesis World 1.2.1、PyTorch 2.10.0+cu128 下验证。
 
 ```bash
 # 1. 安装 Genesis（按平台选择：CPU / CUDA / macOS / AMD）
@@ -108,6 +108,8 @@ python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 
 v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。下面这些入口都会调用 `examples/_grasp_place_traj.py`，先生成混合笛卡尔路点程序，再按 LSPB 轨迹采样执行。
 
+默认 Genesis 回放使用刚体接触、摩擦力、重力和 Genesis 求解器共同决定抓取/释放结果；默认不再使用距离吸附、几何 snap、强制移动方块或 weld 约束（运行头部会显示 `sim_grasp_weld=False`）。Gripper G2 默认抓取 gap 为 22 mm，用于在 30 mm 方块上形成接触预紧；Lite6 默认使用反装夹爪的物理最小 20 mm gap、原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，只保留 0.8 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让夹爪在桌面高度打开，避免转移中下滑和悬空释放。`--sim-grasp-weld` 仅保留为显式 debug 开关，并且必须已有双指真实接触才会触发。
+
 | 机型 | 命令 | 说明 |
 |------|------|------|
 | xArm5 | `python examples/xarm5/xarm5_grasp_place_traj.py --headless --rate 50` | 仅仿真和 dry-run |
@@ -131,7 +133,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo-cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
 ```
 
-更多命令、镜像模式和 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。
+更多命令、镜像模式和 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。真机路径的 `--visual` 是同一条轨迹的运动学镜像，不是接触仿真。
 
 ## 展示场景（xArm6 + Gripper G2 物理装箱）
 

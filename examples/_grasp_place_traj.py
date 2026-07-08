@@ -32,23 +32,26 @@ from ufactory.trajectory import (
 )
 from ufactory.trajectory.mirror_executor import resolve_segment_start_arm_q
 from ufactory.trajectory.scene import (
-    LITE6_PLACE_RELEASE_STANDOFF_M,
     build_scene,
     default_grasp_gap_m,
     drive_for_gap_m,
     dry_heights,
 )
-from ufactory.trajectory.sim_executor import DEFAULT_GRIPPER_HOLD_BIAS_GAP_M
+from ufactory.trajectory.sim_executor import (
+    DEFAULT_GRIPPER_HOLD_BIAS_GAP_M,
+    LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M,
+)
 from _robot_viewer import start_deferred_viewer
 
 GRIPPER_DURATION_S = 2.0
 VISUAL_START_HOLD_S = 0.5
+LITE6_PLACE_SETTLE_S = 0.18
 
 
-def _lite6_place_release_standoff_m(ctx) -> float:
+def _lite6_place_settle_s(ctx) -> float:
     gripper = getattr(ctx, "gripper", None)
     if gripper is not None and gripper.family == "lite6":
-        return LITE6_PLACE_RELEASE_STANDOFF_M
+        return LITE6_PLACE_SETTLE_S
     return 0.0
 
 
@@ -62,18 +65,22 @@ def _build_waypoints(ctx, *, grip_open_m: float, grip_close_m: float) -> tuple[l
     lift = [obj_x, obj_y, ctx.lift_link6_z]
     place_top = [place_x, place_y, ctx.lift_link6_z]
     place_grasp = [place_x, place_y, ctx.grasp_link6_z]
-    place_standoff = [
-        place_x,
-        place_y,
-        ctx.grasp_link6_z + _lite6_place_release_standoff_m(ctx),
-    ]
     retreat = [place_x, place_y, ctx.lift_link6_z]
 
     place_tail: list[object] = [
         CartesianWaypoint(place_grasp, label="place-descend"),
     ]
-    if _lite6_place_release_standoff_m(ctx) > 0.0:
-        place_tail.append(CartesianWaypoint(place_standoff, label="place-standoff"))
+    place_settle_s = _lite6_place_settle_s(ctx)
+    if place_settle_s > 0.0:
+        place_tail.append(
+            {
+                "type": "gripper",
+                "gap_start": grip_close_m,
+                "gap_end": grip_close_m,
+                "duration": place_settle_s,
+                "label": "place-settle",
+            }
+        )
     place_tail.extend(
         [
             {"type": "gripper", "gap_start": grip_close_m, "gap_end": grip_open_m, "duration": GRIPPER_DURATION_S, "label": "release"},
@@ -309,6 +316,11 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
     runtime = get_robot_runtime_profile(robot_key)
     grip_open_mm = runtime.gripper.open_gap_m * 1000.0
     grip_closed_mm = runtime.gripper.closed_gap_m * 1000.0
+    default_hold_bias_m = (
+        LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M
+        if runtime.gripper.family == "lite6"
+        else DEFAULT_GRIPPER_HOLD_BIAS_GAP_M
+    )
 
     parser = argparse.ArgumentParser(
         description=f"{robot_label} trajectory-planned grasp-place (RoboDK-style)"
@@ -334,15 +346,21 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
     parser.add_argument(
         "--sim-grip-hold-bias-gap-mm",
         type=float,
-        default=DEFAULT_GRIPPER_HOLD_BIAS_GAP_M * 1000.0,
+        default=default_hold_bias_m * 1000.0,
         help="Sim-only post-contact gripper hold bias, in physical two-finger gap mm.",
+    )
+    parser.add_argument(
+        "--sim-grasp-weld",
+        dest="sim_grasp_weld",
+        action="store_true",
+        default=False,
+        help="Sim-only debug: add a contact-gated weld after real bilateral finger/object contact.",
     )
     parser.add_argument(
         "--no-sim-grasp-weld",
         dest="sim_grasp_weld",
         action="store_false",
-        default=True,
-        help="Sim-only: disable the static-friction weld used to prevent grasp slip after contact.",
+        help="Compatibility no-op; contact/friction-only grasp is already the default.",
     )
     # Sim-only
     g_sim = parser.add_mutually_exclusive_group()

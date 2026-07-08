@@ -125,6 +125,15 @@ def test_gap_lspb_samples_use_requested_duration_without_overshoot():
     assert np.all(np.diff(gaps[:, 0]) <= 1e-12)
 
 
+def test_gap_lspb_samples_can_hold_identical_gap_for_requested_duration():
+    gaps, n, duration = gap_lspb_samples(0.020, 0.020, rate=50.0, duration_s=0.18)
+
+    assert gaps.shape == (9, 1)
+    assert n == 9
+    assert duration == pytest.approx(0.18)
+    np.testing.assert_allclose(gaps[:, 0], 0.020)
+
+
 def test_program_segments_share_the_same_sampling_contract():
     rate = 20.0
     q0 = np.zeros(6)

@@ -35,14 +35,14 @@
       <inertia ixx="1.425E-06" ixy="0.0" ixz="0.0" iyy="1.63E-06" iyz="-3.1E-07" izz="8.63E-07" />
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger1.stl" />
       </geometry>
       <material name="Black" />
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger1.stl" />
       </geometry>
@@ -62,14 +62,14 @@
       <inertia ixx="1.425E-06" ixy="0.0" ixz="0.0" iyy="1.63E-06" iyz="3.1E-07" izz="8.63E-07" />
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 -0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger2.stl" />
       </geometry>
       <material name="Black" />
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 -0.010 0" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
       <geometry>
         <mesh filename="../lite6_gripper/meshes/collision/finger2.stl" />
       </geometry>

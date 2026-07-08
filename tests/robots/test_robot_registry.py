@@ -86,14 +86,11 @@ def test_lite6_movable_gripper_defaults_to_reversed_assets() -> None:
             "uflite_finger1": "../lite6_gripper/meshes/collision/finger1.stl",
             "uflite_finger2": "../lite6_gripper/meshes/collision/finger2.stl",
         }
-        for link_name, expected_y in (
-            ("uflite_finger1", "0.010"),
-            ("uflite_finger2", "-0.010"),
-        ):
+        for link_name in ("uflite_finger1", "uflite_finger2"):
             link = root.find(f".//link[@name='{link_name}']")
             collision_origin = link.find("./collision/origin") if link is not None else None
             visual_origin = link.find("./visual/origin") if link is not None else None
             assert collision_origin is not None
             assert visual_origin is not None
-            assert collision_origin.get("xyz") == f"0 {expected_y} 0"
-            assert visual_origin.get("xyz") == f"0 {expected_y} 0"
+            assert collision_origin.get("xyz") == "0 0 0"
+            assert visual_origin.get("xyz") == "0 0 0"

@@ -45,15 +45,13 @@ LITE6_PLACE_XY = (0.20, 0.15)
 LITE6_LIFT_Z = 0.20
 LITE6_HOME_Z = 0.20
 
-# The G2 drive->gap model under-closes relative to the visible/collision pads:
-# a 34.7 mm command yields an actual ~40 mm finger inner span for the default
-# cube, matching the earlier xArm6 showcase calibration.
-GRIPPER_G2_GAP_CALIBRATION_OFFSET_M = 0.0053
-DEFAULT_GRIPPER_GRASP_GAP_M = OBJ_SIZE[1] - GRIPPER_G2_GAP_CALIBRATION_OFFSET_M
-
-# A tiny preload gives the binary Lite6 gripper a stable sim grasp without
-# visible finger penetration into the 30 mm cube.
-LITE6_DEFAULT_GRIPPER_GRASP_GAP_M = LITE6_OBJ_SIZE[1] - 0.0002
+# Default grasp gaps intentionally close past the 30 mm cube faces so Genesis
+# rigid contact and friction decide whether the block can be carried. Gripper
+# G2 uses a 22 mm target: enough preload for the 30 mm cube while avoiding the
+# visible contact chatter caused by stronger 15 mm over-closure. Reversed Lite6
+# is limited by its physical 20 mm minimum opening.
+DEFAULT_GRIPPER_GRASP_GAP_M = 0.022
+LITE6_DEFAULT_GRIPPER_GRASP_GAP_M = 0.020
 
 # Finger geometry constants measured/URDF-derived (same as the demo). These
 # describe the Gripper G2 pad geometry; Lite6 uses its own LITE6_* constants.
@@ -62,18 +60,28 @@ FINGER_CLOSE_DESCENT = 0.015
 GRASP_TABLE_CLEARANCE = 0.010
 
 # Lite6 parallel-jaw fingers: pad extends ~27 mm below the joint/finger-center
-# plane (URDF mesh-derived). Keep the fingertip about 6 mm above the table so
-# the 30 mm cube intersects the flat inner pad region instead of the tapered
-# fingertip end.
-LITE6_FINGER_PAD_BELOW_FC = 0.027
+# Lite6 reversed parallel-jaw finger geometry (URDF/mesh-derived). Each finger
+# is an L: a mounting boss near link6 that used to over-reach the cube, plus a
+# long fingertip plate (the large flat inner pad) that is the intended gripping
+# surface. The finger URDFs place both fingers on the raw mesh (no synthetic
+# outward offset), so the fingertip plate closes onto the 30 mm cube while the
+# boss stays clear. ``PAD_BELOW_FC`` is the fc->fingertip distance; the grasp
+# clearance keeps the fingertip plate spanning the cube's upper body with the
+# boss a few mm above the cube top.
+# fc->lowest inner-pad Z at grasp (collision STL, gripper-down); tuned so the flat
+# pad spans the 30 mm cube mid-height after typical MoveL end-side error on descend.
+LITE6_FINGER_PAD_BELOW_FC = 0.021
 LITE6_FINGER_CLOSE_DESCENT = 0.0
+# Slightly below the G2 default so the fingertip plate (not the mounting boss)
+# reaches the cube sides once descend tracking error is accounted for.
 LITE6_GRASP_TABLE_CLEARANCE = 0.006
-# Descend push-down is handled by sim/mirror spawn-freeze; keep extra Z at zero so
-# GLB finger visuals stay aligned with the cube at grasp height.
-LITE6_GRASP_LINK6_Z_EXTRA_M = 0.0
-# Lite6 place: lift the tool slightly before opening so binary/real fingers and
-# collision STLs clear the block top (GLB visuals already show clearance).
-LITE6_PLACE_RELEASE_STANDOFF_M = 0.012
+# Lift the Lite6 grasp slightly so the low mounting boss clears the cube top
+# and the large flat inner pad, not the stop/boss region, carries side contact.
+LITE6_GRASP_LINK6_Z_EXTRA_M = 0.015
+# Lite6 opens at the same grasp height after a short closed-gripper settle in
+# the trajectory wrapper; keep this deprecated standoff at zero so parallel-jaw
+# release does not lift the cube before opening.
+LITE6_PLACE_RELEASE_STANDOFF_M = 0.0
 
 # Empirical link6->finger-center z offset (gripper open, "down" orientation),
 # measured once per gripper family by build_scene and stable across xArm5/6/7/
@@ -87,12 +95,15 @@ RIGID_NOSLIP_ITERATIONS = 5
 RIGID_CONSTRAINT_TIMECONST = 0.005
 MIMIC_CONSTRAINT_SOL_PARAMS = (0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0)
 
-# Sim object tuning: a light, high-friction cube so the partial-close grip
-# reliably holds it through lift/transit. Real gripper firmware grasp physics
-# are out-of-scope v1.
+# Sim object tuning: a light, high-friction cube so rigid contact and friction
+# can support the object through lift/transit.
 OBJ_INERTIAL_MASS_KG = 0.01
 OBJ_FRICTION = 2.5
 LITE6_OBJ_INERTIAL_MASS_KG = 0.006
+# Lite6's fingertip plate is a small flat pad; use higher cube friction so the
+# plate's friction hold carries the cube through lift/transit without slip.
+LITE6_OBJ_FRICTION = 5.0
+LITE6_FINGER_FRICTION = 5.0
 
 
 @dataclass
@@ -205,6 +216,7 @@ class DryHeights:
     grasp_link6_z: float
     pre_grasp_link6_z: float
     lift_link6_z: float
+    gripper: GripperControlParams
 
 
 def dry_heights(robot_key: str) -> DryHeights:
@@ -236,6 +248,7 @@ def dry_heights(robot_key: str) -> DryHeights:
         grasp_link6_z=grasp_link6_z,
         pre_grasp_link6_z=grasp_link6_z + 0.10,
         lift_link6_z=defaults["lift_z"],
+        gripper=gripper,
     )
 
 
@@ -325,11 +338,19 @@ def build_scene(
         ),
     )
 
+    robot_morph_kwargs = {}
+    if gripper.family == "lite6":
+        # The Lite6 gripper finger is L-shaped. Genesis's default processed
+        # convex proxy bridges that concavity and contacts the cube top before
+        # the visible/URDF STL pad reaches the cube side, so keep the raw STL
+        # surface for this gripper.
+        robot_morph_kwargs.update(convexify=False, decimate=False, watertighten=None)
     robot_morph = gs.morphs.URDF(
         file=robot_urdf_path,
         pos=robot_base,
         fixed=True,
         requires_jac_and_IK=True,
+        **robot_morph_kwargs,
     )
     if use_glb_visual:
         robot = scene.add_entity(robot_morph, surface=glb_view_surface())
@@ -376,7 +397,11 @@ def build_scene(
     # Sim object tuning: light + high-friction cube so the grip reliably holds
     # it through lift/transit. Set before any stepping.
     obj_mass_kg = LITE6_OBJ_INERTIAL_MASS_KG if gripper.family == "lite6" else OBJ_INERTIAL_MASS_KG
-    obj.set_friction(float(OBJ_FRICTION))
+    obj_friction = LITE6_OBJ_FRICTION if gripper.family == "lite6" else OBJ_FRICTION
+    obj.set_friction(float(obj_friction))
+    if gripper.family == "lite6":
+        left_finger.set_friction(float(LITE6_FINGER_FRICTION))
+        right_finger.set_friction(float(LITE6_FINGER_FRICTION))
     obj.set_links_inertial_mass(
         torch.tensor([obj_mass_kg], device=gs.device, dtype=gs.tc_float),
     )

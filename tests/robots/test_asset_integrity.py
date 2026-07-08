@@ -668,11 +668,11 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
         vis1 = tuple(visual_origins.get("uflite_finger1", np.zeros(3)).tolist())
         vis2 = tuple(visual_origins.get("uflite_finger2", np.zeros(3)).tolist())
         visual_meshes = _lite6_gripper_visual_mesh_by_link(urdf)
-        assert coll1 == (0.0, 0.01, 0.0), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 collision origin should encode the +10mm closed-gap offset, got {coll1}"
+        assert coll1 == (0.0, 0.0, 0.0), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 collision origin should align with the mesh frame, got {coll1}"
         )
-        assert coll2 == (0.0, -0.01, 0.0), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 collision origin should encode the -10mm closed-gap offset, got {coll2}"
+        assert coll2 == (0.0, 0.0, 0.0), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 collision origin should align with the mesh frame, got {coll2}"
         )
         assert vis1 == coll1
         assert vis2 == coll2
@@ -738,23 +738,23 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             q_m=0.0089,
         )
 
-        assert 34.0 <= closed_sep <= 37.0, (
+        assert 14.0 <= closed_sep <= 17.0, (
             f"{urdf.relative_to(PROJECT_ROOT)}: closed finger center separation {closed_sep:.2f} mm"
         )
-        assert 52.0 <= open_sep <= 56.0, (
+        assert 32.0 <= open_sep <= 35.0, (
             f"{urdf.relative_to(PROJECT_ROOT)}: open finger center separation {open_sep:.2f} mm"
         )
         assert open_sep > closed_sep, (
             f"{urdf.relative_to(PROJECT_ROOT)}: opening should increase collision finger separation"
         )
-        assert closed_gap == pytest.approx(20.0, abs=0.1), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: closed inner gap should match Lite6's 20mm endpoint"
+        assert closed_gap == pytest.approx(0.0, abs=0.5), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: closed root-region inner gap should overlap at the finger root"
         )
-        assert mid_gap == pytest.approx(28.9, abs=0.1), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: mid-stroke inner gap should be halfway between endpoints"
+        assert mid_gap == pytest.approx(8.9, abs=0.5), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: mid-stroke root-region inner gap should track prismatic travel"
         )
-        assert open_gap == pytest.approx(37.8, abs=0.1), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: open inner gap should match Lite6's 38mm endpoint"
+        assert open_gap == pytest.approx(17.8, abs=0.5), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: open root-region inner gap should track prismatic travel"
         )
 
 

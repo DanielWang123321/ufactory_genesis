@@ -80,8 +80,13 @@ xArm 6 has the broadest example coverage in this repository.
 | `xarm7/xarm7_grasp_place_traj.py` | Shared waypoint/LSPB pick-and-place wrapper for xArm7 + Gripper G2 scene |
 | `uf850/uf850_grasp_place_traj.py` | Shared waypoint/LSPB pick-and-place wrapper for UF850 + Gripper G2 scene |
 | `lite6/lite6_grasp_place_traj.py` | Shared waypoint/LSPB pick-and-place wrapper for Lite6 reversed gripper scene |
+| `g2_contact_grasp_diagnose.py` | Controlled Gripper G2 contact preload sweep for the 30 mm cube |
+| `lite6_contact_grasp_diagnose.py` | Lite6 reversed gripper side clearance and bilateral contact diagnostic |
+| `lite6_gripper_cube_diagnose.py` | Standalone Lite6 gripper + cube contact diagnostic, with raw vs processed collision comparison |
 
-All five wrappers call the shared `examples/_grasp_place_traj.py` pipeline. It builds the mixed waypoint program with `TrajectoryPlannerConfig`, `CartesianWaypoint`, and `plan_mixed_waypoints`, then samples the motion with LSPB profiles. Segment labels are stable: `home->pregrasp`, `descend`, `grip`, `lift`, `transit`, `place-descend`, `release`, `retreat`, `return-home`.
+All five wrappers call the shared `examples/_grasp_place_traj.py` pipeline. It builds the mixed waypoint program with `TrajectoryPlannerConfig`, `CartesianWaypoint`, and `plan_mixed_waypoints`, then samples the motion with LSPB profiles. Segment labels are stable: `home->pregrasp`, `descend`, `grip`, `lift`, `transit`, `place-descend`, `release`, `retreat`, `return-home`; Lite6 additionally inserts `place-settle` before `release`.
+
+Default simulation is contact/friction grasping: the block is carried only if Genesis rigid contact friction can support it against gravity. No distance weld, geometric snap, block freeze, or forced block motion is used by default; the run header prints `sim_grasp_weld=False`. Lite6 uses raw STL finger collision plus contact-latched close with a 0.8 mm default sim hold bias and a 0.18 s closed-gripper `place-settle` before release; `python examples/lite6_gripper_cube_diagnose.py --collision-mode both` isolates that contact geometry without the arm. Use `--sim-grasp-weld` only for explicit debug comparisons after real bilateral finger/object contact exists.
 
 When `--executor` is omitted, the script runs Genesis sim:
 
@@ -114,7 +119,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo-cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run --real-gripper
 ```
 
-`--visual` means different things on each path. In sim, it opens the full Genesis viewer. On the real path, it opens a kinematic mirror of the same planned trajectory so you can inspect the plan and grasp state; it is not contact physics:
+`--visual` means different things on each path. In sim, it opens the full Genesis viewer with contact physics. On the real path, it opens a kinematic mirror of the same planned trajectory so you can inspect the plan and grasp state; it is not contact physics:
 
 ```bash
 # Real dry-run + kinematic mirror.
