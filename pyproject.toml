@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.0"
+version = "0.2.1"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -85,4 +85,5 @@ markers = [
     "gpu: in-process Genesis GPU simulation",
     "integration: end-to-end subprocess smoke tests (examples, short RL runs)",
     "display: subprocess tests requiring DISPLAY for visual dry-run",
+    "slow: long-running dev/ref_scripts capture tests",
 ]

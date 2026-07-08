@@ -3,11 +3,11 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.0-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.1-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
-UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, and RL environments.
+UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, trajectory grasp-place examples, and RL environments.
 
 [中文](README.zh.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md)
 
@@ -16,6 +16,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 - [Quick Start](#quick-start)
 - [Supported Robots](#supported-robots)
 - [GLB Visual Preview](#glb-visual-preview)
+- [Trajectory Grasp-Place](#trajectory-grasp-place)
 - [API Quick Reference](#api-quick-reference)
 - [Real-Robot Kinematic Calibration](#real-robot-kinematic-calibration-sn-rules)
 - [xArm 6 — Reference Robot](#xarm-6)
@@ -66,7 +67,7 @@ Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names
 
 ## GLB Visual Preview
 
-High-fidelity GLB rendering with PBR material preservation; collision and physics still use STL meshes. Single entry point:
+High-fidelity GLB rendering with PBR material preservation. Registered arm links use visual STL collision meshes. Gripper G2 and Lite6 Gripper keep their packaged STL paths, whose contents match the upstream xarm_ros2 visual STL assets; Bio Gripper G2 and Lite6 Vacuum use visual STL collision meshes. Single entry point:
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -102,9 +103,38 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 | `--pd` | Arm | Joint motion demo (50 deg/s smooth interp, not stiff PD) |
 | `--show-tcp` | Arm | Show red TCP debug marker on EE flange (default: hidden) |
 
+## Trajectory Grasp-Place
+
+v0.2.1 adds a shared waypoint/LSPB pick-and-place pipeline for all supported robot families. The wrappers below call `examples/_grasp_place_traj.py`, build a mixed Cartesian waypoint program, and sample motion with LSPB profiles.
+
+| Robot | Command | Notes |
+|-------|---------|-------|
+| xArm5 | `python examples/xarm5/xarm5_grasp_place_traj.py --headless --rate 50` | Sim and dry-run only |
+| xArm6 | `python examples/xarm6/xarm6_grasp_place_traj.py --headless --rate 50` | Sim, dry-run, and real `servo-cartesian` |
+| xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | Sim, dry-run, and real arm streaming |
+| UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | Sim, dry-run, and real arm streaming |
+| Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 reversed gripper, 30 mm cube |
+
+The same scripts support Genesis visual replay and real-robot safety dry-run:
+
+```bash
+# Genesis viewer with GLB visuals and STL collision.
+python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
+
+# Real path dry-run: prints segment and servo safety summaries, no robot motion.
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo-cartesian --dry-run --rate 50 --z-min-mm 0
+
+# Real arm streaming; add --real-gripper only after the physical gripper is installed and checked.
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo-cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+```
+
+See [examples/README.md](examples/README.md) for the full command matrix, mirror mode, and SDK simulation validation.
+
 ## API Quick Reference
 
-v0.2.0 uses functional subpackages. The root namespace is intentionally small:
+The project uses functional subpackages. The root namespace is intentionally small:
 
 ```python
 import ufactory

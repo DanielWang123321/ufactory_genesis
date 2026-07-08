@@ -33,7 +33,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link_base.stl" />
+        <mesh filename="meshes/lite6/visual/link_base.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -53,7 +53,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link1.stl" />
+        <mesh filename="meshes/lite6/visual/link1.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -81,7 +81,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link2.stl" />
+        <mesh filename="meshes/lite6/visual/link2.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -109,7 +109,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link3.stl" />
+        <mesh filename="meshes/lite6/visual/link3.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -137,7 +137,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link4.stl" />
+        <mesh filename="meshes/lite6/visual/link4.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -165,7 +165,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link5.stl" />
+        <mesh filename="meshes/lite6/visual/link5.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -193,7 +193,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/lite6/collision/link6.stl" />
+        <mesh filename="meshes/lite6/visual/link6.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>

@@ -5,6 +5,30 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.1] — 2026-07-08
+
+### Added
+
+- Robot-aware LSPB trajectory planning APIs for joint, Cartesian, and mixed waypoint programs.
+- Shared five-robot grasp-place trajectory examples for xArm5, xArm6, xArm7, UF850, and Lite6, with Genesis sim, dry-run, real `servo-cartesian`, and kinematic mirror paths.
+- Lite6 gripper command conversion and tests for its 20-38 mm physical opening range.
+
+### Changed
+
+- Grasp-place scenes now use 30 mm default cubes, calibrated grasp gaps, and shared trajectory scene defaults across supported robots.
+- Registered arm links for xArm5/6/7 1305, Lite6, and UF850 now use `visual/*.stl` meshes for collision to better match the physical curved link surfaces.
+- Collision visualization tooling can now load arm+accessory combo URDFs with raw STL collision meshes, including Gripper G2, Bio Gripper G2, Lite6 Gripper, and Lite6 Vacuum.
+- Gripper G2 and Lite6 Gripper keep their packaged STL paths because they match upstream xarm_ros2 visual STL assets; Bio Gripper G2 already uses visual STL collision, and Lite6 Vacuum now uses upstream visual STL collision.
+- Asset integrity tests now assert registered arm collision references point to visual STL, validate accessory STL collision references, and still reject OBJ collision meshes.
+
+### Fixed
+
+- Grasp-place viewers now start from the planned home/pregrasp pose instead of briefly showing zero-position arms with grippers inside the table.
+- Lite6 grasp-place now keeps finger collision/visual gaps aligned with the 30 mm cube and freezes release/place transitions to avoid pushing the cube into the table.
+- Simulation final place-error reporting now handles mixed CPU/CUDA tensor devices in test doubles and Genesis contexts.
+
 ## [0.2.0] — 2026-07-03
 
 ### Added

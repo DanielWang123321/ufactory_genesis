@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import numpy as np
 
-LITE6_GRIPPER_OPEN = 0.0
-LITE6_GRIPPER_CLOSE = 0.0089
+from ufactory.grippers.lite6 import (
+  LITE6_GRIPPER_SIM_CLOSED_DRIVE,
+  LITE6_GRIPPER_SIM_OPEN_DRIVE,
+)
+
+# Lite6 ships with the reversed parallel gripper in this project: drive 0.0 is
+# the 20 mm physical closed endpoint, while 0.0089 m is the 38 mm open endpoint.
+LITE6_GRIPPER_CLOSE = LITE6_GRIPPER_SIM_CLOSED_DRIVE
+LITE6_GRIPPER_OPEN = LITE6_GRIPPER_SIM_OPEN_DRIVE
 LITE6_GRIPPER_HOLD_STEPS = 200
 
 LITE6_GRIPPER_JOINTS = (

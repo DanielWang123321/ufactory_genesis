@@ -12,10 +12,13 @@ import pytest
 import torch
 
 from ufactory.trajectory import (
+    CartesianWaypoint,
     KinematicCarryTracker,
     RealExecutorConfig,
     TrajKinematicMirror,
+    TrajectoryPlannerConfig,
     build_pickplace_program,
+    plan_mixed_waypoints,
     replay_real,
 )
 from ufactory.trajectory.mirror_executor import (
@@ -63,13 +66,37 @@ def _default_waypoints() -> list[dict]:
     ]
 
 
-def _default_program():
+def _default_mixed_waypoints() -> tuple[list[object], list[float]]:
+    legacy = _default_waypoints()
+    start_xyz = list(legacy[0]["pose_start"])
+    waypoints: list[object] = []
+    for wp in legacy:
+        if wp["type"] == "movel":
+            waypoints.append(CartesianWaypoint(wp["pose_end"], label=wp["label"]))
+        else:
+            waypoints.append(wp)
+    return waypoints, start_xyz
+
+
+def _legacy_default_program():
     return build_pickplace_program(
         rate=50.0,
         speed_rad_s=0.35,
         mvacc_rad_s2=2.0,
         waypoints=_default_waypoints(),
     )
+
+
+def _default_program():
+    waypoints, start_xyz = _default_mixed_waypoints()
+    config = TrajectoryPlannerConfig(
+        robot_key="xarm6",
+        rate=50.0,
+        speed_rad_s=0.35,
+        mvacc_rad_s2=2.0,
+        z_min_m=0.0,
+    )
+    return plan_mixed_waypoints(config, waypoints, start_xyz=start_xyz)
 
 
 # Genesis only supports one gs.init() per process, so every test that needs a
@@ -96,11 +123,42 @@ def _fresh_mirror(ctx, program) -> TrajKinematicMirror:
 
 
 def test_resolve_tick_grip_drive_open_and_close():
+    from ufactory.robots.runtime import G2_GRIPPER_PARAMS
+
     samples = np.array([[0.084], [0.024]], dtype=np.float64)
-    open_drive = resolve_tick_grip_drive(samples, 0)
-    close_drive = resolve_tick_grip_drive(samples, 1)
+    open_drive = resolve_tick_grip_drive(samples, 0, G2_GRIPPER_PARAMS)
+    close_drive = resolve_tick_grip_drive(samples, 1, G2_GRIPPER_PARAMS)
     assert open_drive == pytest.approx(0.0)
     assert close_drive > open_drive
+
+
+def test_default_grasp_place_program_uses_mixed_waypoint_planner():
+    program = _default_program()
+
+    assert program.robot_key == "xarm6_1305"
+    assert program.metadata["planner"] == "ufactory.trajectory.planner"
+    assert program.metadata["kind"] == "mixed"
+    assert [seg.label for seg in program.segments] == [
+        "home->pregrasp",
+        "descend",
+        "grip",
+        "lift",
+        "transit",
+        "place-descend",
+        "release",
+        "retreat",
+        "return-home",
+    ]
+
+
+def test_legacy_pickplace_builder_still_matches_default_segment_shape():
+    planned = _default_program()
+    legacy = _legacy_default_program()
+
+    assert [seg.kind for seg in legacy.segments] == [seg.kind for seg in planned.segments]
+    assert [seg.label for seg in legacy.segments] == [seg.label for seg in planned.segments]
+    assert legacy.total_ticks == planned.total_ticks
+    assert legacy.robot_key is None
 
 
 def test_on_tick_count_matches_program_total_ticks(monkeypatch):
@@ -127,7 +185,7 @@ def test_mirror_tick_arm_targets_finite_on_default_program(shared_ctx):
         samples, n = seg.samples(program.rate)
         for t in range(n):
             if seg.kind == "gripper":
-                drive = resolve_tick_grip_drive(samples, t)
+                drive = resolve_tick_grip_drive(samples, t, ctx.gripper)
                 assert np.isfinite(drive)
                 continue
             q = resolve_tick_arm_q(ctx, seg, samples, t)
@@ -265,7 +323,7 @@ def test_real_visual_dry_run_subprocess():
             sys.executable,
             str(script),
             "--executor",
-            "servo-j",
+            "servo-cartesian",
             "--visual",
             "--dry-run",
             "--rate",

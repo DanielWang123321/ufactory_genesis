@@ -33,7 +33,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link_base.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link_base.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -53,7 +53,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link1.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link1.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -81,7 +81,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link2.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link2.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -109,7 +109,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link3.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link3.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -137,7 +137,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link4.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link4.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -165,7 +165,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link5.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link5.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -193,7 +193,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link6.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link6.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -221,7 +221,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="meshes/xarm7_1305/collision/link7.stl" />
+        <mesh filename="meshes/xarm7_1305/visual/link7.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
@@ -259,9 +259,9 @@
       <inertia ixx="0.00088398" ixy="4.8665E-08" ixz="5.6276E-06" iyy="0.00018256" iyz="4.0828E-08" izz="0.00094673" />
     </inertial>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="-0.022701 -0.000960 -0.004557" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/link_base.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_link_base.stl" />
       </geometry>
     </collision>
   </link>
@@ -272,9 +272,9 @@
       <inertia ixx="3.7322E-06" ixy="4.1705E-06" ixz="-4.0142E-06" iyy="1.744E-05" iyz="1.2237E-06" izz="1.7775E-05" />
     </inertial>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="-0.013576 -0.011335 -0.001188" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/left_finger.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_left_finger.stl" />
       </geometry>
     </collision>
   </link>
@@ -293,9 +293,9 @@
       <inertia ixx="4.1413E-06" ixy="-3.9682E-06" ixz="-4.5734E-06" iyy="1.6115E-05" iyz="-1.6711E-06" izz="1.6032E-05" />
     </inertial>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+      <origin rpy="0 0 0" xyz="-0.013875 0.011611 0.000165" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/right_finger.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_right_finger.stl" />
       </geometry>
     </collision>
   </link>

@@ -22,7 +22,7 @@ assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb
 assets/urdf/lite6_gripper/meshes/collision/gripper_lite.stl
 *.patch
 .DS_Store
-agents.md
+agent.md
 visual_debug_checklist.md
 scripts/generate_visual_grid.py
 scripts/diagnose_*.py
