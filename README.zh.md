@@ -106,9 +106,9 @@ python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。v0.2.3 增加 `servo_j` 真机路径：同一批笛卡尔采样点会先在上位机用 Genesis IK 求解，再编译成显式关节目标，通过 `set_servo_angle_j` 下发。`servo_cartesian` 仍保留，用于固件侧 IK。
+v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。v0.2.3 增加 `servo_j` 真机路径：同一批笛卡尔采样点会先在上位机用 Genesis IK 求解，再编译成显式关节目标，通过 `set_servo_angle_j` 下发。v0.2.4 将笛卡尔时间律作为 `servo_cartesian` 与 `servo_j` 的共同来源：`--speed-mm-s` / `--mvacc-mm-s2` 同时控制仿真、dry-run 和真机流式执行的 MoveL 采样，默认 150 mm/s、800 mm/s²。`servo_cartesian` 仍保留，用于固件侧 IK。
 
-默认 Genesis 回放使用刚体接触、摩擦力、重力和 Genesis 求解器共同决定抓取/释放结果；默认不再使用距离吸附、几何 snap、强制移动方块或 weld 约束（运行头部会显示 `sim_grasp_weld=False`）。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。Gripper G2 默认抓取 gap 为 22 mm，用于在 30 mm 方块上形成接触预紧；Lite6 默认使用反装夹爪的物理最小 20 mm gap、原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让夹爪在桌面高度打开，避免转移中下滑和悬空释放。`--sim-grasp-weld` 仅保留为显式 debug 开关，并且必须已有双指真实接触才会触发。
+默认 Genesis 回放使用刚体接触、摩擦力、重力和 Genesis 求解器共同决定抓取/释放结果；默认不再使用距离吸附、几何 snap、强制移动方块或 weld 约束（运行头部会显示 `sim_grasp_weld=False`）。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。Gripper G2 默认抓取 gap 为 22 mm，用于在 30 mm 方块上形成接触预紧，并在抬升前闭爪保持 0.5 s，等待夹取稳定；Lite6 默认使用反装夹爪的物理最小 20 mm gap、原始 STL 手指碰撞，夹爪开合段为 0.5 s，并在双指真实接触后锁定闭合位置，只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让夹爪在桌面高度打开，避免转移中下滑和悬空释放。`--sim-grasp-weld` 仅保留为显式 debug 开关，并且必须已有双指真实接触才会触发。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
@@ -128,7 +128,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
 python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
 
-# 上位机 IK dry-run：将 MoveL 每个 tick 编译成 servo_j 关节目标，不运动机械臂。
+# 上位机 IK dry-run：保留同一套 MoveL tick 时间律，不运动机械臂。
 python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo_j --dry-run --rate 50 --z-min-mm 0
 

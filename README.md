@@ -105,9 +105,9 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 
 ## Trajectory Grasp-Place
 
-v0.2.1 adds a shared waypoint/LSPB pick-and-place pipeline for all supported robot families. v0.2.3 adds a `servo_j` real path: the same Cartesian samples are solved by host-side Genesis IK, compiled into explicit joint targets, and streamed with `set_servo_angle_j`. `servo_cartesian` remains available when you want firmware-side IK.
+v0.2.1 adds a shared waypoint/LSPB pick-and-place pipeline for all supported robot families. v0.2.3 adds a `servo_j` real path: the same Cartesian samples are solved by host-side Genesis IK, compiled into explicit joint targets, and streamed with `set_servo_angle_j`. v0.2.4 keeps the Cartesian timing as the source of truth for both `servo_cartesian` and `servo_j`: `--speed-mm-s` / `--mvacc-mm-s2` control MoveL source timing for sim, dry-run, and real streaming, with defaults of 150 mm/s and 800 mm/s^2. `servo_cartesian` remains available when you want firmware-side IK.
 
-The default Genesis replay uses rigid-body contact, friction, gravity, and the Genesis solver to decide grasp/release outcome. It does not use distance-based attachment, geometric snap, forced block motion, or weld constraints by default (`sim_grasp_weld=False` in the run header). The shared red block is a 30 mm painted wood cube (17 g, friction 1.0); silicone fingertip pads use friction 1.2; contact stiffness stays at Genesis rigid defaults. Gripper G2 defaults to a 22 mm target gap for contact preload on the 30 mm cube; Lite6 defaults to its physical 20 mm minimum gap, raw STL finger collision, a contact-latched 2.0 mm sim hold bias, and a 0.18 s closed-gripper settle before release so the flat pad grips without sliding and opens at table height. `--sim-grasp-weld` remains as an explicit debug-only contact-gated weld.
+The default Genesis replay uses rigid-body contact, friction, gravity, and the Genesis solver to decide grasp/release outcome. It does not use distance-based attachment, geometric snap, forced block motion, or weld constraints by default (`sim_grasp_weld=False` in the run header). The shared red block is a 30 mm painted wood cube (17 g, friction 1.0); silicone fingertip pads use friction 1.2; contact stiffness stays at Genesis rigid defaults. Gripper G2 defaults to a 22 mm target gap for contact preload on the 30 mm cube, then holds closed for 0.5 s before lift so the grasp is settled before arm motion resumes. Lite6 defaults to its physical 20 mm minimum gap, raw STL finger collision, 0.5 s open/close gripper segments, a contact-latched 2.0 mm sim hold bias, and a 0.18 s closed-gripper settle before release so the flat pad grips without sliding and opens at table height. `--sim-grasp-weld` remains as an explicit debug-only contact-gated weld.
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -127,7 +127,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
 python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
 
-# Host-side IK dry-run: compiles MoveL ticks to servo_j joint targets, no robot motion.
+# Host-side IK dry-run: preserves the same MoveL tick timing, no robot motion.
 python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo_j --dry-run --rate 50 --z-min-mm 0
 

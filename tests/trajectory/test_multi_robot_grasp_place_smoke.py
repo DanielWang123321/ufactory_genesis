@@ -116,7 +116,27 @@ def test_xarm6_grasp_place_servo_j_dry_run_compiles_host_ik():
         f"stderr:\n{result.stderr[-4000:]}"
     )
     assert "[ik-compile] executor=servo_j" in result.stdout
+    assert "timing=preserve-cartesian" in result.stdout
+    assert "retimed=False" in result.stdout
     assert "[real DRY-RUN] executor=servo_j" in result.stdout
+    assert "[servo_j:descend]" in result.stdout
+
+
+@pytest.mark.integration
+def test_lite6_grasp_place_servo_j_dry_run_passes_default_150mm_s_timing():
+    result = _run_example(
+        "examples/lite6/lite6_grasp_place_traj.py",
+        ["--executor", "servo_j", "--dry-run", "--rate", "50", "--z-min-mm", "0"],
+        timeout=600,
+    )
+    assert result.returncode == 0, (
+        f"lite6 servo_j dry-run failed (exit {result.returncode})\n"
+        f"stdout:\n{result.stdout[-4000:]}\n"
+        f"stderr:\n{result.stderr[-4000:]}"
+    )
+    assert "[ik-compile] executor=servo_j" in result.stdout
+    assert "timing=preserve-cartesian" in result.stdout
+    assert "retimed=False" in result.stdout
     assert "[servo_j:descend]" in result.stdout
 
 

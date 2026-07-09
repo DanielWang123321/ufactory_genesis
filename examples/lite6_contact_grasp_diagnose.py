@@ -24,7 +24,13 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(EXAMPLES_ROOT) not in sys.path:
     sys.path.insert(0, str(EXAMPLES_ROOT))
 
-from _grasp_place_traj import _build_program  # noqa: E402
+from _grasp_place_traj import (  # noqa: E402
+    DEFAULT_GRASP_PLACE_JOINT_ACC_RAD_S2,
+    DEFAULT_GRASP_PLACE_JOINT_SPEED_RAD_S,
+    DEFAULT_GRASP_PLACE_LINEAR_ACC_MM_S2,
+    DEFAULT_GRASP_PLACE_LINEAR_SPEED_MM_S,
+    _build_program,
+)
 from ufactory.grippers.lite6 import measure_lite6_glb_side_clearance_m  # noqa: E402
 from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive  # noqa: E402
 from ufactory.trajectory.scene import build_scene, drive_for_gap_m  # noqa: E402
@@ -207,6 +213,8 @@ def run_gap(args: argparse.Namespace, gap_mm: float) -> None:
         rate=args.rate,
         speed_rad_s=args.speed_rad_s,
         mvacc_rad_s2=args.mvacc_rad_s2,
+        speed_mm_s=args.speed_mm_s,
+        mvacc_mm_s2=args.mvacc_mm_s2,
         z_min_mm=args.z_min_mm,
     )
     program = _build_program(
@@ -318,8 +326,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rate", type=float, default=50.0)
     parser.add_argument("--substeps", type=int, default=8)
     parser.add_argument("--visual-model", choices=("glb", "stl"), default="glb")
-    parser.add_argument("--speed-rad-s", type=float, default=0.35)
-    parser.add_argument("--mvacc-rad-s2", type=float, default=2.0)
+    parser.add_argument("--speed-rad-s", type=float, default=DEFAULT_GRASP_PLACE_JOINT_SPEED_RAD_S)
+    parser.add_argument("--mvacc-rad-s2", type=float, default=DEFAULT_GRASP_PLACE_JOINT_ACC_RAD_S2)
+    parser.add_argument("--speed-mm-s", type=float, default=DEFAULT_GRASP_PLACE_LINEAR_SPEED_MM_S)
+    parser.add_argument("--mvacc-mm-s2", type=float, default=DEFAULT_GRASP_PLACE_LINEAR_ACC_MM_S2)
     parser.add_argument("--z-min-mm", type=float, default=0.0)
     parser.add_argument("--hold-s", type=float, default=2.0)
     parser.add_argument("--keyframes", action="store_true", help="Print start/mid/end keyframe metrics.")

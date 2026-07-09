@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Gripper G2 grasp-place examples now insert a 0.5 s closed-gap `grip-settle` segment before lift so xArm5/6/7 and UF850 wait for the grasp to settle before raising the arm.
+- Lite6 grasp-place `grip` and `release` segments now use 0.5 s durations, making the Lite6 gripper open/close four times faster while keeping the 0.18 s `place-settle`.
+- Real gripper execution treats same-gap gripper hold segments as paced no-ops, so `grip-settle` and `place-settle` do not resend SDK gripper commands.
+- Grasp-place MoveL source timing is now controlled by `--speed-mm-s` / `--mvacc-mm-s2` for sim, dry-run, `servo_cartesian`, and `servo_j`; defaults are 150 mm/s and 800 mm/s².
+- Host-side IK `servo_j` now preserves the source Cartesian tick count and duration instead of silently retiming, so unsafe custom speeds fail through the real executor's finite-difference safety checks.
+
 ## [0.2.3] — 2026-07-09
 
 ### Added

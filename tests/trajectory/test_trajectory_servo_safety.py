@@ -12,6 +12,8 @@ from ufactory.trajectory import (
     JointWaypoint,
     RealExecutorConfig,
     ServoLimits,
+    Program,
+    Segment,
     TrajectorySafetyError,
     TrajectoryPlannerConfig,
     build_pickplace_program,
@@ -86,6 +88,37 @@ def test_replay_real_rejects_movej_program_with_servo_cartesian():
 
     with pytest.raises(TrajectorySafetyError, match="cannot replay MoveJ"):
         replay_real(program, RealExecutorConfig(executor="servo_cartesian", dry_run=True, rate=50.0))
+
+
+def test_servo_j_compiled_movel_safety_error_suggests_lowering_source_timing():
+    q_start = np.zeros(6)
+    q_sample = np.zeros((1, 6), dtype=np.float64)
+    q_sample[0, 0] = 0.02
+    seg = Segment(
+        kind="movej",
+        duration=0.02,
+        v_max=1.0,
+        a_max=12.0,
+        label="compiled-line",
+        q_start=q_start,
+        q_end=q_sample[-1],
+        q_samples=q_sample,
+        pose_start=np.array([0.30, 0.0, 0.30]),
+        pose_end=np.array([0.31, 0.0, 0.30]),
+        samples_count=1,
+    )
+    program = Program(segments=[seg], rate=50.0, robot_key="xarm6")
+
+    with pytest.raises(TrajectorySafetyError, match=r"Lower --speed-mm-s/--mvacc-mm-s2"):
+        replay_real(
+            program,
+            RealExecutorConfig(
+                executor="servo_j",
+                dry_run=True,
+                rate=50.0,
+                servo_limits=ServoLimits(joint_speed_rad_s=0.1),
+            ),
+        )
 
 
 @pytest.mark.parametrize("dof", [5, 6, 7])

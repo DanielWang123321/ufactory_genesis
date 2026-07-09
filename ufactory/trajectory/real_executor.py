@@ -334,14 +334,22 @@ def _prepare_segment(seg: Segment, cfg: RealExecutorConfig, lower: np.ndarray, u
         margin=cfg.joint_margin_rad,
     )
     kind, samples, start = _segment_servo_targets(seg, cfg.rate)
-    stats = validate_servo_stream(
-        kind,
-        samples,
-        start,
-        rate=cfg.rate,
-        limits=cfg.servo_limits,
-        label=seg.label or seg.kind,
-    )
+    try:
+        stats = validate_servo_stream(
+            kind,
+            samples,
+            start,
+            rate=cfg.rate,
+            limits=cfg.servo_limits,
+            label=seg.label or seg.kind,
+        )
+    except TrajectorySafetyError as exc:
+        if cfg.executor == EXECUTOR_SERVO_J and seg.kind == "movej" and seg.pose_start is not None:
+            raise TrajectorySafetyError(
+                f"{exc}. Lower --speed-mm-s/--mvacc-mm-s2 for the source MoveL timing, "
+                "or raise --speed-rad-s/--mvacc-rad-s2 only after hardware validation."
+            ) from exc
+        raise
     return _PreparedSegment(seg=seg, kind=kind, samples=samples, start=start, stats=stats)
 
 
@@ -605,6 +613,51 @@ def _gripper_g2_target_speed_mm_s(seg: Segment) -> float:
     return float(min(max(speed, GRIPPER_G2_MIN_SPEED_MM_S), GRIPPER_G2_MAX_SPEED_MM_S))
 
 
+def _is_gripper_gap_hold(seg: Segment) -> bool:
+    return (
+        seg.gap_end is not None
+        and seg.gap_start is not None
+        and abs(float(seg.gap_end) - float(seg.gap_start)) < 1e-12
+    )
+
+
+def _disabled_gripper_reason(cfg: RealExecutorConfig) -> str:
+    if cfg.dry_run:
+        return "dry-run, no SDK gripper command sent"
+    if cfg.sdk_sim_validate:
+        return "sdk-sim-validate keeps the physical gripper idle"
+    if not cfg.real_gripper:
+        return "--real-gripper not set"
+    return "no arm connection"
+
+
+def _enabled_hold_reason(gripper) -> str:
+    family = getattr(gripper, "family", "")
+    if family == "g2":
+        return "Gripper G2 unchanged"
+    if family == "lite6":
+        return "Lite6 gripper unchanged"
+    return "gripper unchanged"
+
+
+def _run_gripper_hold_segment(
+    seg: Segment,
+    cfg: RealExecutorConfig,
+    n: int,
+    *,
+    reason: str,
+    on_tick: Callable[[Segment, int], None] | None = None,
+) -> None:
+    print(
+        f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm hold "
+        f"over {seg.duration:.2f}s (N={n}; {reason})"
+    )
+    if on_tick is not None:
+        _pace_ticks(n, cfg.rate, lambda t: on_tick(seg, t))
+    else:
+        _pace(n, cfg.rate)
+
+
 def _run_gripper_segment(
     seg: Segment,
     cfg: RealExecutorConfig,
@@ -614,19 +667,16 @@ def _run_gripper_segment(
 ) -> None:
     _samples, n = seg.samples(cfg.rate)
     motion_enabled = _gripper_motion_enabled(cfg) and arm is not None
+    gripper = get_robot_runtime_profile(cfg.robot_key).gripper
+    if _is_gripper_gap_hold(seg):
+        reason = _enabled_hold_reason(gripper) if motion_enabled else _disabled_gripper_reason(cfg)
+        _run_gripper_hold_segment(seg, cfg, n, reason=reason, on_tick=on_tick)
+        return
     if not motion_enabled:
-        if cfg.dry_run:
-            reason = "dry-run"
-        elif cfg.sdk_sim_validate:
-            reason = "sdk-sim-validate keeps the physical gripper idle"
-        elif not cfg.real_gripper:
-            reason = "--real-gripper not set"
-        else:
-            reason = "no arm connection"
         print(
             f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm -> "
             f"{seg.gap_end * 1000:.1f}mm over {seg.duration:.2f}s "
-            f"(N={n}; {reason}, no SDK gripper command sent)"
+            f"(N={n}; {_disabled_gripper_reason(cfg)})"
         )
         if on_tick is not None:
             _pace_ticks(n, cfg.rate, lambda t: on_tick(seg, t))
@@ -634,7 +684,6 @@ def _run_gripper_segment(
             _pace(n, cfg.rate)
         return
 
-    gripper = get_robot_runtime_profile(cfg.robot_key).gripper
     if gripper is not None and gripper.family == "lite6":
         _run_lite6_gripper_segment(seg, cfg, arm, n, on_tick=on_tick)
         return
@@ -693,19 +742,14 @@ def _run_lite6_gripper_segment(
     duration so sim-to-real timing stays aligned even though hardware motion
     is open-loop.
     """
-    if (
-        seg.gap_end is not None
-        and seg.gap_start is not None
-        and abs(float(seg.gap_end) - float(seg.gap_start)) < 1e-12
-    ):
-        print(
-            f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm hold "
-            f"over {seg.duration:.2f}s (N={n}; Lite6 gripper unchanged)"
+    if _is_gripper_gap_hold(seg):
+        _run_gripper_hold_segment(
+            seg,
+            cfg,
+            n,
+            reason="Lite6 gripper unchanged",
+            on_tick=on_tick,
         )
-        if on_tick is not None:
-            _pace_ticks(n, cfg.rate, lambda t: on_tick(seg, t))
-        else:
-            _pace(n, cfg.rate)
         return
     closing = seg.gap_end is not None and seg.gap_start is not None and seg.gap_end < seg.gap_start
     if closing:

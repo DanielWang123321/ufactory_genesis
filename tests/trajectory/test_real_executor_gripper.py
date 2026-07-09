@@ -81,6 +81,30 @@ def test_run_gripper_segment_sends_sdk_command_for_real_motion(monkeypatch):
     arm.get_gripper_g2_position.assert_called_once()
 
 
+def test_run_g2_gripper_hold_segment_does_not_resend_sdk_command(monkeypatch):
+    monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
+    arm = _make_gripper_arm()
+    cfg = RealExecutorConfig(
+        robot_key="xarm6",
+        dry_run=False,
+        sdk_sim_validate=False,
+        real_gripper=True,
+        rate=50.0,
+    )
+    ticks: list[int] = []
+
+    _run_gripper_segment(
+        _grip_segment(gap_start=0.022, gap_end=0.022, duration=0.5, label="grip-settle"),
+        cfg,
+        arm,
+        on_tick=lambda _seg, tick: ticks.append(tick),
+    )
+
+    arm.set_gripper_g2_position.assert_not_called()
+    arm.get_gripper_g2_position.assert_not_called()
+    assert ticks == list(range(25))
+
+
 def test_run_gripper_segment_skips_sdk_command_during_dry_run(monkeypatch):
     monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
     arm = _make_gripper_arm()

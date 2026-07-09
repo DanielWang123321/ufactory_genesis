@@ -65,8 +65,10 @@ def _fake_ctx() -> SimpleNamespace:
 def _args(*, visual: bool) -> SimpleNamespace:
     return SimpleNamespace(
         rate=50.0,
-        speed_rad_s=0.35,
-        mvacc_rad_s2=2.0,
+        speed_rad_s=1.0,
+        mvacc_rad_s2=12.0,
+        speed_mm_s=150.0,
+        mvacc_mm_s2=800.0,
         z_min_mm=0.0,
         substeps=2,
         visual_model="glb",

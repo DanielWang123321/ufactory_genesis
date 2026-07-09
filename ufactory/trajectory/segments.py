@@ -111,9 +111,15 @@ class JointLimits:
         mvacc_rad_s2: float,
         *,
         reach_m: float = P._DEFAULT_LINK_LINEAR_REACH_M,
+        linear_speed_m_s: float | None = None,
+        linear_acc_m_s2: float | None = None,
     ) -> JointLimits:
         v_j, a_j = P.joint_limits(speed_rad_s, mvacc_rad_s2)
         v_l, a_l = P.linear_limits_from_joint(speed_rad_s, mvacc_rad_s2, reach_m=reach_m)
+        if linear_speed_m_s is not None:
+            v_l = float(linear_speed_m_s) if float(linear_speed_m_s) > 0.0 else P._EPS
+        if linear_acc_m_s2 is not None:
+            a_l = float(linear_acc_m_s2) if float(linear_acc_m_s2) > 0.0 else P._EPS
         return cls(v_j, a_j, v_l, a_l)
 
 
@@ -235,6 +241,8 @@ def build_pickplace_program(
     mvacc_rad_s2: float,
     waypoints: list[dict],
     robot_key: str | None = None,
+    linear_speed_m_s: float | None = None,
+    linear_acc_m_s2: float | None = None,
 ) -> Program:
     """Assemble a Program from an ordered list of move/grip waypoints.
 
@@ -246,10 +254,17 @@ def build_pickplace_program(
     * ``gripper`` -> ``gap_start`` / ``gap_end`` (m), ``duration`` (s, optional)
 
     Motor ``v_max`` / ``a_max`` come from a shared :class:`JointLimits` derived
-    from ``speed_rad_s`` / ``mvacc_rad_s2``; segment durations are the natural
-    LSPB bottleneck for moves, or explicit ``duration`` for grip.
+    from ``speed_rad_s`` / ``mvacc_rad_s2``. MoveL may override the derived
+    linear limits with ``linear_speed_m_s`` / ``linear_acc_m_s2``. Segment
+    durations are the natural LSPB bottleneck for moves, or explicit
+    ``duration`` for grip.
     """
-    limits = JointLimits.from_speed_mvacc(speed_rad_s, mvacc_rad_s2)
+    limits = JointLimits.from_speed_mvacc(
+        speed_rad_s,
+        mvacc_rad_s2,
+        linear_speed_m_s=linear_speed_m_s,
+        linear_acc_m_s2=linear_acc_m_s2,
+    )
     segments: list[Segment] = []
     grip_default_s = 2.0
     for wp in waypoints:

@@ -54,24 +54,27 @@ def test_compile_cartesian_program_to_joint_stream_preserves_ticks_labels_and_us
 
     assert compiled.metadata["kind"] == "joint-from-cartesian-ik"
     assert compiled.metadata["ik_compiled_movel_segments"] == 1
-    assert compiled.metadata["ik_joint_retimed"] is True
-    # Tick count may grow when joint LSPB needs longer than the Cartesian window.
-    assert compiled.metadata["ik_compiled_ticks"] >= move_ticks
+    assert compiled.metadata["ik_timing_policy"] == "preserve-cartesian"
+    assert compiled.metadata["ik_joint_retimed"] is False
+    assert compiled.metadata["ik_compiled_ticks"] == move_ticks
     assert compiled.metadata["ik_kinematics_suffix"] == "F56A14"
     assert [seg.kind for seg in compiled.segments] == ["movej", "gripper"]
     assert [seg.label for seg in compiled.segments] == ["descend", "grip"]
-    assert compiled.total_ticks >= source.total_ticks
+    assert compiled.total_ticks == source.total_ticks
 
     move = compiled.segments[0]
     q_samples, n = move.samples(compiled.rate)
     assert n == compiled.metadata["ik_compiled_ticks"]
+    assert move.duration == move_seg.duration
+    assert move.samples_count == move_seg.samples_count
     assert move.q_start.shape == (6,)
     assert move.q_end.shape == (6,)
     np.testing.assert_allclose(move.q_end, q_samples[-1])
     assert calls[0] is None
     np.testing.assert_allclose(calls[1], move.q_start)
-    # IK still runs once per Cartesian sample (+ start); retiming happens after.
+    # IK runs once per Cartesian sample (+ start); the output keeps that timing.
     assert len(calls) == move_ticks + 1
+
 
 def test_collapse_joint_keypoints_drops_plateau():
     from ufactory.trajectory.ik import collapse_joint_keypoints

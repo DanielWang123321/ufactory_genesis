@@ -44,6 +44,8 @@ class TrajectoryPlannerConfig:
     speed_rad_s: float = 0.35
     mvacc_rad_s2: float = 2.0
     reach_m: float = 0.4
+    linear_speed_m_s: float | None = None
+    linear_acc_m_s2: float | None = None
     z_min_m: float | None = None
 
     @property
@@ -60,6 +62,8 @@ class TrajectoryPlannerConfig:
             self.speed_rad_s,
             self.mvacc_rad_s2,
             reach_m=self.reach_m,
+            linear_speed_m_s=self.linear_speed_m_s,
+            linear_acc_m_s2=self.linear_acc_m_s2,
         )
 
     def validate(self) -> None:
@@ -70,6 +74,10 @@ class TrajectoryPlannerConfig:
             raise ValueError("mvacc_rad_s2 must be positive")
         if self.reach_m <= 0.0:
             raise ValueError("reach_m must be positive")
+        if self.linear_speed_m_s is not None and self.linear_speed_m_s <= 0.0:
+            raise ValueError("linear_speed_m_s must be positive")
+        if self.linear_acc_m_s2 is not None and self.linear_acc_m_s2 <= 0.0:
+            raise ValueError("linear_acc_m_s2 must be positive")
         self.runtime
 
 

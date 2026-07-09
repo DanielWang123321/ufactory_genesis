@@ -4,11 +4,10 @@ The grasp-place real ``servo_j`` path keeps the Cartesian waypoint program as
 the source of truth, then compiles each MoveL tick into an explicit joint
 target using the same Genesis link6 IK already used by sim and mirror replay.
 
-After per-tick IK, the joint stream is post-processed to remove leading/trailing
-plateaus (near-duplicate solutions under fine Cartesian sampling) and retime
-along the joint-space polyline with an LSPB law over the original segment
-duration. This keeps Cartesian path shape while producing a servo-safe joint
-acceleration profile for ``set_servo_angle_j``.
+After per-tick IK, the joint stream preserves the source Cartesian segment's
+duration and tick count. The real executor's finite-difference safety check is
+the gate for custom speeds: unsafe ``servo_j`` streams fail fast instead of
+silently stretching the segment and changing end-effector speed.
 """
 
 from __future__ import annotations
@@ -35,16 +34,15 @@ def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
 
     Gripper segments are copied unchanged. Existing MoveJ segments are copied
     unchanged and update the IK seed. For each MoveL segment, Cartesian samples
-    are solved tick-for-tick with Genesis IK (previous solution as seed), then
-    the joint stream is plateau-collapsed and LSPB-retimed over the original
-    segment duration.
+    are solved tick-for-tick with Genesis IK (previous solution as seed), and
+    the resulting joint rows are streamed with the same tick count/duration as
+    the source Cartesian segment.
     """
     rate = float(program.rate)
     segments: list[Segment] = []
     last_q: np.ndarray | None = None
     compiled_movel = 0
     compiled_ticks = 0
-    plateau_collapsed = 0
 
     for seg in program.segments:
         if seg.kind == "gripper":
@@ -72,36 +70,25 @@ def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
             q_rows[tick, :] = q
             last_q = q
 
-        v_max = _joint_vmax(program)
-        a_max = _joint_amax(program)
-        q_retimed, n_out, duration_out, n_keys = retime_ik_joint_stream(
-            q_start,
-            q_rows,
-            rate=rate,
-            duration_s=float(seg.duration),
-            v_max=v_max,
-            a_max=a_max,
-        )
-        plateau_collapsed += max(0, (n + 1) - n_keys)
-        q_end = q_retimed[-1].copy()
+        q_end = q_rows[-1].copy()
         last_q = q_end
         segments.append(
             Segment(
                 kind="movej",
-                duration=duration_out,
-                v_max=v_max,
-                a_max=a_max,
+                duration=float(seg.duration),
+                v_max=_joint_vmax(program),
+                a_max=_joint_amax(program),
                 label=seg.label,
                 q_start=q_start,
                 q_end=q_end,
-                q_samples=q_retimed,
+                q_samples=q_rows,
                 pose_start=seg.pose_start,
                 pose_end=seg.pose_end,
-                samples_count=n_out,
+                samples_count=n,
             )
         )
         compiled_movel += 1
-        compiled_ticks += n_out
+        compiled_ticks += n
 
     metadata = dict(program.metadata)
     metadata.update(
@@ -111,8 +98,9 @@ def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
             "ik_compiler": "ufactory.trajectory.ik.compile_cartesian_program_to_joint_stream",
             "ik_compiled_movel_segments": compiled_movel,
             "ik_compiled_ticks": compiled_ticks,
-            "ik_joint_retimed": True,
-            "ik_plateau_collapsed_samples": plateau_collapsed,
+            "ik_timing_policy": "preserve-cartesian",
+            "ik_joint_retimed": False,
+            "ik_plateau_collapsed_samples": 0,
             "ik_robot_urdf": getattr(ctx, "robot_urdf_path", None),
             "ik_kinematics_yaml": getattr(ctx, "kinematics_yaml_path", None),
             "ik_kinematics_suffix": getattr(ctx, "kinematics_suffix", None),

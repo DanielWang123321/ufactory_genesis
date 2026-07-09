@@ -49,10 +49,29 @@ from ufactory.trajectory.sim_executor import (
 )
 from _robot_viewer import start_deferred_viewer
 
-GRIPPER_DURATION_S = 2.0
+G2_GRIPPER_DURATION_S = 2.0
+G2_GRIP_SETTLE_S = 0.5
+LITE6_GRIPPER_DURATION_S = 0.5
 VISUAL_START_HOLD_S = 0.5
 LITE6_PLACE_SETTLE_S = 0.18
-SERVO_J_IK_JOINT_ACC_LIMIT_RAD_S2 = 10.0
+DEFAULT_GRASP_PLACE_LINEAR_SPEED_MM_S = 150.0
+DEFAULT_GRASP_PLACE_LINEAR_ACC_MM_S2 = 800.0
+DEFAULT_GRASP_PLACE_JOINT_SPEED_RAD_S = 1.0
+DEFAULT_GRASP_PLACE_JOINT_ACC_RAD_S2 = 12.0
+
+
+def _gripper_open_close_duration_s(ctx) -> float:
+    gripper = getattr(ctx, "gripper", None)
+    if gripper is not None and gripper.family == "lite6":
+        return LITE6_GRIPPER_DURATION_S
+    return G2_GRIPPER_DURATION_S
+
+
+def _g2_grip_settle_s(ctx) -> float:
+    gripper = getattr(ctx, "gripper", None)
+    if gripper is not None and gripper.family == "g2":
+        return G2_GRIP_SETTLE_S
+    return 0.0
 
 
 def _lite6_place_settle_s(ctx) -> float:
@@ -73,6 +92,28 @@ def _build_waypoints(ctx, *, grip_open_m: float, grip_close_m: float) -> tuple[l
     place_top = [place_x, place_y, ctx.lift_link6_z]
     place_grasp = [place_x, place_y, ctx.grasp_link6_z]
     retreat = [place_x, place_y, ctx.lift_link6_z]
+    gripper_duration_s = _gripper_open_close_duration_s(ctx)
+
+    grip_head: list[object] = [
+        {
+            "type": "gripper",
+            "gap_start": grip_open_m,
+            "gap_end": grip_close_m,
+            "duration": gripper_duration_s,
+            "label": "grip",
+        },
+    ]
+    g2_grip_settle_s = _g2_grip_settle_s(ctx)
+    if g2_grip_settle_s > 0.0:
+        grip_head.append(
+            {
+                "type": "gripper",
+                "gap_start": grip_close_m,
+                "gap_end": grip_close_m,
+                "duration": g2_grip_settle_s,
+                "label": "grip-settle",
+            }
+        )
 
     place_tail: list[object] = [
         CartesianWaypoint(place_grasp, label="place-descend"),
@@ -90,7 +131,13 @@ def _build_waypoints(ctx, *, grip_open_m: float, grip_close_m: float) -> tuple[l
         )
     place_tail.extend(
         [
-            {"type": "gripper", "gap_start": grip_close_m, "gap_end": grip_open_m, "duration": GRIPPER_DURATION_S, "label": "release"},
+            {
+                "type": "gripper",
+                "gap_start": grip_close_m,
+                "gap_end": grip_open_m,
+                "duration": gripper_duration_s,
+                "label": "release",
+            },
             CartesianWaypoint(retreat, label="retreat"),
             CartesianWaypoint(home, label="return-home"),
         ]
@@ -99,7 +146,7 @@ def _build_waypoints(ctx, *, grip_open_m: float, grip_close_m: float) -> tuple[l
     return [
         CartesianWaypoint(pre_grasp, label="home->pregrasp"),
         CartesianWaypoint(grasp, label="descend"),
-        {"type": "gripper", "gap_start": grip_open_m, "gap_end": grip_close_m, "duration": GRIPPER_DURATION_S, "label": "grip"},
+        *grip_head,
         CartesianWaypoint(lift, label="lift"),
         CartesianWaypoint(place_top, label="transit"),
         *place_tail,
@@ -116,6 +163,8 @@ def _build_program(robot_key, ctx, args, *, grip_open_m: float, grip_close_m: fl
         rate=args.rate,
         speed_rad_s=args.speed_rad_s,
         mvacc_rad_s2=args.mvacc_rad_s2,
+        linear_speed_m_s=float(args.speed_mm_s) / 1000.0,
+        linear_acc_m_s2=float(args.mvacc_mm_s2) / 1000.0,
         z_min_m=z_min_m,
     )
     return plan_mixed_waypoints(config, waypoints, start_xyz=start_xyz)
@@ -305,6 +354,7 @@ def _run_real(robot_key, args) -> int:
         print(
             f"[ik-compile] executor=servo_j movel_segments={program.metadata['ik_compiled_movel_segments']} "
             f"ticks={program.metadata['ik_compiled_ticks']} "
+            f"timing={program.metadata.get('ik_timing_policy', '(legacy)')} "
             f"plateau_collapsed={program.metadata.get('ik_plateau_collapsed_samples', 0)} "
             f"retimed={program.metadata.get('ik_joint_retimed', False)} "
             f"urdf={program.metadata.get('ik_robot_urdf')} "
@@ -340,7 +390,7 @@ def _run_real(robot_key, args) -> int:
         sdk_sim_report_csv=args.sdk_sim_report_csv,
         real_gripper=args.real_gripper,
         servo_limits=(
-            ServoLimits(joint_acc_rad_s2=SERVO_J_IK_JOINT_ACC_LIMIT_RAD_S2)
+            ServoLimits(joint_speed_rad_s=args.speed_rad_s, joint_acc_rad_s2=args.mvacc_rad_s2)
             if args.executor == EXECUTOR_SERVO_J
             else ServoLimits()
         ),
@@ -374,10 +424,8 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
         description=f"{robot_label} trajectory-planned grasp-place (RoboDK-style)"
     )
     parser.add_argument("--rate", type=float, default=50.0, choices=[50.0, 100.0])
-    # Default is calibrated for sim grasp-place reliability (gentle accel keeps
-    # the weakly-actuated grip on the object). Real deploy may raise these.
-    parser.add_argument("--speed-rad-s", type=float, default=0.35)
-    parser.add_argument("--mvacc-rad-s2", type=float, default=2.0)
+    parser.add_argument("--speed-rad-s", type=float, default=DEFAULT_GRASP_PLACE_JOINT_SPEED_RAD_S)
+    parser.add_argument("--mvacc-rad-s2", type=float, default=DEFAULT_GRASP_PLACE_JOINT_ACC_RAD_S2)
     parser.add_argument("--substeps", type=int, default=8)
     parser.add_argument(
         "--visual-model",
@@ -434,8 +482,18 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
         action="store_true",
         help="Use requested kinematics YAML/suffix even when the SN rule says nominal URDF should be used.",
     )
-    parser.add_argument("--speed-mm-s", type=float, default=200.0)
-    parser.add_argument("--mvacc-mm-s2", type=float, default=1000.0)
+    parser.add_argument(
+        "--speed-mm-s",
+        type=float,
+        default=DEFAULT_GRASP_PLACE_LINEAR_SPEED_MM_S,
+        help="MoveL linear speed for sim, dry-run, servo_cartesian, and servo_j source timing.",
+    )
+    parser.add_argument(
+        "--mvacc-mm-s2",
+        type=float,
+        default=DEFAULT_GRASP_PLACE_LINEAR_ACC_MM_S2,
+        help="MoveL linear acceleration for sim, dry-run, servo_cartesian, and servo_j source timing.",
+    )
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True,
                         help="Real path: print digest only (default)")
     parser.add_argument("--no-dry-run", dest="dry_run", action="store_false",

@@ -81,9 +81,9 @@ xArm 6 拥有最完整的示例覆盖：
 | `lite6_contact_grasp_diagnose.py` | Lite6 反装夹爪对 30 mm 方块的侧向间隙与双指接触诊断 |
 | `lite6_gripper_cube_diagnose.py` | 独立 Lite6 夹爪 + 方块接触诊断，可对比 raw 与 processed 碰撞 |
 
-五个入口都调用共享的 `examples/_grasp_place_traj.py`。该模块生成混合路点程序，按 LSPB 采样后执行抓放序列（`home->pregrasp` → 抓取 → 搬运 → 放置 → 回零）；Lite6 会在 `release` 前额外插入 `place-settle`。
+五个入口都调用共享的 `examples/_grasp_place_traj.py`。该模块生成混合路点程序，按 LSPB 采样后执行抓放序列（`home->pregrasp` → 抓取 → 搬运 → 放置 → 回零）；Gripper G2 机型会在 `grip` 和 `lift` 之间插入 `grip-settle`，Lite6 会在 `release` 前额外插入 `place-settle`。
 
-默认仿真是接触摩擦抓取：只有当 Genesis 刚体接触摩擦能够抵抗重力时，方块才会被夹起并搬运。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。默认不使用距离 weld、几何 snap、方块冻结或强制移动方块；运行头部会显示 `sim_grasp_weld=False`。Lite6 使用原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，默认只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让开爪发生在桌面高度。`python examples/lite6_gripper_cube_diagnose.py --collision-mode both` 可在不加载机械臂的情况下隔离检查该接触几何。`--sim-grasp-weld` 仅用于显式 debug 对比，并且必须已有双指真实接触才会触发。
+默认仿真是接触摩擦抓取：只有当 Genesis 刚体接触摩擦能够抵抗重力时，方块才会被夹起并搬运。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。默认不使用距离 weld、几何 snap、方块冻结或强制移动方块；运行头部会显示 `sim_grasp_weld=False`。Gripper G2 机型在抬升前闭爪保持 0.5 s；Lite6 夹爪开合段为 0.5 s，使用原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，默认只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让开爪发生在桌面高度。`python examples/lite6_gripper_cube_diagnose.py --collision-mode both` 可在不加载机械臂的情况下隔离检查该接触几何。`--sim-grasp-weld` 仅用于显式 debug 对比，并且必须已有双指真实接触才会触发。
 
 **1. Genesis 仿真**
 
@@ -95,7 +95,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
 
 **2. 真机 dry-run 安全验证**
 
-连接真机前可先 dry-run，检查同一条轨迹的段数、速度、加速度和安全高度；默认不运动机械臂，也不发送夹爪命令。`servo_cartesian` 直接下发笛卡尔目标，由固件求 IK；`servo_j` 先在上位机用 Genesis IK 将每个笛卡尔 tick 编译为关节目标，再通过 `set_servo_angle_j` 下发。
+连接真机前可先 dry-run，检查同一条轨迹的段数、速度、加速度和安全高度；默认不运动机械臂，也不发送夹爪命令。`servo_cartesian` 直接下发笛卡尔目标，由固件求 IK；`servo_j` 先在上位机用 Genesis IK 将每个笛卡尔 tick 编译为关节目标，并保留相同 tick 数和时长，再通过 `set_servo_angle_j` 下发。`--speed-mm-s` 与 `--mvacc-mm-s2` 控制仿真、dry-run、真机两种 executor 共用的 MoveL 时间律，默认 150 mm/s、800 mm/s²。
 
 ```bash
 python examples/xarm6/xarm6_grasp_place_traj.py \

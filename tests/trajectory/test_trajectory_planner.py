@@ -130,6 +130,31 @@ def test_plan_cartesian_waypoints_generates_chained_movel_segments():
     validate_program(program)
 
 
+def test_plan_cartesian_waypoints_uses_explicit_linear_limits():
+    config = TrajectoryPlannerConfig(
+        robot_key="xarm6",
+        rate=50.0,
+        speed_rad_s=0.01,
+        mvacc_rad_s2=0.01,
+        linear_speed_m_s=0.15,
+        linear_acc_m_s2=0.8,
+    )
+
+    program = plan_cartesian_waypoints(
+        config,
+        [0.30, 0.00, 0.30],
+        [CartesianWaypoint([0.30, 0.30, 0.30], label="line")],
+    )
+    seg = program.segments[0]
+    samples, _ = seg.samples(program.rate)
+    full = np.vstack([seg.pose_start.reshape(1, -1), samples])
+    step_speed_m_s = np.linalg.norm(np.diff(full, axis=0), axis=1) * program.rate
+
+    assert seg.v_max == pytest.approx(0.15)
+    assert seg.a_max == pytest.approx(0.8)
+    assert float(np.max(step_speed_m_s)) == pytest.approx(0.15, abs=0.003)
+
+
 def test_plan_cartesian_waypoints_checks_z_min():
     config = TrajectoryPlannerConfig(robot_key="xarm6", z_min_m=0.0)
 
