@@ -59,7 +59,6 @@ xArm 6 has the broadest example coverage in this repository.
 | File | Description |
 |------|-------------|
 | `xarm6/verify_xarm6.py` | FK + PD smoke test |
-| `xarm6/verify_xarm6_dynamics.py` | Dynamics validation |
 | `xarm6/fk_verify.py` | Compatibility wrapper, equivalent to generic FK validation with default `--robot xarm6` |
 | `xarm6/ik_verify.py` | Compatibility wrapper, equivalent to generic IK validation with default `--robot xarm6` |
 
@@ -80,13 +79,10 @@ xArm 6 has the broadest example coverage in this repository.
 | `xarm7/xarm7_grasp_place_traj.py` | Shared waypoint/LSPB pick-and-place wrapper for xArm7 + Gripper G2 scene |
 | `uf850/uf850_grasp_place_traj.py` | Shared waypoint/LSPB pick-and-place wrapper for UF850 + Gripper G2 scene |
 | `lite6/lite6_grasp_place_traj.py` | Shared waypoint/LSPB pick-and-place wrapper for Lite6 reversed gripper scene |
-| `g2_contact_grasp_diagnose.py` | Controlled Gripper G2 contact preload sweep for the 30 mm cube |
-| `lite6_contact_grasp_diagnose.py` | Lite6 reversed gripper side clearance and bilateral contact diagnostic |
-| `lite6_gripper_cube_diagnose.py` | Standalone Lite6 gripper + cube contact diagnostic, with raw vs processed collision comparison |
 
 All five wrappers call the shared `examples/_grasp_place_traj.py` pipeline. It builds the mixed waypoint program with `TrajectoryPlannerConfig`, `CartesianWaypoint`, and `plan_mixed_waypoints`, then samples the motion with LSPB profiles. Segment labels are stable: `home->pregrasp`, `descend`, `grip`, `lift`, `transit`, `place-descend`, `release`, `retreat`, `return-home`; Gripper G2 arms insert `grip-settle` between `grip` and `lift`, and Lite6 inserts `place-settle` before `release`.
 
-Default simulation is contact/friction grasping: the block is carried only if Genesis rigid contact friction can support it against gravity. The shared red block is a 30 mm painted wood cube (17 g, friction 1.0); silicone fingertip pads use friction 1.2; contact stiffness stays at Genesis rigid defaults. No distance weld, geometric snap, block freeze, or forced block motion is used by default; the run header prints `sim_grasp_weld=False`. Gripper G2 arms hold the closed gap for 0.5 s before lift. Lite6 uses 0.5 s gripper open/close segments, raw STL finger collision, contact-latched close with a 2.0 mm default sim hold bias, and a 0.18 s closed-gripper `place-settle` before release; `python examples/lite6_gripper_cube_diagnose.py --collision-mode both` isolates that contact geometry without the arm. Use `--sim-grasp-weld` only for explicit debug comparisons after real bilateral finger/object contact exists.
+Default simulation is contact/friction grasping: the block is carried only if Genesis rigid contact friction can support it against gravity. The shared red block is a 30 mm painted wood cube (17 g, friction 1.0); silicone fingertip pads use friction 1.2; contact stiffness stays at Genesis rigid defaults. No distance weld, geometric snap, block freeze, or forced block motion is used by default; the run header prints `sim_grasp_weld=False`. Gripper G2 arms hold the closed gap for 0.5 s before lift. Lite6 uses 0.5 s gripper open/close segments, raw STL finger collision, contact-latched close with a 2.0 mm default sim hold bias, and a 0.18 s closed-gripper `place-settle` before release. Use `--sim-grasp-weld` only for explicit debug comparisons after real bilateral finger/object contact exists. Contact-friction diagnose scripts live under the local maintainer workspace `dev/diagnostics/manipulation/`.
 
 When `--executor` is omitted, the script runs Genesis sim:
 

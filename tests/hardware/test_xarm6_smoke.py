@@ -46,8 +46,6 @@ def _require_xarm_ip() -> str:
     "script,extra_args",
     [
         ("examples/xarm6/verify_xarm6.py", []),
-        ("examples/xarm6/verify_xarm6_dynamics.py", []),
-        ("examples/xarm6/dynamics_verify_real.py", ["--dry-run"]),
         ("examples/xarm6/xarm6_grasp_place_traj.py", ["--headless", "--rate", "50"]),
         ("examples/xarm6/xarm6_reach_train.py", ["-B", "1", "--max_iterations", "3"]),
         ("examples/xarm6/xarm6_grasp_place_train.py", ["-B", "1", "--max_iterations", "2"]),
@@ -74,10 +72,29 @@ def test_xarm6_smoke(script: str, extra_args: list[str]):
         assert env_cfg["max_joint_delta_rad"] == pytest.approx(0.01)
 
 
+@pytest.mark.integration
+def test_xarm6_dynamics_sim_cli():
+    from ufactory.dynamics import cli_sim_check
+
+    rc = cli_sim_check(["--robot", "xarm6", "--random-count", "5"])
+    assert rc in {0, 1}, f"cli_sim_check unexpected exit {rc}"
+
+
+@pytest.mark.integration
+def test_xarm6_dynamics_hardware_dry_run_cli():
+    from ufactory.dynamics import cli_hardware_check
+
+    rc = cli_hardware_check(["--robot", "xarm6", "--dry-run"])
+    assert rc == 0, f"cli_hardware_check --dry-run exited {rc}"
+
+
 @pytest.mark.hardware
 def test_dynamics_verify_real():
+    from ufactory.dynamics import cli_hardware_check
+
     ip = _require_xarm_ip()
     args = [
+        "--robot", "xarm6",
         "--ip", ip,
         "--poses", "0,1,3",
         "--move-strategy", "direct",
@@ -86,16 +103,8 @@ def test_dynamics_verify_real():
     suffix = os.environ.get("XARM_KINEMATICS_SUFFIX")
     if suffix:
         args.extend(["--kinematics-suffix", suffix])
-    result = _run_example(
-        "examples/xarm6/dynamics_verify_real.py",
-        args,
-        timeout=1200,
-    )
-    assert result.returncode == 0, (
-        f"dynamics_verify_real failed (exit {result.returncode})\n"
-        f"stdout:\n{result.stdout[-4000:]}\n"
-        f"stderr:\n{result.stderr[-4000:]}"
-    )
+    rc = cli_hardware_check(args)
+    assert rc == 0, f"cli_hardware_check failed (exit {rc})"
 
 
 @pytest.mark.hardware

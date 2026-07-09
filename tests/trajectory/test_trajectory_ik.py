@@ -13,9 +13,9 @@ from ufactory.trajectory.segments import JointLimits, Program, make_gripper, mak
 def test_compile_cartesian_program_to_joint_stream_preserves_ticks_labels_and_uses_continuous_seed(monkeypatch):
     calls: list[np.ndarray | None] = []
 
-    def fake_solve(_ctx, xyz_base, *, init_qpos):
+    def fake_solve(_ctx, xyz_base, *, init_qpos, damping=None):
         init_copy = None if init_qpos is None else np.asarray(init_qpos, dtype=np.float64).copy()
-        calls.append(init_copy)
+        calls.append((init_copy, damping))
         xyz = np.asarray(xyz_base, dtype=np.float64).reshape(3)
         return np.array([xyz[0], xyz[1], xyz[2], len(calls) * 0.01, 0.0, 0.0], dtype=np.float64)
 
@@ -54,26 +54,64 @@ def test_compile_cartesian_program_to_joint_stream_preserves_ticks_labels_and_us
 
     assert compiled.metadata["kind"] == "joint-from-cartesian-ik"
     assert compiled.metadata["ik_compiled_movel_segments"] == 1
-    assert compiled.metadata["ik_timing_policy"] == "preserve-cartesian"
-    assert compiled.metadata["ik_joint_retimed"] is False
-    assert compiled.metadata["ik_compiled_ticks"] == move_ticks
+    assert compiled.metadata["ik_timing_policy"] == "joint-lspb-retime"
+    assert compiled.metadata["ik_damping"] == 0.01
     assert compiled.metadata["ik_kinematics_suffix"] == "F56A14"
     assert [seg.kind for seg in compiled.segments] == ["movej", "gripper"]
     assert [seg.label for seg in compiled.segments] == ["descend", "grip"]
-    assert compiled.total_ticks == source.total_ticks
 
     move = compiled.segments[0]
     q_samples, n = move.samples(compiled.rate)
     assert n == compiled.metadata["ik_compiled_ticks"]
-    assert move.duration == move_seg.duration
-    assert move.samples_count == move_seg.samples_count
+    assert move.samples_count == n
     assert move.q_start.shape == (6,)
     assert move.q_end.shape == (6,)
     np.testing.assert_allclose(move.q_end, q_samples[-1])
-    assert calls[0] is None
-    np.testing.assert_allclose(calls[1], move.q_start)
-    # IK runs once per Cartesian sample (+ start); the output keeps that timing.
+    assert calls[0][0] is None
+    assert calls[0][1] == 0.01
+    np.testing.assert_allclose(calls[1][0], move.q_start)
+    assert calls[1][1] == 0.01
+    # IK still runs once per Cartesian sample (+ start); output may be retimed.
     assert len(calls) == move_ticks + 1
+
+
+def test_compile_cartesian_program_to_joint_stream_uses_higher_uf850_ik_damping(monkeypatch):
+    dampings: list[float | None] = []
+
+    def fake_solve(_ctx, xyz_base, *, init_qpos, damping=None):
+        del init_qpos
+        dampings.append(damping)
+        xyz = np.asarray(xyz_base, dtype=np.float64).reshape(3)
+        return np.array([xyz[0], xyz[1], xyz[2], 0.0, 0.0, 0.0], dtype=np.float64)
+
+    monkeypatch.setattr("ufactory.trajectory.ik._solve_base_xyz", fake_solve)
+    ctx = SimpleNamespace(
+        robot_key="uf850",
+        robot_urdf_path="/tmp/uf850_g2.urdf",
+        kinematics_yaml_path="/tmp/uf850_kinematics_F54B07.yaml",
+        kinematics_suffix="F54B07",
+    )
+    limits = JointLimits(1.0, 12.0, 0.15, 0.8)
+    move_seg = make_movel(
+        np.array([0.30, 0.0, 0.30]),
+        np.array([0.30, 0.0, 0.20]),
+        rate=50.0,
+        limits=limits,
+        label="descend",
+    )
+    source = Program(
+        rate=50.0,
+        robot_key="uf850",
+        limits=limits,
+        metadata={"kind": "mixed"},
+        segments=[move_seg],
+    )
+
+    compiled = compile_cartesian_program_to_joint_stream(source, ctx)
+
+    assert compiled.metadata["ik_damping"] == 0.05
+    assert dampings
+    assert all(value == 0.05 for value in dampings)
 
 
 def test_collapse_joint_keypoints_drops_plateau():

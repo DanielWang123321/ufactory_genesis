@@ -5,13 +5,18 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 import torch
 
 from ufactory.trajectory import (
+    AsyncMirrorBridge,
     CartesianWaypoint,
     KinematicCarryTracker,
     RealExecutorConfig,
@@ -23,11 +28,15 @@ from ufactory.trajectory import (
     replay_real,
 )
 from ufactory.trajectory.mirror_executor import (
+    G2_MIRROR_VISUAL_GAP_SHRINK_M,
+    LITE6_MIRROR_VISUAL_GAP_SHRINK_M,
+    mirror_grip_drive_for_gap_m,
     resolve_segment_start_arm_q,
     resolve_tick_arm_q,
     resolve_tick_grip_drive,
 )
-from ufactory.trajectory.scene import build_scene
+from ufactory.trajectory.scene import build_scene, drive_for_gap_m
+from ufactory.robots.runtime import G2_GRIPPER_PARAMS, LITE6_GRIPPER_PARAMS
 
 _TESTS_ROOT = Path(__file__).resolve().parents[1]
 if str(_TESTS_ROOT) not in sys.path:
@@ -124,13 +133,30 @@ def _fresh_mirror(ctx, program) -> TrajKinematicMirror:
 
 
 def test_resolve_tick_grip_drive_open_and_close():
-    from ufactory.robots.runtime import G2_GRIPPER_PARAMS
-
     samples = np.array([[0.084], [0.024]], dtype=np.float64)
     open_drive = resolve_tick_grip_drive(samples, 0, G2_GRIPPER_PARAMS)
     close_drive = resolve_tick_grip_drive(samples, 1, G2_GRIPPER_PARAMS)
     assert open_drive == pytest.approx(0.0)
     assert close_drive > open_drive
+
+
+def test_mirror_grip_drive_floors_g2_and_lite6_visual_gap():
+    """Kinematic mirror must not teleport pads past the cube faces."""
+    obj_w = 0.030
+    g2_ctx = SimpleNamespace(gripper=G2_GRIPPER_PARAMS, obj_size=(obj_w, obj_w, obj_w))
+    lite_ctx = SimpleNamespace(gripper=LITE6_GRIPPER_PARAMS, obj_size=(obj_w, obj_w, obj_w))
+
+    g2_floor = obj_w - G2_MIRROR_VISUAL_GAP_SHRINK_M
+    lite_floor = obj_w - LITE6_MIRROR_VISUAL_GAP_SHRINK_M
+    assert mirror_grip_drive_for_gap_m(g2_ctx, 0.022) == pytest.approx(
+        drive_for_gap_m(g2_floor, G2_GRIPPER_PARAMS)
+    )
+    assert mirror_grip_drive_for_gap_m(g2_ctx, g2_floor + 0.001) == pytest.approx(
+        drive_for_gap_m(g2_floor + 0.001, G2_GRIPPER_PARAMS)
+    )
+    assert mirror_grip_drive_for_gap_m(lite_ctx, 0.020) == pytest.approx(
+        drive_for_gap_m(lite_floor, LITE6_GRIPPER_PARAMS)
+    )
 
 
 def test_default_grasp_place_program_uses_mixed_waypoint_planner():
@@ -174,6 +200,68 @@ def test_on_tick_count_matches_program_total_ticks(monkeypatch):
     cfg = RealExecutorConfig(dry_run=True, rate=50.0)
     replay_real(program, cfg, on_tick=on_tick)
     assert tick_count == program.total_ticks
+
+
+def test_async_mirror_bridge_on_tick_does_not_block_on_tracker():
+    """Servo-path on_tick must return without waiting for scene.step / tracker work."""
+    started = threading.Event()
+    release = threading.Event()
+    applied: list[tuple[object, int]] = []
+
+    class SlowTracker:
+        def on_tick(self, seg, tick_idx: int) -> None:
+            started.set()
+            release.wait(timeout=2.0)
+            applied.append((seg, tick_idx))
+
+    bridge = AsyncMirrorBridge(SlowTracker())
+    seg_a = SimpleNamespace(label="a")
+    seg_b = SimpleNamespace(label="b")
+    try:
+        t0 = time.perf_counter()
+        bridge.on_tick(seg_a, 0)
+        # Posting must not wait for the slow tracker (budget << tracker hold).
+        assert time.perf_counter() - t0 < 0.05
+        assert started.wait(timeout=1.0)
+
+        # Latest-wins: while tracker is busy, overwrite pending with seg_b.
+        bridge.on_tick(seg_b, 1)
+        release.set()
+    finally:
+        bridge.close()
+
+    assert applied
+    assert applied[-1] == (seg_b, 1) or applied == [(seg_a, 0), (seg_b, 1)]
+    # Intermediate frames may drop; final applied tick must be the latest posted.
+    assert any(item == (seg_b, 1) for item in applied)
+
+
+def test_async_mirror_bridge_background_consumes_tracker():
+    """Background worker must invoke tracker.on_tick for posted samples."""
+    calls: list[tuple[object, int]] = []
+    done = threading.Event()
+
+    class CountingTracker:
+        def on_tick(self, seg, tick_idx: int) -> None:
+            calls.append((seg, tick_idx))
+            if tick_idx == 2:
+                done.set()
+
+    tracker = CountingTracker()
+    # Guard: bridge must not touch a scene.step on the posting path.
+    scene = MagicMock()
+    bridge = AsyncMirrorBridge(tracker)
+    seg = SimpleNamespace(label="transit", scene=scene)
+    try:
+        for i in range(3):
+            bridge.on_tick(seg, i)
+        assert done.wait(timeout=2.0)
+    finally:
+        bridge.close()
+
+    assert calls
+    assert calls[-1] == (seg, 2)
+    scene.step.assert_not_called()
 
 
 @pytest.mark.gpu

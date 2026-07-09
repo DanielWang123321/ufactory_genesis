@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.3-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.4-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -17,6 +17,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 - [Supported Robots](#supported-robots)
 - [GLB Visual Preview](#glb-visual-preview)
 - [Trajectory Grasp-Place](#trajectory-grasp-place)
+- [Showcase](#showcase-xarm6--gripper-g2-packaging)
 - [API Quick Reference](#api-quick-reference)
 - [Real-Robot Kinematic Calibration](#real-robot-kinematic-calibration-sn-rules)
 - [xArm 6 — Reference Robot](#xarm-6)
@@ -67,7 +68,7 @@ Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names
 
 ## GLB Visual Preview
 
-High-fidelity GLB rendering with PBR material preservation. Registered arm links use visual STL collision meshes. Gripper G2 and Lite6 Gripper keep their packaged STL paths, whose contents match the upstream xarm_ros2 visual STL assets; Bio Gripper G2 and Lite6 Vacuum use visual STL collision meshes. Single entry point:
+Unified entry point `examples/view_robot_glb.py` for all robot profiles and end effectors:
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -105,9 +106,7 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 
 ## Trajectory Grasp-Place
 
-v0.2.1 adds a shared waypoint/LSPB pick-and-place pipeline for all supported robot families. v0.2.3 adds a `servo_j` real path: the same Cartesian samples are solved by host-side Genesis IK, compiled into explicit joint targets, and streamed with `set_servo_angle_j`. v0.2.4 keeps the Cartesian timing as the source of truth for both `servo_cartesian` and `servo_j`: `--speed-mm-s` / `--mvacc-mm-s2` control MoveL source timing for sim, dry-run, and real streaming, with defaults of 150 mm/s and 800 mm/s^2. `servo_cartesian` remains available when you want firmware-side IK.
-
-The default Genesis replay uses rigid-body contact, friction, gravity, and the Genesis solver to decide grasp/release outcome. It does not use distance-based attachment, geometric snap, forced block motion, or weld constraints by default (`sim_grasp_weld=False` in the run header). The shared red block is a 30 mm painted wood cube (17 g, friction 1.0); silicone fingertip pads use friction 1.2; contact stiffness stays at Genesis rigid defaults. Gripper G2 defaults to a 22 mm target gap for contact preload on the 30 mm cube, then holds closed for 0.5 s before lift so the grasp is settled before arm motion resumes. Lite6 defaults to its physical 20 mm minimum gap, raw STL finger collision, 0.5 s open/close gripper segments, a contact-latched 2.0 mm sim hold bias, and a 0.18 s closed-gripper settle before release so the flat pad grips without sliding and opens at table height. `--sim-grasp-weld` remains as an explicit debug-only contact-gated weld.
+Shared waypoint/LSPB pick-and-place for all five robot families. Default Genesis replay uses contact friction (no distance weld). Real paths support `servo_cartesian` (firmware IK) and `servo_j` (host-side Genesis IK). MoveL timing is controlled by `--speed-mm-s` / `--mvacc-mm-s2` (defaults 150 mm/s, 800 mm/s²). Full command matrix, contact parameters, mirror mode, and SDK simulation validation: [examples/README.md](examples/README.md).
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -116,8 +115,6 @@ The default Genesis replay uses rigid-body contact, friction, gravity, and the G
 | xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | Sim, dry-run, real `servo_cartesian` / `servo_j` |
 | UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | Sim, dry-run, real `servo_cartesian` / `servo_j` |
 | Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 reversed gripper, 30 mm cube; `servo_cartesian` / `servo_j` |
-
-The same scripts support Genesis visual replay and real-robot safety dry-run:
 
 ```bash
 # Genesis viewer with GLB visuals and STL collision.
@@ -140,7 +137,28 @@ python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo_j --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
 ```
 
-See [examples/README.md](examples/README.md) for the full command matrix, mirror mode, and SDK simulation validation. Real-path `--visual` is a kinematic mirror of the planned trajectory, not contact physics.
+Real-path `--visual` is a kinematic mirror of the planned trajectory, not contact physics.
+
+## Showcase (xArm6 + Gripper G2 Packaging)
+
+Yellow table (arm fixed on the long edge), physical pick of a red wood block into an open cardboard box. Movable G2 GLB combo with collision/inertia. Generate box textures once before the first run:
+
+```bash
+export NUMBA_CACHE_DIR=~/.cache/numba
+python scripts/generate_showcase_textures.py
+
+# Full showcase (loops by default)
+python examples/xarm6/xarm6_g2_showcase.py
+
+# Single cycle then hold; faster pace
+python examples/xarm6/xarm6_g2_showcase.py --no-loop --speed 1.5
+```
+
+| Flag | Description |
+|------|-------------|
+| `--table-height` | Table top height in meters (default 0.75) |
+| `--speed` | Motion speed multiplier (>1 is faster) |
+| `--loop` / `--no-loop` | Loop pick-place (default: loop) |
 
 ## API Quick Reference
 
@@ -205,7 +223,8 @@ python examples/fk_verify_robot.py --robot xarm6 --ip <ip>
 python examples/ik_verify_robot.py --robot lite6 --ip <ip>
 dynamics-sim-check --robot xarm6 --random-count 5
 dynamics-hardware-check --robot xarm6 --ip <ip>
-dynamics-sim-collision-check --ip <ip>   # simulation-mode chained self-collision pre-check
+dynamics-sim-collision-check --robot xarm6 --ip <ip>   # simulation-mode chained self-collision pre-check
+# Other robots: swap --robot (xarm5 / xarm7 / uf850 / lite6).
 ```
 
 ## xArm 6

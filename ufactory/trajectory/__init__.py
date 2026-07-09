@@ -44,6 +44,7 @@ __all__ = [
     "replay_real",
     "TrajKinematicMirror",
     "KinematicCarryTracker",
+    "AsyncMirrorBridge",
     "Program",
     "Segment",
     "JointLimits",
@@ -133,6 +134,7 @@ _LAZY_ATTRS = {
     "replay_real": ("ufactory.trajectory.real_executor", "replay_real"),
     "TrajKinematicMirror": ("ufactory.trajectory.mirror_executor", "TrajKinematicMirror"),
     "KinematicCarryTracker": ("ufactory.trajectory.mirror_executor", "KinematicCarryTracker"),
+    "AsyncMirrorBridge": ("ufactory.trajectory.mirror_executor", "AsyncMirrorBridge"),
     # Submodules for ``from ufactory.trajectory import profile`` compatibility.
     "profile": ("ufactory.trajectory.profile", None),
     "segments": ("ufactory.trajectory.segments", None),

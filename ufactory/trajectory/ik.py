@@ -4,10 +4,10 @@ The grasp-place real ``servo_j`` path keeps the Cartesian waypoint program as
 the source of truth, then compiles each MoveL tick into an explicit joint
 target using the same Genesis link6 IK already used by sim and mirror replay.
 
-After per-tick IK, the joint stream preserves the source Cartesian segment's
-duration and tick count. The real executor's finite-difference safety check is
-the gate for custom speeds: unsafe ``servo_j`` streams fail fast instead of
-silently stretching the segment and changing end-effector speed.
+After per-tick IK, the joint stream is plateau-collapsed and LSPB-retimed along
+the joint polyline so finite-difference ``servo_j`` acceleration stays within
+joint limits (especially at 100 Hz, where fine Cartesian sampling creates
+near-duplicate IK solutions).
 """
 
 from __future__ import annotations
@@ -27,6 +27,8 @@ from ufactory.trajectory.validation import validate_program
 
 # Collapse IK samples closer than this (rad, Euclidean in joint space).
 _IK_JOINT_PLATEAU_EPS_RAD = 1e-6
+_DEFAULT_IK_DAMPING = 0.01
+_UF850_IK_DAMPING = 0.05
 
 
 def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
@@ -34,15 +36,18 @@ def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
 
     Gripper segments are copied unchanged. Existing MoveJ segments are copied
     unchanged and update the IK seed. For each MoveL segment, Cartesian samples
-    are solved tick-for-tick with Genesis IK (previous solution as seed), and
-    the resulting joint rows are streamed with the same tick count/duration as
-    the source Cartesian segment.
+    are solved tick-for-tick with Genesis IK (previous solution as seed), then
+    the joint stream is plateau-collapsed and LSPB-retimed so finite-difference
+    ``servo_j`` acceleration stays within joint limits (critical at 100 Hz).
     """
     rate = float(program.rate)
     segments: list[Segment] = []
     last_q: np.ndarray | None = None
     compiled_movel = 0
     compiled_ticks = 0
+    plateau_collapsed = 0
+    any_retimed = False
+    ik_damping = _ik_damping_for_context(ctx)
 
     for seg in program.segments:
         if seg.kind == "gripper":
@@ -62,33 +67,47 @@ def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
             raise ValueError(f"MoveL segment {seg.label!r} has no pose_start")
 
         samples, n = seg.samples(rate)
-        q_start = _solve_base_xyz(ctx, seg.pose_start, init_qpos=last_q)
+        q_start = _solve_base_xyz(ctx, seg.pose_start, init_qpos=last_q, damping=ik_damping)
         last_q = q_start
         q_rows = np.empty((n, q_start.size), dtype=np.float64)
         for tick, xyz_base in enumerate(samples):
-            q = _solve_base_xyz(ctx, xyz_base, init_qpos=last_q)
+            q = _solve_base_xyz(ctx, xyz_base, init_qpos=last_q, damping=ik_damping)
             q_rows[tick, :] = q
             last_q = q
 
-        q_end = q_rows[-1].copy()
+        v_max = _joint_vmax(program)
+        a_max = _joint_amax(program)
+        q_retimed, n_out, duration_out, n_keys = retime_ik_joint_stream(
+            q_start,
+            q_rows,
+            rate=rate,
+            duration_s=float(seg.duration),
+            v_max=v_max,
+            a_max=a_max,
+        )
+        collapsed = max(0, (n + 1) - n_keys)
+        plateau_collapsed += collapsed
+        if abs(duration_out - float(seg.duration)) > 1e-9 or n_out != n:
+            any_retimed = True
+        q_end = q_retimed[-1].copy()
         last_q = q_end
         segments.append(
             Segment(
                 kind="movej",
-                duration=float(seg.duration),
-                v_max=_joint_vmax(program),
-                a_max=_joint_amax(program),
+                duration=duration_out,
+                v_max=v_max,
+                a_max=a_max,
                 label=seg.label,
                 q_start=q_start,
                 q_end=q_end,
-                q_samples=q_rows,
+                q_samples=q_retimed,
                 pose_start=seg.pose_start,
                 pose_end=seg.pose_end,
-                samples_count=n,
+                samples_count=n_out,
             )
         )
         compiled_movel += 1
-        compiled_ticks += n
+        compiled_ticks += n_out
 
     metadata = dict(program.metadata)
     metadata.update(
@@ -98,9 +117,10 @@ def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
             "ik_compiler": "ufactory.trajectory.ik.compile_cartesian_program_to_joint_stream",
             "ik_compiled_movel_segments": compiled_movel,
             "ik_compiled_ticks": compiled_ticks,
-            "ik_timing_policy": "preserve-cartesian",
-            "ik_joint_retimed": False,
-            "ik_plateau_collapsed_samples": 0,
+            "ik_timing_policy": "joint-lspb-retime",
+            "ik_damping": ik_damping,
+            "ik_joint_retimed": any_retimed,
+            "ik_plateau_collapsed_samples": plateau_collapsed,
             "ik_robot_urdf": getattr(ctx, "robot_urdf_path", None),
             "ik_kinematics_yaml": getattr(ctx, "kinematics_yaml_path", None),
             "ik_kinematics_suffix": getattr(ctx, "kinematics_suffix", None),
@@ -204,7 +224,13 @@ def retime_ik_joint_stream(
     return q_out, n, duration, n_keys
 
 
-def _solve_base_xyz(ctx, xyz_base, *, init_qpos: np.ndarray | None) -> np.ndarray:
+def _solve_base_xyz(
+    ctx,
+    xyz_base,
+    *,
+    init_qpos: np.ndarray | None,
+    damping: float | None = None,
+) -> np.ndarray:
     return solve_link6_ik(
         ctx.robot,
         ctx.ik_link,
@@ -212,7 +238,15 @@ def _solve_base_xyz(ctx, xyz_base, *, init_qpos: np.ndarray | None) -> np.ndarra
         arm_dof_idx=ctx.arm_dof_idx,
         quat=ctx.down_quat,
         init_qpos=init_qpos,
+        damping=damping,
     )
+
+
+def _ik_damping_for_context(ctx) -> float:
+    robot_key = str(getattr(ctx, "robot_key", "")).strip().lower()
+    if robot_key == "uf850":
+        return _UF850_IK_DAMPING
+    return _DEFAULT_IK_DAMPING
 
 
 def _joint_vmax(program: Program) -> float:

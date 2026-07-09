@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.3-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.4-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -68,7 +68,7 @@ python examples/view_robot_glb.py --robot xarm6
 
 ## GLB 视觉预览
 
-GLB 用于高精度 PBR 渲染；注册机械臂连杆使用 visual STL 作为碰撞网格。Gripper G2 与 Lite6 Gripper 保留随包 STL 路径，但文件内容与 xarm_ros2 上游 visual STL 一致；Bio Gripper G2 与 Lite6 Vacuum 使用 visual STL 碰撞网格。统一入口：
+统一入口 `examples/view_robot_glb.py`，支持各机型与末端：
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -106,9 +106,7 @@ python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。v0.2.3 增加 `servo_j` 真机路径：同一批笛卡尔采样点会先在上位机用 Genesis IK 求解，再编译成显式关节目标，通过 `set_servo_angle_j` 下发。v0.2.4 将笛卡尔时间律作为 `servo_cartesian` 与 `servo_j` 的共同来源：`--speed-mm-s` / `--mvacc-mm-s2` 同时控制仿真、dry-run 和真机流式执行的 MoveL 采样，默认 150 mm/s、800 mm/s²。`servo_cartesian` 仍保留，用于固件侧 IK。
-
-默认 Genesis 回放使用刚体接触、摩擦力、重力和 Genesis 求解器共同决定抓取/释放结果；默认不再使用距离吸附、几何 snap、强制移动方块或 weld 约束（运行头部会显示 `sim_grasp_weld=False`）。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。Gripper G2 默认抓取 gap 为 22 mm，用于在 30 mm 方块上形成接触预紧，并在抬升前闭爪保持 0.5 s，等待夹取稳定；Lite6 默认使用反装夹爪的物理最小 20 mm gap、原始 STL 手指碰撞，夹爪开合段为 0.5 s，并在双指真实接触后锁定闭合位置，只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让夹爪在桌面高度打开，避免转移中下滑和悬空释放。`--sim-grasp-weld` 仅保留为显式 debug 开关，并且必须已有双指真实接触才会触发。
+五机型共享路点/LSPB 抓取-放置。默认 Genesis 回放使用接触摩擦抓取（无距离 weld）。真机路径支持 `servo_cartesian`（固件 IK）与 `servo_j`（上位机 Genesis IK）。MoveL 时间律由 `--speed-mm-s` / `--mvacc-mm-s2` 控制（默认 150 mm/s、800 mm/s²）。完整命令矩阵、接触参数、镜像模式与 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
@@ -117,8 +115,6 @@ v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。v0.2.3 增加 `
 | xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian` / `servo_j` |
 | UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian` / `servo_j` |
 | Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 反装夹爪，30 mm 方块；`servo_cartesian` / `servo_j` |
-
-同一组脚本也支持 Genesis 可视化和真机安全 dry-run：
 
 ```bash
 # Genesis 三维窗口，GLB visual + STL collision。
@@ -141,7 +137,7 @@ python examples/xarm6/xarm6_grasp_place_traj.py \
   --executor servo_j --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
 ```
 
-更多命令、镜像模式和 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。真机路径的 `--visual` 是同一条轨迹的运动学镜像，不是接触仿真。
+真机路径的 `--visual` 是同一条轨迹的运动学镜像，不是接触仿真。
 
 ## 展示场景（xArm6 + Gripper G2 物理装箱）
 
@@ -229,13 +225,9 @@ python scripts/gen_kinematics_params.py <ip>
 python examples/fk_verify_robot.py --robot xarm6 --ip <ip>
 python examples/ik_verify_robot.py --robot lite6 --ip <ip>
 dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-sim-check --robot uf850 --random-count 0 --z-min-mm 0 --require-reference
-dynamics-sim-check --robot lite6 --random-count 0 --z-min-mm 0 --require-reference
-dynamics-sim-check --robot xarm5 --random-count 0 --z-min-mm 0 --require-reference
-dynamics-sim-check --robot xarm7 --random-count 0 --z-min-mm 0 --require-reference
 dynamics-hardware-check --robot xarm6 --ip <ip>
-dynamics-hardware-check --robot uf850 --ip 192.168.1.xx --z-min-mm 0
-dynamics-sim-collision-check --robot uf850 --ip 192.168.1.xx   # 仿真模式串联自碰撞预检
+dynamics-sim-collision-check --robot xarm6 --ip <ip>   # 仿真模式串联自碰撞预检
+# 其他机型：将 --robot 换成 xarm5 / xarm7 / uf850 / lite6。
 ```
 
 UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自

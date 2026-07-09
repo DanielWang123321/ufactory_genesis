@@ -35,6 +35,7 @@ def solve_link6_ik(
     arm_dof_idx,
     quat=None,
     init_qpos=None,
+    damping: float | None = None,
 ) -> np.ndarray:
     """Solve IK for a single link6 base-frame xyz target.
 
@@ -46,12 +47,16 @@ def solve_link6_ik(
     pos_t = torch.as_tensor([list(pos_base)], device=gs.device, dtype=gs.tc_float)
     if init_qpos is not None:
         init_qpos = _normalize_init_qpos(robot, init_qpos, arm_dof_idx)
+    ik_kwargs = {}
+    if damping is not None:
+        ik_kwargs["damping"] = float(damping)
     sol = robot.inverse_kinematics(
         link=ik_link,
         pos=pos_t,
         quat=quat,
         dofs_idx_local=arm_dof_idx,
         init_qpos=init_qpos,
+        **ik_kwargs,
     )
     return sol[0, arm_dof_idx].detach().cpu().numpy().astype(np.float64)
 

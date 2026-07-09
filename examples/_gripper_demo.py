@@ -28,7 +28,7 @@ def gripper_dof_indices(robot) -> tuple[list[int], list[int]]:
 
 
 def setup_gripper_pd(robot, gripper_dof_idx: list[int], all_gripper_dof_idx: list[int]) -> None:
-  # PD on drive_joint only; damping on all gripper DOFs (matches xarm6_grasp_place_demo).
+  # PD on drive_joint only; damping on all gripper DOFs (matches grasp-place scene).
   pd_idx = gripper_dof_idx or all_gripper_dof_idx
   damp_idx = all_gripper_dof_idx or gripper_dof_idx
   robot.set_dofs_kp(np.full(len(pd_idx), 30.0), pd_idx)

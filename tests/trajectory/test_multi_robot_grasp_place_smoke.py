@@ -116,9 +116,37 @@ def test_xarm6_grasp_place_servo_j_dry_run_compiles_host_ik():
         f"stderr:\n{result.stderr[-4000:]}"
     )
     assert "[ik-compile] executor=servo_j" in result.stdout
-    assert "timing=preserve-cartesian" in result.stdout
+    assert "timing=joint-lspb-retime" in result.stdout
     assert "retimed=False" in result.stdout
     assert "[real DRY-RUN] executor=servo_j" in result.stdout
+    assert "[servo_j:descend]" in result.stdout
+
+
+@pytest.mark.integration
+def test_uf850_f54b07_servo_j_dry_run_uses_stable_ik_damping():
+    result = _run_example(
+        "examples/uf850/uf850_grasp_place_traj.py",
+        [
+            "--executor",
+            "servo_j",
+            "--dry-run",
+            "--rate",
+            "50",
+            "--z-min-mm",
+            "0",
+            "--kinematics-suffix",
+            "F54B07",
+        ],
+        timeout=600,
+    )
+    assert result.returncode == 0, (
+        f"uf850 F54B07 servo_j dry-run failed (exit {result.returncode})\n"
+        f"stdout:\n{result.stdout[-4000:]}\n"
+        f"stderr:\n{result.stderr[-4000:]}"
+    )
+    assert "timing=joint-lspb-retime" in result.stdout
+    assert "damping=0.05" in result.stdout
+    assert "retimed=False" in result.stdout
     assert "[servo_j:descend]" in result.stdout
 
 
@@ -135,7 +163,7 @@ def test_lite6_grasp_place_servo_j_dry_run_passes_default_150mm_s_timing():
         f"stderr:\n{result.stderr[-4000:]}"
     )
     assert "[ik-compile] executor=servo_j" in result.stdout
-    assert "timing=preserve-cartesian" in result.stdout
+    assert "timing=joint-lspb-retime" in result.stdout
     assert "retimed=False" in result.stdout
     assert "[servo_j:descend]" in result.stdout
 
@@ -147,56 +175,6 @@ def test_lite6_grasp_place_rejects_gap_below_reversed_gripper_range():
     )
     assert result.returncode != 0
     assert "--grip-gap-mm must be between 20.0 and 38.0" in result.stderr
-
-
-@pytest.mark.integration
-def test_lite6_contact_diagnose_reports_bilateral_hold():
-    result = _run_example(
-        "examples/lite6_contact_grasp_diagnose.py",
-        ["--gaps-mm", "20"],
-    )
-    assert result.returncode == 0, (
-        f"lite6 contact diagnose failed (exit {result.returncode})\n"
-        f"stdout:\n{result.stdout[-4000:]}\n"
-        f"stderr:\n{result.stderr[-4000:]}"
-    )
-    hold_lines = [line for line in result.stdout.splitlines() if " hold " in line]
-    assert hold_lines, f"no hold summary in output\n{result.stdout[-2000:]}"
-    assert "bilateral_pct=100.0" in hold_lines[-1]
-    assert "touched_end=[9, 10]" in hold_lines[-1]
-    contact_z_match = re.search(r"contact_z_mm=\[([\d.]+),([\d.]+)\]", hold_lines[-1])
-    assert contact_z_match is not None, f"no contact z range in hold summary\n{hold_lines[-1]}"
-    assert float(contact_z_match.group(1)) > 20.0
-    side_match = re.search(r"gap_neg_mm=\s*(-?[\d.]+).*gap_pos_mm=\s*(-?[\d.]+)", hold_lines[-1])
-    assert side_match is not None, f"no side clearance in hold summary\n{hold_lines[-1]}"
-    assert float(side_match.group(1)) > -0.5
-    assert float(side_match.group(2)) > -0.5
-
-
-@pytest.mark.integration
-def test_lite6_standalone_gripper_cube_raw_contact_is_clean():
-    result = _run_example(
-        "examples/lite6_gripper_cube_diagnose.py",
-        ["--collision-mode", "raw", "--rate", "50", "--substeps", "8", "--hold-s", "0.5"],
-    )
-    assert result.returncode == 0, (
-        f"lite6 standalone gripper diagnose failed (exit {result.returncode})\n"
-        f"stdout:\n{result.stdout[-4000:]}\n"
-        f"stderr:\n{result.stderr[-4000:]}"
-    )
-    open_lines = [line for line in result.stdout.splitlines() if "phase=open" in line]
-    hold_lines = [line for line in result.stdout.splitlines() if "phase=hold" in line]
-    assert open_lines and hold_lines, f"missing standalone samples\n{result.stdout[-2000:]}"
-    assert "bilateral=False" in open_lines[-1]
-    assert "rows=0" in open_lines[-1]
-    assert "bilateral=True" in hold_lines[-1]
-    side_match = re.search(r"side_mm=\[(-?[\d.]+),(-?[\d.]+)\]", hold_lines[-1])
-    assert side_match is not None, f"no side clearance in hold line\n{hold_lines[-1]}"
-    assert float(side_match.group(1)) > -0.5
-    assert float(side_match.group(2)) > -0.5
-    contact_z_match = re.search(r"contact_local_z_mm=\[([\d.]+),([\d.]+)\]", hold_lines[-1])
-    assert contact_z_match is not None, f"no local contact z in hold line\n{hold_lines[-1]}"
-    assert float(contact_z_match.group(1)) > 20.0
 
 
 def test_xarm5_grasp_place_real_dry_run_reports_gripper_gap():

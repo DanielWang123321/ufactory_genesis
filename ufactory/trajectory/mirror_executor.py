@@ -7,6 +7,7 @@ the xArm servo stream without adding measurable tick overrun.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 
@@ -76,6 +77,39 @@ def resolve_tick_grip_drive(samples: np.ndarray, tick_idx: int, gripper) -> floa
     return drive_for_gap_m(gap_m, gripper)
 
 
+# Lite6 collision pads sit slightly outside the mapped physical gap: commanding
+# the object width still leaves ~1.1 mm air per face. Shrink the visual floor so
+# the teleported pads meet the cube sides without relying on contact.
+LITE6_MIRROR_VISUAL_GAP_SHRINK_M = 0.0022
+# Gripper G2: the drive→gap map is the SDK two-finger opening, but teleported
+# finger-link AABBs sit ~2 mm/side inside that number. A 22 mm preload plan on a
+# 30 mm cube therefore embeds ~2 mm/side in the kinematic mirror. Floor the
+# visual gap at obj_w - this shrink (~25.6 mm) so pads meet the faces.
+G2_MIRROR_VISUAL_GAP_SHRINK_M = 0.0044
+
+
+def mirror_grip_drive_for_gap_m(ctx: TrajSceneContext, gap_m: float) -> float:
+    """Map a planned gap to the drive used by the kinematic mirror.
+
+    Pure sim can over-close into contact and stop on the cube faces. The mirror
+    teleports fingers with no contact response, so the visual drive must not
+    close past the flush pad/cube geometry or pads penetrate while carry only
+    recenters the object.
+    """
+    gap = float(gap_m)
+    gripper = ctx.gripper
+    family = getattr(gripper, "family", None) if gripper is not None else None
+    obj_w = float(min(ctx.obj_size[0], ctx.obj_size[1]))
+    shrink = None
+    if family == "lite6":
+        shrink = LITE6_MIRROR_VISUAL_GAP_SHRINK_M
+    elif family == "g2":
+        shrink = G2_MIRROR_VISUAL_GAP_SHRINK_M
+    if shrink is not None:
+        gap = max(gap, obj_w - shrink)
+    return drive_for_gap_m(gap, gripper)
+
+
 def _disable_pd(robot, dof_idx: list[int]) -> None:
     if not dof_idx:
         return
@@ -86,7 +120,33 @@ def _disable_pd(robot, dof_idx: list[int]) -> None:
     robot.set_dofs_force_range(zeros, zeros, dof_idx)
 
 
-def kinematic_step(ctx: TrajSceneContext, q_arm: np.ndarray, grip_drive: float) -> None:
+def _set_kinematic_pose(
+    robot,
+    q_arm: np.ndarray,
+    arm_idx: list[int],
+    grip_drive: float,
+    all_grip_idx: list[int],
+) -> None:
+    robot.set_dofs_position(q_arm, arm_idx, zero_velocity=True)
+    if all_grip_idx:
+        grip_target = np.full(len(all_grip_idx), float(grip_drive))
+        robot.set_dofs_position(grip_target, all_grip_idx, zero_velocity=True)
+
+
+def update_scene_visualizer(scene) -> None:
+    """Flush the Genesis viewer after kinematic teleports / carry sync."""
+    visualizer = getattr(scene, "visualizer", None)
+    if getattr(visualizer, "viewer", None) is not None:
+        visualizer.update(force=False)
+
+
+def kinematic_step(
+    ctx: TrajSceneContext,
+    q_arm: np.ndarray,
+    grip_drive: float,
+    *,
+    update_visualizer: bool = True,
+) -> None:
     """Teleport arm/gripper DOFs and refresh the viewer without PD forces.
 
     The G2 gripper's non-driven joints (fingers/knuckles) are linked to
@@ -95,19 +155,27 @@ def kinematic_step(ctx: TrajSceneContext, q_arm: np.ndarray, grip_drive: float) 
     every mimic DOF must be set explicitly (see ``examples/_gripper_demo.py``)
     or the un-driven joints are left to a soft constraint chasing a
     force-less target and diverge.
+
+    ``scene.step`` still integrates contacts even with PD gains zeroed, so the
+    teleported pose is re-applied after the step (same pattern as
+    ``examples/_robot_viewer._kinematic_step``) before the viewer updates.
+
+    Callers that kinematically carry an object should pass
+    ``update_visualizer=False``, re-sync the object, then call
+    :func:`update_scene_visualizer` so the viewer never shows a gravity-slipped
+    frame between ``scene.step`` and carry sync.
     """
     robot = ctx.robot
     scene = ctx.scene
     arm_idx = ctx.arm_dof_idx
     all_grip_idx = ctx.all_gripper_dof_idx
 
-    robot.set_dofs_position(q_arm, arm_idx, zero_velocity=True)
-    grip_target = np.full(len(all_grip_idx), float(grip_drive))
-    robot.set_dofs_position(grip_target, all_grip_idx, zero_velocity=True)
+    _set_kinematic_pose(robot, q_arm, arm_idx, grip_drive, all_grip_idx)
     scene.step(update_visualizer=False)
-    visualizer = getattr(scene, "visualizer", None)
-    if getattr(visualizer, "viewer", None) is not None:
-        visualizer.update(force=False)
+    # Contacts can shove prismatic fingers off the teleported pose during step.
+    _set_kinematic_pose(robot, q_arm, arm_idx, grip_drive, all_grip_idx)
+    if update_visualizer:
+        update_scene_visualizer(scene)
 
 
 class TrajKinematicMirror:
@@ -134,18 +202,23 @@ class TrajKinematicMirror:
     def grip_drive(self) -> float:
         return self._grip_drive
 
+    def _visual_grip_drive(self) -> float:
+        return mirror_grip_drive_for_gap_m(
+            self.ctx, gap_m_from_drive(self._grip_drive, self.ctx.gripper)
+        )
+
     def prime_to_home(self) -> None:
         arm_idx = self.ctx.arm_dof_idx
         if len(self.ctx.home_qpos):
             self._last_q_arm = self.ctx.home_qpos[arm_idx].astype(np.float64).copy()
         self._grip_drive = drive_for_gap_m(self.ctx.gripper.open_gap_m, self.ctx.gripper)
-        kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
+        kinematic_step(self.ctx, self._last_q_arm, self._visual_grip_drive())
 
     def prime_to_segment_start(self, seg: Segment) -> None:
         if seg.kind not in ("movej", "movel"):
             raise ValueError(f"cannot prime arm pose from segment kind {seg.kind!r}")
         self._last_q_arm = resolve_segment_start_arm_q(self.ctx, seg)
-        kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
+        kinematic_step(self.ctx, self._last_q_arm, self._visual_grip_drive())
 
     def prime_to_first_arm_segment_start(self, program: Program) -> None:
         for seg in program.segments:
@@ -153,22 +226,35 @@ class TrajKinematicMirror:
                 self.prime_to_segment_start(seg)
                 return
 
-    def tick(self, seg: Segment, tick_idx: int) -> None:
+    def tick(self, seg: Segment, tick_idx: int, *, update_visualizer: bool = True) -> None:
         samples, n = seg.samples(self.rate)
         if tick_idx < 0 or tick_idx >= n:
             raise IndexError(f"tick {tick_idx} out of range for segment {seg.label!r} (N={n})")
         if seg.kind == "gripper":
-            self._grip_drive = resolve_tick_grip_drive(samples, tick_idx, self.ctx.gripper)
-            kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
+            gap_m = float(samples[tick_idx, 0])
+            # Keep the planned drive for attach/release gap logic; clamp only the
+            # teleported visual pose so Lite6 pads do not penetrate the cube.
+            self._grip_drive = drive_for_gap_m(gap_m, self.ctx.gripper)
+            kinematic_step(
+                self.ctx,
+                self._last_q_arm,
+                self._visual_grip_drive(),
+                update_visualizer=update_visualizer,
+            )
             return
         self._last_q_arm = resolve_tick_arm_q(self.ctx, seg, samples, tick_idx)
-        kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
+        kinematic_step(
+            self.ctx,
+            self._last_q_arm,
+            self._visual_grip_drive(),
+            update_visualizer=update_visualizer,
+        )
 
     def on_tick(self, seg: Segment, tick_idx: int) -> None:
         """Callback compatible with :func:`replay_real` ``on_tick`` hook."""
         self.tick(seg, tick_idx)
 
-    def hold_step(self) -> None:
+    def hold_step(self, *, update_visualizer: bool = True) -> None:
         """Re-assert the last commanded pose for one tick (kinematic hold, no PD).
 
         Without this, letting the viewer idle via plain ``scene.step()`` calls
@@ -176,7 +262,12 @@ class TrajKinematicMirror:
         zeroed for the whole mirror (see :func:`_disable_pd`), so nothing but
         the per-tick teleport keeps the last pose in place.
         """
-        kinematic_step(self.ctx, self._last_q_arm, self._grip_drive)
+        kinematic_step(
+            self.ctx,
+            self._last_q_arm,
+            self._visual_grip_drive(),
+            update_visualizer=update_visualizer,
+        )
 
     def replay_with_pacing(self) -> None:
         """Play the full program at ``program.rate`` (dry-run visual preview)."""
@@ -385,7 +476,9 @@ class KinematicCarryTracker:
         if is_grasp_close and tick_idx == 0:
             self._capture_grip_freeze_pose()
 
-        self.mirror.on_tick(seg, tick_idx)
+        # Defer viewer update until after freeze/carry sync so gravity during
+        # scene.step cannot flash a slipped cube into the mirror viewer.
+        self.mirror.tick(seg, tick_idx, update_visualizer=False)
 
         gap_m = gap_m_from_drive(self.mirror.grip_drive, self.ctx.gripper)
         fc = self._finger_center()
@@ -421,6 +514,8 @@ class KinematicCarryTracker:
         if self._attached:
             self._sync_carry(fc)
 
+        update_scene_visualizer(self.ctx.scene)
+
         if is_release and tick_idx == n - 1:
             self._clear_release_freeze_pose()
         elif not is_release:
@@ -438,5 +533,60 @@ class KinematicCarryTracker:
 
     def hold_step(self) -> None:
         """Composed hold callback: re-teleport the mirror pose and any carried object."""
-        self.mirror.hold_step()
+        self.mirror.hold_step(update_visualizer=False)
         self.hold_sync()
+        update_scene_visualizer(self.ctx.scene)
+
+
+class AsyncMirrorBridge:
+    """Decouple kinematic mirror updates from the real servo stream.
+
+    The servo loop only posts the latest ``(seg, tick_idx)``; a daemon thread
+    applies :meth:`KinematicCarryTracker.on_tick` so ``scene.step`` never blocks
+    the ``1/rate`` send cadence. Intermediate frames may be dropped.
+    """
+
+    def __init__(self, tracker: KinematicCarryTracker) -> None:
+        self._tracker = tracker
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+        self._pending: tuple[Segment, int] | None = None
+        self._stop = False
+        self._thread = threading.Thread(
+            target=self._run,
+            name="async-mirror",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def on_tick(self, seg: Segment, tick_idx: int) -> None:
+        """Post the latest mirror sample (overwrite; never blocks on scene.step)."""
+        with self._cond:
+            self._pending = (seg, tick_idx)
+            self._cond.notify()
+
+    def _run(self) -> None:
+        while True:
+            with self._cond:
+                while self._pending is None and not self._stop:
+                    self._cond.wait()
+                if self._pending is None and self._stop:
+                    return
+                item = self._pending
+                self._pending = None
+            if item is not None:
+                seg, tick_idx = item
+                self._tracker.on_tick(seg, tick_idx)
+
+    def close(self) -> None:
+        """Stop the worker; apply any leftover snapshot on the caller thread."""
+        with self._cond:
+            self._stop = True
+            self._cond.notify()
+        self._thread.join(timeout=5.0)
+        with self._lock:
+            leftover = self._pending
+            self._pending = None
+        if leftover is not None:
+            seg, tick_idx = leftover
+            self._tracker.on_tick(seg, tick_idx)

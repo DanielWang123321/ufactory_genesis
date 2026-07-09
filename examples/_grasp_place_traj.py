@@ -24,6 +24,7 @@ from ufactory.kinematics.calibration import (
 )
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.trajectory import (
+    AsyncMirrorBridge,
     CartesianWaypoint,
     EXECUTOR_SERVO_J,
     KinematicCarryTracker,
@@ -355,11 +356,13 @@ def _run_real(robot_key, args) -> int:
             f"[ik-compile] executor=servo_j movel_segments={program.metadata['ik_compiled_movel_segments']} "
             f"ticks={program.metadata['ik_compiled_ticks']} "
             f"timing={program.metadata.get('ik_timing_policy', '(legacy)')} "
+            f"damping={program.metadata.get('ik_damping', '(default)')} "
             f"plateau_collapsed={program.metadata.get('ik_plateau_collapsed_samples', 0)} "
             f"retimed={program.metadata.get('ik_joint_retimed', False)} "
             f"urdf={program.metadata.get('ik_robot_urdf')} "
             f"calib={program.metadata.get('ik_kinematics_yaml') or '(nominal)'}"
         )
+    bridge = None
     if args.visual and ctx is not None:
         base_mm = [v * 1000.0 for v in ctx.base_pos_world]
         print(
@@ -367,13 +370,14 @@ def _run_real(robot_key, args) -> int:
             f"visual_model={ctx.visual_model} "
             f"base=[{base_mm[0]:.0f},{base_mm[1]:.0f},{base_mm[2]:.0f}]mm "
             f"kinematic open-loop; cube kinematically carried while gripped "
-            f"(no contact physics)"
+            f"(no contact physics; async mirror off servo critical path)"
         )
         mirror = TrajKinematicMirror(ctx, program)
         mirror.prime_to_home()
         start_deferred_viewer(ctx.scene)
         _hold_mirror_at_program_start(mirror, hold_s=args.visual_start_hold_s)
         tracker = KinematicCarryTracker(mirror, grasp_gap_m=grip_close_m)
+        bridge = AsyncMirrorBridge(tracker)
     cfg = RealExecutorConfig(
         executor=args.executor,
         robot_key=runtime.model.key,
@@ -395,14 +399,18 @@ def _run_real(robot_key, args) -> int:
             else ServoLimits()
         ),
     )
-    replay_real(
-        program,
-        cfg,
-        on_tick=tracker.on_tick if tracker is not None else None,
-        on_preposition_complete=(
-            (lambda: mirror.prime_to_first_arm_segment_start(program)) if mirror is not None else None
-        ),
-    )
+    try:
+        replay_real(
+            program,
+            cfg,
+            on_tick=bridge.on_tick if bridge is not None else None,
+            on_preposition_complete=(
+                (lambda: mirror.prime_to_first_arm_segment_start(program)) if mirror is not None else None
+            ),
+        )
+    finally:
+        if bridge is not None:
+            bridge.close()
     if args.visual and ctx is not None:
         _hold_viewer(ctx, on_step=tracker.hold_step if tracker is not None else None)
     return 0
@@ -423,7 +431,13 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
     parser = argparse.ArgumentParser(
         description=f"{robot_label} trajectory-planned grasp-place (RoboDK-style)"
     )
-    parser.add_argument("--rate", type=float, default=50.0, choices=[50.0, 100.0])
+    parser.add_argument(
+        "--rate",
+        type=float,
+        default=50.0,
+        choices=[50.0, 100.0],
+        help="Servo sample rate in Hz (not end-effector speed). Linear speed uses --speed-mm-s.",
+    )
     parser.add_argument("--speed-rad-s", type=float, default=DEFAULT_GRASP_PLACE_JOINT_SPEED_RAD_S)
     parser.add_argument("--mvacc-rad-s2", type=float, default=DEFAULT_GRASP_PLACE_JOINT_ACC_RAD_S2)
     parser.add_argument("--substeps", type=int, default=8)

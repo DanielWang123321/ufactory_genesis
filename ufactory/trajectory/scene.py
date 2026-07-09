@@ -1,11 +1,10 @@
 """Scene construction for the trajectory grasp-place pipeline.
 
 Robot-generic Genesis scene builder for the grasp-place trajectory pipeline
-(originally written for xArm6; see :mod:`examples.xarm6.xarm6_grasp_place_demo`
-for the scene/robot setup this mirrors). Returns a typed context (entities, dof
-indices, PD gains, finger offsets, key heights) reused across xArm5/6/7, UF850
-(Gripper G2) and Lite6 (parallel gripper). Single environment, robot base at
-table height.
+(originally written for xArm6 scripted grasp-place demos). Returns a typed
+context (entities, dof indices, PD gains, finger offsets, key heights) reused
+across xArm5/6/7, UF850 (Gripper G2) and Lite6 (parallel gripper). Single
+environment, robot base at table height.
 """
 
 from __future__ import annotations
