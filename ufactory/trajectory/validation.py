@@ -53,12 +53,31 @@ def validate_segment(
         if runtime is None:
             if seg.q_start is None or seg.q_end is None:
                 raise ValueError(f"MoveJ segment {seg.label!r} requires q_start and q_end")
-            if np.asarray(seg.q_start).reshape(-1).shape != np.asarray(seg.q_end).reshape(-1).shape:
+            q_start = np.asarray(seg.q_start).reshape(-1)
+            q_end = np.asarray(seg.q_end).reshape(-1)
+            if q_start.shape != q_end.shape:
                 raise ValueError(f"MoveJ segment {seg.label!r} q_start/q_end shape mismatch")
+            if seg.q_samples is not None:
+                q_samples = np.asarray(seg.q_samples, dtype=np.float64)
+                if q_samples.ndim != 2 or q_samples.shape[0] < 1:
+                    raise ValueError(f"MoveJ segment {seg.label!r} q_samples must be a non-empty 2D array")
+                if q_samples.shape[1] != q_start.size:
+                    raise ValueError(
+                        f"MoveJ segment {seg.label!r} q_samples expected {q_start.size} joints, "
+                        f"got {q_samples.shape[1]}"
+                    )
             return
         dof = runtime.model.dof
         validate_joint_vector(seg.q_start, dof=dof, name=f"{seg.label or 'movej'}.q_start")
         validate_joint_vector(seg.q_end, dof=dof, name=f"{seg.label or 'movej'}.q_end")
+        if seg.q_samples is not None:
+            q_samples = np.asarray(seg.q_samples, dtype=np.float64)
+            if q_samples.ndim != 2 or q_samples.shape[0] < 1:
+                raise ValueError(f"MoveJ segment {seg.label!r} q_samples must be a non-empty 2D array")
+            if q_samples.shape[1] != dof:
+                raise ValueError(
+                    f"{seg.label or 'movej'}.q_samples expected {dof} joints, got {q_samples.shape[1]}"
+                )
         return
 
     if seg.kind == "movel":

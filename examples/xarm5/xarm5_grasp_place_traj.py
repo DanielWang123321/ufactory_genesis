@@ -13,10 +13,12 @@ Usage (sim):
 
 Real path (dry-run digest only by default; physical arm has no end effector):
     python examples/xarm5/xarm5_grasp_place_traj.py \
-        --executor servo-cartesian --ip 192.168.1.77 --z-min-mm 0
+        --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
+    python examples/xarm5/xarm5_grasp_place_traj.py \
+        --executor servo_j --dry-run --rate 50 --z-min-mm 0
 
-To move the real arm, add ``--no-dry-run``. Do not add ``--real-gripper``
-unless a physical gripper is installed.
+To move the real arm, add ``--no-dry-run`` and ``--ip 192.168.1.xx``.
+Do not add ``--real-gripper`` unless a physical gripper is installed.
 """
 
 from __future__ import annotations

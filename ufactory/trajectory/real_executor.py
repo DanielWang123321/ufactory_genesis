@@ -28,8 +28,8 @@ from ufactory.robots.registry import get_robot_profile, joint_names
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.trajectory.segments import Program, Segment
 
-EXECUTOR_SERVO_J = "servo-j"
-EXECUTOR_SERVO_CART = "servo-cartesian"
+EXECUTOR_SERVO_J = "servo_j"
+EXECUTOR_SERVO_CART = "servo_cartesian"
 REAL_EXECUTORS = (EXECUTOR_SERVO_J, EXECUTOR_SERVO_CART)
 
 # Kept for backwards compatibility; xArm6-specific default. Multi-robot
@@ -251,13 +251,13 @@ def validate_servo_stream(
     if kind == "j":
         if stats.max_speed > limits.joint_speed_rad_s + 1e-12:
             raise TrajectorySafetyError(
-                f"{label or 'servo-j'} joint speed {stats.max_speed:.3f} rad/s "
+                f"{label or 'servo_j'} joint speed {stats.max_speed:.3f} rad/s "
                 f"({math.degrees(stats.max_speed):.1f} deg/s) exceeds "
                 f"{limits.joint_speed_rad_s:.3f} rad/s"
             )
         if stats.max_acc > limits.joint_acc_rad_s2 + 1e-12:
             raise TrajectorySafetyError(
-                f"{label or 'servo-j'} joint acceleration {stats.max_acc:.3f} rad/s^2 "
+                f"{label or 'servo_j'} joint acceleration {stats.max_acc:.3f} rad/s^2 "
                 f"({math.degrees(stats.max_acc):.1f} deg/s^2) exceeds "
                 f"{limits.joint_acc_rad_s2:.3f} rad/s^2"
             )
@@ -265,22 +265,22 @@ def validate_servo_stream(
     if kind == "c":
         if stats.max_speed > limits.cart_speed_mm_s + 1e-12:
             raise TrajectorySafetyError(
-                f"{label or 'servo-cartesian'} Cartesian speed {stats.max_speed:.1f} mm/s "
+                f"{label or 'servo_cartesian'} Cartesian speed {stats.max_speed:.1f} mm/s "
                 f"exceeds {limits.cart_speed_mm_s:.1f} mm/s"
             )
         if stats.max_acc > limits.cart_acc_mm_s2 + 1e-12:
             raise TrajectorySafetyError(
-                f"{label or 'servo-cartesian'} Cartesian acceleration {stats.max_acc:.1f} mm/s^2 "
+                f"{label or 'servo_cartesian'} Cartesian acceleration {stats.max_acc:.1f} mm/s^2 "
                 f"exceeds {limits.cart_acc_mm_s2:.1f} mm/s^2"
             )
         if stats.max_orient_speed > limits.orient_speed_rad_s + 1e-12:
             raise TrajectorySafetyError(
-                f"{label or 'servo-cartesian'} orientation speed {stats.max_orient_speed:.3f} rad/s "
+                f"{label or 'servo_cartesian'} orientation speed {stats.max_orient_speed:.3f} rad/s "
                 f"exceeds {limits.orient_speed_rad_s:.3f} rad/s"
             )
         if stats.max_orient_acc > limits.orient_acc_rad_s2 + 1e-12:
             raise TrajectorySafetyError(
-                f"{label or 'servo-cartesian'} orientation acceleration {stats.max_orient_acc:.3f} rad/s^2 "
+                f"{label or 'servo_cartesian'} orientation acceleration {stats.max_orient_acc:.3f} rad/s^2 "
                 f"exceeds {limits.orient_acc_rad_s2:.3f} rad/s^2"
             )
         return stats
@@ -557,7 +557,7 @@ def _run_arm_segment(
     seg = prep.seg
     first = np.round(prep.samples[0], 4)
     last = np.round(prep.samples[-1], 4)
-    name = "servo-j" if prep.kind == "j" else "servo-cartesian"
+    name = "servo_j" if prep.kind == "j" else "servo_cartesian"
     print(
         f"  [{name}:{seg.label}] N={prep.samples.shape[0]} dur=({prep.stats.duration_s:.2f}s) "
         f"first={first.tolist()} last={last.tolist()} {prep.stats.digest()}"
@@ -726,14 +726,14 @@ def _run_lite6_gripper_segment(
         _pace(n, cfg.rate)
 
 
-def _read_reported_target(arm, kind: str) -> np.ndarray | None:
+def _read_reported_target(arm, kind: str, dim: int) -> np.ndarray | None:
     if kind == "j":
         code, reported = arm.get_servo_angle(is_radian=True)
     else:
         code, reported = arm.get_position(is_radian=True)
     if code != 0:
         return None
-    return np.asarray(reported[: (6 if kind == "c" else 6)], dtype=np.float64)
+    return np.asarray(reported[: int(dim)], dtype=np.float64)
 
 
 def _reported_distance(kind: str, prev: np.ndarray | None, cur: np.ndarray | None) -> float:
@@ -791,7 +791,8 @@ def _stream_servo(
     tick_s = 1.0 / float(cfg.rate)
     next_deadline = time.monotonic()
     max_overrun = 0.0
-    prev_reported = _read_reported_target(arm, kind) if cfg.sdk_sim_validate or csv_writer is not None else None
+    report_dim = int(prep.samples.shape[1])
+    prev_reported = _read_reported_target(arm, kind, report_dim) if cfg.sdk_sim_validate or csv_writer is not None else None
     max_reported_speed = 0.0
     prev_report_t = time.monotonic()
 
@@ -810,7 +811,7 @@ def _stream_servo(
         _assert_stream_health(arm, prep, t, code)
 
         now = time.monotonic()
-        reported = _read_reported_target(arm, kind) if cfg.sdk_sim_validate or csv_writer is not None else None
+        reported = _read_reported_target(arm, kind, report_dim) if cfg.sdk_sim_validate or csv_writer is not None else None
         report_distance = _reported_distance(kind, prev_reported, reported)
         report_speed = 0.0
         if reported is not None and prev_reported is None:

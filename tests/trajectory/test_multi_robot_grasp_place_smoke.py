@@ -78,7 +78,7 @@ def test_grasp_place_traj_headless_sim(script: str):
     assert float(place_match.group(1)) < 50.0
     assert float(drift_match.group(1)) < 10.0
     if "lite6_grasp_place_traj.py" in script:
-        assert "sim_hold_bias=0.8mm" in result.stdout
+        assert "sim_hold_bias=2.0mm" in result.stdout
         assert "place-standoff" not in result.stdout
         settle_z_mm = _phase_obj_z_mm(result.stdout, "place-settle")
         assert LITE6_TABLE_CUBE_CENTER_Z_MM - 1.0 <= settle_z_mm <= LITE6_TABLE_CUBE_CENTER_Z_MM + 1.0
@@ -94,7 +94,7 @@ def test_grasp_place_traj_headless_sim(script: str):
 )
 def test_grasp_place_traj_real_dry_run_reports_gripper_family(script: str, expect_gap_mm: float):
     """Real-path dry-run must resolve each robot's own gripper gap (no G2 hardcode leak)."""
-    result = _run_example(script, ["--executor", "servo-cartesian", "--dry-run", "--rate", "50", "--z-min-mm", "0"])
+    result = _run_example(script, ["--executor", "servo_cartesian", "--dry-run", "--rate", "50", "--z-min-mm", "0"])
     assert result.returncode == 0, (
         f"{script} dry-run failed (exit {result.returncode})\n"
         f"stdout:\n{result.stdout[-4000:]}\n"
@@ -103,13 +103,21 @@ def test_grasp_place_traj_real_dry_run_reports_gripper_family(script: str, expec
     assert f"gripper gap {expect_gap_mm:.1f}mm ->" in result.stdout
 
 
-def test_grasp_place_traj_rejects_servo_j_for_movel_program():
+@pytest.mark.integration
+def test_xarm6_grasp_place_servo_j_dry_run_compiles_host_ik():
     result = _run_example(
         "examples/xarm6/xarm6_grasp_place_traj.py",
-        ["--executor", "servo-j", "--dry-run", "--rate", "50", "--z-min-mm", "0"],
+        ["--executor", "servo_j", "--dry-run", "--rate", "50", "--z-min-mm", "0"],
+        timeout=600,
     )
-    assert result.returncode != 0
-    assert "use --executor servo-cartesian" in result.stderr
+    assert result.returncode == 0, (
+        f"xarm6 servo_j dry-run failed (exit {result.returncode})\n"
+        f"stdout:\n{result.stdout[-4000:]}\n"
+        f"stderr:\n{result.stderr[-4000:]}"
+    )
+    assert "[ik-compile] executor=servo_j" in result.stdout
+    assert "[real DRY-RUN] executor=servo_j" in result.stdout
+    assert "[servo_j:descend]" in result.stdout
 
 
 def test_lite6_grasp_place_rejects_gap_below_reversed_gripper_range():
@@ -175,7 +183,7 @@ def test_xarm5_grasp_place_real_dry_run_reports_gripper_gap():
     """xArm5 real-path dry-run resolves G2 gripper gap like other xArm arms."""
     result = _run_example(
         "examples/xarm5/xarm5_grasp_place_traj.py",
-        ["--executor", "servo-cartesian", "--dry-run", "--rate", "50", "--z-min-mm", "0"],
+        ["--executor", "servo_cartesian", "--dry-run", "--rate", "50", "--z-min-mm", "0"],
     )
     assert result.returncode == 0, (
         f"xarm5 dry-run failed (exit {result.returncode})\n"

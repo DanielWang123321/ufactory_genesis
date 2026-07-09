@@ -83,7 +83,7 @@ xArm 6 拥有最完整的示例覆盖：
 
 五个入口都调用共享的 `examples/_grasp_place_traj.py`。该模块生成混合路点程序，按 LSPB 采样后执行抓放序列（`home->pregrasp` → 抓取 → 搬运 → 放置 → 回零）；Lite6 会在 `release` 前额外插入 `place-settle`。
 
-默认仿真是接触摩擦抓取：只有当 Genesis 刚体接触摩擦能够抵抗重力时，方块才会被夹起并搬运。默认不使用距离 weld、几何 snap、方块冻结或强制移动方块；运行头部会显示 `sim_grasp_weld=False`。Lite6 使用原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，默认只保留 0.8 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让开爪发生在桌面高度。`python examples/lite6_gripper_cube_diagnose.py --collision-mode both` 可在不加载机械臂的情况下隔离检查该接触几何。`--sim-grasp-weld` 仅用于显式 debug 对比，并且必须已有双指真实接触才会触发。
+默认仿真是接触摩擦抓取：只有当 Genesis 刚体接触摩擦能够抵抗重力时，方块才会被夹起并搬运。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。默认不使用距离 weld、几何 snap、方块冻结或强制移动方块；运行头部会显示 `sim_grasp_weld=False`。Lite6 使用原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，默认只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让开爪发生在桌面高度。`python examples/lite6_gripper_cube_diagnose.py --collision-mode both` 可在不加载机械臂的情况下隔离检查该接触几何。`--sim-grasp-weld` 仅用于显式 debug 对比，并且必须已有双指真实接触才会触发。
 
 **1. Genesis 仿真**
 
@@ -95,11 +95,14 @@ python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
 
 **2. 真机 dry-run 安全验证**
 
-连接真机前可先 dry-run，检查同一条轨迹的段数、速度、加速度和安全高度；默认不运动机械臂，也不发送夹爪命令。
+连接真机前可先 dry-run，检查同一条轨迹的段数、速度、加速度和安全高度；默认不运动机械臂，也不发送夹爪命令。`servo_cartesian` 直接下发笛卡尔目标，由固件求 IK；`servo_j` 先在上位机用 Genesis IK 将每个笛卡尔 tick 编译为关节目标，再通过 `set_servo_angle_j` 下发。
 
 ```bash
 python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo-cartesian --dry-run --rate 50 --z-min-mm 0
+  --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
+
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo_j --dry-run --rate 50 --z-min-mm 0
 ```
 
 **3. Genesis 镜像 + 真机执行**
@@ -111,14 +114,29 @@ python examples/xarm6/xarm6_grasp_place_traj.py \
 ```bash
 # 只运动机械臂，不发送物理夹爪命令。
 python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo-cartesian --visual --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+  --executor servo_cartesian --visual --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+
+# 上位机 IK，只运动机械臂；传入 --ip 后会按 SN 自动选择逐台运动学 YAML。
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo_j --visual --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
 
 # 机械臂 + 物理夹爪。
 python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo-cartesian --visual --ip 192.168.1.xx --z-min-mm 0 --no-dry-run --real-gripper
+  --executor servo_j --visual --ip 192.168.1.xx --z-min-mm 0 --no-dry-run --real-gripper
 ```
 
 将 `192.168.1.xx` 换成你的机械臂 IP。
+
+**4. SDK 仿真验证（连控制器、不运动真机）**
+
+连接控制器后先调用 `set_simulation_robot(True)`，在 SDK 仿真模式下流式下发，并可写出逐 tick 报告：
+
+```bash
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo_j --sdk-sim-validate --ip 192.168.1.xx \
+  --rate 50 --z-min-mm 0 \
+  --sdk-sim-report-csv reports/servo_j_sdk_sim.csv
+```
 
 ### 展示场景
 | 文件 | 说明 |

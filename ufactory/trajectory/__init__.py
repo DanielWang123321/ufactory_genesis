@@ -12,6 +12,7 @@ Public surface
 * :class:`JointWaypoint`, :class:`CartesianWaypoint`
 * :func:`plan_joint_waypoints`, :func:`plan_cartesian_waypoints`,
   :func:`plan_mixed_waypoints`
+* :func:`compile_cartesian_program_to_joint_stream`
 * :func:`build_pickplace_program`
 * :func:`replay_sim`
 * :func:`replay_real`
@@ -32,6 +33,7 @@ __all__ = [
     "plan_joint_waypoints",
     "plan_cartesian_waypoints",
     "plan_mixed_waypoints",
+    "compile_cartesian_program_to_joint_stream",
     "validate_program",
     "validate_segment",
     "validate_joint_vector",
@@ -69,6 +71,7 @@ __all__ = [
     "profile",
     "segments",
     "planner",
+    "ik",
     "validation",
     "backends",
     "sim_executor",
@@ -99,6 +102,11 @@ _LAZY_ATTRS = {
     "plan_joint_waypoints": ("ufactory.trajectory.planner", "plan_joint_waypoints"),
     "plan_cartesian_waypoints": ("ufactory.trajectory.planner", "plan_cartesian_waypoints"),
     "plan_mixed_waypoints": ("ufactory.trajectory.planner", "plan_mixed_waypoints"),
+    # ik.py: imports Genesis; host-side MoveL -> explicit MoveJ compilation.
+    "compile_cartesian_program_to_joint_stream": (
+        "ufactory.trajectory.ik",
+        "compile_cartesian_program_to_joint_stream",
+    ),
     # validation.py: generic Program/Segment contract checks.
     "validate_program": ("ufactory.trajectory.validation", "validate_program"),
     "validate_segment": ("ufactory.trajectory.validation", "validate_segment"),
@@ -129,6 +137,7 @@ _LAZY_ATTRS = {
     "profile": ("ufactory.trajectory.profile", None),
     "segments": ("ufactory.trajectory.segments", None),
     "planner": ("ufactory.trajectory.planner", None),
+    "ik": ("ufactory.trajectory.ik", None),
     "validation": ("ufactory.trajectory.validation", None),
     "backends": ("ufactory.trajectory.backends", None),
     "sim_executor": ("ufactory.trajectory.sim_executor", None),

@@ -27,6 +27,7 @@ from genesis.utils.geom import transform_by_quat, transform_quat_by_quat, xyz_to
 from scipy.spatial.transform import Rotation as R
 
 from _packaging_scene import (
+  FINGER_FRICTION_MU,
   HOME_RPY_DEG,
   HOME_XY,
   HOME_Z,
@@ -299,6 +300,8 @@ def _setup_robot(robot, scene):
   ik_link = robot.get_link(runtime.arm.ee_link)
   left_finger = robot.get_link("left_finger")
   right_finger = robot.get_link("right_finger")
+  left_finger.set_friction(float(FINGER_FRICTION_MU))
+  right_finger.set_friction(float(FINGER_FRICTION_MU))
 
   arm_dof_idx = [robot.get_joint(name).dofs_idx_local[0] for name in runtime.arm.joint_names]
   gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]

@@ -35,6 +35,10 @@ class Segment:
     # MoveJ
     q_start: np.ndarray | None = None
     q_end: np.ndarray | None = None
+    # Optional explicit MoveJ target stream. Same sampling contract as
+    # ``joint_lspb_samples``: row 0 is the first target after ``q_start`` and
+    # the final row equals ``q_end``.
+    q_samples: np.ndarray | None = None
     # MoveL (link6 base-frame xyz, m; orientation fixed gripper-down)
     pose_start: np.ndarray | None = None
     pose_end: np.ndarray | None = None
@@ -66,6 +70,11 @@ class Segment:
         """
         if self.kind == "movej":
             assert self.q_start is not None and self.q_end is not None
+            if self.q_samples is not None:
+                q = np.asarray(self.q_samples, dtype=np.float64)
+                if q.ndim != 2 or q.shape[0] < 1:
+                    raise ValueError(f"MoveJ segment {self.label!r} q_samples must be a non-empty 2D array")
+                return q.copy(), int(q.shape[0])
             q, n, _ = P.joint_lspb_samples(
                 self.q_start, self.q_end, rate=rate, v_max=self.v_max, a_max=self.a_max,
             )

@@ -18,6 +18,7 @@ from ufactory.trajectory import (
     TrajKinematicMirror,
     TrajectoryPlannerConfig,
     build_pickplace_program,
+    compile_cartesian_program_to_joint_stream,
     plan_mixed_waypoints,
     replay_real,
 )
@@ -299,6 +300,24 @@ def test_kinematic_carry_tracker_attaches_on_grip_and_releases_on_reopen(shared_
 
 
 @pytest.mark.gpu
+def test_kinematic_carry_tracker_accepts_compiled_movej_arm_segments(shared_ctx):
+    source = _default_program()
+    ctx = shared_ctx
+    compiled = compile_cartesian_program_to_joint_stream(source, ctx)
+    assert all(seg.kind in ("movej", "gripper") for seg in compiled.segments)
+
+    mirror = _fresh_mirror(ctx, compiled)
+    tracker = KinematicCarryTracker(mirror, grasp_gap_m=0.024)
+
+    _run_ticks_through_label(tracker, compiled, stop_after_label="grip")
+    assert tracker.attached
+    _run_ticks_through_label(tracker, compiled, stop_after_label="place-descend")
+    assert tracker.attached
+    _run_ticks_through_label(tracker, compiled, stop_after_label="release")
+    assert not tracker.attached
+
+
+@pytest.mark.gpu
 def test_kinematic_carry_tracker_does_not_attach_when_object_out_of_reach(shared_ctx):
     program = _default_program()
     ctx = shared_ctx
@@ -323,7 +342,7 @@ def test_real_visual_dry_run_subprocess():
             sys.executable,
             str(script),
             "--executor",
-            "servo-cartesian",
+            "servo_cartesian",
             "--visual",
             "--dry-run",
             "--rate",

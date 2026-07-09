@@ -22,6 +22,7 @@ from ufactory.trajectory import (
     validate_servo_stream,
 )
 from ufactory.trajectory.real_executor import _segment_servo_targets
+from ufactory.trajectory.real_executor import _read_reported_target
 
 
 def test_joint_jump_at_100hz_fails_with_reported_degrees_per_second():
@@ -73,7 +74,7 @@ def test_replay_real_rejects_movel_program_with_servo_j():
     )
 
     with pytest.raises(TrajectorySafetyError, match="cannot replay MoveL"):
-        replay_real(program, RealExecutorConfig(executor="servo-j", dry_run=True, rate=50.0))
+        replay_real(program, RealExecutorConfig(executor="servo_j", dry_run=True, rate=50.0))
 
 
 def test_replay_real_rejects_movej_program_with_servo_cartesian():
@@ -84,7 +85,20 @@ def test_replay_real_rejects_movej_program_with_servo_cartesian():
     )
 
     with pytest.raises(TrajectorySafetyError, match="cannot replay MoveJ"):
-        replay_real(program, RealExecutorConfig(executor="servo-cartesian", dry_run=True, rate=50.0))
+        replay_real(program, RealExecutorConfig(executor="servo_cartesian", dry_run=True, rate=50.0))
+
+
+@pytest.mark.parametrize("dof", [5, 6, 7])
+def test_servo_j_reported_target_uses_program_dof(dof: int):
+    class Arm:
+        def get_servo_angle(self, *, is_radian):
+            assert is_radian is True
+            return 0, list(range(10))
+
+    reported = _read_reported_target(Arm(), "j", dof)
+
+    assert reported.shape == (dof,)
+    np.testing.assert_allclose(reported, np.arange(dof, dtype=np.float64))
 
 
 def test_full_sample_joint_limit_check_catches_middle_sample_violation():

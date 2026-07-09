@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import torch
+
 import genesis as gs
 from ufactory.visualization.glb import glb_view_surface
 from ufactory.robots.paths import robot_visual_glb_urdf
+from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION, OBJ_INERTIAL_MASS_KG
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEXTURE_DIR = REPO_ROOT / "assets" / "scenes" / "packaging_showcase" / "textures"
@@ -45,7 +48,11 @@ HOME_XY = (0.30, 0.0)
 HOME_Z = 0.30
 HOME_RPY_DEG = (180.0, 0.0, 0.0)
 
-OBJ_SIZE = (0.03, 0.03, 0.03)  # matching real reference block: 30 mm, 17 g
+# Painted wood reference block: 30 mm cube, ~17 g (rho≈630), μ=1.0; silicone pads μ=1.2.
+OBJ_SIZE = (0.03, 0.03, 0.03)
+OBJ_MASS_KG = OBJ_INERTIAL_MASS_KG
+OBJ_FRICTION_MU = OBJ_FRICTION
+FINGER_FRICTION_MU = FINGER_FRICTION
 OBJ_SPAWN_XY = (ROBOT_XY[0], 0.0)  # 0.1 m toward robot from prior y=0.10
 
 BOX_OUTER = (0.28, 0.22, 0.16)
@@ -313,10 +320,17 @@ def build_packaging_scene(
       ),
       fixed=False,
     ),
-    material=gs.materials.Rigid(rho=630, friction=1.0),  # ~17 g for 30 mm cube
+    material=gs.materials.Rigid(
+      rho=OBJ_MASS_KG / (OBJ_SIZE[0] * OBJ_SIZE[1] * OBJ_SIZE[2]),
+      friction=OBJ_FRICTION_MU,
+    ),
     surface=color_rough(BLOCK_COLOR),
   )
 
   if build_scene:
     scene.build(n_envs=1)
+    block.set_friction(float(OBJ_FRICTION_MU))
+    block.set_links_inertial_mass(
+      torch.tensor([OBJ_MASS_KG], device=gs.device, dtype=gs.tc_float),
+    )
   return scene, robot, block, layout

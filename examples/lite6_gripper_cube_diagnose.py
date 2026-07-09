@@ -32,13 +32,14 @@ from ufactory.grippers.lite6 import (  # noqa: E402
 from ufactory.robots.paths import lite6_gripper_movable_visual_urdf  # noqa: E402
 from ufactory.robots.runtime import LITE6_GRIPPER_PARAMS  # noqa: E402
 from ufactory.trajectory.scene import (  # noqa: E402
+    FINGER_FRICTION,
     FINGER_Z_OFFSET_LITE6,
     LITE6_FINGER_CLOSE_DESCENT,
     LITE6_FINGER_PAD_BELOW_FC,
     LITE6_GRASP_LINK6_Z_EXTRA_M,
     LITE6_GRASP_TABLE_CLEARANCE,
-    LITE6_OBJ_FRICTION,
-    LITE6_OBJ_INERTIAL_MASS_KG,
+    OBJ_FRICTION,
+    OBJ_INERTIAL_MASS_KG,
     OBJ_SIZE,
     RIGID_CONSTRAINT_TIMECONST,
     RIGID_NOSLIP_ITERATIONS,
@@ -286,9 +287,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--visual", action="store_true")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--obj-size-m", type=float, nargs=3, default=OBJ_SIZE)
-    parser.add_argument("--obj-mass-kg", type=float, default=LITE6_OBJ_INERTIAL_MASS_KG)
-    parser.add_argument("--obj-friction", type=float, default=LITE6_OBJ_FRICTION)
-    parser.add_argument("--finger-friction", type=float, default=LITE6_OBJ_FRICTION)
+    parser.add_argument("--obj-mass-kg", type=float, default=OBJ_INERTIAL_MASS_KG)
+    parser.add_argument("--obj-friction", type=float, default=OBJ_FRICTION)
+    parser.add_argument("--finger-friction", type=float, default=FINGER_FRICTION)
     return parser
 
 

@@ -15,7 +15,7 @@ DEFAULT_ONLINE_JOINT_SPEED_RAD_S = 0.5
 DEFAULT_ONLINE_JOINT_MVACC_RAD_S2 = 5.0
 # Clip normalized policy actions before scaling (rsl-rl ActorCritic is unbounded at inference).
 DEFAULT_ACTION_CLIP = 1.0
-EXECUTOR_SERVO_J = "servo-j"
+EXECUTOR_SERVO_J = "servo_j"
 EXECUTOR_ONLINE_JOINT = "online-joint"
 REACH_EXECUTORS = (EXECUTOR_SERVO_J, EXECUTOR_ONLINE_JOINT)
 

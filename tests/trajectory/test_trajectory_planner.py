@@ -22,6 +22,7 @@ from ufactory.trajectory import (
     require_roboticstoolbox,
     validate_program,
 )
+from ufactory.trajectory.segments import Program, Segment
 
 
 def test_planner_import_does_not_load_heavy_modules():
@@ -66,6 +67,50 @@ def test_plan_joint_waypoints_rejects_wrong_dof_for_xarm5():
 
     with pytest.raises(ValueError, match="expected 5 joints"):
         plan_joint_waypoints(config, np.zeros(6), [np.zeros(6)])
+
+
+def test_explicit_movej_samples_override_lspb_and_validate_shape():
+    q_samples = np.array(
+        [
+            [0.10, 0.00, 0.00, 0.00, 0.00, 0.00],
+            [0.20, 0.00, 0.00, 0.00, 0.00, 0.00],
+        ],
+        dtype=np.float64,
+    )
+    seg = Segment(
+        kind="movej",
+        duration=0.04,
+        v_max=0.35,
+        a_max=2.0,
+        label="explicit",
+        q_start=np.zeros(6),
+        q_end=q_samples[-1],
+        q_samples=q_samples,
+        samples_count=q_samples.shape[0],
+    )
+
+    samples, n = seg.samples(50.0)
+
+    assert n == 2
+    np.testing.assert_allclose(samples, q_samples)
+    validate_program(Program(segments=[seg], rate=50.0, robot_key="xarm6"))
+
+
+def test_explicit_movej_samples_validate_dof():
+    seg = Segment(
+        kind="movej",
+        duration=0.04,
+        v_max=0.35,
+        a_max=2.0,
+        label="bad-explicit",
+        q_start=np.zeros(6),
+        q_end=np.zeros(6),
+        q_samples=np.zeros((2, 5)),
+        samples_count=2,
+    )
+
+    with pytest.raises(ValueError, match="expected 6 joints"):
+        validate_program(Program(segments=[seg], rate=50.0, robot_key="xarm6"))
 
 
 def test_plan_cartesian_waypoints_generates_chained_movel_segments():

@@ -30,6 +30,7 @@ from ufactory.grippers.g2 import (
     GRIPPER_G2_OPEN_GAP_M,
     GRIPPER_G2_SIM_CLOSE_DRIVE,
 )
+from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION, OBJ_INERTIAL_MASS_KG
 
 
 class XArm6GraspPlaceEnv:
@@ -129,6 +130,12 @@ class XArm6GraspPlaceEnv:
         self.ik_link = self.robot.get_link(robot_cfg["ik_link_name"])
         self.left_finger_link = self.robot.get_link(robot_cfg["gripper_link_names"][0])
         self.right_finger_link = self.robot.get_link(robot_cfg["gripper_link_names"][1])
+        self.obj.set_friction(float(OBJ_FRICTION))
+        self.left_finger_link.set_friction(float(FINGER_FRICTION))
+        self.right_finger_link.set_friction(float(FINGER_FRICTION))
+        self.obj.set_links_inertial_mass(
+            torch.tensor([OBJ_INERTIAL_MASS_KG], device=self.device, dtype=gs.tc_float),
+        )
         self.collision_monitor_links = [
             self.robot.get_link(name)
             for name in robot_cfg.get("collision_monitor_links", [])

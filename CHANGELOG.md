@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-07-09
+
+### Added
+
+- Host-side IK `servo_j` path for shared grasp-place trajectory examples: MoveL samples are compiled with Genesis IK into explicit `set_servo_angle_j` joint streams.
+- `--kinematics-yaml`, `--kinematics-yaml-dir`, and `--force-kinematics` options on grasp-place real paths; `--ip` still auto-resolves the SN-derived kinematics suffix.
+- `compile_cartesian_program_to_joint_stream()` trajectory API and explicit `q_samples` MoveJ segments.
+
+### Changed
+
+- Grasp-place `--executor` values renamed to underscores: `servo_j` and `servo_cartesian` (hyphen forms removed).
+- Grasp-place `--executor servo_j` is now supported for dry-run, SDK simulation validation, real streaming, mirror mode, and optional physical gripper commands.
+- Host-side IK joint streams are plateau-collapsed and LSPB-retimed after Genesis IK so 100 Hz `servo_j` finite-difference acceleration stays within servo limits.
+- Real-path mirror/carry tracking now handles compiled `movej` arm segments by label, preserving existing grasp/release behavior.
+- Shared grasp-place cube physics unified across robots: 30 mm painted wood block at 17 g with friction 1.0; silicone fingertip pads at friction 1.2; contact stiffness left at Genesis rigid defaults (no per-object sol_params).
+- Lite6 default sim hold bias raised from 0.8 mm to 2.0 mm so contact friction still carries the unified 17 g cube after lowering material μ.
+
+### Fixed
+
+- `servo_j` SDK feedback comparison now respects the program DOF instead of assuming six joints.
+
 ## [0.2.2] — 2026-07-08
 
 ### Added
@@ -36,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Robot-aware LSPB trajectory planning APIs for joint, Cartesian, and mixed waypoint programs.
-- Shared five-robot grasp-place trajectory examples for xArm5, xArm6, xArm7, UF850, and Lite6, with Genesis sim, dry-run, real `servo-cartesian`, and kinematic mirror paths.
+- Shared five-robot grasp-place trajectory examples for xArm5, xArm6, xArm7, UF850, and Lite6, with Genesis sim, dry-run, real `servo_cartesian`, and kinematic mirror paths.
 - Lite6 gripper command conversion and tests for its 20-38 mm physical opening range.
 
 ### Changed

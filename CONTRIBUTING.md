@@ -48,7 +48,7 @@ pytest -m "not hardware and not gpu and not integration and not display"
 pytest -m "not hardware"
 
 # Hardware acceptance (requires xArm SDK + robot on the network)
-XARM_IP=192.168.1.65 pytest -m hardware
+XARM_IP=192.168.1.xx pytest -m hardware
 ```
 
 ### Markers

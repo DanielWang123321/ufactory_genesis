@@ -24,7 +24,10 @@ from ufactory.trajectory.segments import Program, Segment
 # G2's 0.85-radian/84mm drive-to-gap ratio), expressed in physical gap units
 # and normalized by each gripper's effective open-close travel.
 DEFAULT_GRIPPER_HOLD_BIAS_GAP_M = 0.0069
-LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M = 0.0008
+# Lite6: small flat pad + unified cube μ=1.0 / pad μ=1.2 need a slightly larger
+# post-contact hold bias than the prior 0.8 mm (tuned for μ=5.0) so friction
+# can carry the 17 g cube through lift without raising material friction again.
+LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M = 0.0020
 DEFAULT_GRASP_WELD_ATTACH_DIST_M = 0.08
 
 

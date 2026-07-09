@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.2-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.3-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
 </p>
 
@@ -106,17 +106,17 @@ python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。下面这些入口都会调用 `examples/_grasp_place_traj.py`，先生成混合笛卡尔路点程序，再按 LSPB 轨迹采样执行。
+v0.2.1 新增五机型共享的路点/LSPB 抓取-放置流程。v0.2.3 增加 `servo_j` 真机路径：同一批笛卡尔采样点会先在上位机用 Genesis IK 求解，再编译成显式关节目标，通过 `set_servo_angle_j` 下发。`servo_cartesian` 仍保留，用于固件侧 IK。
 
-默认 Genesis 回放使用刚体接触、摩擦力、重力和 Genesis 求解器共同决定抓取/释放结果；默认不再使用距离吸附、几何 snap、强制移动方块或 weld 约束（运行头部会显示 `sim_grasp_weld=False`）。Gripper G2 默认抓取 gap 为 22 mm，用于在 30 mm 方块上形成接触预紧；Lite6 默认使用反装夹爪的物理最小 20 mm gap、原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，只保留 0.8 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让夹爪在桌面高度打开，避免转移中下滑和悬空释放。`--sim-grasp-weld` 仅保留为显式 debug 开关，并且必须已有双指真实接触才会触发。
+默认 Genesis 回放使用刚体接触、摩擦力、重力和 Genesis 求解器共同决定抓取/释放结果；默认不再使用距离吸附、几何 snap、强制移动方块或 weld 约束（运行头部会显示 `sim_grasp_weld=False`）。共享红色方块为 30 mm 油漆木块（17 g，摩擦 1.0）；硅胶指垫摩擦 1.2；接触刚度保持 Genesis 刚体默认。Gripper G2 默认抓取 gap 为 22 mm，用于在 30 mm 方块上形成接触预紧；Lite6 默认使用反装夹爪的物理最小 20 mm gap、原始 STL 手指碰撞，并在双指真实接触后锁定闭合位置，只保留 2.0 mm 仿真保持偏置；释放前会闭爪稳定 0.18 s，让夹爪在桌面高度打开，避免转移中下滑和悬空释放。`--sim-grasp-weld` 仅保留为显式 debug 开关，并且必须已有双指真实接触才会触发。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
-| xArm5 | `python examples/xarm5/xarm5_grasp_place_traj.py --headless --rate 50` | 仅仿真和 dry-run |
-| xArm6 | `python examples/xarm6/xarm6_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo-cartesian` |
-| xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机机械臂运动 |
-| UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机机械臂运动 |
-| Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 反装夹爪，30 mm 方块 |
+| xArm5 | `python examples/xarm5/xarm5_grasp_place_traj.py --headless --rate 50` | 仅仿真和 dry-run（`servo_cartesian` / `servo_j`） |
+| xArm6 | `python examples/xarm6/xarm6_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian`、上位机 IK `servo_j` |
+| xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian` / `servo_j` |
+| UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian` / `servo_j` |
+| Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 反装夹爪，30 mm 方块；`servo_cartesian` / `servo_j` |
 
 同一组脚本也支持 Genesis 可视化和真机安全 dry-run：
 
@@ -126,11 +126,19 @@ python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
 
 # 真机路径 dry-run：只打印分段和 servo 安全检查，不运动机械臂。
 python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo-cartesian --dry-run --rate 50 --z-min-mm 0
+  --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
+
+# 上位机 IK dry-run：将 MoveL 每个 tick 编译成 servo_j 关节目标，不运动机械臂。
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo_j --dry-run --rate 50 --z-min-mm 0
 
 # 真机机械臂执行；确认物理夹爪安装并测试正常后，才添加 --real-gripper。
 python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo-cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+  --executor servo_cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+
+# 上位机 IK 真机执行；传入 --ip 后会按 SN 自动使用逐台运动学 YAML。
+python examples/xarm6/xarm6_grasp_place_traj.py \
+  --executor servo_j --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
 ```
 
 更多命令、镜像模式和 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。真机路径的 `--visual` 是同一条轨迹的运动学镜像，不是接触仿真。
@@ -226,8 +234,8 @@ dynamics-sim-check --robot lite6 --random-count 0 --z-min-mm 0 --require-referen
 dynamics-sim-check --robot xarm5 --random-count 0 --z-min-mm 0 --require-reference
 dynamics-sim-check --robot xarm7 --random-count 0 --z-min-mm 0 --require-reference
 dynamics-hardware-check --robot xarm6 --ip <ip>
-dynamics-hardware-check --robot uf850 --ip 192.168.1.55 --z-min-mm 0
-dynamics-sim-collision-check --robot uf850 --ip 192.168.1.55   # 仿真模式串联自碰撞预检
+dynamics-hardware-check --robot uf850 --ip 192.168.1.xx --z-min-mm 0
+dynamics-sim-collision-check --robot uf850 --ip 192.168.1.xx   # 仿真模式串联自碰撞预检
 ```
 
 UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自

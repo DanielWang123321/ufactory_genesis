@@ -23,10 +23,12 @@ Usage (sim):
 
 Real path (dry-run digest only by default):
     python examples/lite6/lite6_grasp_place_traj.py \
-        --executor servo-cartesian --ip 192.168.1.170 --z-min-mm 0
+        --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
+    python examples/lite6/lite6_grasp_place_traj.py \
+        --executor servo_j --dry-run --rate 50 --z-min-mm 0
 
-To actually move the real arm, add ``--no-dry-run``. Add ``--real-gripper``
-only when the physical gripper should open/close.
+To move the real arm, add ``--no-dry-run`` and ``--ip 192.168.1.xx``.
+Add ``--real-gripper`` only when the physical gripper should open/close.
 """
 
 from __future__ import annotations

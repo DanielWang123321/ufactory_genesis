@@ -19,6 +19,7 @@ import torch
 
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
+from ufactory.kinematics.calibration import prepare_robot_model_for_verification
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_visual_glb_urdf, robot_urdf
 from ufactory.robots.registry import joint_names
@@ -95,15 +96,15 @@ RIGID_NOSLIP_ITERATIONS = 5
 RIGID_CONSTRAINT_TIMECONST = 0.005
 MIMIC_CONSTRAINT_SOL_PARAMS = (0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0)
 
-# Sim object tuning: a light, high-friction cube so rigid contact and friction
-# can support the object through lift/transit.
-OBJ_INERTIAL_MASS_KG = 0.01
-OBJ_FRICTION = 2.5
-LITE6_OBJ_INERTIAL_MASS_KG = 0.006
-# Lite6's fingertip plate is a small flat pad; use higher cube friction so the
-# plate's friction hold carries the cube through lift/transit without slip.
-LITE6_OBJ_FRICTION = 5.0
-LITE6_FINGER_FRICTION = 5.0
+# Red painted wood block (30 mm cube, ~16.7 g ≈ 17 g) and silicone fingertip pads.
+# Contact stiffness uses Genesis default rigid sol_params (not overridden).
+OBJ_INERTIAL_MASS_KG = 0.017
+OBJ_FRICTION = 1.0
+FINGER_FRICTION = 1.2
+# Backward-compatible aliases (same values for all gripper families).
+LITE6_OBJ_INERTIAL_MASS_KG = OBJ_INERTIAL_MASS_KG
+LITE6_OBJ_FRICTION = OBJ_FRICTION
+LITE6_FINGER_FRICTION = FINGER_FRICTION
 
 
 @dataclass
@@ -128,6 +129,9 @@ class TrajSceneContext:
     grasp_link6_z: float
     pre_grasp_link6_z: float
     lift_link6_z: float
+    robot_urdf_path: str = ""
+    kinematics_yaml_path: str | None = None
+    kinematics_suffix: str | None = None
     robot_key: str = "xarm6_1305"
     gripper: GripperControlParams | None = None
     home_pos_base: list[float] = field(default_factory=list)
@@ -266,6 +270,9 @@ def build_scene(
     contact_sol_params: tuple[float, float, float, float, float, float, float] | None = None,
     base_pos: tuple[float, float, float] | None = None,
     visual_model: Literal["glb", "stl"] = "glb",
+    kinematics_yaml: str | None = None,
+    kinematics_suffix: str | None = None,
+    kinematics_yaml_dir: str | None = None,
     obj_xy: tuple[float, float] | None = None,
     place_xy: tuple[float, float] | None = None,
     obj_size: tuple[float, float, float] | None = None,
@@ -295,6 +302,17 @@ def build_scene(
     home_z = float(home_z) if home_z is not None else defaults["home_z"]
 
     robot_urdf_path, use_glb_visual = _robot_urdf_for_visual_model(runtime, visual_model)
+    kinematics_yaml_path = None
+    if kinematics_yaml is not None or kinematics_suffix is not None:
+        robot_urdf_path, kinematics_yaml_path = prepare_robot_model_for_verification(
+            None,
+            kinematics_yaml,
+            kinematics_suffix,
+            kinematics_yaml_dir,
+            default_base_urdf=robot_urdf_path,
+            robot_name=profile.robot_name,
+            joint_count=profile.dof,
+        )
     if use_glb_visual:
         enable_glb_pbr_surfaces()
 
@@ -394,16 +412,13 @@ def build_scene(
     if contact_sol_params is not None:
         _set_contact_sol_params((obj, left_finger, right_finger), contact_sol_params)
 
-    # Sim object tuning: light + high-friction cube so the grip reliably holds
-    # it through lift/transit. Set before any stepping.
-    obj_mass_kg = LITE6_OBJ_INERTIAL_MASS_KG if gripper.family == "lite6" else OBJ_INERTIAL_MASS_KG
-    obj_friction = LITE6_OBJ_FRICTION if gripper.family == "lite6" else OBJ_FRICTION
-    obj.set_friction(float(obj_friction))
-    if gripper.family == "lite6":
-        left_finger.set_friction(float(LITE6_FINGER_FRICTION))
-        right_finger.set_friction(float(LITE6_FINGER_FRICTION))
+    # Painted wood cube (17 g, μ=1.0) + silicone fingertip pads (μ=1.2).
+    # Stiffness: leave default rigid contact sol_params. Set before any stepping.
+    obj.set_friction(float(OBJ_FRICTION))
+    left_finger.set_friction(float(FINGER_FRICTION))
+    right_finger.set_friction(float(FINGER_FRICTION))
     obj.set_links_inertial_mass(
-        torch.tensor([obj_mass_kg], device=gs.device, dtype=gs.tc_float),
+        torch.tensor([OBJ_INERTIAL_MASS_KG], device=gs.device, dtype=gs.tc_float),
     )
 
     jnames = joint_names(profile)
@@ -502,6 +517,9 @@ def build_scene(
         home_qpos=home_qpos_np,
         base_pos_world=robot_base,
         visual_model=str(visual_model).strip().lower(),
+        robot_urdf_path=robot_urdf_path,
+        kinematics_yaml_path=kinematics_yaml_path,
+        kinematics_suffix=kinematics_suffix,
         finger_z_offset=finger_z_offset,
         finger_y_gap=finger_y_gap,
         grasp_link6_z=grasp_link6_z,

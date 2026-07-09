@@ -44,6 +44,8 @@ def solve_link6_ik(
     if quat is None:
         quat = down_quat()
     pos_t = torch.as_tensor([list(pos_base)], device=gs.device, dtype=gs.tc_float)
+    if init_qpos is not None:
+        init_qpos = _normalize_init_qpos(robot, init_qpos, arm_dof_idx)
     sol = robot.inverse_kinematics(
         link=ik_link,
         pos=pos_t,
@@ -52,3 +54,19 @@ def solve_link6_ik(
         init_qpos=init_qpos,
     )
     return sol[0, arm_dof_idx].detach().cpu().numpy().astype(np.float64)
+
+
+def _normalize_init_qpos(robot, init_qpos, arm_dof_idx) -> torch.Tensor:
+    """Accept either full-robot qpos or arm-only qpos as an IK seed."""
+    q = torch.as_tensor(init_qpos, device=gs.device, dtype=gs.tc_float)
+    if q.ndim == 2 and q.shape[0] == 1:
+        q = q.reshape(-1)
+    arm_n = len(arm_dof_idx)
+    if q.ndim == 1 and q.numel() == arm_n and getattr(robot, "n_qs", arm_n) != arm_n:
+        try:
+            full = robot.get_qpos()[0].detach().clone().to(device=gs.device, dtype=gs.tc_float)
+        except Exception:
+            full = torch.zeros(int(robot.n_qs), device=gs.device, dtype=gs.tc_float)
+        full[arm_dof_idx] = q
+        return full
+    return q

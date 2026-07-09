@@ -27,6 +27,7 @@ import _bootstrap  # noqa: F401
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
 from ufactory.robots.paths import xarm6_urdf
+from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION, OBJ_INERTIAL_MASS_KG
 
 XARM6_GRIPPER_URDF = xarm6_urdf("xarm6_with_gripper.urdf")
 TABLE_HEIGHT = 0.4        # meters
@@ -120,6 +121,12 @@ def main():
     ik_link = robot.get_link("link6")
     left_finger = robot.get_link("left_finger")
     right_finger = robot.get_link("right_finger")
+    obj.set_friction(float(OBJ_FRICTION))
+    left_finger.set_friction(float(FINGER_FRICTION))
+    right_finger.set_friction(float(FINGER_FRICTION))
+    obj.set_links_inertial_mass(
+        torch.tensor([OBJ_INERTIAL_MASS_KG], device=gs.device, dtype=gs.tc_float),
+    )
 
     arm_dof_idx = [robot.get_joint(f"joint{i+1}").dofs_idx_local[0] for i in range(6)]
     gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]

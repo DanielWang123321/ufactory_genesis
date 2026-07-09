@@ -18,14 +18,20 @@ import time
 
 import numpy as np
 
-from ufactory.kinematics.calibration import resolve_kinematics_suffix_from_ip
+from ufactory.kinematics.calibration import (
+    resolve_kinematics_suffix_from_ip,
+    validate_kinematics_calibration_request,
+)
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.trajectory import (
     CartesianWaypoint,
+    EXECUTOR_SERVO_J,
     KinematicCarryTracker,
     RealExecutorConfig,
+    ServoLimits,
     TrajKinematicMirror,
     TrajectoryPlannerConfig,
+    compile_cartesian_program_to_joint_stream,
     plan_mixed_waypoints,
     replay_real,
     replay_sim,
@@ -46,6 +52,7 @@ from _robot_viewer import start_deferred_viewer
 GRIPPER_DURATION_S = 2.0
 VISUAL_START_HOLD_S = 0.5
 LITE6_PLACE_SETTLE_S = 0.18
+SERVO_J_IK_JOINT_ACC_LIMIT_RAD_S2 = 10.0
 
 
 def _lite6_place_settle_s(ctx) -> float:
@@ -239,24 +246,71 @@ def _hold_viewer(ctx, on_step=None) -> None:
         pass
 
 
+def _resolve_real_kinematics(runtime, args, ip: str | None) -> str | None:
+    """Resolve the calibration suffix used by host-side IK and mirror scenes."""
+    kinematics_suffix = args.kinematics_suffix
+    if ip:
+        cli_suffix = kinematics_suffix
+        kinematics_suffix, sn = resolve_kinematics_suffix_from_ip(
+            ip,
+            runtime.model.robot_name,
+            kinematics_suffix=cli_suffix,
+            kinematics_yaml=args.kinematics_yaml,
+        )
+        if kinematics_suffix and not cli_suffix and args.kinematics_yaml is None:
+            print(f"kinematics_suffix: {kinematics_suffix} (auto from SN {sn})")
+        validate_kinematics_calibration_request(
+            sn,
+            runtime.model.robot_name,
+            kinematics_yaml=args.kinematics_yaml,
+            kinematics_suffix=kinematics_suffix,
+            allow_sn_override=args.force_kinematics,
+        )
+        return kinematics_suffix
+
+    if args.executor == EXECUTOR_SERVO_J and args.kinematics_yaml is None and not kinematics_suffix:
+        print(
+            "[WARN] servo_j dry-run is using the nominal URDF for host-side IK. "
+            "For real motion, pass --ip so the SN-derived kinematics suffix is used, "
+            "or pass --kinematics-yaml/--kinematics-suffix explicitly."
+        )
+    return kinematics_suffix
+
+
 def _run_real(robot_key, args) -> int:
     runtime = get_robot_runtime_profile(robot_key)
     mirror = None
     tracker = None
     ctx = None
-    if args.visual:
+    ip = args.ip or os.environ.get("XARM_IP")
+    kinematics_suffix = _resolve_real_kinematics(runtime, args, ip)
+    needs_ik_scene = args.executor == EXECUTOR_SERVO_J
+    if args.visual or needs_ik_scene:
         ctx = build_scene(
             robot_key=robot_key,
             rate=args.rate,
             show_viewer=False,
             substeps=args.substeps,
             visual_model=args.visual_model,
+            kinematics_yaml=args.kinematics_yaml,
+            kinematics_suffix=kinematics_suffix,
+            kinematics_yaml_dir=args.kinematics_yaml_dir,
         )
     heights = ctx if ctx is not None else dry_heights(robot_key)
     grip_open_m = ctx.gripper.open_gap_m if ctx is not None else runtime.gripper.open_gap_m
     grip_close_m = args.grip_gap_mm / 1000.0
     program = _build_program(robot_key, heights, args, grip_open_m=grip_open_m, grip_close_m=grip_close_m)
-    if ctx is not None:
+    if args.executor == EXECUTOR_SERVO_J:
+        program = compile_cartesian_program_to_joint_stream(program, ctx)
+        print(
+            f"[ik-compile] executor=servo_j movel_segments={program.metadata['ik_compiled_movel_segments']} "
+            f"ticks={program.metadata['ik_compiled_ticks']} "
+            f"plateau_collapsed={program.metadata.get('ik_plateau_collapsed_samples', 0)} "
+            f"retimed={program.metadata.get('ik_joint_retimed', False)} "
+            f"urdf={program.metadata.get('ik_robot_urdf')} "
+            f"calib={program.metadata.get('ik_kinematics_yaml') or '(nominal)'}"
+        )
+    if args.visual and ctx is not None:
         base_mm = [v * 1000.0 for v in ctx.base_pos_world]
         print(
             f"\n[mirror] robot={ctx.robot_key} gripper={ctx.gripper.family} rate={args.rate}Hz "
@@ -270,17 +324,6 @@ def _run_real(robot_key, args) -> int:
         start_deferred_viewer(ctx.scene)
         _hold_mirror_at_program_start(mirror, hold_s=args.visual_start_hold_s)
         tracker = KinematicCarryTracker(mirror, grasp_gap_m=grip_close_m)
-    ip = args.ip or os.environ.get("XARM_IP")
-    kinematics_suffix = args.kinematics_suffix
-    if ip:
-        cli_suffix = kinematics_suffix
-        kinematics_suffix, sn = resolve_kinematics_suffix_from_ip(
-            ip,
-            runtime.model.robot_name,
-            kinematics_suffix=cli_suffix,
-        )
-        if kinematics_suffix and not cli_suffix:
-            print(f"kinematics_suffix: {kinematics_suffix} (auto from SN {sn})")
     cfg = RealExecutorConfig(
         executor=args.executor,
         robot_key=runtime.model.key,
@@ -296,6 +339,11 @@ def _run_real(robot_key, args) -> int:
         sdk_sim_validate=args.sdk_sim_validate,
         sdk_sim_report_csv=args.sdk_sim_report_csv,
         real_gripper=args.real_gripper,
+        servo_limits=(
+            ServoLimits(joint_acc_rad_s2=SERVO_J_IK_JOINT_ACC_LIMIT_RAD_S2)
+            if args.executor == EXECUTOR_SERVO_J
+            else ServoLimits()
+        ),
     )
     replay_real(
         program,
@@ -305,7 +353,7 @@ def _run_real(robot_key, args) -> int:
             (lambda: mirror.prime_to_first_arm_segment_start(program)) if mirror is not None else None
         ),
     )
-    if ctx is not None:
+    if args.visual and ctx is not None:
         _hold_viewer(ctx, on_step=tracker.hold_step if tracker is not None else None)
     return 0
 
@@ -374,11 +422,18 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
         help="--visual: hold the initial program pose after the viewer opens before replay starts.",
     )
     # Real path
-    parser.add_argument("--executor", default=None, choices=("servo-j", "servo-cartesian"),
-                        help="Enable the real path; grasp-place MoveL programs require servo-cartesian")
+    parser.add_argument("--executor", default=None, choices=("servo_j", "servo_cartesian"),
+                        help="Enable the real path: servo_cartesian uses firmware IK; servo_j uses host-side Genesis IK")
     parser.add_argument("--ip", default=None)
     parser.add_argument("--z-min-mm", type=float, default=0.0)
     parser.add_argument("--kinematics-suffix", default=os.environ.get("XARM_KINEMATICS_SUFFIX"))
+    parser.add_argument("--kinematics-yaml", default=None)
+    parser.add_argument("--kinematics-yaml-dir", default=None)
+    parser.add_argument(
+        "--force-kinematics",
+        action="store_true",
+        help="Use requested kinematics YAML/suffix even when the SN rule says nominal URDF should be used.",
+    )
     parser.add_argument("--speed-mm-s", type=float, default=200.0)
     parser.add_argument("--mvacc-mm-s2", type=float, default=1000.0)
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True,
@@ -417,8 +472,6 @@ def main(robot_key: str, *, robot_label: str) -> int:
             f"--grip-gap-mm must be between {grip_closed_mm:.1f} and {grip_open_mm:.1f}"
         )
     runtime = get_robot_runtime_profile(robot_key)
-    if args.executor == "servo-j":
-        parser.error("the grasp-place program uses MoveL segments; use --executor servo-cartesian")
     if args.visual_start_hold_s < 0.0:
         parser.error("--visual-start-hold-s must be non-negative")
     if args.sdk_sim_report_csv and not args.sdk_sim_validate:
@@ -428,6 +481,8 @@ def main(robot_key: str, *, robot_label: str) -> int:
             parser.error("--sdk-sim-validate requires --executor")
         if not (args.ip or os.environ.get("XARM_IP")):
             parser.error("--sdk-sim-validate requires --ip or XARM_IP")
+    if args.executor is not None and not args.dry_run and not (args.ip or os.environ.get("XARM_IP")):
+        parser.error("--no-dry-run requires --ip or XARM_IP")
 
     if args.executor is None:
         return _run_sim(robot_key, args)

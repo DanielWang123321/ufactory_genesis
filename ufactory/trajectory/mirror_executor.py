@@ -314,8 +314,11 @@ class KinematicCarryTracker:
     def _is_grasp_close_segment(self, seg: Segment) -> bool:
         return seg.kind == "gripper" and seg.label == self.grasp_segment_label
 
+    def _is_arm_segment(self, seg: Segment) -> bool:
+        return seg.kind in ("movej", "movel")
+
     def _should_freeze_approach(self, seg: Segment) -> bool:
-        if self._attached or seg.kind != "movel" or seg.label not in self._APPROACH_FREEZE_LABELS:
+        if self._attached or not self._is_arm_segment(seg) or seg.label not in self._APPROACH_FREEZE_LABELS:
             return False
         if self._spawn_freeze_pos is None:
             return False
@@ -325,7 +328,7 @@ class KinematicCarryTracker:
     def _should_freeze_on_table(self, seg: Segment) -> bool:
         return (
             getattr(self.ctx.gripper, "family", None) == "lite6"
-            and seg.kind == "movel"
+            and self._is_arm_segment(seg)
             and seg.label in self._PLACE_FREEZE_LABELS
         )
 
@@ -389,7 +392,7 @@ class KinematicCarryTracker:
 
         if (
             getattr(self.ctx.gripper, "family", None) == "lite6"
-            and seg.kind == "movel"
+            and self._is_arm_segment(seg)
             and seg.label == "place-descend"
             and tick_idx == n - 1
         ):

@@ -3,23 +3,23 @@ xArm6 Reach — real-robot deploy, smoke tests, and EE alignment.
 
 Usage:
     # Static Genesis vs SDK FK alignment (no motion)
-    python examples/xarm6/xarm6_reach_deploy.py --mode align --ip 192.168.1.65
+    python examples/xarm6/xarm6_reach_deploy.py --mode align --ip 192.168.1.xx
 
     # Zero-action servo smoke (50 Hz, default 50 steps)
-    python examples/xarm6/xarm6_reach_deploy.py --mode smoke-zero --ip 192.168.1.65
+    python examples/xarm6/xarm6_reach_deploy.py --mode smoke-zero --ip 192.168.1.xx
 
     # Small random actions
-    python examples/xarm6/xarm6_reach_deploy.py --mode smoke-random --ip 192.168.1.65 --steps 30
+    python examples/xarm6/xarm6_reach_deploy.py --mode smoke-random --ip 192.168.1.xx --steps 30
 
     # Firmware mode-6 joint online trajectory planning smoke
-    python examples/xarm6/xarm6_reach_deploy.py --mode smoke-zero --ip 192.168.1.65 \\
+    python examples/xarm6/xarm6_reach_deploy.py --mode smoke-zero --ip 192.168.1.xx \\
         --executor online-joint --steps 20
 
     # Open-loop joint replay (position mode, safe calib poses)
-    python examples/xarm6/xarm6_reach_deploy.py --mode replay --ip 192.168.1.65 --poses home,default
+    python examples/xarm6/xarm6_reach_deploy.py --mode replay --ip 192.168.1.xx --poses home,default
 
     # Closed-loop policy deploy (omit --checkpoint to use latest model_*.pt)
-    python examples/xarm6/xarm6_reach_deploy.py --mode deploy --ip 192.168.1.65 \\
+    python examples/xarm6/xarm6_reach_deploy.py --mode deploy --ip 192.168.1.xx \\
         --exp-name xarm6-reach-300-online \\
         --checkpoint logs/xarm6-reach-300-online/model_299.pt \\
         --target 0.4,0.0,0.3 --executor online-joint --action-contract checkpoint --z-min-mm 0
@@ -336,9 +336,9 @@ def main() -> int:
     parser.add_argument("--z-min-mm", type=float, default=0.0)
     parser.add_argument(
         "--executor",
-        default=os.environ.get("XARM_REACH_EXECUTOR", "servo-j"),
+        default=os.environ.get("XARM_REACH_EXECUTOR", "servo_j"),
         choices=REACH_EXECUTORS,
-        help="Joint command executor: servo-j uses mode 1 set_servo_angle_j; online-joint uses mode 6 set_servo_angle",
+        help="Joint command executor: servo_j uses mode 1 set_servo_angle_j; online-joint uses mode 6 set_servo_angle",
     )
     parser.add_argument("--steps", type=int, default=50)
     parser.add_argument("--seed", type=int, default=0)
