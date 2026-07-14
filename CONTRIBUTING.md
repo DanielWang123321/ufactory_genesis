@@ -13,7 +13,7 @@ cd ufactory_genesis
 python -m venv .venv
 source .venv/bin/activate
 
-# Recommended contributor install (validated Genesis pin + test tools)
+# Recommended contributor install (validated Genesis baseline + test tools)
 pip install -e ".[sim,dev]"
 
 # Optional: Pinocchio for dynamics unit tests in the fast tier
@@ -25,7 +25,7 @@ pip install -e ".[rl]"
 pip install -e ".[showcase]"
 ```
 
-The validated sim stack pins `genesis-world==1.2.1` via the `[sim]` extra (see also `requirements.txt`). Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
+The `[sim]` extra requires `genesis-world>=1.2.2` (see also `requirements.txt`), while the tracked lock file and validated simulation baseline use 1.2.2. Newer releases must pass runtime hook checks and the full simulation/hardware matrix before they are considered validated. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
 
 The `tests/` suite is for **contributors and maintainers**, not end-user onboarding. Library users should start from `examples/` and the dynamics CLI entry points.
 
@@ -56,7 +56,7 @@ pytest -m "not hardware"
 XARM_IP=192.168.1.xx pytest -m hardware
 ```
 
-Online real-policy deployment and random-action real modes are hard-disabled in v0.2.5; see [SECURITY.md](SECURITY.md).
+Online real-policy deployment and random-action real modes have been hard-disabled since v0.2.5; see [SECURITY.md](SECURITY.md).
 
 ### Markers
 
@@ -119,7 +119,7 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 | `ufactory/simulation/` | Shared Genesis runtime ownership |
 | `ufactory/training/` | Safe checkpoint YAML/manifest helpers |
 | `ufactory/visualization/` | GLB/PBR visualization helpers |
-| `ufactory/deploy/` | Policy helpers (online real policy hard-disabled in v0.2.5) |
+| `ufactory/deploy/` | Policy helpers (online real policy hard-disabled since v0.2.5) |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
 | `examples/` | Usage examples (viewer, FK/IK verification, RL) |

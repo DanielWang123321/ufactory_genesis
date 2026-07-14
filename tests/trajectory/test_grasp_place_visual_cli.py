@@ -12,6 +12,39 @@ from ufactory.trajectory.mirror_executor import update_scene_visualizer
 from ufactory.visualization.viewer import start_deferred_viewer
 
 
+def test_servo_j_compatibility_fails_before_hardware_connection(monkeypatch):
+    connected = False
+
+    def _reject_capabilities(**_kwargs):
+        raise RuntimeError("Genesis hooks changed")
+
+    def _unexpected_connect(_ip):
+        nonlocal connected
+        connected = True
+        pytest.fail("hardware connection must not be attempted")
+
+    monkeypatch.setattr(grasp_place, "require_genesis_capabilities", _reject_capabilities)
+    monkeypatch.setattr(grasp_place, "_connect", _unexpected_connect)
+
+    with pytest.raises(RuntimeError, match="Genesis hooks changed"):
+        grasp_place.main(
+            [
+                "--robot",
+                "xarm6",
+                "--mode",
+                "real",
+                "--executor",
+                "servo_j",
+                "--ip",
+                "192.0.2.1",
+                "--calibration",
+                "/tmp/not-read-before-compatibility.yaml",
+                "--confirm-real",
+            ]
+        )
+    assert connected is False
+
+
 def test_visual_rejected_for_dry_run(capsys):
     with pytest.raises(SystemExit) as excinfo:
         grasp_place.main(

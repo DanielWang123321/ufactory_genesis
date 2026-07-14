@@ -28,6 +28,7 @@ from ufactory.dynamics.report import (
     _effort_limits,
 )
 from ufactory.dynamics.poses import _XARM6_RUNTIME
+from ufactory.simulation.compat import require_genesis_runtime
 
 if TYPE_CHECKING:
     from ufactory.robots.runtime import RobotRuntimeProfile
@@ -69,7 +70,7 @@ def build_genesis_scene(
     ``uf_dynamics.md`` section 4.8 (Lite6 wrist anomaly) -- without touching the
     production default used by the CLI entry points.
     """
-    import genesis as gs
+    gs = require_genesis_runtime()
 
     runtime = runtime_profile or _XARM6_RUNTIME
     gs_backend = gs.gpu if backend == "gpu" else gs.cpu

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sys
 
+from ufactory.simulation.compat import load_deferred_viewer_api
+
 
 def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
     """Open the interactive viewer after the scene has been initialized and warmed up.
@@ -21,11 +23,7 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
             visualizer.viewer.realtime_factor = None
         return
 
-    try:
-        from genesis.vis.viewer import Viewer
-        from genesis.vis.visualizer import VIEWER_DEFAULT_ASPECT_RATIO, VIEWER_DEFAULT_HEIGHT_RATIO
-    except Exception as exc:
-        gs.raise_exception_from("Rendering not working on this machine.", exc)
+    viewer_api = load_deferred_viewer_api(gs)
 
     live_other_scenes = [
         scene_ref() for scene_ref in gs._scene_registry if scene_ref() is not None and scene_ref() is not scene
@@ -47,8 +45,8 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
             screen_height, _screen_width, screen_scale = gs.utils.try_get_display_size()
         except Exception as exc:
             gs.raise_exception_from("No display detected. Use `show_viewer=False` for headless mode.", exc)
-        viewer_height = (screen_height * screen_scale) * VIEWER_DEFAULT_HEIGHT_RATIO
-        viewer_width = viewer_height / VIEWER_DEFAULT_ASPECT_RATIO
+        viewer_height = (screen_height * screen_scale) * viewer_api.default_height_ratio
+        viewer_width = viewer_height / viewer_api.default_aspect_ratio
         viewer_options.res = (int(viewer_width), int(viewer_height))
     if viewer_options.run_in_thread is None:
         if sys.platform == "linux":
@@ -60,7 +58,7 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
     if sys.platform == "darwin" and viewer_options.run_in_thread:
         gs.raise_exception("Running viewer in background thread is not supported on MacOS.")
 
-    viewer = Viewer(viewer_options, visualizer._context)
+    viewer = viewer_api.viewer_type(viewer_options, visualizer._context)
     visualizer._viewer = viewer
     if getattr(visualizer, "_rasterizer", None) is not None:
         visualizer._rasterizer._viewer = viewer

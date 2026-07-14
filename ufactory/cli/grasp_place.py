@@ -25,6 +25,7 @@ from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBack
 from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 from ufactory.safety.gate import program_sha256, sha256_file
 from ufactory.simulation import GenesisRuntimeManager
+from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real, execute_sim
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
 from ufactory.trajectory.planner import (
@@ -666,6 +667,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.print_config:
         print(dump_runtime_config(config), end="")
         return 0
+    if args.executor == "servo_j" or args.mode == "sim" or args.visual:
+        require_genesis_capabilities(
+            pbr=True,
+            deferred_viewer=bool(args.visual) or bool(config.simulation.show_viewer),
+        )
     _print_summary(config)
     ip = args.ip or os.environ.get("XARM_IP")
     arm = None

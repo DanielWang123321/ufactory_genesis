@@ -41,7 +41,7 @@ python examples/view_robot_glb.py --robot xarm6
 | `verify_robot.py` | 通用正运动学/位置控制冒烟测试（所有机型） |
 | `fk_verify_robot.py` | 通用正运动学验证（可与真机对比） |
 | `ik_verify_robot.py` | 通用逆运动学验证（可与真机对比） |
-| `packaging_showcase.py` | 通用展示场景入口（当前支持 xArm6 + Gripper G2） |
+| `packaging_showcase.py` | YAML 驱动的五机型装箱入口 |
 
 动力学验证使用安装后的控制台命令：
 
@@ -92,23 +92,25 @@ xArm 6 拥有最完整的示例覆盖。
 | `xarm6/xarm6_reach_deploy.py` | 到达任务部署辅助：对齐 / 离线预检仍可用；**v0.2.5 已硬禁用**在线真机策略 `deploy` 与 `smoke-random`（见 [SECURITY.md](../SECURITY.md)） |
 | `xarm6/xarm6_grasp_place_env.py` / `_train.py` / `_eval.py` | 抓放强化学习任务 |
 
-### 展示场景
+### 装箱展示场景
 
 | 文件 | 说明 |
 |------|------|
-| `xarm6/xarm6_g2_showcase.py` | xArm6 + Gripper G2 物理装箱演示 |
+| `packaging_showcase.py` | xArm5/6/7、UF850、Lite6 通用 CLI 包装 |
+| `_packaging_showcase.py` | 共享物理执行实现（内部模块） |
+| `xarm6/xarm6_g2_showcase.py` | 固定选择 `--robot xarm6` 的兼容入口 |
 
-装箱方块/home 的名义坐标与抓放示例完全一致，纸箱/投放中心也使用抓放目标 XY `(0.300, 0.300)`。纸箱基座系尺寸为 `300 × 200 × 150 mm`，长边沿基座 X；展示基座绕 Z 轴 `+90°` 后，画面中长边沿世界 Y。Genesis 只对抓取/home 列使用 X `+2.5 mm` 补偿和 `1.5` 倍机械臂刚度，释放点仍是无补偿箱心；抓取只依靠接触摩擦且不绑定方块。闭合/搬运只驱动 G2 主关节；到达箱心后保留静止等待，再用 `0.2 s` 将计划夹口从 `22 mm` 缓释到 `29 mm`，随后短暂同步驱动六个联动关节，夹指可见间距增加 `3 mm` 后由主关节与右外指节继续张开，方块离开后完成全开。每个 `20 ms` 指令周期使用 32 个物理子步，接触摩擦不变。方块从箱口上方 50 mm 自然下落。dry-run、SDK 仿真和真机使用无补偿的名义轨迹。通用入口支持版本化布局、安全预检和单次真机执行：
+共享 YAML 定义方块、桌面、箱体、路径、时序、接触策略和成功阈值；Lite6 叠加机型任务配置及自身夹爪几何。五机型的两种执行器均支持仿真、dry-run 和 SDK 仿真。完整真机装箱仅启用 xArm6 + G2 与 Lite6 + Lite6 夹子；其他 profile 会在连接控制器前拒绝 real 模式。
 
 ```bash
 # 仿真默认单次；有限多轮和无限循环需显式指定
-python examples/packaging_showcase.py --mode sim --executor servo_j
-python examples/packaging_showcase.py --mode sim --executor servo_j --cycles 3
-python examples/packaging_showcase.py --mode sim --executor servo_j --loop
+python examples/packaging_showcase.py --robot lite6 --mode sim --executor servo_j
+python examples/packaging_showcase.py --robot lite6 --mode sim --executor servo_j --cycles 3
+python examples/packaging_showcase.py --robot xarm7 --mode sim --executor servo_cartesian
 
-python examples/packaging_showcase.py --mode dry-run --executor servo_j
-python examples/packaging_showcase.py --mode dry-run --executor servo_cartesian
-XARM_IP=192.168.1.65 python examples/packaging_showcase.py --mode real \
+python examples/packaging_showcase.py --robot uf850 --mode dry-run --executor servo_j
+python examples/packaging_showcase.py --robot xarm5 --mode dry-run --executor servo_cartesian
+XARM_IP=<ip> python examples/packaging_showcase.py --robot lite6 --mode real \
   --executor servo_j --calibration path/to/exact.yaml --confirm-real
 ```
 

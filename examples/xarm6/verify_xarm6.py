@@ -20,6 +20,7 @@ import torch
 import _bootstrap  # noqa: F401
 import genesis as gs
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification, resolve_kinematics_suffix_from_ip
+from ufactory.simulation.compat import require_genesis_runtime
 
 # Joint/link names (URDF style, with fallback for namespaced names)
 JOINT_NAMES = (
@@ -88,6 +89,7 @@ def angle_diff_deg(a: float, b: float) -> float:
 
 def run_genesis_tests(args, robot_model_path):
     """Part A: Genesis URDF loading and basic verification."""
+    require_genesis_runtime(gs)
     gs.init(backend=gs.gpu)
 
     scene = gs.Scene(

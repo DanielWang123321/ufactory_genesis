@@ -26,6 +26,7 @@ from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
 from ufactory.config import load_runtime_config
+from ufactory.simulation.compat import require_genesis_runtime
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from xarm6_grasp_place_env import XArm6GraspPlaceEnv
@@ -180,6 +181,7 @@ def main():
     train_cfg["runner"]["resume"] = False
 
     # Init Genesis with viewer
+    require_genesis_runtime(gs)
     gs.init(
         backend=gs.gpu,
         precision="32",

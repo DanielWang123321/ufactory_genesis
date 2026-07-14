@@ -41,7 +41,7 @@ Per-robot wrappers are equivalent to `view_robot_glb.py --robot <key>`:
 | `verify_robot.py` | Generic FK/PD smoke test for all supported robots |
 | `fk_verify_robot.py` | Generic FK validation, including optional real-robot comparison |
 | `ik_verify_robot.py` | Generic IK validation, including optional real-robot comparison |
-| `packaging_showcase.py` | Generic showcase entry; currently xArm6 + Gripper G2 |
+| `packaging_showcase.py` | YAML-driven five-robot packaging entry |
 
 Dynamics validation uses installed console scripts:
 
@@ -92,23 +92,25 @@ xArm 6 has the broadest example coverage.
 | `xarm6/xarm6_reach_deploy.py` | Reach deploy helper: align / offline preflight remain available; **v0.2.5 hard-disables** online real-policy `deploy` and `smoke-random` modes (see [SECURITY.md](../SECURITY.md)) |
 | `xarm6/xarm6_grasp_place_env.py` / `_train.py` / `_eval.py` | Grasp-place RL task |
 
-### Showcase
+### Packaging Showcase
 
 | File | Description |
 |------|-------------|
-| `xarm6/xarm6_g2_showcase.py` | xArm6 + Gripper G2 physical packaging demo |
+| `packaging_showcase.py` | Generic CLI wrapper for xArm5/6/7, UF850, and Lite6 |
+| `_packaging_showcase.py` | Shared physical execution implementation (internal) |
+| `xarm6/xarm6_g2_showcase.py` | Compatibility wrapper selecting `--robot xarm6` |
 
-The packaging cube/home nominal coordinates match grasp-place exactly, and the box/drop center uses the same target XY `(0.300, 0.300)`. The 300 x 200 x 150 mm box is long along robot-base X (world Y after the display's +90-degree yaw). Genesis applies a simulation-only +2.5 mm correction to the grasp/home column and 1.5x arm stiffness, then releases at the uncompensated box center with the cube bottom 50 mm above the rim. Close/carry commands only the G2 drive joint. At the box center, Genesis keeps the configured stationary settle, eases the planned gap from 22 to 29 mm for 0.2 s, then drives all six linkage joints until the visible span grows by 3 mm; the drive/right-outer pair continues opening before full release. It uses 32 physics substeps per 20 ms command tick without changing contact friction. Dry-run, SDK simulation, and hardware use the uncompensated nominal path. The generic entry point adds versioned layout, preflight, and single-cycle hardware execution:
+The shared YAML defines the cube, table, box, path, timing, contact policy, and success thresholds. Lite6 adds a robot-specific task overlay and its own gripper geometry. All five robots support simulation, dry-run, and SDK simulation with both executors. Full real packaging is enabled only for xArm6 + G2 and Lite6 + Lite6 Gripper; the other profiles reject real mode before connection.
 
 ```bash
 # Simulation defaults to one cycle; finite repetition is explicit
-python examples/packaging_showcase.py --mode sim --executor servo_j
-python examples/packaging_showcase.py --mode sim --executor servo_j --cycles 3
-python examples/packaging_showcase.py --mode sim --executor servo_j --loop
+python examples/packaging_showcase.py --robot lite6 --mode sim --executor servo_j
+python examples/packaging_showcase.py --robot lite6 --mode sim --executor servo_j --cycles 3
+python examples/packaging_showcase.py --robot xarm7 --mode sim --executor servo_cartesian
 
-python examples/packaging_showcase.py --mode dry-run --executor servo_j
-python examples/packaging_showcase.py --mode dry-run --executor servo_cartesian
-XARM_IP=192.168.1.65 python examples/packaging_showcase.py --mode real \
+python examples/packaging_showcase.py --robot uf850 --mode dry-run --executor servo_j
+python examples/packaging_showcase.py --robot xarm5 --mode dry-run --executor servo_cartesian
+XARM_IP=<ip> python examples/packaging_showcase.py --robot lite6 --mode real \
   --executor servo_j --calibration path/to/exact.yaml --confirm-real
 ```
 

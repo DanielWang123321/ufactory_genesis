@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] — 2026-07-14
+
+### Added
+
+- Runtime compatibility checks for the Genesis version, GLB PBR hooks, deferred Viewer internals, and FK/IK scratch allocation. Versions newer than the validated 1.2.2 baseline emit a one-time warning and fail early when required hooks have changed.
+- YAML-driven packaging profiles for xArm5, xArm6, xArm7, UF850, and Lite6, including strict box/table/target/gripper validation, robot-specific gripper geometry, effective scene hashing, and a Lite6 task overlay.
+- Full real-packaging capability for Lite6 with its binary open/close gripper adapter; xArm6 + Gripper G2 remains enabled.
+
+### Changed
+
+- The simulation extra now requires `genesis-world>=1.2.2` and `packaging>=24`; the reproducible lock remains on the validated Genesis World 1.2.2 and PyTorch 2.10.0 stack.
+- Existing manipulation physics settings remain unchanged while inheriting Genesis 1.2.2 contact-pruning, non-convex collision, thin-shell, and no-slip solver fixes.
+- Packaging scene construction and physical execution are robot-generic. The old `examples/xarm6/xarm6_g2_showcase.py` path delegates to the shared implementation with xArm6 selected.
+- Packaging CLI, report names, calibrated URDF selection, SDK simulation, and isolated real-time mirrors now preserve the selected robot key. xArm5, xArm7, and UF850 real packaging fails before controller connection while their simulation and SDK-simulation paths remain available.
+- `box_floor_top_z_m` is consumed as the actual floor top, placement uses `fixed_target_position_m`, and grasp/release link heights derive from configured gripper geometry instead of G2-only constants.
+
+### Fixed
+
+- Removed the obsolete exact-1.2.1 runtime gate that rejected the validated Genesis 1.2.2 environment before scene initialization.
+- Lite6 packaging no longer fails the two prior inverse-kinematics points or reports the gripper-stage collision set; its collision exemptions are limited to the two verified settle stages and bound to the current URDF hash.
+
 ## [0.2.5] — 2026-07-14
 
 ### Added

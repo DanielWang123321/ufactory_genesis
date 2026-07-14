@@ -95,6 +95,16 @@ class G2Adapter(ConfiguredGripperAdapter):
 
 
 class Lite6Adapter(ConfiguredGripperAdapter):
+    def prepare_real(self, arm: object) -> int:
+        missing = [
+            name
+            for name in ("open_lite6_gripper", "close_lite6_gripper", "stop_lite6_gripper")
+            if not callable(getattr(arm, name, None))
+        ]
+        if missing:
+            raise RuntimeError(f"Lite6 gripper SDK capability is unavailable: {', '.join(missing)}")
+        return 0
+
     def send_real_gap(self, arm: object, gap_m: float) -> int:
         if not self.capabilities.real_command:
             raise RuntimeError("real Lite6 gripper commands are not enabled")

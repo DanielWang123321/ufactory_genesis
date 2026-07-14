@@ -42,6 +42,20 @@ def test_lite6_quantizes_gap_to_binary_commands():
     arm.close_lite6_gripper.assert_called_once_with(sync=False)
 
 
+def test_lite6_real_precheck_requires_all_sdk_commands():
+    adapter = create_gripper_adapter(load_runtime_config("lite6").gripper)
+
+    class IncompleteArm:
+        def open_lite6_gripper(self, **_kwargs):
+            return 0
+
+        def close_lite6_gripper(self, **_kwargs):
+            return 0
+
+    with pytest.raises(RuntimeError, match="stop_lite6_gripper"):
+        adapter.prepare_real(IncompleteArm())
+
+
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), -1.0])
 def test_gripper_mapping_rejects_invalid_gap(value):
     adapter = create_gripper_adapter(load_runtime_config("xarm6").gripper)

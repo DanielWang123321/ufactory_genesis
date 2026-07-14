@@ -1,7 +1,7 @@
 schema_version: 1
-# Commands are deliberately empty until an operator records the exact serial,
-# calibration and locally approved command matrix. project-check reports these
-# rows as INCOMPLETE; dry-run evidence can never masquerade as hardware proof.
+# Copy this file to dev/hardware/hardware_inventory.yaml and keep the real
+# inventory local. Replace REQUIRED and the empty command lists only with
+# operator-approved values. This placeholder intentionally reports INCOMPLETE.
 robots:
   - robot_key: xarm5_1305
     serial_number: REQUIRED

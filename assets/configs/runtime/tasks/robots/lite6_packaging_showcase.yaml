@@ -1,0 +1,22 @@
+schema_version: 1
+task:
+  parameters:
+    fixed_object_position_m: [0.200, 0.000, 0.015]
+    # A 300 x 200 mm box centered at Y=0.150 would put its near wall in
+    # Lite6 link4's pickup envelope. Y=0.220 is the closest verified center
+    # that preserves the fixed box size and passes the full sampled preflight.
+    fixed_target_position_m: [0.200, 0.220, 0.018]
+    default_ee_position_m: [0.200, 0.000, 0.200]
+    box_center_xy_m: [0.200, 0.220]
+    grasp_gap_m: 0.020
+    simulation_grasp_center_compensation_xy_m: [0.0000, 0.0000]
+    simulation_arm_kp_scale: 1.0
+    # Lite6 firmware exposes binary open/close commands. Simulation sends the
+    # full-open target at the start of this interval, then preserves the same
+    # 0.5 s command/settle contract used by dry-run, SDK simulation and real.
+    simulation_release_duration_s: 0.500
+    simulation_pre_release_relax_gap_m: 0.020
+    simulation_pre_release_relax_duration_s: 0.0
+motion:
+  cartesian_speed_m_s: 0.12
+  gripper_duration_s: 0.5

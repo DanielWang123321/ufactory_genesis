@@ -17,20 +17,9 @@ def clean_patch_state(monkeypatch):
     glb._queue().clear()
 
 
-def test_version_mismatch_fails_before_install(monkeypatch):
-    installed: list[bool] = []
-    monkeypatch.setattr(glb.metadata, "version", lambda _name: "1.2.2")
-    monkeypatch.setattr(glb, "_install_patch", lambda: installed.append(True))
-
-    with pytest.raises(RuntimeError, match="supports Genesis 1.2.1 only"):
-        with glb.glb_pbr_surfaces():
-            pass
-    assert installed == []
-
-
 def test_nested_scope_installs_once_and_restores_after_outer_exit(monkeypatch):
     events: list[str] = []
-    monkeypatch.setattr(glb, "_require_supported_version", lambda: None)
+    monkeypatch.setattr(glb, "require_genesis_version", lambda: None)
     monkeypatch.setattr(glb, "_install_patch", lambda: events.append("install"))
     monkeypatch.setattr(glb, "_restore_patch", lambda: events.append("restore"))
 
@@ -46,7 +35,7 @@ def test_nested_scope_installs_once_and_restores_after_outer_exit(monkeypatch):
 
 def test_exception_restores_and_clears_material_queue(monkeypatch):
     restored: list[bool] = []
-    monkeypatch.setattr(glb, "_require_supported_version", lambda: None)
+    monkeypatch.setattr(glb, "require_genesis_version", lambda: None)
     monkeypatch.setattr(glb, "_install_patch", lambda: None)
     monkeypatch.setattr(glb, "_restore_patch", lambda: restored.append(True))
 
@@ -58,11 +47,37 @@ def test_exception_restores_and_clears_material_queue(monkeypatch):
     assert glb._queue() == []
 
 
+def test_incompatible_hook_fails_before_any_global_patch(monkeypatch):
+    import genesis as gs
+    import genesis.utils.gltf as gltf_utils
+    import genesis.utils.mesh as mesh_utils
+
+    original_parse = gltf_utils.parse_mesh_glb
+    original_from_trimesh = gs.Mesh.__dict__["from_trimesh"]
+    original_surface_visual = mesh_utils.surface_uvs_to_trimesh_visual
+    monkeypatch.setattr(glb, "require_genesis_version", lambda: None)
+
+    def _reject(*_args):
+        raise RuntimeError("future PBR hook is incompatible")
+
+    monkeypatch.setattr(glb, "require_pbr_hooks", _reject)
+
+    with pytest.raises(RuntimeError, match="future PBR hook"):
+        with glb.glb_pbr_surfaces():
+            pytest.fail("incompatible hook must fail before entering the scope")
+
+    assert gltf_utils.parse_mesh_glb is original_parse
+    assert gs.Mesh.__dict__["from_trimesh"] is original_from_trimesh
+    assert mesh_utils.surface_uvs_to_trimesh_visual is original_surface_visual
+    assert glb._ORIGINALS == {}
+    assert glb._REFCOUNT == 0
+
+
 def test_concurrent_scopes_share_patch_but_have_thread_local_queues(monkeypatch):
     events: list[str] = []
     barrier = threading.Barrier(2)
     observed: list[tuple[str, ...]] = []
-    monkeypatch.setattr(glb, "_require_supported_version", lambda: None)
+    monkeypatch.setattr(glb, "require_genesis_version", lambda: None)
     monkeypatch.setattr(glb, "_install_patch", lambda: events.append("install"))
     monkeypatch.setattr(glb, "_restore_patch", lambda: events.append("restore"))
 

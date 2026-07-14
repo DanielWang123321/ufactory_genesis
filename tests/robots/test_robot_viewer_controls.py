@@ -136,6 +136,7 @@ def test_gripper_demo_without_pd_holds_arm_kinematically(monkeypatch):
     arm_pd_calls = []
 
     monkeypatch.setattr(robot_viewer, "gs", fake_gs)
+    monkeypatch.setattr(robot_viewer, "require_genesis_runtime", lambda _gs: None)
     monkeypatch.setattr(robot_viewer, "enable_glb_pbr_surfaces", lambda: None)
     monkeypatch.setattr(robot_viewer, "glb_view_surface", lambda: object())
     monkeypatch.setattr(robot_viewer, "setup_arm_pd", lambda *args: arm_pd_calls.append(args))

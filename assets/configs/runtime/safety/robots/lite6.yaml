@@ -15,6 +15,12 @@ safety:
       expires_version: 0.2.6
     - link_a: uflite_finger1
       link_b: uflite_finger2
+      stage: grip-settle
+      reason: Lite6 opposing-finger outer geometry is within 5 mm at valid 20-38 mm commanded gaps.
+      urdf_sha256: 18a77c939c94345828289ffd3b45223b1d21c125c9d85ee97936dff29f189764
+      expires_version: 0.2.6
+    - link_a: uflite_finger1
+      link_b: uflite_finger2
       stage: transit
       reason: Lite6 opposing-finger outer geometry is within 5 mm at valid 20-38 mm commanded gaps.
       urdf_sha256: 18a77c939c94345828289ffd3b45223b1d21c125c9d85ee97936dff29f189764
@@ -34,6 +40,12 @@ safety:
     - link_a: uflite_finger1
       link_b: uflite_finger2
       stage: release
+      reason: Lite6 opposing-finger outer geometry is within 5 mm at valid 20-38 mm commanded gaps.
+      urdf_sha256: 18a77c939c94345828289ffd3b45223b1d21c125c9d85ee97936dff29f189764
+      expires_version: 0.2.6
+    - link_a: uflite_finger1
+      link_b: uflite_finger2
+      stage: pre-release-settle
       reason: Lite6 opposing-finger outer geometry is within 5 mm at valid 20-38 mm commanded gaps.
       urdf_sha256: 18a77c939c94345828289ffd3b45223b1d21c125c9d85ee97936dff29f189764
       expires_version: 0.2.6

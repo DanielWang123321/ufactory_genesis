@@ -314,7 +314,7 @@ def _task_profile(profile: RobotModelSpec) -> TaskProfile:
     return TaskProfile(
         reach_supported=True,
         grasp_place_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
-        showcase_supported=profile.key == "xarm6_1305",
+        showcase_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
         reach_env_defaults=reach_env_defaults,
         grasp_place_env_defaults=grasp_defaults,
     )

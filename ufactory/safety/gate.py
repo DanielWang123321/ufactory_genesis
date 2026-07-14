@@ -580,9 +580,7 @@ class SafetyGate:
             returned_pair_samples = 0
             pair_count = getattr(self.collision, "collision_pair_count", None)
             potential_pair_samples = (
-                int(pair_count) * len(timeline.q_rad)
-                if isinstance(pair_count, int) and pair_count >= 0
-                else None
+                int(pair_count) * len(timeline.q_rad) if isinstance(pair_count, int) and pair_count >= 0 else None
             )
             if self.collision is None:
                 if self.config.safety.require_collision:

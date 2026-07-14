@@ -37,6 +37,7 @@ import genesis as gs
 from ufactory.deploy.reach_config import EXECUTOR_ONLINE_JOINT, EXECUTOR_SERVO_J, REACH_EXECUTORS
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import load_training_config, write_checkpoint_manifest, write_training_config
 
 # Allow importing from same directory
@@ -162,6 +163,7 @@ def main():
     )
 
     # === Init Genesis ===
+    require_genesis_runtime(gs)
     gs.init(
         backend=gs.gpu,
         precision="32",

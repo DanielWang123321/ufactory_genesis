@@ -11,7 +11,7 @@ import genesis as gs
 from ufactory.config import load_runtime_config
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_visual_glb_urdf
-from ufactory.trajectory.packaging import packaging_layout
+from ufactory.trajectory.packaging import PackagingLayout as CorePackagingLayout, packaging_layout
 from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -76,18 +76,27 @@ def box_top_z(layout: PackagingLayout) -> float:
     return layout.table_top_z + layout.box_wall + layout.box_outer[2]
 
 
-def packaging_camera(table_top_z: float) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+def packaging_camera(
+    layout_or_table_top_z: PackagingLayout | float,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """Viewer / headless camera aligned to long-edge robot workspace."""
-    cx = (ROBOT_XY[0] + OBJ_SPAWN_XY[0] + BOX_CENTER_XY[0]) / 3
-    cy = (ROBOT_XY[1] + OBJ_SPAWN_XY[1] + BOX_CENTER_XY[1]) / 3
-    pos = (cx + 0.12, cy - 1.12, table_top_z + 0.55)
-    lookat = (cx, cy + 0.04, table_top_z + 0.08)
+    layout = (
+        layout_or_table_top_z
+        if isinstance(layout_or_table_top_z, PackagingLayout)
+        else make_layout(float(layout_or_table_top_z))
+    )
+    cx = (layout.robot_xy[0] + layout.obj_spawn_xy[0] + layout.box_center_xy[0]) / 3
+    cy = (layout.robot_xy[1] + layout.obj_spawn_xy[1] + layout.box_center_xy[1]) / 3
+    pos = (cx + 0.12, cy - 1.12, layout.table_top_z + 0.55)
+    lookat = (cx, cy + 0.04, layout.table_top_z + 0.08)
     return pos, lookat
 
 
 @dataclass(frozen=True)
 class PackagingLayout:
     table_top_z: float
+    table_top_size: tuple[float, float, float]
+    table_center_xy: tuple[float, float]
     robot_xy: tuple[float, float]
     obj_spawn_xy: tuple[float, float]
     obj_spawn_center_z: float
@@ -96,11 +105,14 @@ class PackagingLayout:
     box_center_xy: tuple[float, float]
     box_outer: tuple[float, float, float]
     box_wall: float
+    box_floor_thickness: float
     box_inner_floor_z: float
     place_xy: tuple[float, float]
     home_position_base: tuple[float, float, float]
     simulation_grasp_center_compensation_xy: tuple[float, float]
     simulation_arm_kp_scale: float
+    robot_key: str
+    gripper_adapter: str
 
 
 def texture_path(name: str) -> str:
@@ -159,15 +171,27 @@ def color_rough(color: tuple[float, float, float]) -> gs.surfaces.Rough:
     return gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=color))
 
 
+def _base_xy_to_world(pos_xy: tuple[float, float]) -> tuple[float, float]:
+    """Apply the showcase's fixed +90 degree base yaw and translation."""
+
+    return ROBOT_XY[0] - float(pos_xy[1]), ROBOT_XY[1] + float(pos_xy[0])
+
+
 def make_layout(table_top_z: float = DEFAULT_TABLE_TOP_Z, runtime_config=None) -> PackagingLayout:
     core = packaging_layout(runtime_config or PACKAGING_CONFIG)
-    obj_xy = (ROBOT_XY[0] - core.object_position_m[1], ROBOT_XY[1] + core.object_position_m[0])
-    box_xy = (ROBOT_XY[0] - core.box_center_xy_m[1], ROBOT_XY[1] + core.box_center_xy_m[0])
+    config = runtime_config or PACKAGING_CONFIG
+    obj_xy = _base_xy_to_world(core.object_position_m[:2])
+    box_xy = _base_xy_to_world(core.box_center_xy_m)
+    place_xy = _base_xy_to_world(core.target_position_m[:2])
+    table_xy = _base_xy_to_world(core.table_center_m[:2])
+    table_size = (core.table_size_m[1], core.table_size_m[0], core.table_size_m[2])
     box_outer = (core.box_outer_size_m[1], core.box_outer_size_m[0], core.box_outer_size_m[2])
     wall = core.box_wall_m
     inner_floor_z = table_top_z + core.box_floor_top_z_m
     return PackagingLayout(
         table_top_z=table_top_z,
+        table_top_size=table_size,
+        table_center_xy=table_xy,
         robot_xy=ROBOT_XY,
         obj_spawn_xy=obj_xy,
         obj_spawn_center_z=core.object_position_m[2],
@@ -176,24 +200,27 @@ def make_layout(table_top_z: float = DEFAULT_TABLE_TOP_Z, runtime_config=None) -
         box_center_xy=box_xy,
         box_outer=box_outer,
         box_wall=wall,
+        box_floor_thickness=core.box_floor_top_z_m - core.table_top_z_m,
         box_inner_floor_z=inner_floor_z,
-        place_xy=box_xy,
+        place_xy=place_xy,
         home_position_base=core.home_position_m,
         simulation_grasp_center_compensation_xy=core.simulation_grasp_center_compensation_xy_m,
         simulation_arm_kp_scale=core.simulation_arm_kp_scale,
+        robot_key=config.robot.key,
+        gripper_adapter=config.gripper.adapter,
     )
 
 
 def add_table(scene: gs.Scene, layout: PackagingLayout) -> None:
     top_z = layout.table_top_z
-    top_sx, top_sy, top_sz = TABLE_TOP_SIZE
+    top_sx, top_sy, top_sz = layout.table_top_size
     leg_h = top_z - top_sz
     leg_sx, leg_sy, _ = LEG_SIZE
-    tcx, tcy, _ = table_top_center()
+    tcx, tcy = layout.table_center_xy
 
     scene.add_entity(
         gs.morphs.Box(
-            size=TABLE_TOP_SIZE,
+            size=layout.table_top_size,
             pos=(tcx, tcy, top_z - top_sz / 2),
             fixed=True,
         ),
@@ -202,10 +229,10 @@ def add_table(scene: gs.Scene, layout: PackagingLayout) -> None:
 
     leg_z = leg_h / 2
     corners = (
-        (TABLE_ORIGIN_X + 0.03, tcy - top_sy / 2 + 0.06),
-        (TABLE_ORIGIN_X + 0.03, tcy + top_sy / 2 - 0.06),
-        (TABLE_ORIGIN_X + top_sx - 0.03, tcy - top_sy / 2 + 0.06),
-        (TABLE_ORIGIN_X + top_sx - 0.03, tcy + top_sy / 2 - 0.06),
+        (tcx - top_sx / 2 + 0.03, tcy - top_sy / 2 + 0.06),
+        (tcx - top_sx / 2 + 0.03, tcy + top_sy / 2 - 0.06),
+        (tcx + top_sx / 2 - 0.03, tcy - top_sy / 2 + 0.06),
+        (tcx + top_sx / 2 - 0.03, tcy + top_sy / 2 - 0.06),
     )
     for cx, cy in corners:
         scene.add_entity(
@@ -219,11 +246,12 @@ def add_cardboard_box(scene: gs.Scene, layout: PackagingLayout) -> None:
     ox, oy, oz = layout.box_outer
     t = layout.box_wall
     floor_z = layout.table_top_z
+    floor_thickness = layout.box_floor_thickness
 
     add_textured_box(
         scene,
-        (ox, oy, t),
-        (cx, cy, floor_z + t / 2),
+        (ox, oy, floor_thickness),
+        (cx, cy, floor_z + floor_thickness / 2),
         "cardboard.jpg",
         color_scale=CARDBOARD_COLOR_SCALE,
         fixed=True,
@@ -276,14 +304,18 @@ def add_cardboard_box(scene: gs.Scene, layout: PackagingLayout) -> None:
 
 
 def _add_packaging_robot(scene: gs.Scene, layout: PackagingLayout, urdf_path: str):
+    morph_kwargs = {}
+    if getattr(layout, "gripper_adapter", "g2") == "lite6":
+        morph_kwargs.update(convexify=False, decimate=False, watertighten=None)
     robot_morph = gs.morphs.URDF(
         file=urdf_path,
         pos=(layout.robot_xy[0], layout.robot_xy[1], layout.table_top_z),
         euler=(0.0, 0.0, ROBOT_BASE_YAW_DEG),
         fixed=True,
         requires_jac_and_IK=True,
+        **morph_kwargs,
     )
-    # Genesis 1.2.1 otherwise replaces every GLB material with the fallback
+    # Genesis 1.2.2 otherwise replaces every GLB material with the fallback
     # surface passed to add_entity. Keep this scope on the actual GLB import so
     # metallic/roughness factors survive in every caller, including the spawned
     # real-robot mirror process (which intentionally starts with clean globals).
@@ -303,21 +335,24 @@ def build_packaging_scene(
     robot_urdf_path: str | None = None,
     runtime_config=None,
 ):
-    layout = make_layout(table_top_z, runtime_config)
-    cam_pos, cam_lookat = packaging_camera(table_top_z)
+    config = runtime_config or PACKAGING_CONFIG
+    core_layout: CorePackagingLayout = packaging_layout(config)
+    layout = make_layout(table_top_z, config)
+    cam_pos, cam_lookat = packaging_camera(layout)
     scene_kwargs: dict = {}
     if renderer is not None:
         scene_kwargs["renderer"] = renderer
     scene = gs.Scene(
-        sim_options=gs.options.SimOptions(dt=sim_dt, substeps=32),
+        sim_options=gs.options.SimOptions(dt=sim_dt, substeps=core_layout.simulation_substeps),
         rigid_options=gs.options.RigidOptions(
             dt=sim_dt,
             constraint_solver=gs.constraint_solver.Newton,
             enable_collision=True,
             enable_joint_limit=True,
-            iterations=100,
-            noslip_iterations=5,
-            constraint_timeconst=0.005,
+            iterations=int(config.simulation.solver_iterations),
+            noslip_iterations=int(config.simulation.noslip_iterations),
+            constraint_timeconst=float(config.simulation.constraint_time_constant_s),
+            use_gjk_collision=config.simulation.use_gjk_collision,
         ),
         viewer_options=gs.options.ViewerOptions(
             camera_pos=cam_pos,
@@ -337,7 +372,13 @@ def build_packaging_scene(
     add_table(scene, layout)
     add_cardboard_box(scene, layout)
 
-    urdf_path = robot_urdf_path or robot_visual_glb_urdf("xarm6_1305", with_gripper_g2=True, movable=True)
+    if robot_urdf_path is None:
+        if config.gripper.adapter == "lite6":
+            urdf_path = robot_visual_glb_urdf(config.robot.key, with_lite6_gripper=True, movable=True)
+        else:
+            urdf_path = robot_visual_glb_urdf(config.robot.key, with_gripper_g2=True, movable=True)
+    else:
+        urdf_path = robot_urdf_path
     robot = _add_packaging_robot(scene, layout, urdf_path)
 
     block = scene.add_entity(

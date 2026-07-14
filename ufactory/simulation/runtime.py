@@ -7,7 +7,7 @@ import threading
 from types import TracebackType
 
 from ufactory.config.models import SimulationConfig
-from ufactory.visualization.glb import _require_supported_version
+from ufactory.simulation.compat import require_genesis_runtime
 
 
 class GenesisRuntimeError(RuntimeError):
@@ -37,8 +37,7 @@ class GenesisRuntimeManager(AbstractContextManager["GenesisRuntimeManager"]):
         with self._lock:
             if self.__class__._active is not None:
                 raise GenesisRuntimeError("another GenesisRuntimeManager already owns this process")
-            _require_supported_version()
-            import genesis as gs
+            gs = require_genesis_runtime()
 
             backend = gs.gpu if self.config.backend == "gpu" else gs.cpu
             gs.init(

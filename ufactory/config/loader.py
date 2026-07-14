@@ -175,6 +175,10 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             closed_loop=bool(gripper_data["closed_loop"]),
             allowed_contact_links=frozenset(map(str, gripper_data["allowed_contact_links"])),
             tool_tip_offset_z_m=float(gripper_data["tool_tip_offset_z_m"]),
+            finger_pad_below_center_m=float(gripper_data["finger_pad_below_center_m"]),
+            finger_close_descent_m=float(gripper_data["finger_close_descent_m"]),
+            grasp_table_clearance_m=float(gripper_data["grasp_table_clearance_m"]),
+            grasp_height_extra_m=float(gripper_data["grasp_height_extra_m"]),
         )
     task_data = data["task"]
     task_name = str(task_data["name"])
@@ -203,13 +207,11 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             )
     if task_name == "packaging_showcase":
         table_size = _tuple_floats(task_parameters["table_size_m"], field="task.parameters.table_size_m", size=3)
-        box_size = _tuple_floats(
-            task_parameters["box_outer_size_m"], field="task.parameters.box_outer_size_m", size=3
-        )
+        box_size = _tuple_floats(task_parameters["box_outer_size_m"], field="task.parameters.box_outer_size_m", size=3)
         if any(value <= 0.0 for value in (*table_size, *box_size)):
             raise ConfigError("packaging table and box dimensions must be positive")
-        _tuple_floats(task_parameters["table_center_m"], field="task.parameters.table_center_m", size=3)
-        _tuple_floats(task_parameters["box_center_xy_m"], field="task.parameters.box_center_xy_m", size=2)
+        table_center = _tuple_floats(task_parameters["table_center_m"], field="task.parameters.table_center_m", size=3)
+        box_center = _tuple_floats(task_parameters["box_center_xy_m"], field="task.parameters.box_center_xy_m", size=2)
         wall = _positive(task_parameters["box_wall_thickness_m"], field="task.parameters.box_wall_thickness_m")
         if wall * 2.0 >= min(box_size[0], box_size[1]):
             raise ConfigError("box wall thickness leaves no inner opening")
@@ -222,10 +224,84 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             "pre_release_settle_s",
             "post_release_settle_s",
             "place_success_distance_m",
+            "simulation_release_duration_s",
+            "simulation_home_settle_s",
+            "lift_success_clearance_m",
+            "home_success_distance_m",
         ):
             _positive(task_parameters[field_name], field=f"task.parameters.{field_name}", allow_zero=False)
-        if object_size[0] + 2.0 * wall >= box_size[0] or object_size[1] + 2.0 * wall >= box_size[1]:
-            raise ConfigError("configured object does not fit through the box opening")
+        _positive(
+            task_parameters["simulation_pre_release_relax_duration_s"],
+            field="task.parameters.simulation_pre_release_relax_duration_s",
+            allow_zero=True,
+        )
+        simulation_substeps = int(task_parameters["simulation_substeps"])
+        if simulation_substeps < 1 or simulation_substeps != float(task_parameters["simulation_substeps"]):
+            raise ConfigError("task.parameters.simulation_substeps must be a positive integer")
+        collision_margin = float(data["safety"]["min_collision_distance_m"])
+        if (
+            object_size[0] + 2.0 * (wall + collision_margin) >= box_size[0]
+            or object_size[1] + 2.0 * (wall + collision_margin) >= box_size[1]
+        ):
+            raise ConfigError("configured object plus safety margin does not fit through the box opening")
+        if gripper is None:
+            raise ConfigError("packaging_showcase requires a configured gripper")
+        grasp_gap = float(task_parameters["grasp_gap_m"])
+        relax_gap = float(task_parameters["simulation_pre_release_relax_gap_m"])
+        for field_name, gap in (("grasp_gap_m", grasp_gap), ("simulation_pre_release_relax_gap_m", relax_gap)):
+            if not gripper.closed_gap_m <= gap <= gripper.open_gap_m:
+                raise ConfigError(
+                    f"task.parameters.{field_name} must be within the configured gripper gap range "
+                    f"[{gripper.closed_gap_m}, {gripper.open_gap_m}]"
+                )
+
+        object_position = _tuple_floats(
+            task_parameters["fixed_object_position_m"],
+            field="task.parameters.fixed_object_position_m",
+            size=3,
+        )
+        target_position = _tuple_floats(
+            task_parameters["fixed_target_position_m"],
+            field="task.parameters.fixed_target_position_m",
+            size=3,
+        )
+        table_top_z = table_center[2] + table_size[2] / 2.0
+        object_support_z = object_position[2] - object_size[2] / 2.0
+        if not math.isclose(object_support_z, table_top_z, rel_tol=0.0, abs_tol=1e-9):
+            raise ConfigError("fixed object must rest on the configured table top")
+        floor_top_z = _positive(task_parameters["box_floor_top_z_m"], field="task.parameters.box_floor_top_z_m")
+        if floor_top_z <= table_top_z:
+            raise ConfigError("box floor top must be above the configured table top")
+        floor_thickness = floor_top_z - table_top_z
+        if floor_thickness >= box_size[2]:
+            raise ConfigError("box floor thickness must be smaller than the box height")
+        expected_target_z = floor_top_z + object_size[2] / 2.0
+        if not math.isclose(target_position[2], expected_target_z, rel_tol=0.0, abs_tol=1e-9):
+            raise ConfigError("fixed target Z must equal box floor top plus half the object height")
+
+        inner_x = box_size[0] - 2.0 * wall
+        inner_y = box_size[1] - 2.0 * wall
+        if abs(target_position[0] - box_center[0]) + object_size[0] / 2.0 + collision_margin >= inner_x / 2.0:
+            raise ConfigError("fixed target X footprint is outside the box opening")
+        if abs(target_position[1] - box_center[1]) + object_size[1] / 2.0 + collision_margin >= inner_y / 2.0:
+            raise ConfigError("fixed target Y footprint is outside the box opening")
+
+        table_min_x = table_center[0] - table_size[0] / 2.0
+        table_max_x = table_center[0] + table_size[0] / 2.0
+        table_min_y = table_center[1] - table_size[1] / 2.0
+        table_max_y = table_center[1] + table_size[1] / 2.0
+
+        def require_on_table(name: str, center_x: float, center_y: float, size_x: float, size_y: float) -> None:
+            if (
+                center_x - size_x / 2.0 < table_min_x
+                or center_x + size_x / 2.0 > table_max_x
+                or center_y - size_y / 2.0 < table_min_y
+                or center_y + size_y / 2.0 > table_max_y
+            ):
+                raise ConfigError(f"configured {name} footprint is outside the table")
+
+        require_on_table("object", object_position[0], object_position[1], object_size[0], object_size[1])
+        require_on_table("box", box_center[0], box_center[1], box_size[0], box_size[1])
     task = TaskProfile(
         name=task_name,
         parameters=task_parameters,

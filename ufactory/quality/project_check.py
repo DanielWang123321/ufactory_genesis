@@ -1,4 +1,4 @@
-"""Local quality checks for v0.2.5 (no remote CI required)."""
+"""Local quality checks for v0.2.6 (no remote CI required)."""
 
 from __future__ import annotations
 
@@ -166,7 +166,7 @@ class ProjectCheck:
                 "--cov-fail-under=75",
                 "--cov-report=term-missing",
             ),
-            env={**os.environ, "CUDA_VISIBLE_DEVICES": ""},
+            env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "QD_KERNEL_COVERAGE": "0"},
         )
         self.command(
             "pytest-safety-coverage",
@@ -181,7 +181,7 @@ class ProjectCheck:
                 "--cov-fail-under=90",
                 "--cov-report=term-missing",
             ),
-            env={**os.environ, "CUDA_VISIBLE_DEVICES": ""},
+            env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "QD_KERNEL_COVERAGE": "0"},
         )
 
     def sim(self) -> None:
@@ -193,7 +193,7 @@ class ProjectCheck:
 
     def _inventory(self, path: Path | None, mode: str, *, confirm_real: bool) -> None:
         if path is None or not path.is_file():
-            self.incomplete(f"{mode}-inventory", "a tracked --inventory YAML is required")
+            self.incomplete(f"{mode}-inventory", "an operator-maintained --inventory YAML is required")
             return
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or data.get("schema_version") != 1:
@@ -258,8 +258,8 @@ class ProjectCheck:
                 result.data["snapshot_report"] = json.loads(report_path.read_text(encoding="utf-8"))
 
     def release(self, version: str | None) -> None:
-        if version != "0.2.5":
-            self.results.append(CheckResult("release-version", "FAIL", 0.0, reason="--version must be 0.2.5"))
+        if version != "0.2.6":
+            self.results.append(CheckResult("release-version", "FAIL", 0.0, reason="--version must be 0.2.6"))
         else:
             self.results.append(CheckResult("release-version", "PASS", 0.0))
         if self.dirty:

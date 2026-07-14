@@ -907,7 +907,7 @@ wheels = [
 
 [[package]]
 name = "genesis-ufactory"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -942,6 +942,7 @@ showcase = [
 ]
 sim = [
     { name = "genesis-world" },
+    { name = "packaging" },
     { name = "torch" },
 ]
 trajectory = [
@@ -952,10 +953,11 @@ trajectory = [
 requires-dist = [
     { name = "coal", marker = "extra == 'dynamics'", specifier = "==3.0.3" },
     { name = "coal", marker = "extra == 'real'", specifier = "==3.0.3" },
-    { name = "genesis-world", marker = "extra == 'sim'", specifier = "==1.2.1" },
+    { name = "genesis-world", marker = "extra == 'sim'", specifier = ">=1.2.2" },
     { name = "matplotlib", marker = "extra == 'dynamics'", specifier = ">=3.8" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.16" },
     { name = "numpy" },
+    { name = "packaging", marker = "extra == 'sim'", specifier = ">=24" },
     { name = "pin", marker = "extra == 'dynamics'", specifier = "==4.0.0" },
     { name = "pin", marker = "extra == 'real'", specifier = "==4.0.0" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.9" },
@@ -975,7 +977,7 @@ provides-extras = ["dev", "dynamics", "real", "sim", "rl", "showcase", "trajecto
 
 [[package]]
 name = "genesis-world"
-version = "1.2.1"
+version = "1.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "coacd" },
@@ -1012,7 +1014,7 @@ dependencies = [
     { name = "z3-solver" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/8b/2543e7f376d16fd1a5b613dc1c565d6327453a8818c3b79e210bdb45d0cd/genesis_world-1.2.1-py3-none-any.whl", hash = "sha256:fd6c558e154b255c23c8566c347203b1dce0781da23014743c87a97e14d9722e", size = 83228858, upload-time = "2026-07-03T07:52:44.296Z" },
+    { url = "https://files.pythonhosted.org/packages/42/68/663718901c285fad7fadc323b6ef06802afef43d66eb8b1d6f6342827bcc/genesis_world-1.2.2-py3-none-any.whl", hash = "sha256:567d49f287e597b7118421a8d63ed3259875a5f3906c0a4b8585fc21a9a0fb9a", size = 83278734, upload-time = "2026-07-11T07:42:35.076Z" },
 ]
 
 [[package]]

@@ -13,6 +13,7 @@ from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.robots.registry import RobotModelSpec, joint_names
+from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
 
 from _bio_gripper_g2_demo import (
     BIO_GRIPPER_G2_OPEN,
@@ -98,20 +99,8 @@ def _link_world_positions(robot, link_names: tuple[str, ...]) -> dict[str, list[
     return out
 
 
-def _ensure_fk_scratch(robot) -> None:
-    if getattr(robot, "_IK_qpos_orig", None) is not None:
-        return
-    if robot.n_qs == 0:
-        return
-    try:
-        import quadrants as qd
-    except ImportError:
-        return
-    robot._IK_qpos_orig = qd.field(dtype=gs.qd_float, shape=(robot.n_qs, robot._solver._B))
-
-
 def _fk_link_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
-    _ensure_fk_scratch(robot)
+    ensure_ik_scratch(robot, gs_module=gs)
     qpos_t = torch.tensor(qpos_np, dtype=torch.float32, device=gs.device)
     links_pos, _ = robot.forward_kinematics(qpos=qpos_t)
     idx = int(ee_link.idx_local)
@@ -122,6 +111,7 @@ def _fk_link_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
 
 def run_glb_diagnose(profile: RobotModelSpec, *, with_gripper_g2: bool = False) -> None:
     """Headless GLB/STL link pose diagnostic for any supported arm."""
+    require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
     gs.init(backend=gs.gpu)
     stl_path = robot_urdf(profile.key)
@@ -305,6 +295,7 @@ def run_glb_viewer(
     gripper_demo: bool = False,
     show_tcp: bool = False,
 ) -> None:
+    require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
     gs.init(backend=gs.gpu)
     scene = gs.Scene(

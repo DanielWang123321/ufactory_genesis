@@ -18,6 +18,11 @@ task:
     # hardware execution keep the nominal geometry above unchanged.
     simulation_grasp_center_compensation_xy_m: [0.0025, 0.0000]
     simulation_arm_kp_scale: 1.5
+    simulation_release_duration_s: 0.020
+    simulation_pre_release_relax_gap_m: 0.029
+    simulation_pre_release_relax_duration_s: 0.200
+    simulation_home_settle_s: 0.800
+    simulation_substeps: 32
 
     table_size_m: [0.800, 1.200, 0.040]
     table_center_m: [0.337, 0.000, -0.020]
@@ -36,6 +41,8 @@ task:
     pre_release_settle_s: 0.500
     post_release_settle_s: 0.500
     place_success_distance_m: 0.025
+    lift_success_clearance_m: 0.100
+    home_success_distance_m: 0.010
   allowed_contacts:
     start: []
     "home->pregrasp": []

@@ -8,6 +8,7 @@ from itertools import count
 
 import genesis as gs
 
+from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 
 CAMERA_POS = (0.22, -0.28, 0.18)
@@ -26,6 +27,7 @@ def run_standalone_gripper_viewer(
     parser.add_argument("--headless", action="store_true", help="Run without viewer window")
     args = parser.parse_args()
 
+    require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
     gs.init(backend=gs.gpu, logging_level="error")
     scene = gs.Scene(

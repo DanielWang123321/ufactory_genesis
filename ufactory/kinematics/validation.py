@@ -19,6 +19,7 @@ from ufactory.kinematics.calibration import (
 )
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
 
 PASS_POS_MM = 1.0
 PASS_RPY_DEG = 0.5
@@ -54,19 +55,6 @@ def angle_diff_deg(a: float, b: float) -> float:
     return abs(diff) * 180.0 / math.pi
 
 
-def _ensure_fk_scratch(robot) -> None:
-    if getattr(robot, "_IK_qpos_orig", None) is not None:
-        return
-    if robot.n_qs == 0:
-        return
-    try:
-        import genesis as gs
-        import quadrants as qd
-    except ImportError:
-        return
-    robot._IK_qpos_orig = qd.field(dtype=gs.qd_float, shape=(robot.n_qs, robot._solver._B))
-
-
 def validation_configs(runtime: RobotRuntimeProfile) -> list[tuple[str, np.ndarray]]:
     dof = runtime.model.dof
     configs = [("home", np.asarray(runtime.arm.home_qpos, dtype=np.float64))]
@@ -83,7 +71,7 @@ def validation_configs(runtime: RobotRuntimeProfile) -> list[tuple[str, np.ndarr
 
 
 def build_genesis_robot(urdf_path: str, *, backend: str = "cpu", show_viewer: bool = False):
-    import genesis as gs
+    gs = require_genesis_runtime()
 
     gs.init(backend=gs.cpu if backend == "cpu" else gs.gpu)
     scene = gs.Scene(show_viewer=show_viewer)
@@ -95,7 +83,7 @@ def build_genesis_robot(urdf_path: str, *, backend: str = "cpu", show_viewer: bo
 def genesis_fk(robot, q: np.ndarray, ee_link_idx: int) -> tuple[np.ndarray, np.ndarray]:
     import genesis as gs
 
-    _ensure_fk_scratch(robot)
+    ensure_ik_scratch(robot, gs_module=gs)
     q_t = torch.tensor(q, dtype=torch.float32, device=gs.device)
     links_pos, links_quat = robot.forward_kinematics(qpos=q_t)
     if links_pos.ndim == 2:

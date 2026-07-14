@@ -5,6 +5,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+_qd_kcov.*
 htmlcov/
 .ipynb_checkpoints/
 dist/
@@ -16,7 +17,6 @@ logs/
 debug/
 data/
 dev/*
-!dev/hardware_inventory.yaml
 outputs/
 reports/
 assets/urdf/*/kinematics/user/*.yaml
@@ -38,3 +38,4 @@ agent.md
 worklog.md
 release_checklist.md
 versions.md
+.vscode

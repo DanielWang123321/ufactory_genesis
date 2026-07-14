@@ -3,8 +3,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.5-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.2.1-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.6-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
 </p>
 
 UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, trajectory grasp-place examples, and RL environments.
@@ -17,7 +17,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 - [Supported Robots](#supported-robots)
 - [GLB Visual Preview](#glb-visual-preview)
 - [Trajectory Grasp-Place](#trajectory-grasp-place)
-- [Showcase](#showcase-xarm6--gripper-g2-packaging)
+- [Showcase](#showcase-yaml-driven-packaging)
 - [API Quick Reference](#api-quick-reference)
 - [Real-Robot Kinematic Calibration](#real-robot-kinematic-calibration-sn-rules)
 - [xArm 6 — Reference Robot](#xarm-6)
@@ -28,7 +28,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 
 ## Quick Start
 
-v0.2.5 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. The validated stack is Python 3.13, Genesis World 1.2.1, and PyTorch 2.10.0+cu128.
+v0.2.6 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.2 or newer is required; the validated stack is Python 3.13, Genesis World 1.2.2, and PyTorch 2.10.0+cu128. Newer Genesis releases are allowed only when the runtime compatibility hooks remain available and are not physics- or hardware-validated until the full project matrix passes.
 
 ```bash
 # From a cloned repository
@@ -104,7 +104,7 @@ Per-model `view_*_glb.py` scripts (e.g. `examples/xarm6/view_xarm6_glb.py`) are 
 
 ## Trajectory Grasp-Place
 
-The configuration-driven v0.2.5 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
+The configuration-driven v0.2.6 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -135,47 +135,55 @@ XARM_IP=192.168.1.xx ufactory-grasp-place --robot xarm6 --mode real \
 
 `--visual`: with `--mode sim`, force the Genesis viewer; with `--mode real`, open the kinematic mirror (no contact physics). The generic grasp-place mirror uses capped non-blocking updates; the packaging command runs its full-rate Genesis/GLB viewer in a separate process, consuming all 50 Hz mirror states with the normal 60 Hz repaint rate without sharing the servo sender's Python scheduler. The window remains open until it is closed or Ctrl+C is pressed. Not supported for `dry-run` / `sdk-sim`.
 
-Online real-policy deployment and random-action real modes are hard-disabled in v0.2.5 (see [SECURITY.md](SECURITY.md)). Training, simulation evaluation, static FK alignment, and offline action preflight remain available.
+Online real-policy deployment and random-action real modes have been hard-disabled since v0.2.5 (see [SECURITY.md](SECURITY.md)). Training, simulation evaluation, static FK alignment, and offline action preflight remain available.
 
-## Showcase (xArm6 + Gripper G2 Packaging)
+## Showcase (YAML-Driven Packaging)
 
-Dark-green table (arm fixed on the long edge), contact/friction pick of a red wood block and a 50 mm-clearance drop into an open cardboard box. The nominal cube/home coordinates exactly match grasp-place (`[0.300, 0, 0.015]` / `[0.300, 0, 0.300]`), and the box/drop center uses the grasp-place target XY `(0.300, 0.300)`. The 300 x 200 x 150 mm box has its long edge along robot-base X; the +90-degree display yaw makes that edge appear along world Y. Genesis alone applies the configured +2.5 mm correction to the grasp/home column and 1.5x arm stiffness; release remains at the uncompensated box center, and dry-run, SDK simulation, and hardware keep the nominal path throughout. Closing and carrying command only the G2 drive joint. At the box center, Genesis preserves the configured stationary settle, eases the planned gap from 22 to 29 mm for 0.2 s, then briefly drives all six linkage joints until the visible finger span grows by 3 mm; the drive/right-outer pair continues the release before the gripper finishes fully opening after the cube is clear. Contact is resolved with 32 physics substeps per 20 ms command tick without changing the cube, finger, or box friction. The cube is never attached or slaved to the gripper. Generate box textures once before the first run:
+`ufactory-packaging-showcase` supports xArm5, xArm6, xArm7, UF850, and Lite6 in `sim`, `dry-run`, and `sdk-sim`, with both `servo_j` and `servo_cartesian`. The physical scene, task trajectory, timings, success thresholds, contacts, and gripper geometry resolve from versioned YAML. The shared defaults live in `assets/configs/runtime/tasks/packaging_showcase.yaml`; Lite6 applies `assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml`.
+
+| Robot/end effector | Sim / dry-run / SDK sim | Full real packaging |
+|--------------------|:-----------------------:|:-------------------:|
+| xArm6 + Gripper G2 | ✓ | ✓ |
+| Lite6 + Lite6 Gripper | ✓ | ✓ |
+| xArm5 / xArm7 / UF850 + configured G2 model | ✓ | Disabled until a real gripper is enabled |
+
+All simulations use contact and friction; the cube is never attached to the gripper. G2 retains its tuned 22→29 mm, 0.2 s preload relaxation and one-tick full-open target. Lite6 disables preload relaxation and issues its binary full-open target at the start of a 0.5 s release/settle segment. Its closer workspace uses cube/home coordinates `[0.200, 0, 0.015]` / `[0.200, 0, 0.200]` and the nearest fully preflighted box center `(0.200, 0.220)`; `(0.200, 0.150)` intersects the Lite6 link4 pickup envelope with the fixed 300 × 200 mm box. Generate box textures once before the first run:
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
 python scripts/generate_showcase_textures.py
 
-# One cycle, then hold the final frame (default)
-python examples/xarm6/xarm6_g2_showcase.py
+# One cycle, then hold the final frame; select any supported robot.
+ufactory-packaging-showcase --robot xarm6 --mode sim --executor servo_j
+ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian
 
-# Three reliable cycles; or explicitly loop forever
-python examples/xarm6/xarm6_g2_showcase.py --cycles 3
-python examples/xarm6/xarm6_g2_showcase.py --loop
+# Release regression: three physical cycles per robot/executor.
+ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_j --cycles 3
 
-# Versioned geometry + full offline collision preflight (both executors)
-ufactory-packaging-showcase --mode dry-run --executor servo_j
-ufactory-packaging-showcase --mode dry-run --executor servo_cartesian
+# Offline collision preflight and controller simulation.
+ufactory-packaging-showcase --robot xarm7 --mode dry-run --executor servo_j
+ufactory-packaging-showcase --robot lite6 --mode sdk-sim --executor servo_cartesian \
+  --ip <ip> --calibration path/to/exact.yaml
 
-# Save per-check safety results and timings before the first hardware run
-ufactory-packaging-showcase --mode dry-run --executor servo_j \
-  --calibration path/to/exact.yaml --report reports/packaging_preflight.json
-
-# Real xArm6 + G2: one approved cycle only. The measured base-frame layout
-# must match assets/configs/runtime/tasks/packaging_showcase.yaml.
-XARM_IP=192.168.1.65 ufactory-packaging-showcase --mode real \
+# Real execution is enabled only for xArm6 + G2 and Lite6 + Lite6 Gripper.
+XARM_IP=<ip> ufactory-packaging-showcase --robot lite6 --mode real \
   --executor servo_j --calibration path/to/exact.yaml --confirm-real
+
+# Compatibility entry: delegates to the generic simulator with --robot xarm6.
+python examples/xarm6/xarm6_g2_showcase.py
 ```
 
-`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the validated Python 3.13 / Genesis 1.2.1 stack. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
+`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the validated Python 3.13 / Genesis 1.2.2 stack. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
 
 | Flag | Description |
 |------|-------------|
-| `--table-height` | Table top height in meters (default 0.75) |
-| `--speed` | Motion speed multiplier (>1 is faster) |
+| `--robot` | `xarm5`, `xarm6`, `xarm7`, `uf850`, or `lite6` |
+| `--table-height` | Simulation display height only; base-frame packaging geometry is unchanged |
+| `--speed` | Simulation playback multiplier (>1 is faster) |
 | `--cycles N` | Run exactly N simulation cycles (default: 1) |
 | `--loop` / `--no-loop` | Explicit infinite loop / compatibility alias for one cycle |
 
-Every repeated simulation cycle restores the cube position, identity orientation, and zero velocity, then clears all release-only gripper control before the next grasp. A failed lift, placement, or home return stops further cycles and preserves the viewer for inspection. Real mode also supports `servo_cartesian`, requires exact per-unit calibration and explicit confirmation, and never loops. Run `sdk-sim` for either executor before hardware acceptance; `servo_cartesian` real execution additionally obtains matching SDK simulation evidence in the same process.
+Every repeated simulation cycle restores the cube position, identity orientation, and zero velocity before the next grasp. A failed lift, placement, or home return stops further cycles. Real mode requires exact per-unit calibration and explicit confirmation and never loops; `servo_cartesian` additionally obtains matching same-process SDK-simulation evidence. xArm5, xArm7, and UF850 `--mode real` are rejected before controller connection rather than silently skipping the gripper.
 
 ## API Quick Reference
 
@@ -208,7 +216,7 @@ Advanced APIs are imported from their owning modules:
 | Gripper command conversions/controllers | `ufactory.grippers.g2`, `ufactory.grippers.bio_g2` |
 | Approved planning/preflight/execution | `ufactory.trajectory`, `ufactory.safety` |
 | GLB visualization helpers | `ufactory.visualization.glb` |
-| Policy deployment helpers | `ufactory.deploy` (online real policy hard-disabled in v0.2.5) |
+| Policy deployment helpers | `ufactory.deploy` (online real policy hard-disabled since v0.2.5) |
 
 ```python
 from ufactory.config import load_runtime_config
@@ -251,7 +259,7 @@ Default dynamics validation poses for UF850 / Lite6 / xArm5 / xArm7 come from
 
 ## xArm 6
 
-xArm 6 is the reference robot in this repo, with compatibility wrappers under `examples/xarm6/`. New generic entry points prefer `--robot`, for example `examples/view_robot_glb.py --robot xarm6 --diagnose` and `examples/packaging_showcase.py --robot xarm6 --gripper-g2`. Online real-policy and random-action modes in `examples/xarm6/xarm6_reach_deploy.py` are hard-disabled in v0.2.5; align and offline preflight paths remain available.
+xArm 6 is the reference robot in this repo, with compatibility wrappers under `examples/xarm6/`. New generic entry points prefer `--robot`, for example `examples/view_robot_glb.py --robot xarm6 --diagnose` and `examples/packaging_showcase.py --robot xarm6 --gripper-g2`. Online real-policy and random-action modes in `examples/xarm6/xarm6_reach_deploy.py` have been hard-disabled since v0.2.5; align and offline preflight paths remain available.
 
 ## Project Layout
 

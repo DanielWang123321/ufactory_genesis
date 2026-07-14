@@ -103,6 +103,10 @@ class GripperProfile:
     closed_loop: bool
     allowed_contact_links: frozenset[str]
     tool_tip_offset_z_m: float
+    finger_pad_below_center_m: float
+    finger_close_descent_m: float
+    grasp_table_clearance_m: float
+    grasp_height_extra_m: float
 
     def __post_init__(self) -> None:
         if not self.adapter or not self.drive_joint:
@@ -115,6 +119,15 @@ class GripperProfile:
             raise ValueError("gripper force_lower_n must be below force_upper_n")
         if self.tool_tip_offset_z_m <= 0.0:
             raise ValueError("gripper tool_tip_offset_z_m must be positive")
+        for name in (
+            "finger_pad_below_center_m",
+            "finger_close_descent_m",
+            "grasp_table_clearance_m",
+            "grasp_height_extra_m",
+        ):
+            value = float(getattr(self, name))
+            if not math.isfinite(value) or value < 0.0:
+                raise ValueError(f"gripper {name} must be finite and non-negative")
 
 
 @dataclass(frozen=True)

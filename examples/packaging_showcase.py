@@ -1,6 +1,6 @@
 """Generic packaging showcase entry point.
 
-Currently implemented for the xArm6 + Gripper G2 task profile.
+Supports xArm5/6/7 and UF850 with Gripper G2 models, plus the Lite6 gripper.
 """
 
 from __future__ import annotations
@@ -20,8 +20,6 @@ def main() -> None:
     runtime = get_robot_runtime_profile(args.robot)
     if not runtime.task.showcase_supported:
         raise SystemExit(f"{runtime.model.key} has no packaging showcase profile")
-    if runtime.model.key != "xarm6_1305":
-        raise SystemExit("The current packaging showcase implementation is xArm6 + Gripper G2 only")
 
     from ufactory.cli.packaging import main as packaging_main
 

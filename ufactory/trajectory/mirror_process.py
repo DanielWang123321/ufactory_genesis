@@ -29,6 +29,7 @@ def _paced_start_hold(mirror: Any, hold_s: float) -> None:
 
 def _packaging_mirror_worker(
     program: Program,
+    robot_key: str,
     config_path: str | None,
     urdf_path: str,
     start_hold_s: float,
@@ -46,7 +47,7 @@ def _packaging_mirror_worker(
         from ufactory.visualization import start_deferred_viewer
 
         config = load_runtime_config(
-            "xarm6",
+            robot_key,
             task="packaging_showcase",
             config_path=None if config_path is None else Path(config_path),
         )
@@ -120,11 +121,13 @@ class PackagingMirrorProcess:
         self,
         program: Program,
         *,
+        robot_key: str,
         config_path: Path | None,
         urdf_path: Path,
         start_hold_s: float = 0.5,
     ) -> None:
         self._program = program
+        self._robot_key = str(robot_key)
         self._segment_indices = {id(segment): idx for idx, segment in enumerate(program.segments)}
         context = mp.get_context("spawn")
         self._commands = context.Queue()
@@ -134,6 +137,7 @@ class PackagingMirrorProcess:
             target=_packaging_mirror_worker,
             args=(
                 program,
+                self._robot_key,
                 None if config_path is None else str(config_path),
                 str(urdf_path),
                 float(start_hold_s),

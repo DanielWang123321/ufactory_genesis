@@ -1,4 +1,4 @@
-"""Safe xArm6 + Gripper G2 packaging showcase command."""
+"""Safe configuration-driven packaging showcase command."""
 
 from __future__ import annotations
 
@@ -31,11 +31,13 @@ from ufactory.config import dump_runtime_config, load_runtime_config
 from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn
+from ufactory.robots.registry import robot_cli_choices
 from ufactory.safety import validate_sdk_simulation
 from ufactory.safety.adapters import PinocchioCollisionBackend, PinocchioKinematicsBackend
 from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 from ufactory.safety.gate import program_sha256
 from ufactory.simulation import GenesisRuntimeManager
+from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
 from ufactory.trajectory.packaging import (
@@ -49,21 +51,19 @@ from ufactory.trajectory.packaging import (
 from ufactory.trajectory.preflight import create_safety_gate
 
 
-def _example_paths() -> tuple[Path, Path]:
+def _example_paths() -> Path:
     root = Path(__file__).resolve().parents[2]
     examples = root / "examples"
-    xarm6 = examples / "xarm6"
-    for path in (examples, xarm6):
-        value = str(path)
-        if value not in sys.path:
-            sys.path.insert(0, value)
-    return examples, xarm6
+    value = str(examples)
+    if value not in sys.path:
+        sys.path.insert(0, value)
+    return examples
 
 
 def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = False) -> Any:
     _example_paths()
     from _packaging_scene import build_packaging_scene
-    from xarm6_g2_showcase import _trajectory_context, init_showcase_robot, stiffen_gripper_mimic_constraints
+    from _packaging_showcase import _trajectory_context, init_showcase_robot, stiffen_gripper_mimic_constraints
 
     scene, robot, block, display_layout = build_packaging_scene(
         sim_dt=1.0 / float(config.motion.rate_hz),
@@ -77,6 +77,7 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
         robot,
         display_layout,
         scene,
+        runtime_config=config,
         cartesian_xy_offset_m=standard_offset,
         arm_kp_scale=1.0,
     )
@@ -122,9 +123,16 @@ def _backends(config: Any, urdf: Path) -> tuple[Any, Any]:
 
 def _run_sim(args: argparse.Namespace) -> int:
     _example_paths()
-    from xarm6_g2_showcase import main as showcase_main
+    from _packaging_showcase import main as showcase_main
 
-    sim_args = ["--speed", str(args.speed), "--executor", args.executor]
+    sim_args = [
+        "--robot",
+        getattr(args, "robot", "xarm6"),
+        "--speed",
+        str(args.speed),
+        "--executor",
+        args.executor,
+    ]
     if args.cycles is not None:
         sim_args.extend(("--cycles", str(args.cycles)))
     elif args.loop is not None:
@@ -145,9 +153,15 @@ def _positive_cycles(value: str) -> int:
     return cycles
 
 
+def _sdk_evidence_path(report: Path | None, robot_key: str) -> Path:
+    """Resolve the SDK-simulation evidence path without an xArm6 default."""
+
+    return report or Path("reports") / f"sdk_sim_{robot_key}_packaging.json"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ufactory-packaging-showcase")
-    parser.add_argument("--robot", default="xarm6", choices=("xarm6",))
+    parser.add_argument("--robot", default="xarm6", choices=robot_cli_choices())
     parser.add_argument("--mode", default="sim", choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", default="servo_j", choices=("servo_j", "servo_cartesian"))
     parser.add_argument("--config", type=Path)
@@ -186,10 +200,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--visual is only supported with --mode sim or --mode real")
     if args.mode == "real":
         args.loop = False
-    config = load_runtime_config("xarm6", task="packaging_showcase", config_path=args.config)
+    config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config)
     if args.print_config:
         print(dump_runtime_config(config), end="")
         return 0
+    if args.mode == "real" and (config.gripper is None or not config.gripper.real_command):
+        parser.error(
+            f"{config.robot.key} has no enabled real gripper; full real packaging is unsupported for this profile"
+        )
+    if args.mode == "sim" or args.executor == "servo_j" or args.visual:
+        require_genesis_capabilities(
+            pbr=True,
+            deferred_viewer=args.mode == "sim" or bool(args.visual),
+        )
     if args.mode == "sim":
         return _run_sim(args)
     _print_summary(config)
@@ -298,7 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 collision=collision,
                 allowed_collision=gate.collision_allowed,
             )
-            evidence_path = args.report or Path("reports") / "sdk_sim_xarm6_packaging.json"
+            evidence_path = _sdk_evidence_path(args.report, config.robot.key)
             _write_json(evidence_path, asdict(evidence))
             print(f"sdk_sim={'PASS' if evidence.passed else 'FAIL'}")
             if not evidence.passed:
@@ -328,6 +351,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ik_ctx = None
             bridge = PackagingMirrorProcess(
                 approved.program,
+                robot_key=config.robot.key,
                 config_path=args.config,
                 urdf_path=urdf,
                 start_hold_s=0.5,

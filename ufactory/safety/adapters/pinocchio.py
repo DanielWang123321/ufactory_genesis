@@ -401,9 +401,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
                 False,
             )
             candidate_indices = [
-                index
-                for index, result in enumerate(self.geometry_data.collisionResults)
-                if bool(result.isCollision())
+                index for index, result in enumerate(self.geometry_data.collisionResults) if bool(result.isCollision())
             ]
 
             # Restore a zero-margin collision query before materializing the
@@ -422,8 +420,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
                 False,
             )
             exact_collision_flags = {
-                index: bool(self.geometry_data.collisionResults[index].isCollision())
-                for index in candidate_indices
+                index: bool(self.geometry_data.collisionResults[index].isCollision()) for index in candidate_indices
             }
 
             distance_request = self.coal.DistanceRequest()
@@ -454,8 +451,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
                         min_distance_m=min_distance,
                         link_a=self._link_name(pair.first),
                         link_b=self._link_name(pair.second),
-                        environment=pair.first in self.environment_indices
-                        or pair.second in self.environment_indices,
+                        environment=pair.first in self.environment_indices or pair.second in self.environment_indices,
                     )
                 )
             return tuple(results)

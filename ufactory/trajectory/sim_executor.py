@@ -107,9 +107,8 @@ def replay_sim(
         opening_grip_control_idx = grip_control_idx
     initial_opening_grip_control_idx = list(getattr(ctx, "gripper_initial_open_dof_idx", ()))
     initial_opening_clearance_m = float(getattr(ctx, "gripper_initial_open_clearance_m", 0.0))
-    all_opening_grip_control_idx = list(
-        dict.fromkeys([*initial_opening_grip_control_idx, *opening_grip_control_idx])
-    )
+    binary_gripper_commands = bool(getattr(ctx, "gripper_binary_commands", False))
+    all_opening_grip_control_idx = list(dict.fromkeys([*initial_opening_grip_control_idx, *opening_grip_control_idx]))
     gripper_buffer_width = max(len(grip_control_idx), len(all_opening_grip_control_idx))
     opening_only_grip_idx = [idx for idx in all_opening_grip_control_idx if idx not in grip_control_idx]
     rate = float(program.rate)
@@ -174,11 +173,7 @@ def replay_sim(
             nominal_opening_start_drive: float | None = None
             if is_opening:
                 opening_positions = (
-                    robot.get_dofs_position(all_opening_grip_control_idx)[0]
-                    .detach()
-                    .cpu()
-                    .numpy()
-                    .astype(np.float64)
+                    robot.get_dofs_position(all_opening_grip_control_idx)[0].detach().cpu().numpy().astype(np.float64)
                 )
                 opening_start_targets = dict(zip(all_opening_grip_control_idx, opening_positions, strict=True))
                 if initial_opening_grip_control_idx and initial_opening_clearance_m > 0.0:
@@ -191,7 +186,11 @@ def replay_sim(
                     assert opening_start_targets is not None
                     assert nominal_opening_start_drive is not None
                     denominator = final_target_drive - nominal_opening_start_drive
-                    alpha = 1.0 if abs(denominator) < 1e-12 else (planned_grip_drive - nominal_opening_start_drive) / denominator
+                    alpha = (
+                        1.0
+                        if binary_gripper_commands or abs(denominator) < 1e-12
+                        else (planned_grip_drive - nominal_opening_start_drive) / denominator
+                    )
                     alpha = float(np.clip(alpha, 0.0, 1.0))
                     if (
                         opening_start_finger_span_m is not None
@@ -202,8 +201,7 @@ def replay_sim(
                         segment_grip_control_idx = opening_grip_control_idx
                     grip_targets = np.asarray(
                         [
-                            opening_start_targets[idx]
-                            + alpha * (final_target_drive - opening_start_targets[idx])
+                            opening_start_targets[idx] + alpha * (final_target_drive - opening_start_targets[idx])
                             for idx in segment_grip_control_idx
                         ],
                         dtype=np.float64,

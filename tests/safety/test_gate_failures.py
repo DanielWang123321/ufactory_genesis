@@ -316,7 +316,16 @@ def test_lite6_contact_exemptions_match_exact_trajectory_stages():
         scene_sha256="s" * 64,
     )
     finger_pair = CollisionResult(True, 0.0, "uflite_finger1", "uflite_finger2")
-    expected_stages = {"grip", "lift", "transit", "place-descend", "place-settle", "release"}
+    expected_stages = {
+        "grip",
+        "grip-settle",
+        "lift",
+        "transit",
+        "pre-release-settle",
+        "place-descend",
+        "place-settle",
+        "release",
+    }
     assert {item.stage for item in config.safety.exemptions} == expected_stages
     assert all(lite_gate.collision_allowed(finger_pair, stage) for stage in expected_stages)
     assert not lite_gate.collision_allowed(finger_pair, "grasp")

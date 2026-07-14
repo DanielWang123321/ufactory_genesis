@@ -110,10 +110,7 @@ def load_kinematics_calibration(
                 "'python scripts/gen_kinematics_params.py <robot-ip>' so it includes "
                 "schema_version, robot_key, full serial_number, units and joints"
             )
-        raise ValueError(
-            f"{yaml_path}: root fields must be exactly {sorted(expected_root)}, "
-            f"got {sorted(actual_root)}"
-        )
+        raise ValueError(f"{yaml_path}: root fields must be exactly {sorted(expected_root)}, got {sorted(actual_root)}")
     if data["schema_version"] != 1:
         raise ValueError(f"{yaml_path}: schema_version must be 1")
     if str(data["robot_key"]) != profile.key:

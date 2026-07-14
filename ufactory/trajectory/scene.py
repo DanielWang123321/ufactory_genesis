@@ -121,6 +121,9 @@ class TrajSceneContext:
     # finger span grows by ``gripper_initial_open_clearance_m``.
     gripper_initial_open_dof_idx: list[int] = field(default_factory=list)
     gripper_initial_open_clearance_m: float = 0.0
+    # Binary grippers receive their final open/close target at command start;
+    # the segment duration is retained as their mechanical settle window.
+    gripper_binary_commands: bool = False
     robot_urdf_path: str = ""
     kinematics_yaml_path: str | None = None
     kinematics_suffix: str | None = None
@@ -190,6 +193,9 @@ def _robot_defaults(robot_key: str) -> dict:
     config = load_runtime_config(runtime.model.key)
     params = config.task.parameters
     object_spec = resolve_grasp_object_spec(config)
+    gripper_profile = config.gripper
+    if gripper_profile is None:
+        raise ValueError(f"{runtime.model.key} has no configured gripper geometry")
     obj_pos_base = tuple(float(value) for value in params["fixed_object_position_m"])
     place_pos_base = tuple(float(value) for value in params["fixed_target_position_m"])
     default_ee = tuple(float(value) for value in params["default_ee_position_m"])
@@ -205,6 +211,11 @@ def _robot_defaults(robot_key: str) -> dict:
         "lift_z": default_ee[2],
         "home_z": default_ee[2],
         "grasp_gap_m": LITE6_DEFAULT_GRIPPER_GRASP_GAP_M if is_lite6 else DEFAULT_GRIPPER_GRASP_GAP_M,
+        "tool_tip_offset_z_m": gripper_profile.tool_tip_offset_z_m,
+        "finger_pad_below_center_m": gripper_profile.finger_pad_below_center_m,
+        "finger_close_descent_m": gripper_profile.finger_close_descent_m,
+        "grasp_table_clearance_m": gripper_profile.grasp_table_clearance_m,
+        "grasp_height_extra_m": gripper_profile.grasp_height_extra_m,
     }
 
 
@@ -242,18 +253,11 @@ def dry_heights(robot_key: str) -> DryHeights:
         raise ValueError(f"{runtime.model.key} has no supported gripper for the trajectory scene")
     defaults = _robot_defaults(runtime.model.key)
     obj_xy = defaults["obj_xy"]
-    if gripper.family == "lite6":
-        finger_z_offset = FINGER_Z_OFFSET_LITE6
-        pad_below_fc = LITE6_FINGER_PAD_BELOW_FC
-        close_descent = LITE6_FINGER_CLOSE_DESCENT
-        table_clearance = LITE6_GRASP_TABLE_CLEARANCE
-        grasp_extra = LITE6_GRASP_LINK6_Z_EXTRA_M
-    else:
-        finger_z_offset = FINGER_Z_OFFSET_G2
-        pad_below_fc = FINGER_PAD_BELOW_FC
-        close_descent = FINGER_CLOSE_DESCENT
-        table_clearance = GRASP_TABLE_CLEARANCE
-        grasp_extra = 0.0
+    finger_z_offset = float(defaults["tool_tip_offset_z_m"])
+    pad_below_fc = float(defaults["finger_pad_below_center_m"])
+    close_descent = float(defaults["finger_close_descent_m"])
+    table_clearance = float(defaults["grasp_table_clearance_m"])
+    grasp_extra = float(defaults["grasp_height_extra_m"])
     grasp_link6_z = table_clearance + close_descent + pad_below_fc + finger_z_offset + grasp_extra
     return DryHeights(
         finger_z_offset=finger_z_offset,
@@ -528,16 +532,10 @@ def build_scene(
     # the gripper points down, so use the larger of |dy|/|dx| as the span.
     finger_y_gap = max(abs(lf_pos[1] - rf_pos[1]).item(), abs(lf_pos[0] - rf_pos[0]).item())
 
-    if gripper.family == "lite6":
-        pad_below_fc = LITE6_FINGER_PAD_BELOW_FC
-        close_descent = LITE6_FINGER_CLOSE_DESCENT
-        table_clearance = LITE6_GRASP_TABLE_CLEARANCE
-        grasp_extra = LITE6_GRASP_LINK6_Z_EXTRA_M
-    else:
-        pad_below_fc = FINGER_PAD_BELOW_FC
-        close_descent = FINGER_CLOSE_DESCENT
-        table_clearance = GRASP_TABLE_CLEARANCE
-        grasp_extra = 0.0
+    pad_below_fc = float(defaults["finger_pad_below_center_m"])
+    close_descent = float(defaults["finger_close_descent_m"])
+    table_clearance = float(defaults["grasp_table_clearance_m"])
+    grasp_extra = float(defaults["grasp_height_extra_m"])
 
     grasp_link6_z = table_clearance + close_descent + pad_below_fc + finger_z_offset + grasp_extra
     pre_grasp_link6_z = grasp_link6_z + 0.10

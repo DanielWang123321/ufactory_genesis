@@ -304,16 +304,17 @@ def test_packaging_cli_forwards_repetition_to_showcase(
     from ufactory.cli import packaging
 
     received: list[str] = []
-    fake = ModuleType("xarm6_g2_showcase")
+    fake = ModuleType("_packaging_showcase")
 
     def _fake_main(argv: list[str]) -> int:
         received.extend(argv)
         return 0
 
     fake.main = _fake_main  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "xarm6_g2_showcase", fake)
+    monkeypatch.setitem(sys.modules, "_packaging_showcase", fake)
     args = SimpleNamespace(
         speed=1.0,
+        robot="xarm6",
         executor="servo_j",
         cycles=cycles,
         loop=loop,
@@ -323,7 +324,7 @@ def test_packaging_cli_forwards_repetition_to_showcase(
     )
 
     assert packaging._run_sim(args) == 0
-    assert received == ["--speed", "1.0", "--executor", "servo_j", *expected_tail]
+    assert received == ["--robot", "xarm6", "--speed", "1.0", "--executor", "servo_j", *expected_tail]
 
 
 def test_packaging_showcase_resolves_default_and_explicit_repetition() -> None:

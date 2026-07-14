@@ -1,14 +1,13 @@
-"""Scoped Genesis 1.2.1 GLB PBR preservation patch."""
+"""Scoped Genesis 1.2.2+ GLB PBR preservation patch."""
 
 from __future__ import annotations
 
 from contextlib import contextmanager
-from importlib import metadata
 import threading
 from typing import Any, Iterator
 
+from ufactory.simulation.compat import require_genesis_version, require_pbr_hooks
 
-SUPPORTED_GENESIS_VERSION = "1.2.1"
 _LOCK = threading.RLock()
 _LOCAL = threading.local()
 _REFCOUNT = 0
@@ -24,24 +23,13 @@ def _queue() -> list[Any]:
     return queue
 
 
-def _require_supported_version() -> None:
-    try:
-        version = metadata.version("genesis-world")
-    except metadata.PackageNotFoundError as exc:
-        raise RuntimeError("Genesis is not installed; install genesis-world==1.2.1") from exc
-    if version != SUPPORTED_GENESIS_VERSION:
-        raise RuntimeError(
-            f"PBR integration supports Genesis {SUPPORTED_GENESIS_VERSION} only; found {version}. "
-            "Refusing to initialize an unvalidated renderer."
-        )
-
-
 def _install_patch() -> None:
     import trimesh
     import genesis as gs
     import genesis.utils.gltf as gltf_utils
     import genesis.utils.mesh as mesh_utils
 
+    require_pbr_hooks(gs, gltf_utils, mesh_utils)
     original_parse = gltf_utils.parse_mesh_glb
     original_bound_from_trimesh = gs.Mesh.from_trimesh
     original_from_trimesh_descriptor = gs.Mesh.__dict__["from_trimesh"]
@@ -145,7 +133,7 @@ def glb_pbr_surfaces() -> Iterator[None]:
     """Install the patch for a scoped GLB load and always restore originals."""
 
     global _REFCOUNT
-    _require_supported_version()
+    require_genesis_version()
     with _LOCK:
         if _REFCOUNT == 0:
             _install_patch()

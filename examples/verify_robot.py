@@ -13,6 +13,7 @@ import genesis as gs
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.registry import get_robot_profile, joint_names, robot_cli_choices
+from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
 
 
 def quat_to_rpy(quat):
@@ -38,21 +39,12 @@ def resolve_entity_name(entity, requested_name: str, kind: str) -> str:
     raise KeyError(f"{kind} not found: {requested_name}")
 
 
-def _ensure_fk_scratch(robot) -> None:
-    if getattr(robot, "_IK_qpos_orig", None) is not None:
-        return
-    if robot.n_qs == 0:
-        return
-    import quadrants as qd
-
-    robot._IK_qpos_orig = qd.field(dtype=gs.qd_float, shape=(robot.n_qs, robot._solver._B))
-
-
 def run_tests(profile_key: str, urdf_path: str, vis: bool) -> None:
     profile = get_robot_profile(profile_key)
     jnames = joint_names(profile)
     ee = profile.ee_link
 
+    require_genesis_runtime(gs)
     gs.init(backend=gs.gpu)
     scene = gs.Scene(show_viewer=vis, sim_options=gs.options.SimOptions(dt=0.01))
     robot = scene.add_entity(
@@ -71,7 +63,7 @@ def run_tests(profile_key: str, urdf_path: str, vis: bool) -> None:
     ee_link_name = resolve_entity_name(robot, ee, "link")
     ee_link = next(l for l in robot.links if resolve_entity_name(robot, l.name, "link") == ee_link_name)
     q_t = torch.tensor(q, dtype=torch.float32, device=gs.device)
-    _ensure_fk_scratch(robot)
+    ensure_ik_scratch(robot, gs_module=gs)
     links_pos, _ = robot.forward_kinematics(qpos=q_t)
     idx = int(ee_link.idx_local)
     fk_pos = links_pos[idx].cpu().numpy() if links_pos.ndim == 2 else links_pos[0, idx].cpu().numpy()

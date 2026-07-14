@@ -24,6 +24,7 @@ import genesis as gs
 from ufactory.config import load_runtime_config, resolve_grasp_object_spec
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import load_training_config, write_checkpoint_manifest, write_training_config
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -165,6 +166,7 @@ def main():
     )
 
     # === Init Genesis ===
+    require_genesis_runtime(gs)
     gs.init(
         backend=gs.gpu,
         precision="32",

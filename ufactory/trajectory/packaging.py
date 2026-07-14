@@ -1,8 +1,8 @@
-"""Versioned xArm6 packaging task geometry and trajectory assembly."""
+"""Versioned multi-robot packaging geometry and trajectory assembly."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import hashlib
 import json
 from typing import Any
@@ -13,12 +13,6 @@ from ufactory.config import ResolvedRuntimeConfig, resolve_manipulation_object_s
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.safety.adapters import EnvironmentObstacle
 from ufactory.trajectory.planner import CartesianWaypoint, JointWaypoint, TrajectoryPlannerConfig, plan_mixed_waypoints
-from ufactory.trajectory.scene import (
-    FINGER_CLOSE_DESCENT,
-    FINGER_PAD_BELOW_FC,
-    FINGER_Z_OFFSET_G2,
-    GRASP_TABLE_CLEARANCE,
-)
 
 PACKAGING_TASK_NAME = "packaging_showcase"
 OBJECT_RELOCATED_STAGES = ("post-release-settle", "return-transit", "return-home")
@@ -60,6 +54,22 @@ class PackagingLayout:
     place_success_distance_m: float
     simulation_grasp_center_compensation_xy_m: tuple[float, float]
     simulation_arm_kp_scale: float
+    simulation_release_duration_s: float
+    simulation_pre_release_relax_gap_m: float
+    simulation_pre_release_relax_duration_s: float
+    simulation_home_settle_s: float
+    simulation_substeps: int
+    lift_success_clearance_m: float
+    home_success_distance_m: float
+    tool_tip_offset_z_m: float
+    finger_pad_below_center_m: float
+    finger_close_descent_m: float
+    grasp_table_clearance_m: float
+    grasp_height_extra_m: float
+
+    @property
+    def table_top_z_m(self) -> float:
+        return self.table_center_m[2] + self.table_size_m[2] / 2.0
 
     @property
     def object_support_z_m(self) -> float:
@@ -80,10 +90,11 @@ class PackagingLayout:
     def grasp_link6_z_m(self) -> float:
         return (
             self.object_support_z_m
-            + GRASP_TABLE_CLEARANCE
-            + FINGER_CLOSE_DESCENT
-            + FINGER_PAD_BELOW_FC
-            + FINGER_Z_OFFSET_G2
+            + self.grasp_table_clearance_m
+            + self.finger_close_descent_m
+            + self.finger_pad_below_center_m
+            + self.tool_tip_offset_z_m
+            + self.grasp_height_extra_m
         )
 
     @property
@@ -96,8 +107,8 @@ class PackagingLayout:
     @property
     def release_object_center_m(self) -> tuple[float, float, float]:
         return (
-            self.box_center_xy_m[0],
-            self.box_center_xy_m[1],
+            self.target_position_m[0],
+            self.target_position_m[1],
             self.box_rim_z_m + self.release_object_bottom_clearance_m + self.object_size_m[2] / 2.0,
         )
 
@@ -107,6 +118,9 @@ def packaging_layout(config: ResolvedRuntimeConfig) -> PackagingLayout:
         raise ValueError(f"expected task {PACKAGING_TASK_NAME!r}, got {config.task.name!r}")
     p = config.task.parameters
     obj = resolve_manipulation_object_spec(config)
+    if config.gripper is None:
+        raise ValueError("packaging showcase requires a configured gripper")
+    gripper = config.gripper
     sim_compensation = _vec2(p.get("simulation_grasp_center_compensation_xy_m", (0.0, 0.0)))
     sim_arm_kp_scale = float(p.get("simulation_arm_kp_scale", 1.0))
     if not all(np.isfinite(value) for value in sim_compensation):
@@ -134,6 +148,18 @@ def packaging_layout(config: ResolvedRuntimeConfig) -> PackagingLayout:
         place_success_distance_m=float(p["place_success_distance_m"]),
         simulation_grasp_center_compensation_xy_m=sim_compensation,
         simulation_arm_kp_scale=sim_arm_kp_scale,
+        simulation_release_duration_s=float(p["simulation_release_duration_s"]),
+        simulation_pre_release_relax_gap_m=float(p["simulation_pre_release_relax_gap_m"]),
+        simulation_pre_release_relax_duration_s=float(p["simulation_pre_release_relax_duration_s"]),
+        simulation_home_settle_s=float(p["simulation_home_settle_s"]),
+        simulation_substeps=int(p["simulation_substeps"]),
+        lift_success_clearance_m=float(p["lift_success_clearance_m"]),
+        home_success_distance_m=float(p["home_success_distance_m"]),
+        tool_tip_offset_z_m=float(gripper.tool_tip_offset_z_m),
+        finger_pad_below_center_m=float(gripper.finger_pad_below_center_m),
+        finger_close_descent_m=float(gripper.finger_close_descent_m),
+        grasp_table_clearance_m=float(gripper.grasp_table_clearance_m),
+        grasp_height_extra_m=float(gripper.grasp_height_extra_m),
     )
 
 
@@ -159,10 +185,11 @@ def packaging_obstacles(layout: PackagingLayout) -> tuple[EnvironmentObstacle, .
     cx, cy = layout.box_center_xy_m
     wall = layout.box_wall_m
     wall_center_z = layout.box_floor_top_z_m + sz / 2.0
-    floor_center_z = layout.box_floor_top_z_m - wall / 2.0
+    floor_thickness = layout.box_floor_top_z_m - layout.table_top_z_m
+    floor_center_z = layout.table_top_z_m + floor_thickness / 2.0
     return (
         EnvironmentObstacle("table", layout.table_size_m, layout.table_center_m),
-        EnvironmentObstacle("box_floor", (sx, sy, wall), (cx, cy, floor_center_z)),
+        EnvironmentObstacle("box_floor", (sx, sy, floor_thickness), (cx, cy, floor_center_z)),
         EnvironmentObstacle(
             "box_wall_x_min", (wall, sy - 2.0 * wall, sz), (cx - sx / 2.0 + wall / 2.0, cy, wall_center_z)
         ),
@@ -198,8 +225,8 @@ def build_packaging_program(
     place_offset_x, place_offset_y = map(float, place_offset)
     obj_x = layout.object_position_m[0] + offset_x
     obj_y = layout.object_position_m[1] + offset_y
-    box_x = layout.box_center_xy_m[0] + place_offset_x
-    box_y = layout.box_center_xy_m[1] + place_offset_y
+    box_x = layout.target_position_m[0] + place_offset_x
+    box_y = layout.target_position_m[1] + place_offset_y
     home = np.asarray(layout.home_position_m, dtype=np.float64)
     home[:2] += offset
     grasp_z = layout.grasp_link6_z_m
@@ -277,7 +304,11 @@ def build_packaging_program(
 def packaging_scene_sha256(config: ResolvedRuntimeConfig) -> str:
     layout = packaging_layout(config)
     payload = {
-        "task": dict(config.task.parameters),
+        "robot": asdict(config.robot),
+        "arm_control": asdict(config.arm),
+        "gripper": None if config.gripper is None else asdict(config.gripper),
+        "simulation": asdict(config.simulation),
+        "layout": asdict(layout),
         "contacts": dict(config.task.allowed_contacts),
         "obstacles": [obstacle.__dict__ for obstacle in packaging_obstacles(layout)],
     }
