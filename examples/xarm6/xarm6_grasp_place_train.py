@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import pickle
 import shutil
 import sys
 from importlib import metadata
@@ -17,15 +16,15 @@ try:
         if metadata.version("rsl-rl-lib") != "2.2.4":
             raise ImportError
 except (metadata.PackageNotFoundError, ImportError) as e:
-    raise ImportError(
-        "Please uninstall 'rsl_rl' and install 'rsl-rl-lib==2.2.4'."
-    ) from e
+    raise ImportError("Please uninstall 'rsl_rl' and install 'rsl-rl-lib==2.2.4'.") from e
 
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
+from ufactory.config import load_runtime_config, resolve_grasp_object_spec
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.training import load_training_config, write_checkpoint_manifest, write_training_config
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from xarm6_grasp_place_env import XArm6GraspPlaceEnv
@@ -79,7 +78,23 @@ def get_task_cfgs(robot: str = "xarm6"):
     runtime = get_robot_runtime_profile(robot)
     if not runtime.task.grasp_place_supported or runtime.gripper_g2 is None:
         raise ValueError(f"{runtime.model.key} has no grasp-place task profile")
+    config = load_runtime_config(runtime.model.key)
+    params = config.task.parameters
+    object_spec = resolve_grasp_object_spec(config)
     env_cfg = {"num_envs": 10, **runtime.task.grasp_place_env_defaults}
+    env_cfg.update(
+        {
+            "runtime_config_sha256": config.sha256,
+            "obj_size": list(object_spec.size_m),
+            "obj_mass_kg": object_spec.mass_kg,
+            "fixed_obj_pos": list(params["fixed_object_position_m"]),
+            "fixed_target_pos": list(params["fixed_target_position_m"]),
+            "obj_spawn_lower": list(params["object_spawn_lower_m"]),
+            "obj_spawn_upper": list(params["object_spawn_upper_m"]),
+            "target_spawn_lower": list(params["target_spawn_lower_m"]),
+            "target_spawn_upper": list(params["target_spawn_upper_m"]),
+        }
+    )
     reward_cfg = {
         "reach": 4.0,
         "align": 3.0,
@@ -139,8 +154,15 @@ def main():
         shutil.rmtree(log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(log_dir / "cfgs.pkl", "wb") as f:
-        pickle.dump([env_cfg, reward_cfg, robot_cfg, train_cfg], f)
+    write_training_config(
+        log_dir / "config.yaml",
+        task="grasp_place",
+        robot_key=get_robot_runtime_profile(args.robot).model.key,
+        env=env_cfg,
+        reward=reward_cfg,
+        robot=robot_cfg,
+        train=train_cfg,
+    )
 
     # === Init Genesis ===
     gs.init(
@@ -168,8 +190,23 @@ def main():
         num_learning_iterations=args.max_iterations,
         init_at_random_ep_len=True,
     )
+    artifact = load_training_config(log_dir / "config.yaml")
+    checkpoints = sorted(log_dir.glob("model_*.pt"), key=lambda path: int(path.stem.split("_")[1]))
+    for checkpoint in checkpoints:
+        write_checkpoint_manifest(
+            checkpoint,
+            training_config=artifact,
+            executor_action_contract="joint_delta_rad+gripper_gap_m",
+        )
+    if checkpoints:
+        write_checkpoint_manifest(
+            checkpoints[-1],
+            training_config=artifact,
+            executor_action_contract="joint_delta_rad+gripper_gap_m",
+            output_path=log_dir / "checkpoint_manifest.json",
+        )
 
-    print(f"\n=== Training complete ===")
+    print("\n=== Training complete ===")
     print(f"TensorBoard: tensorboard --logdir {log_dir}")
     print(f"CSV log: {log_dir / 'metrics.csv'}")
 

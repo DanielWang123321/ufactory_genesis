@@ -11,24 +11,23 @@ import pytest
 
 from ufactory.robots.registry import ROBOT_PROFILES
 from ufactory.robots.runtime import get_robot_runtime_profile
-from ufactory.trajectory import (
+from ufactory.trajectory.backends import OptionalTrajectoryDependencyError, require_roboticstoolbox
+from ufactory.trajectory.planner import (
     CartesianWaypoint,
     JointWaypoint,
-    OptionalTrajectoryDependencyError,
     TrajectoryPlannerConfig,
     plan_cartesian_waypoints,
     plan_joint_waypoints,
     plan_mixed_waypoints,
-    require_roboticstoolbox,
-    validate_program,
 )
 from ufactory.trajectory.segments import Program, Segment
+from ufactory.trajectory.validation import validate_program
 
 
 def test_planner_import_does_not_load_heavy_modules():
     code = (
         "import sys; "
-        "from ufactory.trajectory import TrajectoryPlannerConfig, plan_joint_waypoints; "
+        "from ufactory.trajectory.planner import TrajectoryPlannerConfig, plan_joint_waypoints; "
         "print('genesis' in sys.modules, 'roboticstoolbox' in sys.modules)"
     )
     result = subprocess.run(
@@ -190,5 +189,5 @@ def test_optional_roboticstoolbox_backend_has_clear_install_hint():
     if importlib.util.find_spec("roboticstoolbox") is not None:
         pytest.skip("roboticstoolbox installed in this environment")
 
-    with pytest.raises(OptionalTrajectoryDependencyError, match=r'\.\[trajectory\]'):
+    with pytest.raises(OptionalTrajectoryDependencyError, match=r"\.\[trajectory\]"):
         require_roboticstoolbox()

@@ -1,4 +1,4 @@
-"""GPU regression: xArm5 pose 4 with STL collision meshes and PD-hold gate."""
+"""GPU regression: xArm5 pose 4 with STL collision meshes and PD-hold check."""
 
 from __future__ import annotations
 
@@ -51,8 +51,8 @@ def _link_pair_force(contacts: list[dict], names: dict[int, str], pair: frozense
     return max_force
 
 
-def test_xarm5_pose4_stl_collision_pd_hold_gate_bypass():
-    """Pose 4: STL collision loads; J4 PD may saturate but gate allows hardware via pin_G."""
+def test_xarm5_pose4_stl_collision_pd_hold_check_bypass():
+    """Pose 4: STL collision loads; J4 PD may saturate but check allows hardware via pin_G."""
     runtime = get_robot_runtime_profile("xarm5")
     urdf = robot_urdf("xarm5_1305")
     target_q = _pose4_target_q()

@@ -30,11 +30,7 @@ ROBOT_MESHES = {
         ("link1", "link2", "link3", "link4", "link5", "link6", "link7", "link_base"),
     ),
 }
-TEST_CASES = [
-    (robot_key, link_name)
-    for robot_key, (_, links) in ROBOT_MESHES.items()
-    for link_name in links
-]
+TEST_CASES = [(robot_key, link_name) for robot_key, (_, links) in ROBOT_MESHES.items() for link_name in links]
 
 HAUSDORFF_TOL_M = 1e-4
 VOLUME_REL_TOL = 0.01
@@ -55,10 +51,7 @@ def _load_baseline_obj(robot_key: str, link_name: str) -> trimesh.Trimesh:
             stderr=subprocess.PIPE,
         )
     except subprocess.CalledProcessError as exc:
-        pytest.fail(
-            f"baseline OBJ unavailable: {BASELINE_COMMIT}:{rel}; "
-            f"{exc.stderr.decode().strip()}"
-        )
+        pytest.fail(f"baseline OBJ unavailable: {BASELINE_COMMIT}:{rel}; {exc.stderr.decode().strip()}")
     with tempfile.NamedTemporaryFile(suffix=".obj", delete=False) as tmp:
         tmp.write(obj_bytes)
         tmp_path = Path(tmp.name)

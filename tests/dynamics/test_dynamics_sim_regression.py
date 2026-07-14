@@ -2,14 +2,14 @@
 
 Drives ``dynamics-sim-check`` on each hardware-dynamics robot URDF with the
 calibrated pose set (deterministic, no random poses) plus the Pinocchio reference
-oracle, then asserts the invariants the CI gate cares about:
+oracle, then asserts the invariants the regression checks care about:
 
 * every pose settles (no NOT_SETTLED / SATURATED)
 * per-sample ``pd_hold_tau`` / ``pin_G`` / mass matrix are finite
 * the mass matrix is symmetric and positive-definite
 * L1/L2b/L3a layer metrics are finite
 * the gravity oracle is non-trivial (``pin_G_l2`` > threshold)
-* the report is schema version 3, while still accepting legacy schema v2 records,
+* the report is schema version 4, while still accepting legacy schema v2/v3 records,
   and records a joint_frictionloss run value
 
 This is a GPU/Genesis-dependent test by design (it actually runs the solver); the
@@ -29,7 +29,7 @@ pytest.importorskip("pinocchio")
 
 pytestmark = pytest.mark.gpu
 
-from ufactory.dynamics import cli_sim_check  # noqa: E402
+from ufactory.dynamics.cli import cli_sim_check  # noqa: E402
 from ufactory.robots.runtime import get_robot_runtime_profile  # noqa: E402
 
 _HARDWARE_DYNAMICS_ROBOTS = ("xarm5", "xarm6", "xarm7", "lite6", "uf850")
@@ -86,7 +86,7 @@ def test_dynamics_sim_regression_layers_finite(tmp_path, robot_key: str):
     run_config = next(r[1] for r in records if isinstance(r, tuple) and r[0] == "run_config")
     samples = [r for r in records if not isinstance(r, tuple)]
     assert samples, f"no sample records written for {robot_key}"
-    assert run_config["version"] in {"2", "3"}
+    assert run_config["version"] in {"2", "3", "4"}
     assert run_config.get("joint_frictionloss") is not None
 
     pin_g_l2_threshold = 0.5 if robot_key == "xarm5" else 1.0

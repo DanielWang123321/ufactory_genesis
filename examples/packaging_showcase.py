@@ -6,7 +6,6 @@ Currently implemented for the xArm6 + Gripper G2 task profile.
 from __future__ import annotations
 
 import argparse
-import sys
 
 import _bootstrap  # noqa: F401
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
@@ -24,10 +23,9 @@ def main() -> None:
     if runtime.model.key != "xarm6_1305":
         raise SystemExit("The current packaging showcase implementation is xArm6 + Gripper G2 only")
 
-    from xarm6.xarm6_g2_showcase import main as xarm6_showcase_main
+    from ufactory.cli.packaging import main as packaging_main
 
-    sys.argv = [sys.argv[0], *remaining]
-    xarm6_showcase_main()
+    raise SystemExit(packaging_main(["--robot", args.robot, *remaining]))
 
 
 if __name__ == "__main__":

@@ -19,7 +19,6 @@ from ufactory.robots.runtime import DEFAULT_DYNAMICS_MOVE_SPEED_RAD_S
 from ufactory.hardware.xarm import (
     MODE_POSITION,
     format_arm_status,
-    prepare_arm_for_motion,
 )
 
 DEFAULT_GRAVITY_DIRECTION = [0.0, 0.0, -1.0]
@@ -149,8 +148,23 @@ class RealRobotSession:
             raise ConnectionError(f"Failed to connect to xArm at {ip}")
 
     def ensure_ready(self, mode: int | None = None) -> None:
-        """Prepare arm for motion (SDK: motion_enable -> set_mode -> set_state(0))."""
-        prepare_arm_for_motion(self.arm, mode=mode if mode is not None else self._motion_mode)
+        """Enable an already healthy controller without clearing or resetting faults."""
+        arm = self.arm
+        if int(getattr(arm, "error_code", 0)) != 0 or int(getattr(arm, "state", 4)) == 4:
+            raise RuntimeError(
+                f"controller is not healthy ({format_arm_status(arm)}); inspect and recover manually in UFACTORY Studio"
+            )
+        selected_mode = mode if mode is not None else self._motion_mode
+        operations = (
+            ("motion_enable", lambda: arm.motion_enable(enable=True)),
+            ("set_mode", lambda: arm.set_mode(selected_mode)),
+            ("set_state", lambda: arm.set_state(0)),
+        )
+        for label, operation in operations:
+            code = operation()
+            if int(code) != 0:
+                arm.set_state(4)
+                raise RuntimeError(f"{label} failed with code {code}; controller stopped without automatic recovery")
 
     def configure_for_dynamics(self) -> None:
         """Position mode, bare flange, torque reporting in Nm."""
@@ -170,20 +184,8 @@ class RealRobotSession:
         self.arm.set_self_collision_detection(True)
 
     def recover_after_motion_error(self, *, retries: int = 5) -> bool:
-        """Clear stop/collision state so the next pose can be checked."""
-        for _ in range(retries):
-            try:
-                self.arm.clean_warn()
-                time.sleep(0.1)
-                if self.arm.error_code != 0:
-                    self.arm.clean_error()
-                    time.sleep(0.3)
-                self.ensure_ready(MODE_POSITION)
-                if self.arm.error_code == 0 and self.arm.state != 4:
-                    return True
-            except Exception:
-                pass
-            time.sleep(0.2)
+        """v0.2.5 never performs automatic controller recovery."""
+        del retries
         return False
 
     def print_config(self) -> None:

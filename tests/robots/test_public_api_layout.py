@@ -72,10 +72,33 @@ def test_root_namespace_is_core_robot_api_only() -> None:
     for name in (
         "ROBOT_PROFILES",
         "RobotModelSpec",
-        "RobotRuntimeProfile",
         "get_robot_profile",
-        "get_robot_runtime_profile",
+        "RepositoryAssetStore",
         "robot_urdf",
         "robot_visual_glb_urdf",
     ):
         assert hasattr(ufactory, name)
+
+    for name in ("RobotRuntimeProfile", "get_robot_runtime_profile"):
+        assert not hasattr(ufactory, name)
+
+
+def test_v025_trajectory_api_does_not_export_unsafe_legacy_replay() -> None:
+    import ufactory.trajectory as trajectory
+
+    assert set(trajectory.__all__) == {
+        "plan_mixed_waypoints",
+        "preflight_program",
+        "execute_sim",
+        "execute_real",
+    }
+    for name in ("replay_real", "replay_sim", "RealExecutorConfig", "SafetyGuard"):
+        assert not hasattr(trajectory, name)
+
+
+def test_v025_dynamics_api_is_report_and_validation_only() -> None:
+    import ufactory.dynamics as dynamics
+
+    assert "DynamicsValidationService" in dynamics.__all__
+    for name in ("cli_hardware_check", "build_genesis_scene", "test_pd_step_response"):
+        assert not hasattr(dynamics, name)

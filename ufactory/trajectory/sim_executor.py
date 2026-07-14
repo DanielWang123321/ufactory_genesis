@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import time
 
 import numpy as np
 import torch
@@ -29,6 +30,10 @@ DEFAULT_GRIPPER_HOLD_BIAS_GAP_M = 0.0069
 # can carry the 17 g cube through lift without raising material friction again.
 LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M = 0.0020
 DEFAULT_GRASP_WELD_ATTACH_DIST_M = 0.08
+# Final metrics are observations, not extra trajectory commands.  Two physics
+# ticks let the last already-issued PD target take effect before measuring,
+# avoiding a one-tick tracking-lag artifact at the return-home boundary.
+DEFAULT_FINAL_METRIC_SETTLE_S = 0.04
 
 
 @dataclass
@@ -43,6 +48,9 @@ class PhaseStatus:
     eside_grip_mm: float = 0.0
     obj_pos_mm: tuple[float, float, float] = (0.0, 0.0, 0.0)
     link6_mm: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    ik_duration_ms: float = 0.0
+    ik_failures: int = 0
+    cpu_gpu_syncs: int = 0
 
 
 @dataclass
@@ -52,6 +60,7 @@ class SimReport:
     home_drift_mm: float = 0.0
     total_ticks: int = 0
     total_duration: float = 0.0
+    metric_settle_ticks: int = 0
 
 
 def replay_sim(
@@ -62,7 +71,9 @@ def replay_sim(
     gripper_hold_bias_gap_m: float = DEFAULT_GRIPPER_HOLD_BIAS_GAP_M,
     stabilize_grasp_weld: bool = False,
     grasp_weld_attach_dist_m: float = DEFAULT_GRASP_WELD_ATTACH_DIST_M,
+    final_metric_settle_s: float = DEFAULT_FINAL_METRIC_SETTLE_S,
     on_phase: Callable[[PhaseStatus, Segment], None] | None = None,
+    on_tick: Callable[[Segment, int], None] | None = None,
 ) -> SimReport:
     """Replay ``program`` in the Genesis scene and return a SimReport.
 
@@ -72,28 +83,64 @@ def replay_sim(
     than the object width to create contact. Once the close finishes, subsequent
     arm segments hold the actually reached drive value plus a small bias instead
     of continuing to chase the over-closed target. This keeps a clamp load while
-    avoiding persistent finger penetration into the cube.
+    avoiding persistent finger penetration into the cube.  Final metrics are
+    sampled after a short physics-only settling window while the final approved
+    targets remain latched; this does not append or alter trajectory commands.
+    ``on_tick`` runs after each commanded physics step and is intended for
+    diagnostics that need to observe intra-segment ordering.
     """
     robot = ctx.robot
     scene = ctx.scene
     ik_link = ctx.ik_link
     arm_idx = ctx.arm_dof_idx
     grip_idx = ctx.gripper_dof_idx
+    grip_control_idx = (
+        ctx.all_gripper_dof_idx if getattr(ctx, "control_all_gripper_dofs", False) else ctx.gripper_dof_idx
+    )
+    control_all_on_open = bool(getattr(ctx, "control_all_gripper_dofs_on_open", False))
+    configured_open_idx = list(getattr(ctx, "gripper_open_dof_idx", ()))
+    if configured_open_idx:
+        opening_grip_control_idx = configured_open_idx
+    elif control_all_on_open:
+        opening_grip_control_idx = ctx.all_gripper_dof_idx
+    else:
+        opening_grip_control_idx = grip_control_idx
+    initial_opening_grip_control_idx = list(getattr(ctx, "gripper_initial_open_dof_idx", ()))
+    initial_opening_clearance_m = float(getattr(ctx, "gripper_initial_open_clearance_m", 0.0))
+    all_opening_grip_control_idx = list(
+        dict.fromkeys([*initial_opening_grip_control_idx, *opening_grip_control_idx])
+    )
+    gripper_buffer_width = max(len(grip_control_idx), len(all_opening_grip_control_idx))
+    opening_only_grip_idx = [idx for idx in all_opening_grip_control_idx if idx not in grip_control_idx]
     rate = float(program.rate)
+    if not np.isfinite(final_metric_settle_s) or final_metric_settle_s < 0.0:
+        raise ValueError("final_metric_settle_s must be finite and non-negative")
     report = SimReport(total_duration=program.total_duration, total_ticks=program.total_ticks)
 
     gripper = ctx.gripper
     current_grip_drive = drive_for_gap_m(gripper.open_gap_m, gripper)
     last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy() if len(ctx.home_qpos) else None
     grasp_welded = False
+    buffers = _TensorBuffers(
+        arm=torch.empty((1, len(arm_idx)), device=gs.device, dtype=gs.tc_float),
+        gripper=torch.empty((1, gripper_buffer_width), device=gs.device, dtype=gs.tc_float),
+        arm_cpu=torch.empty((1, len(arm_idx)), device="cpu", dtype=gs.tc_float),
+        gripper_cpu=torch.empty((1, gripper_buffer_width), device="cpu", dtype=gs.tc_float),
+    )
+    buffers.arm_numpy = buffers.arm_cpu.numpy()
+    buffers.gripper_numpy = buffers.gripper_cpu.numpy()
 
     for si, seg in enumerate(program.segments):
         samples, n = seg.samples(rate)
         if n == 0:
             continue
         status = PhaseStatus(
-            label=seg.label or seg.kind, seg_index=si, ticks=n, duration=seg.duration,
-            v_max=seg.v_max, a_max=seg.a_max,
+            label=seg.label or seg.kind,
+            seg_index=si,
+            ticks=n,
+            duration=seg.duration,
+            v_max=seg.v_max,
+            a_max=seg.a_max,
         )
         if seg.kind == "gripper":
             is_holding_gap = (
@@ -107,21 +154,76 @@ def replay_sim(
                 and seg.gap_end is not None
                 and seg.gap_end < seg.gap_start
             )
-            is_opening = (
-                seg.gap_start is not None
+            is_opening = seg.gap_start is not None and seg.gap_end is not None and seg.gap_end > seg.gap_start
+            is_holding_fully_open = (
+                is_holding_gap
                 and seg.gap_end is not None
-                and seg.gap_end > seg.gap_start
+                and abs(float(seg.gap_end) - float(gripper.open_gap_m)) < 1e-12
             )
+            if is_holding_fully_open and initial_opening_grip_control_idx:
+                segment_grip_control_idx = initial_opening_grip_control_idx
+            else:
+                segment_grip_control_idx = opening_grip_control_idx if is_opening else grip_control_idx
             if is_opening and grasp_welded:
                 _delete_grasp_weld(ctx)
                 grasp_welded = False
             contact_hold_drive: float | None = None
             final_target_drive = resolve_tick_grip_drive(samples, n - 1, gripper)
+            opening_start_targets: dict[int, float] | None = None
+            opening_start_finger_span_m: float | None = None
+            nominal_opening_start_drive: float | None = None
+            if is_opening:
+                opening_positions = (
+                    robot.get_dofs_position(all_opening_grip_control_idx)[0]
+                    .detach()
+                    .cpu()
+                    .numpy()
+                    .astype(np.float64)
+                )
+                opening_start_targets = dict(zip(all_opening_grip_control_idx, opening_positions, strict=True))
+                if initial_opening_grip_control_idx and initial_opening_clearance_m > 0.0:
+                    opening_start_finger_span_m = _finger_span_m(ctx)
+                nominal_opening_start_drive = resolve_tick_grip_drive(samples, 0, gripper)
             for t in range(n):
                 planned_grip_drive = resolve_tick_grip_drive(samples, t, gripper)
-                if not is_holding_gap:
+                grip_targets: np.ndarray | None = None
+                if is_opening:
+                    assert opening_start_targets is not None
+                    assert nominal_opening_start_drive is not None
+                    denominator = final_target_drive - nominal_opening_start_drive
+                    alpha = 1.0 if abs(denominator) < 1e-12 else (planned_grip_drive - nominal_opening_start_drive) / denominator
+                    alpha = float(np.clip(alpha, 0.0, 1.0))
+                    if (
+                        opening_start_finger_span_m is not None
+                        and _finger_span_m(ctx) < opening_start_finger_span_m + initial_opening_clearance_m
+                    ):
+                        segment_grip_control_idx = initial_opening_grip_control_idx
+                    else:
+                        segment_grip_control_idx = opening_grip_control_idx
+                    grip_targets = np.asarray(
+                        [
+                            opening_start_targets[idx]
+                            + alpha * (final_target_drive - opening_start_targets[idx])
+                            for idx in segment_grip_control_idx
+                        ],
+                        dtype=np.float64,
+                    )
+                    drive_start = opening_start_targets.get(grip_idx[0], planned_grip_drive)
+                    current_grip_drive = float(drive_start + alpha * (final_target_drive - drive_start))
+                elif not is_holding_gap:
                     current_grip_drive = contact_hold_drive if contact_hold_drive is not None else planned_grip_drive
-                _step(robot, scene, arm_idx, grip_idx, last_q_arm, grip_drive=current_grip_drive)
+                _step(
+                    robot,
+                    scene,
+                    arm_idx,
+                    segment_grip_control_idx,
+                    last_q_arm,
+                    grip_drive=current_grip_drive,
+                    grip_targets=grip_targets,
+                    buffers=buffers,
+                )
+                if on_tick is not None:
+                    on_tick(seg, t)
                 if (
                     is_closing
                     and _latches_contact_during_close(gripper)
@@ -156,44 +258,108 @@ def replay_sim(
                     grasp_welded = True
         else:
             for t in range(n):
-                q_arm = resolve_tick_arm_q(ctx, seg, samples, t)
+                ik_started = time.perf_counter_ns()
+                try:
+                    q_arm = resolve_tick_arm_q(ctx, seg, samples, t)
+                except Exception:
+                    status.ik_failures += 1
+                    raise
+                finally:
+                    if seg.kind == "movel":
+                        status.ik_duration_ms += (time.perf_counter_ns() - ik_started) / 1e6
                 last_q_arm = q_arm
-                _step(robot, scene, arm_idx, grip_idx, q_arm, grip_drive=current_grip_drive)
+                _step(
+                    robot,
+                    scene,
+                    arm_idx,
+                    grip_control_idx,
+                    q_arm,
+                    grip_drive=current_grip_drive,
+                    buffers=buffers,
+                )
+                if on_tick is not None:
+                    on_tick(seg, t)
 
         # End-side error vs the segment target (both in world frame).
         if seg.kind == "movel" and seg.pose_end is not None:
             target_world = np.asarray(ctx.base_to_world(seg.pose_end), dtype=np.float64)
             link6_w = ik_link.get_pos()[0]
             final_world = np.array([link6_w[i].item() for i in range(3)])
+            status.cpu_gpu_syncs += 3
             status.eside_arm_mm = float(np.linalg.norm(final_world - target_world) * 1000.0)
         # Snapshot obj + link6 (world, m -> mm) for diagnostics.
         op = ctx.obj.get_pos()[0]
         status.obj_pos_mm = (float(op[0].item()) * 1000.0, float(op[1].item()) * 1000.0, float(op[2].item()) * 1000.0)
         lp = ik_link.get_pos()[0]
         status.link6_mm = (float(lp[0].item()) * 1000.0, float(lp[1].item()) * 1000.0, float(lp[2].item()) * 1000.0)
+        status.cpu_gpu_syncs += 6
         if on_phase is not None:
             on_phase(status, seg)
         report.phases.append(status)
 
-    # Final metrics: place error + home drift.
+    # Observe after the final already-issued target has had a brief chance to
+    # settle.  Bare steps retain Genesis' latched arm/gripper control targets.
+    report.metric_settle_ticks = int(np.ceil(float(final_metric_settle_s) * rate))
+    for _ in range(report.metric_settle_ticks):
+        scene.step()
+
+    # Final metrics: place error + home drift, both against the complete
+    # three-dimensional positions consumed when the scene was constructed.
     obj_pos = ctx.obj.get_pos()[0]
-    obj_half_z = ctx.obj_size[2] / 2
-    place_target_world = np.array(ctx.base_to_world([ctx.place_xy[0], ctx.place_xy[1], obj_half_z]))
+    place_target_world = np.asarray(ctx.base_to_world(ctx.place_pos_base), dtype=np.float64)
     place_target_t = torch.as_tensor(place_target_world, device=obj_pos.device, dtype=obj_pos.dtype)
     report.place_error_mm = float(torch.norm(obj_pos - place_target_t).item() * 1000.0)
     final_link6 = np.array([ik_link.get_pos()[0][i].item() for i in range(3)])
     home_world = np.array(ctx.base_to_world(ctx.home_pos_base))
     report.home_drift_mm = float(np.linalg.norm(final_link6 - home_world) * 1000.0)
+    if opening_only_grip_idx:
+        # Opening may temporarily put extra mimic DOFs into position-control
+        # mode.  Genesis latches that mode across replay calls, so a later
+        # close that intentionally drives only the master joint would otherwise
+        # fight the stale open target.  Return those release-only DOFs to
+        # passive zero-force mode after all metrics have been sampled.
+        robot.control_dofs_force(
+            torch.zeros((1, len(opening_only_grip_idx)), device=gs.device, dtype=gs.tc_float),
+            opening_only_grip_idx,
+        )
     return report
 
 
-def _step(robot, scene, arm_idx, grip_idx, q_arm_target, grip_drive):
+@dataclass
+class _TensorBuffers:
+    arm: torch.Tensor
+    gripper: torch.Tensor
+    arm_cpu: torch.Tensor
+    gripper_cpu: torch.Tensor
+    arm_numpy: np.ndarray | None = None
+    gripper_numpy: np.ndarray | None = None
+
+
+def _step(
+    robot,
+    scene,
+    arm_idx,
+    grip_control_idx,
+    q_arm_target,
+    grip_drive,
+    *,
+    buffers: _TensorBuffers,
+    grip_targets: np.ndarray | None = None,
+):
     """Send one PD control tick and step the scene."""
     if q_arm_target is not None:
-        q_t = torch.as_tensor([q_arm_target.tolist()], device=gs.device, dtype=gs.tc_float)
-        robot.control_dofs_position(q_t, arm_idx)
-    g_t = torch.as_tensor([[float(grip_drive)]], device=gs.device, dtype=gs.tc_float)
-    robot.control_dofs_position(g_t, grip_idx)
+        assert buffers.arm_numpy is not None
+        np.copyto(buffers.arm_numpy[0], np.asarray(q_arm_target, dtype=buffers.arm_numpy.dtype))
+        buffers.arm.copy_(buffers.arm_cpu, non_blocking=True)
+        robot.control_dofs_position(buffers.arm, arm_idx)
+    if grip_targets is None:
+        buffers.gripper.fill_(float(grip_drive))
+    else:
+        assert buffers.gripper_numpy is not None
+        width = len(grip_control_idx)
+        np.copyto(buffers.gripper_numpy[0, :width], np.asarray(grip_targets, dtype=buffers.gripper_numpy.dtype))
+        buffers.gripper.copy_(buffers.gripper_cpu, non_blocking=True)
+    robot.control_dofs_position(buffers.gripper[:, : len(grip_control_idx)], grip_control_idx)
     scene.step()
 
 
@@ -229,8 +395,15 @@ def _closedness_fraction(drive: float, gripper) -> float:
     return max(0.0, min(1.0, frac))
 
 
+def _finger_span_m(ctx: TrajSceneContext) -> float:
+    """Return the dominant horizontal distance between the two finger links."""
+    left = ctx.left_finger.get_pos()[0]
+    right = ctx.right_finger.get_pos()[0]
+    return max(abs(float(left[0] - right[0])), abs(float(left[1] - right[1])))
+
+
 def _should_weld_grasp(ctx: TrajSceneContext, attach_dist_m: float) -> bool:
-    """Debug weld gate: allow only real bilateral finger/object contact.
+    """Debug contact-conditioned weld: allow only real bilateral finger/object contact.
 
     ``attach_dist_m`` is kept for API compatibility with older callers; default
     sim no longer uses distance-based attachment.

@@ -18,32 +18,20 @@ import torch
 
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
+from ufactory.config import load_runtime_config, resolve_grasp_object_spec
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
-from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
+from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
+from ufactory.simulation import GenesisRuntimeManager
 from ufactory.robots.paths import robot_visual_glb_urdf, robot_urdf
 from ufactory.robots.registry import joint_names
 from ufactory.robots.runtime import GripperControlParams, RobotRuntimeProfile, get_robot_runtime_profile
 
 TABLE_HEIGHT = 0.4  # meters; robot base sits on the table surface
 DEFAULT_ROBOT_BASE_POS = (0.30, 0.00, TABLE_HEIGHT)
-OBJ_SIZE = (0.030, 0.030, 0.030)
-
-# Object and target xy are expressed in the robot base frame. Defaults are
-# tuned for the 700 mm-reach xArm5/6/7 and 850 mm-reach UF850; Lite6 (440 mm
-# reach) uses smaller LITE6_* defaults (see below).
-OBJ_XY = (0.30, 0.00)
-PLACE_XY = (0.30, 0.30)
-LIFT_Z = 0.30
-HOME_Z = 0.30
-
 # Lite6 has a 440 mm reach (vs. 700-850 mm for the other arms). The installed
 # reversed Lite6 gripper has a 20-38 mm physical opening, so the default task
-# uses a 30 mm cube and closer-in workspace coordinates.
-LITE6_OBJ_SIZE = (0.030, 0.030, 0.030)
-LITE6_OBJ_XY = (0.20, 0.00)
-LITE6_PLACE_XY = (0.20, 0.15)
-LITE6_LIFT_Z = 0.20
-LITE6_HOME_Z = 0.20
+# uses the shared cube with closer-in configured workspace coordinates.
 
 # Default grasp gaps intentionally close past the 30 mm cube faces so Genesis
 # rigid contact and friction decide whether the block can be carried. Gripper
@@ -95,13 +83,10 @@ RIGID_NOSLIP_ITERATIONS = 5
 RIGID_CONSTRAINT_TIMECONST = 0.005
 MIMIC_CONSTRAINT_SOL_PARAMS = (0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0)
 
-# Red painted wood block (30 mm cube, ~16.7 g ≈ 17 g) and silicone fingertip pads.
-# Contact stiffness uses Genesis default rigid sol_params (not overridden).
-OBJ_INERTIAL_MASS_KG = 0.017
+# Painted wood block and silicone fingertip pads. Size and mass come from the
+# shared grasp-place runtime configuration; contact stiffness remains code policy.
 OBJ_FRICTION = 1.0
 FINGER_FRICTION = 1.2
-# Backward-compatible aliases (same values for all gripper families).
-LITE6_OBJ_INERTIAL_MASS_KG = OBJ_INERTIAL_MASS_KG
 LITE6_OBJ_FRICTION = OBJ_FRICTION
 LITE6_FINGER_FRICTION = FINGER_FRICTION
 
@@ -128,6 +113,14 @@ class TrajSceneContext:
     grasp_link6_z: float
     pre_grasp_link6_z: float
     lift_link6_z: float
+    base_yaw_rad: float = 0.0
+    control_all_gripper_dofs: bool = False
+    control_all_gripper_dofs_on_open: bool = False
+    gripper_open_dof_idx: list[int] = field(default_factory=list)
+    # Optional staged opening: use these DOFs until the measured horizontal
+    # finger span grows by ``gripper_initial_open_clearance_m``.
+    gripper_initial_open_dof_idx: list[int] = field(default_factory=list)
+    gripper_initial_open_clearance_m: float = 0.0
     robot_urdf_path: str = ""
     kinematics_yaml_path: str | None = None
     kinematics_suffix: str | None = None
@@ -135,14 +128,32 @@ class TrajSceneContext:
     gripper: GripperControlParams | None = None
     home_pos_base: list[float] = field(default_factory=list)
     table_height: float = TABLE_HEIGHT
-    obj_xy: tuple[float, float] = OBJ_XY
-    place_xy: tuple[float, float] = PLACE_XY
-    obj_size: tuple[float, float, float] = OBJ_SIZE
+    obj_xy: tuple[float, float] = (0.0, 0.0)
+    place_xy: tuple[float, float] = (0.0, 0.0)
+    obj_size: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    obj_mass_kg: float = 0.0
+    obj_pos_base: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    place_pos_base: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     def base_to_world(self, pos_base) -> list[float]:
         """Convert a base-frame xyz (m) to the Genesis world frame (m)."""
         p = [float(pos_base[0]), float(pos_base[1]), float(pos_base[2])]
-        return [p[0] + self.base_pos_world[0], p[1] + self.base_pos_world[1], p[2] + self.base_pos_world[2]]
+        c = math.cos(self.base_yaw_rad)
+        s = math.sin(self.base_yaw_rad)
+        return [
+            self.base_pos_world[0] + c * p[0] - s * p[1],
+            self.base_pos_world[1] + s * p[0] + c * p[1],
+            self.base_pos_world[2] + p[2],
+        ]
+
+    def world_to_base(self, pos_world) -> list[float]:
+        """Convert a Genesis world-frame xyz (m) to the robot base frame."""
+        dx = float(pos_world[0]) - self.base_pos_world[0]
+        dy = float(pos_world[1]) - self.base_pos_world[1]
+        dz = float(pos_world[2]) - self.base_pos_world[2]
+        c = math.cos(self.base_yaw_rad)
+        s = math.sin(self.base_yaw_rad)
+        return [c * dx + s * dy, -s * dx + c * dy, dz]
 
 
 def _base_to_world(base_pos_world: tuple[float, float, float], pos_base) -> list[float]:
@@ -175,24 +186,25 @@ def _robot_urdf_for_visual_model(runtime: RobotRuntimeProfile, visual_model: str
 
 def _robot_defaults(robot_key: str) -> dict:
     """Per-robot default scene geometry (object/place xy, key heights)."""
-    if get_robot_runtime_profile(robot_key).model.key == "lite6":
-        return {
-            "base_pos": DEFAULT_ROBOT_BASE_POS,
-            "obj_xy": LITE6_OBJ_XY,
-            "place_xy": LITE6_PLACE_XY,
-            "obj_size": LITE6_OBJ_SIZE,
-            "lift_z": LITE6_LIFT_Z,
-            "home_z": LITE6_HOME_Z,
-            "grasp_gap_m": LITE6_DEFAULT_GRIPPER_GRASP_GAP_M,
-        }
+    runtime = get_robot_runtime_profile(robot_key)
+    config = load_runtime_config(runtime.model.key)
+    params = config.task.parameters
+    object_spec = resolve_grasp_object_spec(config)
+    obj_pos_base = tuple(float(value) for value in params["fixed_object_position_m"])
+    place_pos_base = tuple(float(value) for value in params["fixed_target_position_m"])
+    default_ee = tuple(float(value) for value in params["default_ee_position_m"])
+    is_lite6 = runtime.model.key == "lite6"
     return {
         "base_pos": DEFAULT_ROBOT_BASE_POS,
-        "obj_xy": OBJ_XY,
-        "place_xy": PLACE_XY,
-        "obj_size": OBJ_SIZE,
-        "lift_z": LIFT_Z,
-        "home_z": HOME_Z,
-        "grasp_gap_m": DEFAULT_GRIPPER_GRASP_GAP_M,
+        "obj_xy": obj_pos_base[:2],
+        "place_xy": place_pos_base[:2],
+        "obj_pos_base": obj_pos_base,
+        "place_pos_base": place_pos_base,
+        "obj_size": object_spec.size_m,
+        "obj_mass_kg": object_spec.mass_kg,
+        "lift_z": default_ee[2],
+        "home_z": default_ee[2],
+        "grasp_gap_m": LITE6_DEFAULT_GRIPPER_GRASP_GAP_M if is_lite6 else DEFAULT_GRIPPER_GRASP_GAP_M,
     }
 
 
@@ -274,7 +286,10 @@ def build_scene(
     kinematics_yaml_dir: str | None = None,
     obj_xy: tuple[float, float] | None = None,
     place_xy: tuple[float, float] | None = None,
+    obj_pos_base: tuple[float, float, float] | None = None,
+    place_pos_base: tuple[float, float, float] | None = None,
     obj_size: tuple[float, float, float] | None = None,
+    obj_mass_kg: float | None = None,
     lift_z: float | None = None,
     home_z: float | None = None,
 ) -> TrajSceneContext:
@@ -282,9 +297,9 @@ def build_scene(
 
     ``robot_key`` selects the arm profile (``xarm5``/``xarm6``/``xarm7``/``lite6``/``uf850``);
     the gripper (Gripper G2 or Lite6 parallel gripper) is resolved from that
-    robot's runtime profile. Any of ``obj_xy``/``place_xy``/``obj_size``/``lift_z``/``home_z``
-    left as ``None`` fall back to the robot's tuned default (Lite6's smaller
-    reach and gripper opening use different defaults than the other arms).
+    robot's runtime profile. Full base-frame object positions are preferred.
+    Legacy ``obj_xy``/``place_xy`` inputs remain supported and use half the
+    configured object height as their table-resting z coordinate.
     """
     runtime = get_robot_runtime_profile(robot_key)
     profile = runtime.model
@@ -294,12 +309,37 @@ def build_scene(
     defaults = _robot_defaults(profile.key)
 
     robot_base = tuple(float(v) for v in (base_pos if base_pos is not None else defaults["base_pos"]))
-    obj_xy = tuple(obj_xy) if obj_xy is not None else defaults["obj_xy"]
-    place_xy = tuple(place_xy) if place_xy is not None else defaults["place_xy"]
-    obj_size = tuple(obj_size) if obj_size is not None else defaults["obj_size"]
+    obj_size = tuple(float(value) for value in (obj_size if obj_size is not None else defaults["obj_size"]))
+    if len(obj_size) != 3 or any(not math.isfinite(value) or value <= 0.0 for value in obj_size):
+        raise ValueError("obj_size must contain three positive finite values")
+    if obj_pos_base is not None and obj_xy is not None:
+        raise ValueError("obj_pos_base and obj_xy are mutually exclusive")
+    if place_pos_base is not None and place_xy is not None:
+        raise ValueError("place_pos_base and place_xy are mutually exclusive")
+    rest_center_z = obj_size[2] / 2.0
+    if obj_pos_base is None:
+        selected_xy = tuple(obj_xy) if obj_xy is not None else defaults["obj_xy"]
+        obj_pos_base = (float(selected_xy[0]), float(selected_xy[1]), rest_center_z)
+    else:
+        obj_pos_base = tuple(float(value) for value in obj_pos_base)
+    if place_pos_base is None:
+        selected_xy = tuple(place_xy) if place_xy is not None else defaults["place_xy"]
+        place_pos_base = (float(selected_xy[0]), float(selected_xy[1]), rest_center_z)
+    else:
+        place_pos_base = tuple(float(value) for value in place_pos_base)
+    if len(obj_pos_base) != 3 or not all(math.isfinite(value) for value in obj_pos_base):
+        raise ValueError("obj_pos_base must contain three finite values")
+    if len(place_pos_base) != 3 or not all(math.isfinite(value) for value in place_pos_base):
+        raise ValueError("place_pos_base must contain three finite values")
+    obj_mass_kg = float(defaults["obj_mass_kg"] if obj_mass_kg is None else obj_mass_kg)
+    if not math.isfinite(obj_mass_kg) or obj_mass_kg <= 0.0:
+        raise ValueError("obj_mass_kg must be finite and positive")
+    obj_xy = obj_pos_base[:2]
+    place_xy = place_pos_base[:2]
     lift_z = float(lift_z) if lift_z is not None else defaults["lift_z"]
     home_z = float(home_z) if home_z is not None else defaults["home_z"]
 
+    GenesisRuntimeManager.active()
     robot_urdf_path, use_glb_visual = _robot_urdf_for_visual_model(runtime, visual_model)
     kinematics_yaml_path = None
     if kinematics_yaml is not None or kinematics_suffix is not None:
@@ -312,11 +352,6 @@ def build_scene(
             robot_name=profile.robot_name,
             joint_count=profile.dof,
         )
-    if use_glb_visual:
-        enable_glb_pbr_surfaces()
-
-    gs.init(backend=gs.gpu, precision="32", logging_level="warning", seed=1)
-
     dt = 1.0 / float(rate)
     substep_dt = dt / int(substeps)
     constraint_timeconst = max(float(constraint_timeconst), 2.0 * substep_dt)
@@ -370,13 +405,13 @@ def build_scene(
         **robot_morph_kwargs,
     )
     if use_glb_visual:
-        robot = scene.add_entity(robot_morph, surface=glb_view_surface())
+        with glb_pbr_surfaces():
+            robot = scene.add_entity(robot_morph, surface=glb_view_surface())
     else:
         robot = scene.add_entity(robot_morph)
 
-    obj_half_z = obj_size[2] / 2
-    obj_pos_world = _base_to_world(robot_base, (obj_xy[0], obj_xy[1], obj_half_z))
-    place_pos_world = _base_to_world(robot_base, (place_xy[0], place_xy[1], obj_half_z))
+    obj_pos_world = _base_to_world(robot_base, obj_pos_base)
+    place_pos_world = _base_to_world(robot_base, place_pos_base)
     obj = scene.add_entity(
         gs.morphs.Box(
             size=tuple(obj_size),
@@ -411,13 +446,13 @@ def build_scene(
     if contact_sol_params is not None:
         _set_contact_sol_params((obj, left_finger, right_finger), contact_sol_params)
 
-    # Painted wood cube (17 g, μ=1.0) + silicone fingertip pads (μ=1.2).
+    # Configured painted-wood cube + silicone fingertip pads (μ=1.2).
     # Stiffness: leave default rigid contact sol_params. Set before any stepping.
     obj.set_friction(float(OBJ_FRICTION))
     left_finger.set_friction(float(FINGER_FRICTION))
     right_finger.set_friction(float(FINGER_FRICTION))
     obj.set_links_inertial_mass(
-        torch.tensor([OBJ_INERTIAL_MASS_KG], device=gs.device, dtype=gs.tc_float),
+        torch.tensor([obj_mass_kg], device=gs.device, dtype=gs.tc_float),
     )
 
     jnames = joint_names(profile)
@@ -427,10 +462,12 @@ def build_scene(
 
     runtime_arm = runtime.arm
     robot.set_dofs_kp(
-        torch.tensor(runtime_arm.kp, device=gs.device, dtype=gs.tc_float), arm_dof_idx,
+        torch.tensor(runtime_arm.kp, device=gs.device, dtype=gs.tc_float),
+        arm_dof_idx,
     )
     robot.set_dofs_kv(
-        torch.tensor(runtime_arm.kv, device=gs.device, dtype=gs.tc_float), arm_dof_idx,
+        torch.tensor(runtime_arm.kv, device=gs.device, dtype=gs.tc_float),
+        arm_dof_idx,
     )
     robot.set_dofs_force_range(
         torch.tensor(runtime_arm.force_lower, device=gs.device, dtype=gs.tc_float),
@@ -438,10 +475,12 @@ def build_scene(
         arm_dof_idx,
     )
     robot.set_dofs_kp(
-        torch.tensor([gripper.kp], device=gs.device, dtype=gs.tc_float), gripper_dof_idx,
+        torch.tensor([gripper.kp], device=gs.device, dtype=gs.tc_float),
+        gripper_dof_idx,
     )
     robot.set_dofs_kv(
-        torch.tensor([gripper.kv], device=gs.device, dtype=gs.tc_float), gripper_dof_idx,
+        torch.tensor([gripper.kv], device=gs.device, dtype=gs.tc_float),
+        gripper_dof_idx,
     )
     robot.set_dofs_force_range(
         torch.tensor([gripper.force_lower], device=gs.device, dtype=gs.tc_float),
@@ -454,11 +493,12 @@ def build_scene(
         all_gripper_dof_idx,
     )
     robot.set_dofs_frictionloss(
-        torch.full((n_grip,), gripper.frictionloss, device=gs.device, dtype=gs.tc_float), all_gripper_dof_idx,
+        torch.full((n_grip,), gripper.frictionloss, device=gs.device, dtype=gs.tc_float),
+        all_gripper_dof_idx,
     )
 
     dq = xyz_to_quat(
-        torch.tensor([[math.pi, 0.0, 0.0]], device=gs.device, dtype=gs.tc_float),
+        torch.tensor([GRIPPER_DOWN_RPY_RAD], device=gs.device, dtype=gs.tc_float),
         rpy=True,
         degrees=False,
     )
@@ -466,7 +506,10 @@ def build_scene(
     home_pos = _base_to_world(robot_base, home_pos_base)
     home_link6_pos = torch.tensor([home_pos], device=gs.device, dtype=gs.tc_float)
     home_qpos_result = robot.inverse_kinematics(
-        link=ik_link, pos=home_link6_pos, quat=dq, dofs_idx_local=arm_dof_idx,
+        link=ik_link,
+        pos=home_link6_pos,
+        quat=dq,
+        dofs_idx_local=arm_dof_idx,
     )
     init_qpos = torch.zeros(1, robot.n_dofs, device=gs.device, dtype=gs.tc_float)
     for i, idx in enumerate(arm_dof_idx):
@@ -531,6 +574,9 @@ def build_scene(
         obj_xy=obj_xy,
         place_xy=place_xy,
         obj_size=obj_size,
+        obj_mass_kg=obj_mass_kg,
+        obj_pos_base=obj_pos_base,
+        place_pos_base=place_pos_base,
     )
 
 

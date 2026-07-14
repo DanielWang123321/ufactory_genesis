@@ -1,0 +1,13 @@
+schema_version: 1
+task:
+  name: reach
+  parameters:
+    episode_length_s: 5.0
+    control_dt_s: 0.02
+    action_scale_rad: 0.05
+    action_clip: 1.0
+    servo_speed_rad_s: 0.5
+    target_position_lower_m: [0.15, -0.30, 0.05]
+    target_position_upper_m: [0.55, 0.30, 0.50]
+  allowed_contacts:
+    reach: []

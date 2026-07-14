@@ -72,9 +72,13 @@ def validation_configs(runtime: RobotRuntimeProfile) -> list[tuple[str, np.ndarr
     configs = [("home", np.asarray(runtime.arm.home_qpos, dtype=np.float64))]
     configs.append(("default", np.asarray(runtime.arm.default_qpos, dtype=np.float64)))
     if dof >= 5:
-        configs.append(("A", np.asarray([0.5, -0.3, 0.0, 0.0, 0.3, *([0.0] * max(0, dof - 5))], dtype=np.float64)[:dof]))
+        configs.append(
+            ("A", np.asarray([0.5, -0.3, 0.0, 0.0, 0.3, *([0.0] * max(0, dof - 5))], dtype=np.float64)[:dof])
+        )
     if dof >= 6:
-        configs.append(("B", np.asarray([0.0, -0.5, -0.1, 0.5, 0.5, 0.0, *([0.0] * max(0, dof - 6))], dtype=np.float64)[:dof]))
+        configs.append(
+            ("B", np.asarray([0.0, -0.5, -0.1, 0.5, 0.5, 0.0, *([0.0] * max(0, dof - 6))], dtype=np.float64)[:dof])
+        )
     return configs
 
 

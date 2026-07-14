@@ -132,7 +132,9 @@ class ArmReachEnv:
         self.episode_length_buf += 1
         current_qpos = self.robot.get_dofs_position(self.dof_idx)
         if actions.shape != current_qpos.shape:
-            raise ValueError(f"Action shape {tuple(actions.shape)} does not match qpos shape {tuple(current_qpos.shape)}")
+            raise ValueError(
+                f"Action shape {tuple(actions.shape)} does not match qpos shape {tuple(current_qpos.shape)}"
+            )
         joint_delta = reach_action_delta_torch(
             actions,
             action_scale=self.action_scale,

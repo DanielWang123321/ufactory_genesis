@@ -9,4 +9,4 @@ from ufactory.kinematics.validation import cli_fk
 
 
 if __name__ == "__main__":
-  sys.exit(cli_fk())
+    sys.exit(cli_fk())

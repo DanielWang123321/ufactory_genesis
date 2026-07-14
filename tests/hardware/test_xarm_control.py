@@ -45,48 +45,39 @@ def test_prepare_arm_for_motion_happy_path():
     arm = _make_arm(state=0)
     prepare_arm_for_motion(arm, mode=MODE_POSITION)
 
-    arm.clean_warn.assert_called()
+    arm.clean_warn.assert_not_called()
     arm.motion_enable.assert_called_with(enable=True)
     arm.set_mode.assert_called_with(MODE_POSITION)
     arm.set_state.assert_called_with(STATE_MOTION)
 
 
-def test_prepare_arm_for_motion_waits_out_of_stop_state():
+def test_prepare_arm_for_motion_rejects_stop_state_without_recovery():
     arm = _make_arm(state=REPORT_STATE_STOPPING)
-    states = [REPORT_STATE_STOPPING, REPORT_STATE_STOPPING, 0]
-
-    def read_state():
-        return states.pop(0) if states else 0
-
-    type(arm).state = property(lambda self: read_state())
-
-    prepare_arm_for_motion(arm, mode=MODE_SERVO, retries=3, poll_timeout_s=1.0)
-    arm.set_mode.assert_called_with(MODE_SERVO)
+    with pytest.raises(RuntimeError, match="not ready"):
+        prepare_arm_for_motion(arm, mode=MODE_SERVO)
+    arm.emergency_stop.assert_not_called()
 
 
-def test_prepare_arm_for_motion_cleans_error_first():
+def test_prepare_arm_for_motion_rejects_error_without_cleaning():
     arm = _make_arm(state=0, error_code=1)
 
-    def clear_error():
-        arm.error_code = 0
-        return 0
-
-    arm.clean_error.side_effect = clear_error
-    prepare_arm_for_motion(arm)
-    arm.clean_error.assert_called()
+    with pytest.raises(RuntimeError, match="active error"):
+        prepare_arm_for_motion(arm)
+    arm.clean_error.assert_not_called()
 
 
 def test_prepare_arm_for_motion_fails_when_stuck_in_stop():
     arm = _make_arm(state=REPORT_STATE_STOPPING)
-    with pytest.raises(RuntimeError, match="state=4"):
+    with pytest.raises(RuntimeError, match="not ready"):
         prepare_arm_for_motion(arm, retries=1, poll_timeout_s=0.05)
 
 
-def test_prepare_arm_for_motion_retries_on_set_mode_failure():
+def test_prepare_arm_for_motion_stops_on_set_mode_failure():
     arm = _make_arm(state=0)
-    arm.set_mode.side_effect = [1, 0]
-    prepare_arm_for_motion(arm, retries=2, poll_timeout_s=0.05)
-    assert arm.set_mode.call_count == 2
+    arm.set_mode.return_value = 1
+    with pytest.raises(RuntimeError, match="without automatic recovery"):
+        prepare_arm_for_motion(arm, retries=2, poll_timeout_s=0.05)
+    assert arm.set_mode.call_count == 1
 
 
 def test_assert_motion_ready_rejects_stop_state():
@@ -132,10 +123,11 @@ def test_prepare_gripper_g2_for_motion_happy_path():
     arm.set_gripper_mode.assert_called_with(0)
 
 
-def test_prepare_gripper_g2_for_motion_cleans_error_first():
+def test_prepare_gripper_g2_for_motion_rejects_error_without_cleaning():
     arm = _make_gripper_arm(err_code=5)
-    prepare_gripper_g2_for_motion(arm, poll_s=0.0)
-    arm.clean_gripper_error.assert_called()
+    with pytest.raises(RuntimeError, match="recover manually"):
+        prepare_gripper_g2_for_motion(arm, poll_s=0.0)
+    arm.clean_gripper_error.assert_not_called()
 
 
 def test_prepare_gripper_g2_for_motion_fails_after_retries():

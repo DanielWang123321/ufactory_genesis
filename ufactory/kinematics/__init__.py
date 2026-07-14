@@ -1,6 +1,7 @@
 """Kinematics calibration and Genesis FK/IK validation helpers."""
 
 from ufactory.kinematics.calibration import (
+    KinematicsCalibration,
     DEFAULT_KINEMATICS_SUFFIX_ENV,
     LITE6_KINEMATICS_MIN_SN_MODEL_CODE,
     XARM_KINEMATICS_MIN_SN_MODEL_CODE,
@@ -10,6 +11,7 @@ from ufactory.kinematics.calibration import (
     get_robot_sn,
     has_per_unit_kinematics_calibration,
     load_kinematics_yaml,
+    load_kinematics_calibration,
     log_kinematics_sn_status,
     parse_sn_model_code,
     prepare_robot_model_for_verification,
@@ -18,17 +20,22 @@ from ufactory.kinematics.calibration import (
     robot_name_from_firmware,
     validate_kinematics_calibration_request,
 )
+from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW, GRIPPER_DOWN_RPY_RAD
 
 __all__ = [
     "DEFAULT_KINEMATICS_SUFFIX_ENV",
+    "GRIPPER_DOWN_QUAT_XYZW",
+    "GRIPPER_DOWN_RPY_RAD",
     "LITE6_KINEMATICS_MIN_SN_MODEL_CODE",
     "XARM_KINEMATICS_MIN_SN_MODEL_CODE",
     "build_calibrated_urdf",
+    "KinematicsCalibration",
     "fetch_robot_sn_from_ip",
     "find_kinematics_yaml",
     "get_robot_sn",
     "has_per_unit_kinematics_calibration",
     "load_kinematics_yaml",
+    "load_kinematics_calibration",
     "log_kinematics_sn_status",
     "parse_sn_model_code",
     "prepare_robot_model_for_verification",

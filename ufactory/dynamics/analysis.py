@@ -17,13 +17,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import xml.etree.ElementTree as ET
 
 import numpy as np
 
 from ufactory.dynamics.report import (
-    ABS_ERR_LIMITS,
     L2_ERR_LIMIT,
     POS_ERR_TOL,
     REL_ERR_LIMIT,
@@ -35,11 +35,9 @@ from ufactory.dynamics.report import (
     ValidationStatus,
     _abs_err_limits,
     _effort_limits,
-    _runtime_dof,
     array_or_nan,
 )
 from ufactory.dynamics.poses import (
-    JOINT_NAMES,
     SafePose,
     _XARM6_RUNTIME,
 )
@@ -725,7 +723,9 @@ def validate_urdf_dynamics(urdf_path: str | Path, *, com_abs_limit_m: float = 2.
                 if attr not in limit.attrib:
                     issues.append(UrdfDynamicsIssue("ERROR", name, f"missing limit {attr}"))
                 elif float(limit.attrib[attr]) <= 0:
-                    issues.append(UrdfDynamicsIssue("ERROR", name, f"limit {attr} must be positive", limit.attrib[attr]))
+                    issues.append(
+                        UrdfDynamicsIssue("ERROR", name, f"limit {attr} must be positive", limit.attrib[attr])
+                    )
         dynamics = joint.find("dynamics")
         if dynamics is None:
             issues.append(UrdfDynamicsIssue("WARN", name, "missing joint dynamics block"))
@@ -734,6 +734,8 @@ def validate_urdf_dynamics(urdf_path: str | Path, *, com_abs_limit_m: float = 2.
             if attr not in dynamics.attrib:
                 issues.append(UrdfDynamicsIssue("WARN", name, f"missing dynamics {attr}"))
             elif float(dynamics.attrib[attr]) < 0:
-                issues.append(UrdfDynamicsIssue("ERROR", name, f"dynamics {attr} must be non-negative", dynamics.attrib[attr]))
+                issues.append(
+                    UrdfDynamicsIssue("ERROR", name, f"dynamics {attr} must be non-negative", dynamics.attrib[attr])
+                )
 
     return issues

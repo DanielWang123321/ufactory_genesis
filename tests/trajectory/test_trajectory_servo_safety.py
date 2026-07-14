@@ -7,24 +7,24 @@ import math
 import numpy as np
 import pytest
 
-from ufactory.trajectory import (
+from ufactory.trajectory.planner import (
     CartesianWaypoint,
     JointWaypoint,
-    RealExecutorConfig,
-    ServoLimits,
-    Program,
-    Segment,
-    TrajectorySafetyError,
     TrajectoryPlannerConfig,
-    build_pickplace_program,
-    check_segment_safety,
     plan_cartesian_waypoints,
     plan_joint_waypoints,
+)
+from ufactory.trajectory.real_executor import (
+    RealExecutorConfig,
+    ServoLimits,
+    TrajectorySafetyError,
+    _read_reported_target,
+    _segment_servo_targets,
+    check_segment_safety,
     replay_real,
     validate_servo_stream,
 )
-from ufactory.trajectory.real_executor import _segment_servo_targets
-from ufactory.trajectory.real_executor import _read_reported_target
+from ufactory.trajectory.segments import Program, Segment, build_pickplace_program
 
 
 def test_joint_jump_at_100hz_fails_with_reported_degrees_per_second():
@@ -64,7 +64,9 @@ def test_default_grasp_place_program_passes_servo_stream_limits_at_50hz():
 
     max_xyz_speed = max(s.max_speed for s in stats if s.kind == "c")
     max_xyz_acc = max(s.max_acc for s in stats if s.kind == "c")
-    assert max_xyz_speed == pytest.approx(142.47, abs=0.2)
+    # v0.2.5 rounds the minimum LSPB duration up to a whole tick, so the
+    # sampled stream cannot exceed its analytical limit.
+    assert max_xyz_speed == pytest.approx(139.85, abs=0.2)
     assert max_xyz_acc == pytest.approx(800.0, abs=0.5)
 
 
@@ -206,11 +208,23 @@ def _default_waypoints() -> list[dict]:
     return [
         {"type": "movel", "pose_start": home, "pose_end": pre_grasp, "label": "home->pregrasp"},
         {"type": "movel", "pose_start": pre_grasp, "pose_end": grasp, "label": "descend"},
-        {"type": "gripper", "gap_start": grip_open_m, "gap_end": grip_close_m, "duration": grip_duration_s, "label": "grip"},
+        {
+            "type": "gripper",
+            "gap_start": grip_open_m,
+            "gap_end": grip_close_m,
+            "duration": grip_duration_s,
+            "label": "grip",
+        },
         {"type": "movel", "pose_start": grasp, "pose_end": lift, "label": "lift"},
         {"type": "movel", "pose_start": lift, "pose_end": place_top, "label": "transit"},
         {"type": "movel", "pose_start": place_top, "pose_end": place_grasp, "label": "place-descend"},
-        {"type": "gripper", "gap_start": grip_close_m, "gap_end": grip_open_m, "duration": grip_duration_s, "label": "release"},
+        {
+            "type": "gripper",
+            "gap_start": grip_close_m,
+            "gap_end": grip_open_m,
+            "duration": grip_duration_s,
+            "label": "release",
+        },
         {"type": "movel", "pose_start": place_grasp, "pose_end": retreat, "label": "retreat"},
         {"type": "movel", "pose_start": retreat, "pose_end": home, "label": "return-home"},
     ]

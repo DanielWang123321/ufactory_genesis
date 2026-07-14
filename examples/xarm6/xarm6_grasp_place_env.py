@@ -24,13 +24,13 @@ import torch
 
 import _bootstrap  # noqa: F401
 import genesis as gs
-from genesis.utils.geom import xyz_to_quat
+from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.manipulation.frames import base_to_world_pos, world_to_base_pos
 from ufactory.grippers.g2 import (
     GRIPPER_G2_OPEN_GAP_M,
     GRIPPER_G2_SIM_CLOSE_DRIVE,
 )
-from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION, OBJ_INERTIAL_MASS_KG
+from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION
 
 
 class XArm6GraspPlaceEnv:
@@ -59,6 +59,9 @@ class XArm6GraspPlaceEnv:
 
         self.table_height = float(env_cfg["table_height"])
         self.obj_size = tuple(float(v) for v in env_cfg["obj_size"])
+        self.obj_mass_kg = float(env_cfg["obj_mass_kg"])
+        if not math.isfinite(self.obj_mass_kg) or self.obj_mass_kg <= 0.0:
+            raise ValueError("obj_mass_kg must be finite and positive")
         self.obj_size_t = torch.tensor(self.obj_size, device=self.device, dtype=gs.tc_float)
         self.obj_rest_z_base = self.obj_size[2] / 2.0
         self.grasp_center_offset_z = float(env_cfg.get("grasp_center_offset_z", 0.065))
@@ -134,18 +137,14 @@ class XArm6GraspPlaceEnv:
         self.left_finger_link.set_friction(float(FINGER_FRICTION))
         self.right_finger_link.set_friction(float(FINGER_FRICTION))
         self.obj.set_links_inertial_mass(
-            torch.tensor([OBJ_INERTIAL_MASS_KG], device=self.device, dtype=gs.tc_float),
+            torch.tensor([self.obj_mass_kg], device=self.device, dtype=gs.tc_float),
         )
         self.collision_monitor_links = [
-            self.robot.get_link(name)
-            for name in robot_cfg.get("collision_monitor_links", [])
+            self.robot.get_link(name) for name in robot_cfg.get("collision_monitor_links", [])
         ]
 
         self.arm_joint_names = robot_cfg["arm_joint_names"]
-        self.arm_dof_idx = [
-            self.robot.get_joint(name).dofs_idx_local[0]
-            for name in self.arm_joint_names
-        ]
+        self.arm_dof_idx = [self.robot.get_joint(name).dofs_idx_local[0] for name in self.arm_joint_names]
         self.gripper_joint_name = robot_cfg["gripper_joint_name"]
         self.gripper_dof_idx = [self.robot.get_joint(self.gripper_joint_name).dofs_idx_local[0]]
         self.all_dof_idx = self.arm_dof_idx + self.gripper_dof_idx
@@ -216,8 +215,12 @@ class XArm6GraspPlaceEnv:
             self.arm_dof_idx,
         )
 
-        self.robot.set_dofs_kp(torch.tensor([robot_cfg["gripper_kp"]], device=self.device, dtype=gs.tc_float), self.gripper_dof_idx)
-        self.robot.set_dofs_kv(torch.tensor([robot_cfg["gripper_kv"]], device=self.device, dtype=gs.tc_float), self.gripper_dof_idx)
+        self.robot.set_dofs_kp(
+            torch.tensor([robot_cfg["gripper_kp"]], device=self.device, dtype=gs.tc_float), self.gripper_dof_idx
+        )
+        self.robot.set_dofs_kv(
+            torch.tensor([robot_cfg["gripper_kv"]], device=self.device, dtype=gs.tc_float), self.gripper_dof_idx
+        )
         self.robot.set_dofs_force_range(
             torch.tensor([robot_cfg["gripper_force_lower"]], device=self.device, dtype=gs.tc_float),
             torch.tensor([robot_cfg["gripper_force_upper"]], device=self.device, dtype=gs.tc_float),
@@ -225,8 +228,7 @@ class XArm6GraspPlaceEnv:
         )
 
         self.all_gripper_dof_idx = [
-            self.robot.get_joint(name).dofs_idx_local[0]
-            for name in robot_cfg["all_gripper_joint_names"]
+            self.robot.get_joint(name).dofs_idx_local[0] for name in robot_cfg["all_gripper_joint_names"]
         ]
         n_grip = len(self.all_gripper_dof_idx)
         self.robot.set_dofs_damping(
@@ -252,11 +254,8 @@ class XArm6GraspPlaceEnv:
             dtype=gs.tc_float,
         ).expand(self.num_envs, 3)
         default_ee_world = self.base_to_world(default_ee_base)
-        down_quat = xyz_to_quat(
-            torch.tensor([[math.pi, 0.0, 0.0]], device=self.device, dtype=gs.tc_float),
-            rpy=True,
-            degrees=False,
-        ).expand(self.num_envs, 4)
+        x, y, z, w = GRIPPER_DOWN_QUAT_XYZW
+        down_quat = torch.tensor([[w, x, y, z]], device=self.device, dtype=gs.tc_float).expand(self.num_envs, 4)
         init_qpos = self.robot.inverse_kinematics(
             link=self.ik_link,
             pos=default_ee_world,
@@ -336,7 +335,6 @@ class XArm6GraspPlaceEnv:
 
         rand_obj = torch.rand(n, 3, device=self.device, dtype=gs.tc_float)
         obj = self.obj_spawn_lower + rand_obj * (self.obj_spawn_upper - self.obj_spawn_lower)
-        obj[:, 2] = self.obj_rest_z_base
 
         if self.curriculum_stage == 1:
             target = obj.clone()
@@ -354,7 +352,6 @@ class XArm6GraspPlaceEnv:
         else:
             rand_target = torch.rand(n, 3, device=self.device, dtype=gs.tc_float)
             target = self.target_spawn_lower + rand_target * (self.target_spawn_upper - self.target_spawn_lower)
-        target[:, 2] = self.obj_rest_z_base
         return obj, target
 
     def _record_episode_outcomes(self, envs_idx: torch.Tensor) -> None:
@@ -409,8 +406,7 @@ class XArm6GraspPlaceEnv:
         self.extras["episode"] = {}
         for key in self.episode_sums.keys():
             self.extras["episode"]["rew_" + key] = (
-                torch.mean(self.episode_sums[key][envs_idx]).item()
-                / self.env_cfg["episode_length_s"]
+                torch.mean(self.episode_sums[key][envs_idx]).item() / self.env_cfg["episode_length_s"]
             )
             self.episode_sums[key][envs_idx] = 0.0
 
@@ -473,7 +469,9 @@ class XArm6GraspPlaceEnv:
 
     def step(self, actions: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         if actions.shape != (self.num_envs, self.num_actions):
-            raise ValueError(f"Action shape {tuple(actions.shape)} does not match ({self.num_envs}, {self.num_actions})")
+            raise ValueError(
+                f"Action shape {tuple(actions.shape)} does not match ({self.num_envs}, {self.num_actions})"
+            )
 
         self.episode_length_buf += 1
         raw_actions = actions
@@ -534,8 +532,7 @@ class XArm6GraspPlaceEnv:
         action_sat = (raw_actions.abs() >= self.action_clip - eps).float().mean(dim=-1)
         delta_sat = (joint_delta_unclipped.abs() >= self.max_joint_delta_rad - eps).float().mean(dim=-1)
         gripper_bound = (
-            (target_gap <= self.gripper_close_gap_m + eps)
-            | (target_gap >= self.gripper_open_gap_m - eps)
+            (target_gap <= self.gripper_close_gap_m + eps) | (target_gap >= self.gripper_open_gap_m - eps)
         ).float()
         self.episode_action_sat_sum += action_sat
         self.episode_delta_sat_sum += delta_sat
@@ -560,13 +557,7 @@ class XArm6GraspPlaceEnv:
         at_table = torch.abs(obj_base[:, 2] - self.obj_rest_z_base) < 0.025
         released = gap > (object_width + 0.02)
         stable = torch.norm(obj_vel, dim=-1) < 0.15
-        place_candidate = (
-            (xy_dist < self.place_success_dist_m)
-            & at_table
-            & released
-            & stable
-            & self.ever_grasped
-        )
+        place_candidate = (xy_dist < self.place_success_dist_m) & at_table & released & stable & self.ever_grasped
         self.place_stable_steps = torch.where(
             place_candidate,
             self.place_stable_steps + 1,

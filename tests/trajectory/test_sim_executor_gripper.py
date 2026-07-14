@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from ufactory.robots.runtime import G2_GRIPPER_PARAMS, LITE6_GRIPPER_PARAMS
+from ufactory.config import load_runtime_config, resolve_grasp_object_spec
 from ufactory.trajectory.mirror_executor import gap_m_from_drive
 from ufactory.trajectory.segments import Program, Segment
 from ufactory.trajectory.scene import (
@@ -16,7 +17,7 @@ from ufactory.trajectory.scene import (
     LITE6_FINGER_PAD_BELOW_FC,
     LITE6_GRASP_LINK6_Z_EXTRA_M,
     LITE6_GRASP_TABLE_CLEARANCE,
-    LITE6_OBJ_SIZE,
+    build_scene,
     default_grasp_gap_m,
     drive_for_gap_m,
     dry_heights,
@@ -50,6 +51,15 @@ def test_default_grasp_gaps_match_contact_preload_targets():
     assert default_grasp_gap_m("lite6") == pytest.approx(0.020)
 
 
+def test_scene_rejects_ambiguous_or_invalid_object_contract_before_genesis_init():
+    with pytest.raises(ValueError, match="obj_pos_base and obj_xy are mutually exclusive"):
+        build_scene(obj_xy=(0.3, 0.0), obj_pos_base=(0.3, 0.0, 0.015))
+    with pytest.raises(ValueError, match="place_pos_base and place_xy are mutually exclusive"):
+        build_scene(place_xy=(0.3, 0.3), place_pos_base=(0.3, 0.3, 0.015))
+    with pytest.raises(ValueError, match="obj_mass_kg must be finite and positive"):
+        build_scene(obj_mass_kg=0.0)
+
+
 def test_lite6_default_grasp_height_targets_flat_finger_pad():
     heights = dry_heights("lite6")
     # link6 height = table clearance + fingertip-plate length + link6->fc offset.
@@ -66,7 +76,8 @@ def test_lite6_default_grasp_height_targets_flat_finger_pad():
 
     # Positive clearance keeps the low boss/stop region above the cube top while
     # the large flat inner pad still spans the cube sides.
-    cube_top_below_fc = fc_above_table - LITE6_OBJ_SIZE[2]
+    cube_size = resolve_grasp_object_spec(load_runtime_config("lite6")).size_m
+    cube_top_below_fc = fc_above_table - cube_size[2]
     assert cube_top_below_fc == pytest.approx(0.012)
     boss_reach_below_fc = 0.0065
     assert cube_top_below_fc > boss_reach_below_fc
@@ -77,21 +88,33 @@ class _FakeRobot:
         self.contact_limited_drive = contact_limited_drive
         self.drive = 0.0
         self.grip_commands: list[float] = []
+        self.dof_commands: list[tuple[int, ...]] = []
+        self.force_commands: list[tuple[tuple[int, ...], tuple[float, ...]]] = []
         self._solver = _FakeSolver()
 
     def control_dofs_position(self, target, dofs_idx) -> None:
-        if dofs_idx == [1]:
+        command_idx = tuple(int(idx) for idx in dofs_idx)
+        self.dof_commands.append(command_idx)
+        if 1 in command_idx:
             cmd = float(target.reshape(-1)[0].item())
             self.grip_commands.append(cmd)
             self.drive = min(cmd, self.contact_limited_drive)
 
-    def get_dofs_position(self, _dofs_idx):
-        return torch.tensor([[self.drive]], dtype=torch.float32)
+    def get_dofs_position(self, dofs_idx):
+        return torch.full((1, len(dofs_idx)), self.drive, dtype=torch.float32)
+
+    def control_dofs_force(self, target, dofs_idx) -> None:
+        indices = tuple(int(idx) for idx in dofs_idx)
+        values = tuple(float(value) for value in target.reshape(-1).tolist())
+        self.force_commands.append((indices, values))
 
 
 class _FakeScene:
+    def __init__(self) -> None:
+        self.steps = 0
+
     def step(self) -> None:
-        pass
+        self.steps += 1
 
 
 class _FakeSolver:
@@ -165,6 +188,7 @@ class _FakeCtx:
     right_finger: _FakeLink | None = None
     obj_size: tuple[float, float, float] = (0.030, 0.030, 0.030)
     place_xy: tuple[float, float] = (0.30, 0.30)
+    place_pos_base: tuple[float, float, float] = (0.30, 0.30, 0.020)
     home_pos_base: tuple[float, float, float] = (0.0, 0.0, 0.0)
     gripper: object = G2_GRIPPER_PARAMS
 
@@ -208,6 +232,165 @@ def test_replay_sim_holds_contact_limited_gripper_drive_after_close(monkeypatch)
     assert robot.grip_commands[0] == pytest.approx(overclosed_target)
     assert robot.grip_commands[-1] == pytest.approx(expected_hold)
     assert robot.grip_commands[-1] < overclosed_target
+
+
+def test_replay_sim_metrics_use_full_place_position_after_physics_only_settle(monkeypatch):
+    monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
+
+    scene = _FakeScene()
+    ctx = _FakeCtx(
+        robot=_FakeRobot(contact_limited_drive=0.45),
+        scene=scene,
+        obj=_FakeObj(pos=(0.30, 0.30, 0.020)),
+        ik_link=_FakeLink(),
+        arm_dof_idx=[0],
+        gripper_dof_idx=[1],
+        home_qpos=np.zeros(2),
+        place_pos_base=(0.30, 0.30, 0.020),
+    )
+    program = Program(
+        rate=50.0,
+        segments=[
+            Segment(kind="movej", duration=0.02, v_max=1.0, a_max=1.0, q_start=np.zeros(1), q_end=np.zeros(1)),
+        ],
+    )
+
+    report = replay_sim(program, ctx)
+
+    assert report.place_error_mm == pytest.approx(0.0, abs=1e-4)
+    assert report.metric_settle_ticks == 2
+    assert scene.steps == sum(phase.ticks for phase in report.phases) + report.metric_settle_ticks
+
+
+def test_replay_sim_calls_on_tick_after_each_commanded_physics_step(monkeypatch):
+    monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
+
+    scene = _FakeScene()
+    ctx = _FakeCtx(
+        robot=_FakeRobot(contact_limited_drive=0.85),
+        scene=scene,
+        obj=_FakeObj(),
+        ik_link=_FakeLink(),
+        arm_dof_idx=[0],
+        gripper_dof_idx=[1],
+        home_qpos=np.zeros(2),
+    )
+    program = Program(
+        rate=50.0,
+        segments=[
+            Segment(
+                kind="gripper",
+                duration=0.04,
+                v_max=0.0,
+                a_max=0.0,
+                gap_start=0.022,
+                gap_end=0.084,
+                label="release",
+            ),
+            Segment(
+                kind="movej",
+                duration=0.02,
+                v_max=1.0,
+                a_max=1.0,
+                q_start=np.zeros(1),
+                q_end=np.zeros(1),
+                label="return",
+            ),
+        ],
+    )
+    observed: list[tuple[str, int, int]] = []
+
+    replay_sim(
+        program,
+        ctx,
+        on_tick=lambda segment, tick: observed.append((segment.label, tick, scene.steps)),
+    )
+
+    assert observed == [("release", 0, 1), ("release", 1, 2), ("return", 0, 3)]
+
+
+def test_replay_sim_controls_mimic_dofs_only_while_opening(monkeypatch):
+    monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
+
+    robot = _FakeRobot(contact_limited_drive=0.85)
+    ctx = _FakeCtx(
+        robot=robot,
+        scene=_FakeScene(),
+        obj=_FakeObj(),
+        ik_link=_FakeLink(),
+        arm_dof_idx=[0],
+        gripper_dof_idx=[1],
+        home_qpos=np.zeros(2),
+    )
+    ctx.all_gripper_dof_idx = [1, 2, 3, 4]
+    ctx.gripper_open_dof_idx = [1, 4]
+    program = Program(
+        rate=50.0,
+        segments=[
+            Segment(kind="gripper", duration=0.02, v_max=0.0, a_max=0.0, gap_start=0.084, gap_end=0.022),
+            Segment(kind="movej", duration=0.02, v_max=1.0, a_max=1.0, q_start=np.zeros(1), q_end=np.zeros(1)),
+            Segment(kind="gripper", duration=0.02, v_max=0.0, a_max=0.0, gap_start=0.022, gap_end=0.084),
+        ],
+    )
+
+    replay_sim(program, ctx)
+
+    gripper_commands = [indices for indices in robot.dof_commands if 1 in indices]
+    assert gripper_commands == [(1,), (1,), (1, 4)]
+    assert robot.force_commands == [((4,), (0.0,))]
+
+
+def test_replay_sim_uses_all_release_dofs_until_initial_clearance(monkeypatch):
+    monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
+
+    robot = _FakeRobot(contact_limited_drive=0.85)
+    ctx = _FakeCtx(
+        robot=robot,
+        scene=_FakeScene(),
+        obj=_FakeObj(),
+        ik_link=_FakeLink(),
+        left_finger=_FakeLink(pos=(0.0, -0.02, 0.0)),
+        right_finger=_FakeLink(pos=(0.0, 0.02, 0.0)),
+        arm_dof_idx=[0],
+        gripper_dof_idx=[1],
+        home_qpos=np.zeros(2),
+    )
+    ctx.all_gripper_dof_idx = [1, 2, 3, 4]
+    ctx.gripper_open_dof_idx = [1, 4]
+    ctx.gripper_initial_open_dof_idx = [1, 2, 3, 4]
+    ctx.gripper_initial_open_clearance_m = 0.003
+    program = Program(
+        rate=50.0,
+        segments=[
+            Segment(
+                kind="gripper",
+                duration=0.02,
+                v_max=0.0,
+                a_max=0.0,
+                gap_start=0.022,
+                gap_end=0.084,
+                label="release",
+            ),
+            Segment(
+                kind="gripper",
+                duration=0.02,
+                v_max=0.0,
+                a_max=0.0,
+                gap_start=0.084,
+                gap_end=0.084,
+                label="post-release-settle",
+            ),
+        ],
+    )
+
+    replay_sim(program, ctx)
+
+    assert [indices for indices in robot.dof_commands if 1 in indices] == [(1, 2, 3, 4), (1, 2, 3, 4)]
+    assert robot.force_commands == [((2, 3, 4), (0.0, 0.0, 0.0))]
 
 
 def test_replay_sim_does_not_weld_by_default_even_with_bilateral_contact(monkeypatch):

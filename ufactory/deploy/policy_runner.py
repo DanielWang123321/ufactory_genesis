@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +17,7 @@ from ufactory.deploy.reach_config import (
     ReachDeployConfig,
     normalize_reach_executor,
 )
+from ufactory.training import validate_checkpoint_artifacts
 
 
 class ReachPolicyRunner:
@@ -40,14 +40,19 @@ class ReachPolicyRunner:
     def from_checkpoint(
         cls,
         checkpoint_path: str | Path,
-        cfgs_path: str | Path,
+        config_path: str | Path,
         *,
         device: str | torch.device = "cpu",
     ) -> ReachPolicyRunner:
         ckpt_path = Path(checkpoint_path)
-        cfg_path = Path(cfgs_path)
-        with cfg_path.open("rb") as f:
-            env_cfg, _reward_cfg, _robot_cfg, train_cfg = pickle.load(f)
+        cfg_path = Path(config_path)
+        artifact, _manifest = validate_checkpoint_artifacts(
+            ckpt_path,
+            cfg_path,
+            expected_task="reach",
+        )
+        env_cfg = artifact["env"]
+        train_cfg = artifact["train"]
 
         policy_cfg = train_cfg["policy"]
         actor_critic = ActorCritic(
@@ -59,7 +64,7 @@ class ReachPolicyRunner:
             activation=policy_cfg["activation"],
             init_noise_std=policy_cfg["init_noise_std"],
         )
-        loaded = torch.load(ckpt_path, weights_only=False, map_location=device)
+        loaded = torch.load(ckpt_path, weights_only=True, map_location=device)
         actor_critic.load_state_dict(loaded["model_state_dict"])
         action_clip = float(env_cfg.get("action_clip", 1.0))
         executor = normalize_reach_executor(env_cfg.get("executor", EXECUTOR_SERVO_J))

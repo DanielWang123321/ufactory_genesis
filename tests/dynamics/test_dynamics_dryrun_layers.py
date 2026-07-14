@@ -26,14 +26,11 @@ import pytest
 
 pytest.importorskip("pinocchio")
 
-from ufactory.dynamics import (
-    GenesisDynamicsSample,
-    SafePose,
-    build_dynamics_sample,
-    load_reference_backend,
-)
+from ufactory.dynamics.analysis import build_dynamics_sample
+from ufactory.dynamics.reference import load_reference_backend
+from ufactory.dynamics.report import GenesisDynamicsSample, SafePose
 from ufactory.robots.paths import xarm6_1305_urdf
-from ufactory.dynamics import dynamics_pose_tuples
+from ufactory.dynamics.poses_config import dynamics_pose_tuples
 from ufactory.robots.runtime import get_robot_runtime_profile
 
 _RUNTIME = get_robot_runtime_profile("xarm6")

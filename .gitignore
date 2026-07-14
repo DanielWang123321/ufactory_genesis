@@ -15,7 +15,8 @@ build/
 logs/
 debug/
 data/
-dev/
+dev/*
+!dev/hardware_inventory.yaml
 outputs/
 reports/
 assets/urdf/*/kinematics/user/*.yaml
@@ -34,7 +35,6 @@ agent.md
 .agents
 .cache
 .venv
-uv.lock
 worklog.md
-versions.md
 release_checklist.md
+versions.md

@@ -12,7 +12,6 @@ from ufactory.grippers.bio_g2 import (
     CLOSE_POS,
     OPEN_GAP,
     OPEN_POS,
-    STROKE,
 )
 
 # Re-export constants for backward compatibility.

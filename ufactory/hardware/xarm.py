@@ -55,12 +55,11 @@ def assert_motion_ready(arm: Any) -> None:
     if arm.state == REPORT_STATE_STOPPING:
         raise RuntimeError(
             f"Arm not ready for motion ({format_arm_status(arm)}). "
-            "Call prepare_arm_for_motion() or clear e-stop in xArm Studio."
+            "Inspect the physical E-stop and recover manually in xArm Studio."
         )
     if arm.error_code != 0:
         raise RuntimeError(
-            f"Arm has active error ({format_arm_status(arm)}). "
-            "Call clean_error() then prepare_arm_for_motion()."
+            f"Arm has active error ({format_arm_status(arm)}). Inspect and recover manually in xArm Studio."
         )
 
 
@@ -80,82 +79,34 @@ def prepare_arm_for_motion(
     retries: int = 3,
     poll_timeout_s: float = POLL_TIMEOUT_S,
 ) -> None:
-    """SDK-aligned sequence before any motion command.
-
-    Order: clean_warn -> clean_error (if needed) -> motion_enable ->
-           set_mode(mode) -> set_state(0) -> poll until arm.state != 4.
-    """
-    last_error = ""
-
-    for attempt in range(1, retries + 1):
-        arm.clean_warn()
-        time.sleep(0.1)
-
-        if arm.error_code != 0:
-            code = arm.clean_error()
-            if code != 0:
-                last_error = f"clean_error returned {code}"
-                time.sleep(0.15)
-                continue
-            time.sleep(0.15)
-
-        code = arm.motion_enable(enable=True)
-        if code != 0:
-            last_error = f"motion_enable returned {code}"
-            time.sleep(0.15)
-            continue
-
-        code = arm.set_mode(mode)
-        if code != 0:
-            last_error = f"set_mode({mode}) returned {code}"
-            time.sleep(0.15)
-            continue
-
-        code = arm.set_state(STATE_MOTION)
-        if code != 0:
-            last_error = f"set_state(0) returned {code}"
-            time.sleep(0.15)
-            continue
-
-        if _wait_until_not_stopping(arm, timeout_s=poll_timeout_s):
-            assert_motion_ready(arm)
-            return
-
-        last_error = f"arm.state still {REPORT_STATE_STOPPING} after set_state(0)"
-        time.sleep(0.2)
-
-    # Last resort: SDK emergency_stop recovery (motion_enable + set_state(0))
-    if hasattr(arm, "emergency_stop"):
-        arm.emergency_stop()
-        time.sleep(0.3)
-        if _wait_until_not_stopping(arm, timeout_s=poll_timeout_s) and arm.error_code == 0:
-            assert_motion_ready(arm)
-            return
-
-    raise RuntimeError(
-        f"Failed to prepare arm for motion (mode={mode}) after {retries} attempts. "
-        f"Last: {last_error}. Status: {format_arm_status(arm)}. "
-        "If state=4 persists, clear e-stop / resume in xArm Studio."
+    """Enable an already healthy arm; never clear/reset/recover controller faults."""
+    del retries
+    assert_motion_ready(arm)
+    operations = (
+        ("motion_enable", lambda: arm.motion_enable(enable=True)),
+        (f"set_mode({mode})", lambda: arm.set_mode(mode)),
+        ("set_state(0)", lambda: arm.set_state(STATE_MOTION)),
     )
+    for label, operation in operations:
+        code = operation()
+        if code != 0:
+            arm.set_state(REPORT_STATE_STOPPING)
+            raise RuntimeError(f"{label} returned {code}; controller stopped without automatic recovery")
+    if not _wait_until_not_stopping(arm, timeout_s=poll_timeout_s):
+        raise RuntimeError(
+            f"controller did not confirm motion state ({format_arm_status(arm)}); inspect it manually in xArm Studio"
+        )
+    assert_motion_ready(arm)
 
 
 def prepare_gripper_g2_for_motion(arm: Any, *, retries: int = 3, poll_s: float = 0.15) -> None:
-    """SDK-aligned sequence before any Gripper G2 position command.
-
-    Order: clean_gripper_error (if needed) -> set_gripper_enable(True) ->
-           set_gripper_mode(0) (position mode).
-    """
+    """Enable an already healthy G2; never clear gripper errors automatically."""
     last_error = ""
 
     for attempt in range(1, retries + 1):
         code, err_code = arm.get_gripper_err_code()
         if code == 0 and err_code != 0:
-            clean_code = arm.clean_gripper_error()
-            if clean_code != 0:
-                last_error = f"clean_gripper_error returned {clean_code}"
-                time.sleep(poll_s)
-                continue
-            time.sleep(poll_s)
+            raise RuntimeError(f"Gripper G2 has error {err_code}; recover manually before motion")
 
         code = arm.set_gripper_enable(True)
         if code != 0:
@@ -169,9 +120,7 @@ def prepare_gripper_g2_for_motion(arm: Any, *, retries: int = 3, poll_s: float =
         last_error = f"set_gripper_mode(0) returned {code}"
         time.sleep(poll_s)
 
-    raise RuntimeError(
-        f"Failed to prepare Gripper G2 for motion after {retries} attempts. Last: {last_error}."
-    )
+    raise RuntimeError(f"Failed to prepare Gripper G2 for motion after {retries} attempts. Last: {last_error}.")
 
 
 def _report_state_allows_servo(state: int) -> bool:
@@ -190,16 +139,10 @@ def wait_for_servo_motion_ready(
     while time.monotonic() < deadline:
         assert_motion_ready(arm)
         code, state = arm.get_state()
-        if (
-            code == 0
-            and arm.mode == MODE_SERVO
-            and _report_state_allows_servo(state)
-        ):
+        if code == 0 and arm.mode == MODE_SERVO and _report_state_allows_servo(state):
             return
         time.sleep(poll_s)
-    raise RuntimeError(
-        f"Servo mode not ready after {timeout_s}s ({format_arm_status(arm)})"
-    )
+    raise RuntimeError(f"Servo mode not ready after {timeout_s}s ({format_arm_status(arm)})")
 
 
 def prime_servo_angle_j(
@@ -229,8 +172,7 @@ def prime_servo_angle_j(
             return
         time.sleep(retry_s)
     raise RuntimeError(
-        f"prime set_servo_angle_j failed after {retries} attempts, last code={last_code} "
-        f"({format_arm_status(arm)})"
+        f"prime set_servo_angle_j failed after {retries} attempts, last code={last_code} ({format_arm_status(arm)})"
     )
 
 
@@ -264,8 +206,7 @@ def prime_servo_cartesian(
             return
         time.sleep(retry_s)
     raise RuntimeError(
-        f"prime set_servo_cartesian failed after {retries} attempts, last code={last_code} "
-        f"({format_arm_status(arm)})"
+        f"prime set_servo_cartesian failed after {retries} attempts, last code={last_code} ({format_arm_status(arm)})"
     )
 
 
@@ -294,6 +235,5 @@ def prime_online_joint_planning(
             return
         time.sleep(retry_s)
     raise RuntimeError(
-        f"prime online joint planning failed after {retries} attempts, last code={last_code} "
-        f"({format_arm_status(arm)})"
+        f"prime online joint planning failed after {retries} attempts, last code={last_code} ({format_arm_status(arm)})"
     )

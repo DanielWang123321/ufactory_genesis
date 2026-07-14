@@ -88,8 +88,8 @@ def test_compile_cartesian_program_to_joint_stream_uses_higher_uf850_ik_damping(
     ctx = SimpleNamespace(
         robot_key="uf850",
         robot_urdf_path="/tmp/uf850_g2.urdf",
-        kinematics_yaml_path="/tmp/uf850_kinematics_F54B07.yaml",
-        kinematics_suffix="F54B07",
+        kinematics_yaml_path="/tmp/uf850_kinematics_XXXXXX.yaml",
+        kinematics_suffix="XXXXXX",
     )
     limits = JointLimits(1.0, 12.0, 0.15, 0.8)
     move_seg = make_movel(
@@ -141,9 +141,7 @@ def test_retime_ik_joint_stream_bounds_finite_diff_acc():
     q0 = np.zeros(6)
     # Leading plateau then a jump — the failure mode seen at 100 Hz.
     rows = np.vstack([np.zeros((4, 6)), np.linspace(0.0, 0.05, 20)[:, None] * np.array([0, 1, 0, 0, 1, 0])])
-    q_out, n, dur, n_keys = retime_ik_joint_stream(
-        q0, rows, rate=100.0, duration_s=0.25, v_max=0.35, a_max=2.0
-    )
+    q_out, n, dur, n_keys = retime_ik_joint_stream(q0, rows, rate=100.0, duration_s=0.25, v_max=0.35, a_max=2.0)
     assert n_keys < rows.shape[0] + 1
     # Short Cartesian duration is extended to the joint LSPB bound.
     assert dur >= 0.25 - 1e-9

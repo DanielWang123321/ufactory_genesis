@@ -7,10 +7,10 @@ from typing import Any
 
 import numpy as np
 
-from ufactory.dynamics import parse_joint_limits
+from ufactory.dynamics.poses import parse_joint_limits
 from ufactory.deploy.action_postprocess import process_reach_action_np
 from ufactory.robots.paths import robot_urdf
-from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
+from ufactory.robots.runtime import RobotRuntimeProfile
 from ufactory.hardware.xarm import assert_motion_ready
 
 from ufactory.deploy.reach_config import ReachDeployConfig
@@ -94,14 +94,12 @@ class SafetyGuard:
         upper = self.limits.joint_upper - margin
         if np.any(q < lower) or np.any(q > upper):
             raise SafetyViolation(
-                f"Joint command out of limits: q={q.tolist()} "
-                f"allowed=[{lower.tolist()}, {upper.tolist()}]"
+                f"Joint command out of limits: q={q.tolist()} allowed=[{lower.tolist()}, {upper.tolist()}]"
             )
 
     def check_ee_position(self, ee_pos_m: np.ndarray) -> None:
         ee_pos_m = np.asarray(ee_pos_m, dtype=np.float64).reshape(3)
         if ee_pos_m[2] < self.limits.z_min_m:
             raise SafetyViolation(
-                f"EE z={ee_pos_m[2] * 1000.0:.1f} mm below minimum "
-                f"{self.limits.z_min_m * 1000.0:.1f} mm"
+                f"EE z={ee_pos_m[2] * 1000.0:.1f} mm below minimum {self.limits.z_min_m * 1000.0:.1f} mm"
             )

@@ -19,7 +19,7 @@ from ufactory.kinematics.validation import (
     _connect_sdk,
 )
 from ufactory.deploy.sdk_units import MM_PER_M, sdk_position_m, sdk_position_mm
-from ufactory.dynamics import xarm6_default_dynamics_configs
+from ufactory.dynamics.poses import xarm6_default_dynamics_configs
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
 
@@ -106,10 +106,7 @@ def print_alignment_report(rows: Sequence[dict]) -> int:
             failed += 1
             continue
         ok = bool(row["ok"])
-        print(
-            f"{'PASS' if ok else 'FAIL'} {row['name']}: "
-            f"pos={row['pos_mm']:.2f}mm rpy={row['rpy_deg']:.2f}deg"
-        )
+        print(f"{'PASS' if ok else 'FAIL'} {row['name']}: pos={row['pos_mm']:.2f}mm rpy={row['rpy_deg']:.2f}deg")
         failed += 0 if ok else 1
     if failed:
         print(f"Alignment check failed: {failed} pose(s) out of tolerance")

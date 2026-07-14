@@ -1,4 +1,10 @@
-kinematics:
+schema_version: 1
+robot_key: lite6
+serial_number: NOMINAL
+units:
+  position: m
+  angle: rad
+joints:
   joint1:
     x: 0
     y: 0

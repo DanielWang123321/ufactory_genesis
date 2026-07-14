@@ -13,11 +13,8 @@ cd ufactory_genesis
 python -m venv .venv
 source .venv/bin/activate
 
-# Install Genesis (platform-specific: https://genesis-world.readthedocs.io/)
-pip install "genesis-world>=1.2.0"
-
-# Install in editable mode with contributor test tools
-pip install -e ".[dev]"
+# Recommended contributor install (validated Genesis pin + test tools)
+pip install -e ".[sim,dev]"
 
 # Optional: Pinocchio for dynamics unit tests in the fast tier
 pip install -e ".[dynamics,dev]"
@@ -28,7 +25,15 @@ pip install -e ".[rl]"
 pip install -e ".[showcase]"
 ```
 
+The validated sim stack pins `genesis-world==1.2.1` via the `[sim]` extra (see also `requirements.txt`). Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
+
 The `tests/` suite is for **contributors and maintainers**, not end-user onboarding. Library users should start from `examples/` and the dynamics CLI entry points.
+
+Local quality reports (not a substitute for pytest):
+
+```bash
+project-check
+```
 
 ## Running Tests
 
@@ -41,7 +46,7 @@ Three tiers (orthogonal pytest markers):
 | **hardware** | `XARM_IP=<robot-ip> pytest -m hardware` | Real robot acceptance |
 
 ```bash
-# Fast tier (default PR gate)
+# Fast tier (default PR checks)
 pytest -m "not hardware and not gpu and not integration and not display"
 
 # Full simulation regression (no real robot)
@@ -50,6 +55,8 @@ pytest -m "not hardware"
 # Hardware acceptance (requires xArm SDK + robot on the network)
 XARM_IP=192.168.1.xx pytest -m hardware
 ```
+
+Online real-policy deployment and random-action real modes are hard-disabled in v0.2.5; see [SECURITY.md](SECURITY.md).
 
 ### Markers
 
@@ -67,9 +74,14 @@ Tests are grouped under `tests/` by `ufactory` module:
 | Subdirectory | Module | Examples |
 |--------------|--------|----------|
 | `tests/robots/` | `ufactory.robots`, kinematics SN, assets | `test_robot_registry.py`, `test_asset_integrity.py` |
+| `tests/config/` | `ufactory.config` | `test_runtime_config.py` |
+| `tests/safety/` | `ufactory.safety` | `test_gate_and_approval.py`, `test_models_v025.py` |
+| `tests/kinematics/` | `ufactory.kinematics` | `test_pinocchio_pose_ik.py`, `test_strict_calibration.py` |
 | `tests/dynamics/` | `ufactory.dynamics` | `test_dynamics_validation.py`, `test_dynamics_sim_regression.py` |
 | `tests/hardware/` | `ufactory.hardware` | `test_real_robot_session.py`, `test_xarm6_smoke.py` |
 | `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
+| `tests/training/` | `ufactory.training` | `test_artifacts.py` |
+| `tests/visualization/` | `ufactory.visualization` | `test_pbr_scope.py` |
 | `tests/deploy/` | `ufactory.deploy` | `test_deploy.py` |
 | `tests/manipulation/` | `ufactory.manipulation` | `test_grasp_place_contract.py` |
 
@@ -94,14 +106,22 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 
 | Directory | Purpose |
 |-----------|---------|
+| `ufactory/config/` | Versioned runtime YAML loading, validation, and hashes |
+| `ufactory/safety/` | SafetyGate, ApprovedProgram, collision/timing ports |
+| `ufactory/cli/` | Console entry points (`ufactory-grasp-place`, packaging) |
+| `ufactory/quality/` | Local `project-check` reports |
 | `ufactory/robots/` | Robot registry, asset paths, and runtime profiles |
 | `ufactory/kinematics/` | Calibration and Genesis FK/IK validation helpers |
 | `ufactory/dynamics/` | Dynamics simulation, validation, reports, and CLIs |
 | `ufactory/hardware/` | xArm SDK/session helpers and hold-current observation |
 | `ufactory/grippers/` | Gripper command conversions and controllers |
-| `ufactory/trajectory/`, `ufactory/manipulation/`, `ufactory/deploy/` | Trajectory, task, and policy deployment helpers |
+| `ufactory/trajectory/`, `ufactory/manipulation/` | Trajectory planning/preflight/execution and task helpers |
+| `ufactory/simulation/` | Shared Genesis runtime ownership |
+| `ufactory/training/` | Safe checkpoint YAML/manifest helpers |
 | `ufactory/visualization/` | GLB/PBR visualization helpers |
+| `ufactory/deploy/` | Policy helpers (online real policy hard-disabled in v0.2.5) |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
+| `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
 | `examples/` | Usage examples (viewer, FK/IK verification, RL) |
 | `scripts/` | User-facing helper scripts |
 | `tests/` | Contributor pytest suite (not required for library use) |

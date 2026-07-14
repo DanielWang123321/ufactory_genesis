@@ -3,12 +3,12 @@
 import argparse
 import csv
 import os
-import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
 
 import torch
+from ufactory.training import validate_checkpoint_artifacts
 
 try:
     from importlib import metadata
@@ -20,13 +20,12 @@ try:
         if metadata.version("rsl-rl-lib") != "2.2.4":
             raise ImportError
 except (metadata.PackageNotFoundError, ImportError) as e:
-    raise ImportError(
-        "Please uninstall 'rsl_rl' and install 'rsl-rl-lib==2.2.4'."
-    ) from e
+    raise ImportError("Please uninstall 'rsl_rl' and install 'rsl-rl-lib==2.2.4'.") from e
 
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
+from ufactory.config import load_runtime_config
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from xarm6_grasp_place_env import XArm6GraspPlaceEnv
@@ -76,7 +75,7 @@ def load_runner_checkpoint(runner: OnPolicyRunner, ckpt_path: Path, load_optimiz
     if not isinstance(map_location, torch.device):
         map_location = torch.device(map_location)
 
-    loaded_dict = torch.load(ckpt_path, weights_only=False, map_location=map_location)
+    loaded_dict = torch.load(ckpt_path, weights_only=True, map_location=map_location)
     runner.alg.actor_critic.load_state_dict(loaded_dict["model_state_dict"])
     if runner.alg.rnd:
         runner.alg.rnd.load_state_dict(loaded_dict["rnd_state_dict"])
@@ -103,31 +102,46 @@ def resolve_report_csv(report_csv: str | None) -> Path | None:
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Grasp-Place Evaluation")
     parser.add_argument(
-        "--checkpoint", type=str, default=None,
+        "--checkpoint",
+        type=str,
+        default=None,
         help="Path to model checkpoint (.pt). Default: latest in the experiment log dir",
     )
     parser.add_argument(
-        "-B", "--num_envs", type=int, default=1,
+        "-B",
+        "--num_envs",
+        type=int,
+        default=1,
         help="Number of parallel environments to visualize",
     )
     parser.add_argument(
-        "--episodes", type=int, default=10,
+        "--episodes",
+        type=int,
+        default=10,
         help="Number of episodes to run (0 = infinite)",
     )
     parser.add_argument(
-        "-e", "--exp_name", type=str, default="xarm6-grasp-place-joint-g2",
+        "-e",
+        "--exp_name",
+        type=str,
+        default="xarm6-grasp-place-joint-g2",
         help="Experiment name (for finding log dir)",
     )
     parser.add_argument(
-        "--stage", type=int, default=None,
+        "--stage",
+        type=int,
+        default=None,
         help="Curriculum stage for eval (default: infer from latest metrics.csv row)",
     )
     parser.add_argument(
-        "--headless", action="store_true", default=False,
+        "--headless",
+        action="store_true",
+        default=False,
         help="Run evaluation without opening the Genesis viewer",
     )
     parser.add_argument(
-        "--report-csv", default=None,
+        "--report-csv",
+        default=None,
         help="Optional episode CSV path; use 'auto' for reports/grasp_place_eval_<timestamp>.csv",
     )
     args = parser.parse_args()
@@ -142,15 +156,23 @@ def main():
     print(f"Loading checkpoint: {ckpt_path}")
 
     # Load configs from training
-    cfgs_path = log_dir / "cfgs.pkl"
-    if cfgs_path.exists():
-        with open(cfgs_path, "rb") as f:
-            env_cfg, reward_cfg, robot_cfg, train_cfg = pickle.load(f)
-    else:
-        # Fallback: import from train script
-        from xarm6_grasp_place_train import get_task_cfgs, get_train_cfg
-        env_cfg, reward_cfg, robot_cfg = get_task_cfgs()
-        train_cfg = get_train_cfg(args.exp_name, 0)
+    config_path = log_dir / "config.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Missing {config_path}; checkpoint evaluation requires its original hashed training config"
+        )
+    runtime_config = load_runtime_config("xarm6")
+    artifact, _manifest = validate_checkpoint_artifacts(
+        ckpt_path,
+        config_path,
+        expected_task="grasp_place",
+        expected_robot_key=runtime_config.robot.key,
+        expected_runtime_config_sha256=runtime_config.sha256,
+    )
+    env_cfg = artifact["env"]
+    reward_cfg = artifact["reward"]
+    robot_cfg = artifact["robot"]
+    train_cfg = artifact["train"]
 
     # Override for eval
     env_cfg["num_envs"] = args.num_envs
@@ -293,14 +315,14 @@ def main():
     # Summary
     if episode_rewards:
         avg_reward = sum(episode_rewards) / len(episode_rewards)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Evaluation Summary ({episode_count} episodes):")
         print(f"  Avg reward:       {avg_reward:.1f}")
-        print(f"  Grasp success:    {grasp_count}/{episode_count} ({100*grasp_count/episode_count:.1f}%)")
-        print(f"  Lift success:     {lift_count}/{episode_count} ({100*lift_count/episode_count:.1f}%)")
-        print(f"  Place success:    {place_count}/{episode_count} ({100*place_count/episode_count:.1f}%)")
-        print(f"  Full success:     {success_count}/{episode_count} ({100*success_count/episode_count:.1f}%)")
-        print(f"{'='*60}")
+        print(f"  Grasp success:    {grasp_count}/{episode_count} ({100 * grasp_count / episode_count:.1f}%)")
+        print(f"  Lift success:     {lift_count}/{episode_count} ({100 * lift_count / episode_count:.1f}%)")
+        print(f"  Place success:    {place_count}/{episode_count} ({100 * place_count / episode_count:.1f}%)")
+        print(f"  Full success:     {success_count}/{episode_count} ({100 * success_count / episode_count:.1f}%)")
+        print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

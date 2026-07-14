@@ -40,4 +40,3 @@ def test_abs_err_limits_are_ten_percent_of_effort(robot_key: str) -> None:
     runtime = get_robot_runtime_profile(robot_key)
     expected = tuple(e * ABS_ERR_FRACTION for e in runtime.arm.effort_limits)
     assert runtime.dynamics.abs_err_limits == expected
-

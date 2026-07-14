@@ -1,0 +1,83 @@
+"""Deterministic tests for the scoped PBR patch lifecycle."""
+
+from __future__ import annotations
+
+import threading
+
+import pytest
+
+import ufactory.visualization.glb as glb
+
+
+@pytest.fixture(autouse=True)
+def clean_patch_state(monkeypatch):
+    monkeypatch.setattr(glb, "_REFCOUNT", 0)
+    monkeypatch.setattr(glb, "_ORIGINALS", {})
+    monkeypatch.setattr(glb, "_LEGACY_CONTEXTS", [])
+    glb._queue().clear()
+
+
+def test_version_mismatch_fails_before_install(monkeypatch):
+    installed: list[bool] = []
+    monkeypatch.setattr(glb.metadata, "version", lambda _name: "1.2.2")
+    monkeypatch.setattr(glb, "_install_patch", lambda: installed.append(True))
+
+    with pytest.raises(RuntimeError, match="supports Genesis 1.2.1 only"):
+        with glb.glb_pbr_surfaces():
+            pass
+    assert installed == []
+
+
+def test_nested_scope_installs_once_and_restores_after_outer_exit(monkeypatch):
+    events: list[str] = []
+    monkeypatch.setattr(glb, "_require_supported_version", lambda: None)
+    monkeypatch.setattr(glb, "_install_patch", lambda: events.append("install"))
+    monkeypatch.setattr(glb, "_restore_patch", lambda: events.append("restore"))
+
+    with glb.glb_pbr_surfaces():
+        glb._queue().append("outer")
+        with glb.glb_pbr_surfaces():
+            glb._queue().append("inner")
+        assert glb._REFCOUNT == 1
+        assert glb._queue() == []
+    assert events == ["install", "restore"]
+    assert glb._REFCOUNT == 0
+
+
+def test_exception_restores_and_clears_material_queue(monkeypatch):
+    restored: list[bool] = []
+    monkeypatch.setattr(glb, "_require_supported_version", lambda: None)
+    monkeypatch.setattr(glb, "_install_patch", lambda: None)
+    monkeypatch.setattr(glb, "_restore_patch", lambda: restored.append(True))
+
+    with pytest.raises(ValueError, match="load failed"):
+        with glb.glb_pbr_surfaces():
+            glb._queue().append(object())
+            raise ValueError("load failed")
+    assert restored == [True]
+    assert glb._queue() == []
+
+
+def test_concurrent_scopes_share_patch_but_have_thread_local_queues(monkeypatch):
+    events: list[str] = []
+    barrier = threading.Barrier(2)
+    observed: list[tuple[str, ...]] = []
+    monkeypatch.setattr(glb, "_require_supported_version", lambda: None)
+    monkeypatch.setattr(glb, "_install_patch", lambda: events.append("install"))
+    monkeypatch.setattr(glb, "_restore_patch", lambda: events.append("restore"))
+
+    def worker(name: str) -> None:
+        with glb.glb_pbr_surfaces():
+            glb._queue().append(name)
+            barrier.wait()
+            observed.append(tuple(glb._queue()))
+
+    threads = [threading.Thread(target=worker, args=(name,)) for name in ("a", "b")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2.0)
+        assert not thread.is_alive()
+
+    assert sorted(observed) == [("a",), ("b",)]
+    assert events == ["install", "restore"]

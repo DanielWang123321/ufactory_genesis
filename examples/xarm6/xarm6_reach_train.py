@@ -16,7 +16,6 @@ Usage:
 
 import argparse
 import os
-import pickle
 import shutil
 from importlib import metadata
 from pathlib import Path
@@ -30,9 +29,7 @@ try:
         if metadata.version("rsl-rl-lib") != "2.2.4":
             raise ImportError
 except (metadata.PackageNotFoundError, ImportError) as e:
-    raise ImportError(
-        "Please uninstall 'rsl_rl' and install 'rsl-rl-lib==2.2.4'."
-    ) from e
+    raise ImportError("Please uninstall 'rsl_rl' and install 'rsl-rl-lib==2.2.4'.") from e
 
 from rsl_rl.runners import OnPolicyRunner
 
@@ -40,6 +37,7 @@ import genesis as gs
 from ufactory.deploy.reach_config import EXECUTOR_ONLINE_JOINT, EXECUTOR_SERVO_J, REACH_EXECUTORS
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.training import load_training_config, write_checkpoint_manifest, write_training_config
 
 # Allow importing from same directory
 import sys
@@ -96,7 +94,9 @@ def _apply_executor_action_contract(env_cfg: dict, executor: str) -> None:
     env_cfg["executor"] = executor
     if executor == EXECUTOR_ONLINE_JOINT:
         env_cfg.pop("servo_speed_rad_s", None)
-        env_cfg["max_joint_delta_rad"] = abs(float(env_cfg["action_scale"])) * abs(float(env_cfg.get("action_clip", 1.0)))
+        env_cfg["max_joint_delta_rad"] = abs(float(env_cfg["action_scale"])) * abs(
+            float(env_cfg.get("action_clip", 1.0))
+        )
         return
     if executor == EXECUTOR_SERVO_J:
         env_cfg.pop("max_joint_delta_rad", None)
@@ -151,8 +151,15 @@ def main():
         shutil.rmtree(log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(log_dir / "cfgs.pkl", "wb") as f:
-        pickle.dump([env_cfg, reward_cfg, robot_cfg, train_cfg], f)
+    write_training_config(
+        log_dir / "config.yaml",
+        task="reach",
+        robot_key=get_robot_runtime_profile(args.robot).model.key,
+        env=env_cfg,
+        reward=reward_cfg,
+        robot=robot_cfg,
+        train=train_cfg,
+    )
 
     # === Init Genesis ===
     gs.init(
@@ -176,6 +183,21 @@ def main():
         num_learning_iterations=args.max_iterations,
         init_at_random_ep_len=True,
     )
+    artifact = load_training_config(log_dir / "config.yaml")
+    checkpoints = sorted(log_dir.glob("model_*.pt"), key=lambda path: int(path.stem.split("_")[1]))
+    for checkpoint in checkpoints:
+        write_checkpoint_manifest(
+            checkpoint,
+            training_config=artifact,
+            executor_action_contract=str(args.executor),
+        )
+    if checkpoints:
+        write_checkpoint_manifest(
+            checkpoints[-1],
+            training_config=artifact,
+            executor_action_contract=str(args.executor),
+            output_path=log_dir / "checkpoint_manifest.json",
+        )
 
 
 if __name__ == "__main__":

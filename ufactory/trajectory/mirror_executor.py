@@ -133,11 +133,82 @@ def _set_kinematic_pose(
         robot.set_dofs_position(grip_target, all_grip_idx, zero_velocity=True)
 
 
-def update_scene_visualizer(scene) -> None:
-    """Flush the Genesis viewer after kinematic teleports / carry sync."""
+def _update_mirror_entities(context, entities: tuple[object, ...]) -> None:
+    """Upload only moving rigid entities to the rasterizer node buffers."""
+    visualizer = context.visualizer
+    visualizer.update_visual_states(force_render=True)
+    context._scene._bounds = None
+
+    for entity in entities:
+        if getattr(entity._morph, "enable_custom_vverts", False):
+            # Custom per-vertex geometry needs Genesis' complete update path.
+            context.update(force_render=True)
+            return
+        solver = entity._solver
+        if entity.surface.vis_mode == "visual":
+            geoms = entity.vgeoms
+            geoms_t = solver._vgeoms_render_T
+        else:
+            geoms = entity.geoms
+            geoms_t = solver._geoms_render_T
+        for geom in geoms:
+            if geom.uid not in context.rigid_nodes:
+                continue
+            geom_envs_idx = context._get_geom_active_envs_idx(geom, context.rendered_envs_idx)
+            if len(geom_envs_idx) == 0:
+                continue
+            if len(geom_envs_idx) < len(context.rendered_envs_idx):
+                geom_t = geoms_t[geom.idx][context.rendered_envs_idx]
+            else:
+                geom_t = geoms_t[geom.idx][geom_envs_idx]
+            node = context.rigid_nodes[geom.uid]
+            node.mesh._bounds = None
+            node.mesh.primitives[0].poses = geom_t
+            context.jit.update_buffer(node, "model", geom_t.transpose((0, 2, 1)))
+
+
+def update_scene_visualizer(scene, *, entities: tuple[object, ...] | None = None) -> bool:
+    """Try to flush a kinematic teleport without stepping physics or waiting.
+
+    The mirror never calls ``scene.step`` (see :func:`kinematic_step`), so the
+    simulation clock ``scene._t`` never advances. Genesis' default
+    ``visualizer.update(force=False)`` early-returns in that case
+    (``RasterizerContext.update`` skips while ``self._t >= scene._t``), which
+    would freeze the viewer on the last stepped frame. A forced rasterizer
+    context update performs the incremental render-transform refresh
+    (``update_geoms_render_T`` + node buffer upload) so the teleport is drawn,
+    without the full ``visualizer.reset()`` path.
+
+    Genesis' public ``Viewer.update`` blocks on the on-screen renderer lock.
+    Waiting for that lock can overlap a real servo deadline, while dropping a
+    mirror-only frame is harmless. Acquire it without waiting and return
+    ``False`` when the frame was intentionally skipped (or no viewer exists).
+    """
     visualizer = getattr(scene, "visualizer", None)
-    if getattr(visualizer, "viewer", None) is not None:
-        visualizer.update(force=False)
+    viewer = getattr(visualizer, "viewer", None)
+    if viewer is None:
+        return False
+
+    pyrender_viewer = getattr(viewer, "_pyrender_viewer", None)
+    render_lock = getattr(pyrender_viewer, "render_lock", None)
+    context = getattr(viewer, "context", None)
+    if pyrender_viewer is None or render_lock is None or context is None:
+        # Compatibility fallback for test doubles and older Genesis builds.
+        viewer.update(force=True)
+        return True
+    if not render_lock.acquire(blocking=False):
+        return False
+    try:
+        if not viewer.is_alive():
+            return False
+        pyrender_viewer.update_on_sim_step()
+        if entities is None:
+            context.update(force_render=True)
+        else:
+            _update_mirror_entities(context, entities)
+        return True
+    finally:
+        render_lock.release()
 
 
 def kinematic_step(
@@ -147,23 +218,28 @@ def kinematic_step(
     *,
     update_visualizer: bool = True,
 ) -> None:
-    """Teleport arm/gripper DOFs and refresh the viewer without PD forces.
+    """Teleport arm/gripper DOFs and refresh the viewer, WITHOUT a physics step.
 
-    The G2 gripper's non-driven joints (fingers/knuckles) are linked to
-    ``drive_joint`` via Genesis equality (mimic) constraints that are only
-    reliably enforced under real PD dynamics. In a pure kinematic teleport,
-    every mimic DOF must be set explicitly (see ``examples/_gripper_demo.py``)
-    or the un-driven joints are left to a soft constraint chasing a
-    force-less target and diverge.
+    This is a *pure kinematic* visual mirror: it only shows where the real arm
+    is, so it teleports every DOF with ``set_dofs_position`` and never runs
+    ``scene.step``. That is critical for real-robot ``--visual`` runs, where the
+    mirror runs in a background thread beside the main-thread 50 Hz servo loop.
+    A full ``scene.step`` on the packaging scene (32 substeps) costs ~25 ms and
+    holds the Python GIL in chunks, stalling the servo loop past its 5 ms
+    minor-deadline threshold and tripping the PAUSE fault (three minor misses
+    within one second). A teleport is <1 ms and leaves the servo cadence
+    untouched (measured: 0 deadline misses vs. ~15/s with ``scene.step``).
 
-    ``scene.step`` still integrates contacts even with PD gains zeroed, so the
-    teleported pose is re-applied after the step (same pattern as
-    ``examples/_robot_viewer._kinematic_step``) before the viewer updates.
+    No contact physics is needed. The G2 gripper's non-driven joints
+    (fingers/knuckles) are set explicitly here via ``all_gripper_dof_idx`` (see
+    ``examples/_gripper_demo.py``), and any carried object is positioned
+    directly by :class:`KinematicCarryTracker`. ``set_dofs_position`` runs
+    forward kinematics, so link/geom world transforms are current for rendering.
 
     Callers that kinematically carry an object should pass
     ``update_visualizer=False``, re-sync the object, then call
-    :func:`update_scene_visualizer` so the viewer never shows a gravity-slipped
-    frame between ``scene.step`` and carry sync.
+    :func:`update_scene_visualizer` so the viewer shows arm and object in one
+    consistent frame.
     """
     robot = ctx.robot
     scene = ctx.scene
@@ -171,11 +247,8 @@ def kinematic_step(
     all_grip_idx = ctx.all_gripper_dof_idx
 
     _set_kinematic_pose(robot, q_arm, arm_idx, grip_drive, all_grip_idx)
-    scene.step(update_visualizer=False)
-    # Contacts can shove prismatic fingers off the teleported pose during step.
-    _set_kinematic_pose(robot, q_arm, arm_idx, grip_drive, all_grip_idx)
     if update_visualizer:
-        update_scene_visualizer(scene)
+        update_scene_visualizer(scene, entities=(ctx.robot, ctx.obj))
 
 
 class TrajKinematicMirror:
@@ -203,9 +276,7 @@ class TrajKinematicMirror:
         return self._grip_drive
 
     def _visual_grip_drive(self) -> float:
-        return mirror_grip_drive_for_gap_m(
-            self.ctx, gap_m_from_drive(self._grip_drive, self.ctx.gripper)
-        )
+        return mirror_grip_drive_for_gap_m(self.ctx, gap_m_from_drive(self._grip_drive, self.ctx.gripper))
 
     def prime_to_home(self) -> None:
         arm_idx = self.ctx.arm_dof_idx
@@ -315,9 +386,7 @@ class KinematicCarryTracker:
     no longer used as a mid-close attach threshold on the grasp segment.
     """
 
-    _APPROACH_FREEZE_LABELS = frozenset({"descend"})
     _PLACE_FREEZE_LABELS = frozenset()
-    _RELEASE_LABEL = "release"
 
     def __init__(
         self,
@@ -327,6 +396,8 @@ class KinematicCarryTracker:
         release_gap_m: float | None = None,
         attach_dist_m: float = 0.08,
         grasp_segment_label: str = "grip",
+        release_segment_label: str = "release",
+        approach_freeze_labels: frozenset[str] | tuple[str, ...] | None = None,
     ) -> None:
         self.mirror = mirror
         self.ctx = mirror.ctx
@@ -337,6 +408,12 @@ class KinematicCarryTracker:
         self.release_gap_m = float(release_gap_m) if release_gap_m is not None else self.grasp_gap_m + 0.003
         self.attach_dist_m = float(attach_dist_m)
         self.grasp_segment_label = str(grasp_segment_label)
+        self.release_segment_label = str(release_segment_label)
+        self._approach_freeze_labels = (
+            frozenset({"descend"})
+            if approach_freeze_labels is None
+            else frozenset(str(label) for label in approach_freeze_labels)
+        )
         self._attached = False
         self._carry_offset: torch.Tensor | None = None
         self._carry_quat: torch.Tensor | None = None
@@ -352,6 +429,37 @@ class KinematicCarryTracker:
     @property
     def attached(self) -> bool:
         return self._attached
+
+    def warm_up(self, *, iterations: int = 2) -> None:
+        """Compile lazy mirror operations before real motion is authorized.
+
+        Genesis/Quadrants compiles some object pose kernels on their first use.
+        The first object ``set_pos``/``set_quat`` otherwise occurs when the
+        real arm reaches ``descend``; those cold calls can consume several
+        consecutive 20 ms servo periods.  Exercise the same operations at the
+        unchanged spawn pose while the hardware is still motion-disabled.
+        """
+        if int(iterations) < 1:
+            raise ValueError("warm-up iterations must be positive")
+        if self._attached:
+            raise RuntimeError("mirror warm-up must run before an object is attached")
+
+        obj_pos = self.ctx.obj.get_pos().clone()
+        obj_quat = self.ctx.obj.get_quat().clone()
+        try:
+            for _ in range(int(iterations)):
+                self.mirror.hold_step(update_visualizer=False)
+                self._finger_center()
+                self.ctx.obj.set_pos(obj_pos, zero_velocity=True)
+                self.ctx.obj.set_quat(obj_quat, zero_velocity=True)
+                if getattr(self.ctx.gripper, "family", None) == "lite6":
+                    snap_object_to_lite6_glb_grasp(self.ctx)
+                    self.ctx.obj.set_pos(obj_pos, zero_velocity=True)
+                update_scene_visualizer(self.ctx.scene, entities=(self.ctx.robot, self.ctx.obj))
+        finally:
+            self.ctx.obj.set_pos(obj_pos, zero_velocity=True)
+            self.ctx.obj.set_quat(obj_quat, zero_velocity=True)
+            update_scene_visualizer(self.ctx.scene, entities=(self.ctx.robot, self.ctx.obj))
 
     def _finger_center(self) -> torch.Tensor:
         lf = self.ctx.left_finger.get_pos()[0]
@@ -393,7 +501,7 @@ class KinematicCarryTracker:
         self._release_freeze_quat = None
 
     def _is_release_segment(self, seg: Segment) -> bool:
-        return seg.kind == "gripper" and seg.label == self._RELEASE_LABEL
+        return seg.kind == "gripper" and seg.label == self.release_segment_label
 
     def _prepare_place_release(self) -> None:
         self._snap_object_to_table()
@@ -409,7 +517,7 @@ class KinematicCarryTracker:
         return seg.kind in ("movej", "movel")
 
     def _should_freeze_approach(self, seg: Segment) -> bool:
-        if self._attached or not self._is_arm_segment(seg) or seg.label not in self._APPROACH_FREEZE_LABELS:
+        if self._attached or not self._is_arm_segment(seg) or seg.label not in self._approach_freeze_labels:
             return False
         if self._spawn_freeze_pos is None:
             return False
@@ -464,7 +572,7 @@ class KinematicCarryTracker:
         if self._attached and gap_m >= self.release_gap_m - 1e-3:
             self._attached = False
 
-    def on_tick(self, seg: Segment, tick_idx: int) -> None:
+    def on_tick(self, seg: Segment, tick_idx: int, *, update_visualizer: bool = True) -> None:
         """Callback compatible with :func:`replay_real` ``on_tick`` hook."""
         _, n = seg.samples(self.mirror.rate)
         is_grasp_close = self._is_grasp_close_segment(seg)
@@ -514,7 +622,8 @@ class KinematicCarryTracker:
         if self._attached:
             self._sync_carry(fc)
 
-        update_scene_visualizer(self.ctx.scene)
+        if update_visualizer:
+            update_scene_visualizer(self.ctx.scene, entities=(self.ctx.robot, self.ctx.obj))
 
         if is_release and tick_idx == n - 1:
             self._clear_release_freeze_pose()
@@ -535,19 +644,24 @@ class KinematicCarryTracker:
         """Composed hold callback: re-teleport the mirror pose and any carried object."""
         self.mirror.hold_step(update_visualizer=False)
         self.hold_sync()
-        update_scene_visualizer(self.ctx.scene)
+        update_scene_visualizer(self.ctx.scene, entities=(self.ctx.robot, self.ctx.obj))
 
 
 class AsyncMirrorBridge:
     """Decouple kinematic mirror updates from the real servo stream.
 
     The servo loop only posts the latest ``(seg, tick_idx)``; a daemon thread
-    applies :meth:`KinematicCarryTracker.on_tick` so ``scene.step`` never blocks
-    the ``1/rate`` send cadence. Intermediate frames may be dropped.
+    applies :meth:`KinematicCarryTracker.on_tick` so Genesis never blocks the
+    ``1/rate`` send cadence. State follows the latest servo sample while visual
+    buffer uploads are capped; intermediate display frames may be dropped.
     """
 
-    def __init__(self, tracker: KinematicCarryTracker) -> None:
+    def __init__(self, tracker: KinematicCarryTracker, *, max_visual_hz: float = 15.0) -> None:
+        if not np.isfinite(max_visual_hz) or float(max_visual_hz) <= 0.0:
+            raise ValueError("max_visual_hz must be finite and positive")
         self._tracker = tracker
+        self._visual_period_ns = max(1, int(round(1_000_000_000.0 / float(max_visual_hz))))
+        self._next_visual_ns = 0
         self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
         self._pending: tuple[Segment, int] | None = None
@@ -576,7 +690,11 @@ class AsyncMirrorBridge:
                 self._pending = None
             if item is not None:
                 seg, tick_idx = item
-                self._tracker.on_tick(seg, tick_idx)
+                now_ns = time.monotonic_ns()
+                update_visualizer = now_ns >= self._next_visual_ns
+                if update_visualizer:
+                    self._next_visual_ns = now_ns + self._visual_period_ns
+                self._tracker.on_tick(seg, tick_idx, update_visualizer=update_visualizer)
 
     def close(self) -> None:
         """Stop the worker; apply any leftover snapshot on the caller thread."""
@@ -589,4 +707,4 @@ class AsyncMirrorBridge:
             self._pending = None
         if leftover is not None:
             seg, tick_idx = leftover
-            self._tracker.on_tick(seg, tick_idx)
+            self._tracker.on_tick(seg, tick_idx, update_visualizer=True)

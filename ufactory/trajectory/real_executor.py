@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from ufactory.hardware import xarm as xc
-from ufactory.dynamics import parse_joint_limits
+from ufactory.dynamics.poses import parse_joint_limits
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sdk_pos_mm
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.registry import get_robot_profile, joint_names
@@ -196,32 +196,45 @@ def compute_servo_stream_stats(
     start_arr = np.asarray(start, dtype=np.float64).reshape(-1)
     if start_arr.size != arr.shape[1]:
         raise ValueError(f"start/sample shape mismatch: {start_arr.size} vs {arr.shape[1]}")
+    if not np.all(np.isfinite(arr)) or not np.all(np.isfinite(start_arr)):
+        raise ValueError("servo stream contains NaN or infinity")
     full = np.vstack([start_arr.reshape(1, -1), arr])
     dt_rate = float(rate)
-    if dt_rate <= 0:
-        raise ValueError("rate must be positive")
+    if not math.isfinite(dt_rate) or dt_rate <= 0:
+        raise ValueError("rate must be finite and positive")
     delta = np.diff(full, axis=0)
     if kind == "j":
-        speed = np.abs(delta) * dt_rate
-        acc = np.abs(np.diff(speed, axis=0)) * dt_rate if speed.shape[0] > 1 else np.zeros_like(speed)
+        velocity = delta * dt_rate
+        velocity_with_static_endpoints = np.concatenate(
+            (np.zeros((1, velocity.shape[1])), velocity, np.zeros((1, velocity.shape[1]))), axis=0
+        )
+        acceleration = np.diff(velocity_with_static_endpoints, axis=0) * dt_rate
         return ServoStreamStats(
             kind=kind,
             label=label,
             samples=arr.shape[0],
             duration_s=arr.shape[0] / dt_rate,
             max_step=float(np.max(np.abs(delta))),
-            max_speed=float(np.max(speed)),
-            max_acc=float(np.max(acc)) if acc.size else 0.0,
+            max_speed=float(np.max(np.abs(velocity))),
+            max_acc=float(np.max(np.abs(acceleration))) if acceleration.size else 0.0,
         )
     if kind == "c":
         xyz_delta = delta[:, 0:3]
-        rpy_delta = delta[:, 3:6]
+        rpy_delta = (delta[:, 3:6] + math.pi) % (2.0 * math.pi) - math.pi
         xyz_step = np.linalg.norm(xyz_delta, axis=1)
-        xyz_speed = xyz_step * dt_rate
-        xyz_acc = np.abs(np.diff(xyz_speed)) * dt_rate if xyz_speed.size > 1 else np.zeros(1)
+        xyz_velocity = xyz_delta * dt_rate
+        xyz_velocity_with_static_endpoints = np.concatenate((np.zeros((1, 3)), xyz_velocity, np.zeros((1, 3))), axis=0)
+        xyz_acceleration = np.diff(xyz_velocity_with_static_endpoints, axis=0) * dt_rate
+        xyz_speed = np.linalg.norm(xyz_velocity, axis=1)
+        xyz_acc = np.linalg.norm(xyz_acceleration, axis=1)
         orient_step = np.linalg.norm(rpy_delta, axis=1)
-        orient_speed = orient_step * dt_rate
-        orient_acc = np.abs(np.diff(orient_speed)) * dt_rate if orient_speed.size > 1 else np.zeros(1)
+        orient_velocity = rpy_delta * dt_rate
+        orient_velocity_with_static_endpoints = np.concatenate(
+            (np.zeros((1, 3)), orient_velocity, np.zeros((1, 3))), axis=0
+        )
+        orient_acceleration = np.diff(orient_velocity_with_static_endpoints, axis=0) * dt_rate
+        orient_speed = np.linalg.norm(orient_velocity, axis=1)
+        orient_acc = np.linalg.norm(orient_acceleration, axis=1)
         return ServoStreamStats(
             kind=kind,
             label=label,
@@ -322,7 +335,9 @@ def check_segment_safety(
             )
 
 
-def _prepare_segment(seg: Segment, cfg: RealExecutorConfig, lower: np.ndarray, upper: np.ndarray) -> _PreparedSegment | None:
+def _prepare_segment(
+    seg: Segment, cfg: RealExecutorConfig, lower: np.ndarray, upper: np.ndarray
+) -> _PreparedSegment | None:
     if seg.kind == "gripper":
         return None
     check_segment_safety(
@@ -578,10 +593,7 @@ def _run_arm_segment(
     suffix = f" max_overrun={max_overrun * 1000.0:.2f}ms"
     if cfg.sdk_sim_validate:
         if prep.kind == "j":
-            suffix += (
-                f" reported_max_speed={reported_max_speed:.3f}rad/s "
-                f"({math.degrees(reported_max_speed):.1f}deg/s)"
-            )
+            suffix += f" reported_max_speed={reported_max_speed:.3f}rad/s ({math.degrees(reported_max_speed):.1f}deg/s)"
         else:
             suffix += f" reported_max_speed={reported_max_speed:.1f}mm/s"
     print(f"    sent {prep.samples.shape[0]} ticks{suffix}")
@@ -593,7 +605,7 @@ def _gripper_motion_enabled(cfg: RealExecutorConfig) -> bool:
     ``--sdk-sim-validate`` sets ``cfg.dry_run = False`` to stream the arm's
     servo targets against the controller's simulated-robot mode, but that flag
     does not cover the gripper: a real gripper command would still move the
-    physical hardware. Gate on ``real_gripper`` as well so physical gripper
+    physical hardware. Also require ``real_gripper`` so physical gripper
     motion is opt-in and SDK simulation stays side-effect-free.
     """
     return bool(cfg.real_gripper) and not cfg.dry_run and not cfg.sdk_sim_validate
@@ -615,9 +627,7 @@ def _gripper_g2_target_speed_mm_s(seg: Segment) -> float:
 
 def _is_gripper_gap_hold(seg: Segment) -> bool:
     return (
-        seg.gap_end is not None
-        and seg.gap_start is not None
-        and abs(float(seg.gap_end) - float(seg.gap_start)) < 1e-12
+        seg.gap_end is not None and seg.gap_start is not None and abs(float(seg.gap_end) - float(seg.gap_start)) < 1e-12
     )
 
 
@@ -648,10 +658,7 @@ def _run_gripper_hold_segment(
     reason: str,
     on_tick: Callable[[Segment, int], None] | None = None,
 ) -> None:
-    print(
-        f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm hold "
-        f"over {seg.duration:.2f}s (N={n}; {reason})"
-    )
+    print(f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm hold over {seg.duration:.2f}s (N={n}; {reason})")
     if on_tick is not None:
         _pace_ticks(n, cfg.rate, lambda t: on_tick(seg, t))
     else:
@@ -702,9 +709,7 @@ def _run_gripper_g2_segment(
     speed_mm_s = _gripper_g2_target_speed_mm_s(seg)
     code = arm.set_gripper_g2_position(target_mm, speed=speed_mm_s, wait=False)
     if code != 0:
-        raise RuntimeError(
-            f"set_gripper_g2_position failed code={code} segment={seg.label!r} target={target_mm:.1f}mm"
-        )
+        raise RuntimeError(f"set_gripper_g2_position failed code={code} segment={seg.label!r} target={target_mm:.1f}mm")
     print(
         f"  [{seg.label}] gripper gap {seg.gap_start * 1000:.1f}mm -> {seg.gap_end * 1000:.1f}mm "
         f"over {seg.duration:.2f}s (N={n}; set_gripper_g2_position target={target_mm:.1f}mm "
@@ -809,8 +814,7 @@ def _nearest_target_index(kind: str, targets: np.ndarray, reported: np.ndarray |
 def _assert_stream_health(arm, prep: _PreparedSegment, tick: int, code: int) -> None:
     if getattr(arm, "state", None) == xc.REPORT_STATE_STOPPING or getattr(arm, "error_code", 0) != 0:
         raise RuntimeError(
-            f"SDK stream fault segment={prep.seg.label!r} tick={tick} code={code}; "
-            f"{xc.format_arm_status(arm)}"
+            f"SDK stream fault segment={prep.seg.label!r} tick={tick} code={code}; {xc.format_arm_status(arm)}"
         )
 
 
@@ -825,8 +829,10 @@ def _stream_servo(
     kind = prep.kind
     send = arm.set_servo_angle_j if kind == "j" else arm.set_servo_cartesian
     prime = xc.prime_servo_angle_j if kind == "j" else xc.prime_servo_cartesian
-    prime_args = dict(speed=cfg.speed_rad_s, mvacc=cfg.mvacc_rad_s2) if kind == "j" else dict(
-        speed=cfg.speed_mm_s, mvacc=cfg.mvacc_mm_s2
+    prime_args = (
+        dict(speed=cfg.speed_rad_s, mvacc=cfg.mvacc_rad_s2)
+        if kind == "j"
+        else dict(speed=cfg.speed_mm_s, mvacc=cfg.mvacc_mm_s2)
     )
     first = prep.samples[0]
     prime(arm, first.tolist(), **prime_args)
@@ -836,7 +842,9 @@ def _stream_servo(
     next_deadline = time.monotonic()
     max_overrun = 0.0
     report_dim = int(prep.samples.shape[1])
-    prev_reported = _read_reported_target(arm, kind, report_dim) if cfg.sdk_sim_validate or csv_writer is not None else None
+    prev_reported = (
+        _read_reported_target(arm, kind, report_dim) if cfg.sdk_sim_validate or csv_writer is not None else None
+    )
     max_reported_speed = 0.0
     prev_report_t = time.monotonic()
 
@@ -855,7 +863,9 @@ def _stream_servo(
         _assert_stream_health(arm, prep, t, code)
 
         now = time.monotonic()
-        reported = _read_reported_target(arm, kind, report_dim) if cfg.sdk_sim_validate or csv_writer is not None else None
+        reported = (
+            _read_reported_target(arm, kind, report_dim) if cfg.sdk_sim_validate or csv_writer is not None else None
+        )
         report_distance = _reported_distance(kind, prev_reported, reported)
         report_speed = 0.0
         if reported is not None and prev_reported is None:
@@ -875,8 +885,10 @@ def _stream_servo(
         max_reported_speed = max(max_reported_speed, report_speed)
 
         command_delta = target - full_targets[t]
-        command_speed = float(np.max(np.abs(command_delta)) / tick_s) if kind == "j" else float(
-            np.linalg.norm(command_delta[:3]) / tick_s
+        command_speed = (
+            float(np.max(np.abs(command_delta)) / tick_s)
+            if kind == "j"
+            else float(np.linalg.norm(command_delta[:3]) / tick_s)
         )
         if csv_writer is not None:
             csv_writer.writerow(

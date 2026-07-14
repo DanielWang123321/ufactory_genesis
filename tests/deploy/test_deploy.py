@@ -60,9 +60,7 @@ def test_parse_target_xyz():
 
 def test_effective_max_joint_delta_uses_servo_speed(reach_config: ReachDeployConfig):
     assert reach_config.executor == EXECUTOR_SERVO_J
-    assert reach_config.max_joint_delta_rad == pytest.approx(
-        reach_config.servo_speed_rad_s * reach_config.ctrl_dt
-    )
+    assert reach_config.max_joint_delta_rad == pytest.approx(reach_config.servo_speed_rad_s * reach_config.ctrl_dt)
     assert reach_config.max_joint_delta_rad == pytest.approx(0.01)
 
 

@@ -1,20 +1,29 @@
-"""Standalone Lite6 gripper keyframe capture must match GLB kinematics."""
+"""Tracked Lite6 geometry and command mapping are self-consistent."""
 
 from __future__ import annotations
 
-import importlib
-import sys
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import pytest
 
-_TESTS_ROOT = Path(__file__).resolve().parents[1]
-_PROJECT_ROOT = _TESTS_ROOT.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+from ufactory.grippers.lite6 import (
+    LITE6_GRIPPER_CLOSED_GAP_M,
+    LITE6_GRIPPER_OPEN_GAP_M,
+    LITE6_GRIPPER_SIM_CLOSED_DRIVE,
+    LITE6_GRIPPER_SIM_OPEN_DRIVE,
+    lite6_gripper_sim_drive_to_gap_m,
+)
+from ufactory.robots.paths import lite6_gripper_movable_visual_urdf
 
 
-@pytest.mark.slow
-def test_standalone_lite6_gripper_collision_matches_glb_kinematics():
-    capture = importlib.import_module("dev.ref_scripts.capture_lite6_gripper_keyframes")
-    assert capture.main([]) == 0
+def test_standalone_lite6_gripper_collision_assets_and_gap_mapping():
+    urdf = Path(lite6_gripper_movable_visual_urdf()).resolve()
+    root = ET.parse(urdf).getroot()
+    for link_name in ("uflite_finger1", "uflite_finger2"):
+        mesh = root.find(f".//link[@name='{link_name}']/collision/geometry/mesh")
+        assert mesh is not None
+        mesh_path = (urdf.parent / str(mesh.get("filename"))).resolve()
+        assert mesh_path.is_file()
+    assert lite6_gripper_sim_drive_to_gap_m(LITE6_GRIPPER_SIM_CLOSED_DRIVE) == pytest.approx(LITE6_GRIPPER_CLOSED_GAP_M)
+    assert lite6_gripper_sim_drive_to_gap_m(LITE6_GRIPPER_SIM_OPEN_DRIVE) == pytest.approx(LITE6_GRIPPER_OPEN_GAP_M)

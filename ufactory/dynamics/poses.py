@@ -90,7 +90,9 @@ def filter_safe_configs(
     return safe, rejected
 
 
-def parse_joint_limits(urdf_path: str | Path, joint_names: Sequence[str] = JOINT_NAMES) -> tuple[np.ndarray, np.ndarray]:
+def parse_joint_limits(
+    urdf_path: str | Path, joint_names: Sequence[str] = JOINT_NAMES
+) -> tuple[np.ndarray, np.ndarray]:
     root = ET.parse(str(urdf_path)).getroot()
     lower = np.full(len(joint_names), -np.inf, dtype=np.float64)
     upper = np.full(len(joint_names), np.inf, dtype=np.float64)

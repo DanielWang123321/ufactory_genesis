@@ -8,44 +8,51 @@ and gripper segment completeness. Hardware-specific streaming limits remain in
 
 from __future__ import annotations
 
+import math
 import numpy as np
+import numpy.typing as npt
 
-from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
+from ufactory.config import ResolvedRuntimeConfig, load_runtime_config
 from ufactory.trajectory.segments import Program, Segment
+from ufactory.types import FloatArray
 
 
-def runtime_for_robot(robot_key: str) -> RobotRuntimeProfile:
+def runtime_for_robot(robot_key: str) -> ResolvedRuntimeConfig:
     """Resolve ``robot_key`` and return its runtime profile."""
-    return get_robot_runtime_profile(robot_key)
+    return load_runtime_config(robot_key)
 
 
 def validate_rate(rate: float) -> float:
     value = float(rate)
-    if value <= 0.0:
-        raise ValueError(f"trajectory rate must be positive, got {rate!r}")
+    if not math.isfinite(value) or value <= 0.0:
+        raise ValueError(f"trajectory rate must be finite and positive, got {rate!r}")
     return value
 
 
-def validate_joint_vector(q, *, dof: int, name: str = "q") -> np.ndarray:
+def validate_joint_vector(q: npt.ArrayLike, *, dof: int, name: str = "q") -> FloatArray:
     """Return ``q`` as a 1D float array and require exactly ``dof`` joints."""
     arr = np.asarray(q, dtype=np.float64).reshape(-1)
     if arr.size != int(dof):
         raise ValueError(f"{name} expected {int(dof)} joints, got {arr.size}")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"{name} contains NaN or infinity")
     return arr
 
 
-def validate_cartesian_xyz(xyz, *, name: str = "xyz") -> np.ndarray:
+def validate_cartesian_xyz(xyz: npt.ArrayLike, *, name: str = "xyz") -> FloatArray:
     """Return ``xyz`` as a length-3 float array."""
     arr = np.asarray(xyz, dtype=np.float64).reshape(-1)
     if arr.size != 3:
         raise ValueError(f"{name} expected xyz length 3, got {arr.size}")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"{name} contains NaN or infinity")
     return arr
 
 
 def validate_segment(
     seg: Segment,
     *,
-    runtime: RobotRuntimeProfile | None = None,
+    runtime: ResolvedRuntimeConfig | None = None,
     z_min_m: float | None = None,
 ) -> None:
     """Validate one trajectory segment against the generic trajectory contract."""
@@ -57,6 +64,8 @@ def validate_segment(
             q_end = np.asarray(seg.q_end).reshape(-1)
             if q_start.shape != q_end.shape:
                 raise ValueError(f"MoveJ segment {seg.label!r} q_start/q_end shape mismatch")
+            if not np.all(np.isfinite(q_start)) or not np.all(np.isfinite(q_end)):
+                raise ValueError(f"MoveJ segment {seg.label!r} contains NaN or infinity")
             if seg.q_samples is not None:
                 q_samples = np.asarray(seg.q_samples, dtype=np.float64)
                 if q_samples.ndim != 2 or q_samples.shape[0] < 1:
@@ -66,8 +75,10 @@ def validate_segment(
                         f"MoveJ segment {seg.label!r} q_samples expected {q_start.size} joints, "
                         f"got {q_samples.shape[1]}"
                     )
+                if not np.all(np.isfinite(q_samples)):
+                    raise ValueError(f"MoveJ segment {seg.label!r} q_samples contains NaN or infinity")
             return
-        dof = runtime.model.dof
+        dof = runtime.robot.dof
         validate_joint_vector(seg.q_start, dof=dof, name=f"{seg.label or 'movej'}.q_start")
         validate_joint_vector(seg.q_end, dof=dof, name=f"{seg.label or 'movej'}.q_end")
         if seg.q_samples is not None:
@@ -75,9 +86,9 @@ def validate_segment(
             if q_samples.ndim != 2 or q_samples.shape[0] < 1:
                 raise ValueError(f"MoveJ segment {seg.label!r} q_samples must be a non-empty 2D array")
             if q_samples.shape[1] != dof:
-                raise ValueError(
-                    f"{seg.label or 'movej'}.q_samples expected {dof} joints, got {q_samples.shape[1]}"
-                )
+                raise ValueError(f"{seg.label or 'movej'}.q_samples expected {dof} joints, got {q_samples.shape[1]}")
+            if not np.all(np.isfinite(q_samples)):
+                raise ValueError(f"MoveJ segment {seg.label!r} q_samples contains NaN or infinity")
         return
 
     if seg.kind == "movel":
@@ -92,6 +103,9 @@ def validate_segment(
     if seg.kind == "gripper":
         if seg.gap_start is None or seg.gap_end is None:
             raise ValueError(f"Gripper segment {seg.label!r} requires gap_start and gap_end")
+        values = (float(seg.gap_start), float(seg.gap_end), float(seg.duration))
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError(f"Gripper segment {seg.label!r} contains NaN or infinity")
         if seg.duration < 0.0:
             raise ValueError(f"Gripper segment {seg.label!r} has negative duration")
         return

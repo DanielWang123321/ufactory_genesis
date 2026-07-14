@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import pickle
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +13,7 @@ _TESTS_ROOT = Path(__file__).resolve().parents[1]
 if str(_TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_TESTS_ROOT))
 from conftest import PROJECT_ROOT
+
 PYTHON = sys.executable
 NUMBA_CACHE_DIR = os.path.expanduser("~/.cache/numba")
 
@@ -59,12 +59,13 @@ def test_xarm6_smoke(script: str, extra_args: list[str]):
         f"stderr:\n{result.stderr[-4000:]}"
     )
     if script == "examples/xarm6/xarm6_grasp_place_train.py":
-        cfgs_path = PROJECT_ROOT / "logs" / "xarm6-grasp-place-joint-g2" / "cfgs.pkl"
+        cfgs_path = PROJECT_ROOT / "logs" / "xarm6-grasp-place-joint-g2" / "config.yaml"
         metrics_path = PROJECT_ROOT / "logs" / "xarm6-grasp-place-joint-g2" / "metrics.csv"
         assert cfgs_path.exists()
         assert metrics_path.exists()
-        with cfgs_path.open("rb") as f:
-            env_cfg, _reward_cfg, _robot_cfg, _train_cfg = pickle.load(f)
+        from ufactory.training import load_training_config
+
+        env_cfg = load_training_config(cfgs_path)["env"]
         assert env_cfg["num_envs"] == 1
         assert env_cfg["num_obs"] == 30
         assert env_cfg["num_actions"] == 7
@@ -74,7 +75,7 @@ def test_xarm6_smoke(script: str, extra_args: list[str]):
 
 @pytest.mark.integration
 def test_xarm6_dynamics_sim_cli():
-    from ufactory.dynamics import cli_sim_check
+    from ufactory.dynamics.cli import cli_sim_check
 
     rc = cli_sim_check(["--robot", "xarm6", "--random-count", "5"])
     assert rc in {0, 1}, f"cli_sim_check unexpected exit {rc}"
@@ -82,7 +83,7 @@ def test_xarm6_dynamics_sim_cli():
 
 @pytest.mark.integration
 def test_xarm6_dynamics_hardware_dry_run_cli():
-    from ufactory.dynamics import cli_hardware_check
+    from ufactory.dynamics.cli import cli_hardware_check
 
     rc = cli_hardware_check(["--robot", "xarm6", "--dry-run"])
     assert rc == 0, f"cli_hardware_check --dry-run exited {rc}"
@@ -90,15 +91,21 @@ def test_xarm6_dynamics_hardware_dry_run_cli():
 
 @pytest.mark.hardware
 def test_dynamics_verify_real():
-    from ufactory.dynamics import cli_hardware_check
+    from ufactory.dynamics.cli import cli_hardware_check
 
     ip = _require_xarm_ip()
     args = [
-        "--robot", "xarm6",
-        "--ip", ip,
-        "--poses", "0,1,3",
-        "--move-strategy", "direct",
-        "--z-min-mm", "0",
+        "--robot",
+        "xarm6",
+        "--ip",
+        ip,
+        "--poses",
+        "0,1,3",
+        "--move-strategy",
+        "direct",
+        "--confirm-real",
+        "--z-min-mm",
+        "0",
     ]
     suffix = os.environ.get("XARM_KINEMATICS_SUFFIX")
     if suffix:

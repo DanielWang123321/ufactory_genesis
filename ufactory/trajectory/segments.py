@@ -16,11 +16,12 @@ world before Genesis IK.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
 from ufactory.trajectory import profile as P
+from ufactory.types import FloatArray
 
 SegmentKind = Literal["movej", "movel", "gripper"]
 
@@ -33,15 +34,15 @@ class Segment:
     a_max: float
     label: str = ""
     # MoveJ
-    q_start: np.ndarray | None = None
-    q_end: np.ndarray | None = None
+    q_start: FloatArray | None = None
+    q_end: FloatArray | None = None
     # Optional explicit MoveJ target stream. Same sampling contract as
     # ``joint_lspb_samples``: row 0 is the first target after ``q_start`` and
     # the final row equals ``q_end``.
-    q_samples: np.ndarray | None = None
+    q_samples: FloatArray | None = None
     # MoveL (link6 base-frame xyz, m; orientation fixed gripper-down)
-    pose_start: np.ndarray | None = None
-    pose_end: np.ndarray | None = None
+    pose_start: FloatArray | None = None
+    pose_end: FloatArray | None = None
     # Gripper (physical two-finger gap, m)
     gap_start: float | None = None
     gap_end: float | None = None
@@ -62,7 +63,7 @@ class Segment:
             f"v={self.v_max:.3f} a={self.a_max:.3f} N={self.samples_count} {self.length()}>"
         )
 
-    def samples(self, rate: float) -> tuple[np.ndarray, int]:
+    def samples(self, rate: float) -> tuple[FloatArray, int]:
         """Dense absolute targets at ``rate`` (Hz).
 
         Returns ``(samples[N, dim], N)``. MoveJ -> joints (rad), MoveL -> link6
@@ -76,19 +77,31 @@ class Segment:
                     raise ValueError(f"MoveJ segment {self.label!r} q_samples must be a non-empty 2D array")
                 return q.copy(), int(q.shape[0])
             q, n, _ = P.joint_lspb_samples(
-                self.q_start, self.q_end, rate=rate, v_max=self.v_max, a_max=self.a_max,
+                self.q_start,
+                self.q_end,
+                rate=rate,
+                v_max=self.v_max,
+                a_max=self.a_max,
             )
             return q, n
         if self.kind == "movel":
             assert self.pose_start is not None and self.pose_end is not None
             p, n, _ = P.linear_cartesian_samples(
-                self.pose_start, self.pose_end, rate=rate, v_max=self.v_max, a_max=self.a_max,
+                self.pose_start,
+                self.pose_end,
+                rate=rate,
+                v_max=self.v_max,
+                a_max=self.a_max,
             )
             return p, n
         if self.kind == "gripper":
             assert self.gap_start is not None and self.gap_end is not None
             g, n, _ = P.gap_lspb_samples(
-                self.gap_start, self.gap_end, rate=rate, duration_s=self.duration, a_max=self.a_max,
+                self.gap_start,
+                self.gap_end,
+                rate=rate,
+                duration_s=self.duration,
+                a_max=self.a_max,
             )
             return g, n
         raise ValueError(f"unknown segment kind: {self.kind}")
@@ -128,13 +141,13 @@ def _finalize(seg: Segment, rate: float) -> Segment:
     return _replace(seg, samples_count=n)
 
 
-def _replace(seg: Segment, **kw) -> Segment:
+def _replace(seg: Segment, **kw: Any) -> Segment:
     return Segment(**{**seg.__dict__, **kw})
 
 
 def make_movej(
-    q_start: np.ndarray,
-    q_end: np.ndarray,
+    q_start: FloatArray,
+    q_end: FloatArray,
     *,
     rate: float,
     limits: JointLimits,
@@ -160,8 +173,8 @@ def make_movej(
 
 
 def make_movel(
-    pose_start: np.ndarray,
-    pose_end: np.ndarray,
+    pose_start: FloatArray,
+    pose_end: FloatArray,
     *,
     rate: float,
     limits: JointLimits,
@@ -226,8 +239,8 @@ class Program:
     def total_ticks(self) -> int:
         return int(sum(s.samples_count for s in self.segments))
 
-    def iter_samples(self) -> list[tuple[str, np.ndarray]]:
-        out: list[tuple[str, np.ndarray]] = []
+    def iter_samples(self) -> list[tuple[str, FloatArray]]:
+        out: list[tuple[str, FloatArray]] = []
         for seg in self.segments:
             arr, _ = seg.samples(self.rate)
             out.append((seg.kind, arr))
@@ -239,7 +252,7 @@ def build_pickplace_program(
     rate: float,
     speed_rad_s: float,
     mvacc_rad_s2: float,
-    waypoints: list[dict],
+    waypoints: list[dict[str, Any]],
     robot_key: str | None = None,
     linear_speed_m_s: float | None = None,
     linear_acc_m_s2: float | None = None,
@@ -271,9 +284,13 @@ def build_pickplace_program(
         t = str(wp["type"])
         label = str(wp.get("label", t))
         if t == "movej":
-            segments.append(make_movej(np.array(wp["q_start"]), np.array(wp["q_end"]), rate=rate, limits=limits, label=label))
+            segments.append(
+                make_movej(np.array(wp["q_start"]), np.array(wp["q_end"]), rate=rate, limits=limits, label=label)
+            )
         elif t == "movel":
-            segments.append(make_movel(np.array(wp["pose_start"]), np.array(wp["pose_end"]), rate=rate, limits=limits, label=label))
+            segments.append(
+                make_movel(np.array(wp["pose_start"]), np.array(wp["pose_end"]), rate=rate, limits=limits, label=label)
+            )
         elif t == "gripper":
             segments.append(
                 make_gripper(

@@ -116,7 +116,7 @@ def read_joint_frictionloss(robot, dof_idx: Sequence[int]) -> np.ndarray:
 def capture_self_contacts(robot, *, min_force_n: float = 1e-6) -> list[dict[str, Any]]:
     """Return active self-contact pairs (link indices + contact force magnitude, N).
 
-    Diagnostic helper only (not part of L1/L2/L3 gating). Used to check whether a
+    Diagnostic helper only (not part of L1/L2/L3 validation layers). Used to check whether a
     coarse/overlapping collision mesh is injecting a spurious contact force that
     inflates ``pd_hold_tau`` at a specific configuration -- e.g. the Lite6 wrist
     (J4-J5-J6) anomaly documented in ``uf_dynamics.md`` sections 4.7/4.8. Returns
@@ -199,7 +199,7 @@ def genesis_pd_hold_torque_at_q(
     ``capture_contacts=True`` additionally records active self-contact pairs at the
     settled state (see :func:`capture_self_contacts`); off by default since it costs
     an extra backend call and is only needed for diagnosing simulation-side torque
-    anomalies (not part of L1/L2/L3 gating).
+    anomalies (not part of L1/L2/L3 validation layers).
     """
     runtime = runtime_profile or _XARM6_RUNTIME
     set_pd_gains(robot, dof_idx, runtime)
@@ -394,15 +394,19 @@ def test_mass_parameters(robot, dof_idx, runtime_profile: RobotRuntimeProfile) -
             per_link.append((link.name.split("/")[-1], m))
     em01 = sum(m for _, m in per_link)
     cons_err = abs(total_mass - em01) / max(em01, 1e-9) if em01 else 1.0
-    lines.append(f"  Total mass (get_mass): {total_mass:.4f} kg; sum per link: {em01:.4f} kg; consistency err {cons_err*100:.2f}%")
+    lines.append(
+        f"  Total mass (get_mass): {total_mass:.4f} kg; sum per link: {em01:.4f} kg; consistency err {cons_err * 100:.2f}%"
+    )
     if cons_err > 0.01:
-        lines.append(f"  [FAIL] Total/per-link mass inconsistency {cons_err*100:.2f}% > 1%")
+        lines.append(f"  [FAIL] Total/per-link mass inconsistency {cons_err * 100:.2f}% > 1%")
         passed = False
     for name, m in per_link:
         lines.append(f"    {name}: {m:.4f} kg")
     damping = _to_np(robot.get_dofs_damping(dof_idx)).flatten()
     frictionloss = _to_np(robot.get_dofs_frictionloss(dof_idx)).flatten()
-    lines.append(f"  Joint damping: {np.round(damping, 4).tolist()}  frictionloss: {np.round(frictionloss, 4).tolist()}")
+    lines.append(
+        f"  Joint damping: {np.round(damping, 4).tolist()}  frictionloss: {np.round(frictionloss, 4).tolist()}"
+    )
     if passed:
         lines.append("[PASS] Model parameters internally consistent")
     else:
@@ -483,11 +487,15 @@ def test_energy_dissipation(robot, scene, dof_idx, runtime_profile: RobotRuntime
     lines.append(f"  Total dissipated: {total_dissipated:.4f} J  Max single-step increase: {max_increase:.6f} J")
     tolerance = max(0.01 * abs(energies[0]), 0.01)
     passed = max_increase <= tolerance and total_dissipated >= -tolerance
-    lines.append("[PASS] Energy dissipated within tolerance" if passed else "[FAIL] Energy conservation/dissipation violated")
+    lines.append(
+        "[PASS] Energy dissipated within tolerance" if passed else "[FAIL] Energy conservation/dissipation violated"
+    )
     return passed, lines
 
 
-def test_mass_matrix_plausibility(robot, scene, dof_idx, runtime_profile: RobotRuntimeProfile) -> tuple[bool, list[str]]:
+def test_mass_matrix_plausibility(
+    robot, scene, dof_idx, runtime_profile: RobotRuntimeProfile
+) -> tuple[bool, list[str]]:
     """Test 10: mass matrix symmetry, positive-definiteness, finite diagonal."""
     lines: list[str] = ["--- Test 10: Mass Matrix Plausibility ---"]
     set_pd_gains(robot, dof_idx, runtime_profile)
@@ -506,7 +514,7 @@ def test_mass_matrix_plausibility(robot, scene, dof_idx, runtime_profile: RobotR
     asym = float(np.abs(M - M.T).max())
     lines.append(f"  Asymmetry |M-M^T|={asym:.8f}")
     if asym > 1e-5:
-        lines.append(f"  [FAIL] Mass matrix not symmetric")
+        lines.append("  [FAIL] Mass matrix not symmetric")
         passed = False
     eig = np.linalg.eigvalsh(M)
     lines.append(f"  Eigenvalues: [{', '.join(f'{v:.6f}' for v in eig)}]")
@@ -572,12 +580,16 @@ def test_pd_step_response(robot, scene, dof_idx, runtime_profile: RobotRuntimePr
             if ss_err > 0.05:
                 status = "[FAIL]"
                 passed = False
-            lines.append(f"    J{j+1}: ss_err={ss_err:.4f}rad overshoot={ov_pct:.1f}% settle={settle_t:.2f}s {status}")
+            lines.append(
+                f"    J{j + 1}: ss_err={ss_err:.4f}rad overshoot={ov_pct:.1f}% settle={settle_t:.2f}s {status}"
+            )
     lines.append("[PASS] PD step response acceptable" if passed else "[FAIL] PD step response has issues")
     return passed, lines
 
 
-def test_gravity_compensation_torques(robot, scene, dof_idx, runtime_profile: RobotRuntimeProfile) -> tuple[bool, list[str]]:
+def test_gravity_compensation_torques(
+    robot, scene, dof_idx, runtime_profile: RobotRuntimeProfile
+) -> tuple[bool, list[str]]:
     """Test 7: gravity-compensation torques. Effort limits from runtime_profile
     (no hardcoded URDF_JOINT_EFFORT)."""
     lines: list[str] = ["--- Test 7: Static Torque / Gravity Compensation ---"]
@@ -614,10 +626,12 @@ def test_gravity_compensation_torques(robot, scene, dof_idx, runtime_profile: Ro
             passed = False
         for i in range(min(len(cf), len(effort))):
             if abs(float(cf[i])) > float(effort[i]) * 1.05:
-                lines.append(f"    [FAIL] Joint {i+1} force {cf[i]:.2f} exceeds limit {effort[i]:.2f} Nm")
+                lines.append(f"    [FAIL] Joint {i + 1} force {cf[i]:.2f} exceeds limit {effort[i]:.2f} Nm")
                 passed = False
         if name != "home (upright)" and max_ctrl < 3.0:
             lines.append(f"    [FAIL] Max control force {max_ctrl:.2f} Nm too small for non-upright config")
             passed = False
-    lines.append("[PASS] Gravity compensation torques plausible" if passed else "[FAIL] Gravity compensation torque check failed")
+    lines.append(
+        "[PASS] Gravity compensation torques plausible" if passed else "[FAIL] Gravity compensation torque check failed"
+    )
     return passed, lines

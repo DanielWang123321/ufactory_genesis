@@ -26,7 +26,7 @@ def test_profile_import_does_not_load_genesis():
     code = (
         "import sys; "
         "import ufactory.trajectory.profile; "
-        "from ufactory.trajectory import build_pickplace_program; "
+        "from ufactory.trajectory.segments import build_pickplace_program; "
         "print('genesis' in sys.modules)"
     )
     result = subprocess.run(

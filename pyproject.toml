@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.4"
+version = "0.2.5"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -38,13 +38,25 @@ Issues = "https://github.com/DanielWang123321/ufactory_genesis/issues"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.12",
+    "mypy>=1.16",
+    "pip-audit>=2.9",
+    "types-PyYAML",
 ]
 dynamics = [
     "matplotlib>=3.8",
-    "pin>=3.0.0",
+    "pin==4.0.0",
+    "coal==3.0.3",
 ]
 real = [
     "xarm-python-sdk",
+    "pin==4.0.0",
+    "coal==3.0.3",
+]
+sim = [
+    "genesis-world==1.2.1",
+    "torch==2.10.0",
 ]
 rl = [
     "rsl-rl-lib==2.2.4",
@@ -66,11 +78,68 @@ dynamics-sim-collision-check = "ufactory.dynamics.cli:cli_sim_collision_check"
 dynamics-hardware-check = "ufactory.dynamics.cli:cli_hardware_check"
 dynamics-report-compare = "ufactory.dynamics.cli:cli_report_compare"
 observe-hold-current = "ufactory.hardware.observe:cli_observe_hold_current"
+ufactory-grasp-place = "ufactory.cli.grasp_place:main"
+ufactory-packaging-showcase = "ufactory.cli.packaging:main"
+project-check = "ufactory.quality.project_check:main"
 
-# NOTE: This project is designed for editable install (pip install -e .).
-# Assets (URDF, STL, GLB) live outside the Python package in assets/ and
-# are resolved relative to PROJECT_ROOT at runtime. For a standard pip
-# install, assets must be packaged via MANIFEST.in + package_data (future).
+[tool.coverage.run]
+branch = true
+source = ["ufactory"]
+relative_files = true
+# Fast coverage measures code that is safe and deterministic on a CPU-only
+# source checkout. Optional backend adapters are covered by their owning
+# sim/sdk-sim/hardware layers instead of being imported by fast tests.
+omit = [
+    "ufactory/cli/*",
+    "ufactory/deploy/*",
+    "ufactory/hardware/*",
+    "ufactory/quality/*",
+    "ufactory/safety/adapters/*",
+    "ufactory/simulation/*",
+    "ufactory/dynamics/cli.py",
+    "ufactory/dynamics/plot.py",
+    "ufactory/dynamics/probe.py",
+    "ufactory/dynamics/reference.py",
+    "ufactory/grippers/bio_g2.py",
+    "ufactory/grippers/lite6.py",
+    "ufactory/kinematics/genesis.py",
+    "ufactory/kinematics/validation.py",
+    "ufactory/robots/paths.py",
+    "ufactory/robots/runtime.py",
+    "ufactory/trajectory/backends.py",
+    "ufactory/trajectory/ik.py",
+    "ufactory/trajectory/mirror_executor.py",
+    "ufactory/trajectory/real_executor.py",
+    "ufactory/trajectory/scene.py",
+    "ufactory/trajectory/sim_executor.py",
+]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E402", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"examples/grasp_place_env.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Source delivery policy: only a cloned repository plus ``pip install -e .``
+# is supported. Wheels/sdists and remote asset downloads are intentionally not
+# part of v0.2.5; RepositoryAssetStore fails closed outside this layout.
 
 [tool.setuptools.packages.find]
 where = ["."]

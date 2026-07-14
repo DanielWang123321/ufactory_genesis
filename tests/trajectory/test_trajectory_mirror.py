@@ -15,18 +15,17 @@ import numpy as np
 import pytest
 import torch
 
-from ufactory.trajectory import (
+from ufactory.config import load_runtime_config
+from ufactory.simulation import GenesisRuntimeManager
+from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
+from ufactory.trajectory.mirror_executor import (
     AsyncMirrorBridge,
-    CartesianWaypoint,
     KinematicCarryTracker,
-    RealExecutorConfig,
     TrajKinematicMirror,
-    TrajectoryPlannerConfig,
-    build_pickplace_program,
-    compile_cartesian_program_to_joint_stream,
-    plan_mixed_waypoints,
-    replay_real,
 )
+from ufactory.trajectory.planner import CartesianWaypoint, TrajectoryPlannerConfig, plan_mixed_waypoints
+from ufactory.trajectory.real_executor import RealExecutorConfig, replay_real
+from ufactory.trajectory.segments import build_pickplace_program
 from ufactory.trajectory.mirror_executor import (
     G2_MIRROR_VISUAL_GAP_SHRINK_M,
     LITE6_MIRROR_VISUAL_GAP_SHRINK_M,
@@ -66,11 +65,23 @@ def _default_waypoints() -> list[dict]:
     return [
         {"type": "movel", "pose_start": home, "pose_end": pre_grasp, "label": "home->pregrasp"},
         {"type": "movel", "pose_start": pre_grasp, "pose_end": grasp, "label": "descend"},
-        {"type": "gripper", "gap_start": grip_open_m, "gap_end": grip_close_m, "duration": grip_duration_s, "label": "grip"},
+        {
+            "type": "gripper",
+            "gap_start": grip_open_m,
+            "gap_end": grip_close_m,
+            "duration": grip_duration_s,
+            "label": "grip",
+        },
         {"type": "movel", "pose_start": grasp, "pose_end": lift, "label": "lift"},
         {"type": "movel", "pose_start": lift, "pose_end": place_top, "label": "transit"},
         {"type": "movel", "pose_start": place_top, "pose_end": place_grasp, "label": "place-descend"},
-        {"type": "gripper", "gap_start": grip_close_m, "gap_end": grip_open_m, "duration": grip_duration_s, "label": "release"},
+        {
+            "type": "gripper",
+            "gap_start": grip_close_m,
+            "gap_end": grip_open_m,
+            "duration": grip_duration_s,
+            "label": "release",
+        },
         {"type": "movel", "pose_start": place_grasp, "pose_end": retreat, "label": "retreat"},
         {"type": "movel", "pose_start": retreat, "pose_end": home, "label": "return-home"},
     ]
@@ -117,10 +128,12 @@ _PRISTINE_OBJ_STATE: dict[str, torch.Tensor] = {}
 
 @pytest.fixture(scope="module")
 def shared_ctx():
-    ctx = build_scene(rate=50.0, show_viewer=False, substeps=2)
-    _PRISTINE_OBJ_STATE["pos"] = ctx.obj.get_pos().clone()
-    _PRISTINE_OBJ_STATE["quat"] = ctx.obj.get_quat().clone()
-    return ctx
+    config = load_runtime_config("xarm6")
+    with GenesisRuntimeManager(config.simulation):
+        ctx = build_scene(rate=50.0, show_viewer=False, substeps=2)
+        _PRISTINE_OBJ_STATE["pos"] = ctx.obj.get_pos().clone()
+        _PRISTINE_OBJ_STATE["quat"] = ctx.obj.get_quat().clone()
+        yield ctx
 
 
 def _fresh_mirror(ctx, program) -> TrajKinematicMirror:
@@ -148,9 +161,7 @@ def test_mirror_grip_drive_floors_g2_and_lite6_visual_gap():
 
     g2_floor = obj_w - G2_MIRROR_VISUAL_GAP_SHRINK_M
     lite_floor = obj_w - LITE6_MIRROR_VISUAL_GAP_SHRINK_M
-    assert mirror_grip_drive_for_gap_m(g2_ctx, 0.022) == pytest.approx(
-        drive_for_gap_m(g2_floor, G2_GRIPPER_PARAMS)
-    )
+    assert mirror_grip_drive_for_gap_m(g2_ctx, 0.022) == pytest.approx(drive_for_gap_m(g2_floor, G2_GRIPPER_PARAMS))
     assert mirror_grip_drive_for_gap_m(g2_ctx, g2_floor + 0.001) == pytest.approx(
         drive_for_gap_m(g2_floor + 0.001, G2_GRIPPER_PARAMS)
     )
@@ -209,7 +220,7 @@ def test_async_mirror_bridge_on_tick_does_not_block_on_tracker():
     applied: list[tuple[object, int]] = []
 
     class SlowTracker:
-        def on_tick(self, seg, tick_idx: int) -> None:
+        def on_tick(self, seg, tick_idx: int, *, update_visualizer: bool = True) -> None:
             started.set()
             release.wait(timeout=2.0)
             applied.append((seg, tick_idx))
@@ -242,7 +253,7 @@ def test_async_mirror_bridge_background_consumes_tracker():
     done = threading.Event()
 
     class CountingTracker:
-        def on_tick(self, seg, tick_idx: int) -> None:
+        def on_tick(self, seg, tick_idx: int, *, update_visualizer: bool = True) -> None:
             calls.append((seg, tick_idx))
             if tick_idx == 2:
                 done.set()
@@ -262,6 +273,29 @@ def test_async_mirror_bridge_background_consumes_tracker():
     assert calls
     assert calls[-1] == (seg, 2)
     scene.step.assert_not_called()
+
+
+def test_async_mirror_bridge_caps_visual_updates_without_dropping_state():
+    calls: list[tuple[int, bool]] = []
+    first = threading.Event()
+    second = threading.Event()
+
+    class Tracker:
+        def on_tick(self, _seg, tick_idx: int, *, update_visualizer: bool = True) -> None:
+            calls.append((tick_idx, update_visualizer))
+            (first if len(calls) == 1 else second).set()
+
+    bridge = AsyncMirrorBridge(Tracker(), max_visual_hz=0.001)
+    seg = SimpleNamespace(label="transit")
+    try:
+        bridge.on_tick(seg, 0)
+        assert first.wait(timeout=1.0)
+        bridge.on_tick(seg, 1)
+        assert second.wait(timeout=1.0)
+    finally:
+        bridge.close()
+
+    assert calls == [(0, True), (1, False)]
 
 
 @pytest.mark.gpu
@@ -315,9 +349,31 @@ def test_hold_step_does_not_drift_arm_pose(shared_ctx):
 
     q_after_many_holds = ctx.robot.get_dofs_position()[0, ctx.arm_dof_idx].detach().cpu().numpy()
     np.testing.assert_allclose(
-        q_after_many_holds, q_after_one_hold, atol=1e-4,
+        q_after_many_holds,
+        q_after_one_hold,
+        atol=1e-4,
         err_msg="arm pose kept drifting across repeated hold_step() calls instead of staying steady",
     )
+
+
+@pytest.mark.gpu
+def test_carry_tracker_warm_up_preserves_initial_scene_state(shared_ctx):
+    program = _default_program()
+    ctx = shared_ctx
+    mirror = _fresh_mirror(ctx, program)
+    tracker = KinematicCarryTracker(mirror, grasp_gap_m=0.024)
+    obj_pos = ctx.obj.get_pos().clone()
+    obj_quat = ctx.obj.get_quat().clone()
+    q_arm = mirror.last_q_arm.copy()
+    grip_drive = mirror.grip_drive
+
+    tracker.warm_up()
+
+    assert not tracker.attached
+    torch.testing.assert_close(ctx.obj.get_pos(), obj_pos)
+    torch.testing.assert_close(ctx.obj.get_quat(), obj_quat)
+    np.testing.assert_allclose(mirror.last_q_arm, q_arm)
+    assert mirror.grip_drive == pytest.approx(grip_drive)
 
 
 def _run_ticks_through_label(tracker, program, *, stop_after_label: str):
@@ -356,8 +412,7 @@ def test_grip_segment_obj_xy_drift_bounded_during_close(shared_ctx):
 
     assert tracker.attached, "segment-end latch should engage after the grip close segment"
     assert max_xy_drift_m < 0.001, (
-        f"grip segment pushed the object {max_xy_drift_m * 1000:.2f} mm in XY "
-        "(expected < 1 mm with freeze-until-latch)"
+        f"grip segment pushed the object {max_xy_drift_m * 1000:.2f} mm in XY (expected < 1 mm with freeze-until-latch)"
     )
 
 

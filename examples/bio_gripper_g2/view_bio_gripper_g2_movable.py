@@ -16,7 +16,9 @@ def _controller(robot):
 
 
 def main() -> None:
-    run_standalone_gripper_viewer("Bio Gripper G2 open/close demo (standalone)", bio_gripper_g2_movable_visual_urdf(), _controller)
+    run_standalone_gripper_viewer(
+        "Bio Gripper G2 open/close demo (standalone)", bio_gripper_g2_movable_visual_urdf(), _controller
+    )
 
 
 if __name__ == "__main__":

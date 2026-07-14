@@ -3,13 +3,13 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.4-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.2.0%2B-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.5-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.2.1-lightgrey" alt="Genesis">
 </p>
 
 UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化、运动学校准、轨迹抓放示例与强化学习环境。
 
-[English](README.md) | [贡献指南](CONTRIBUTING.md) | [变更日志](CHANGELOG.md)
+[English](README.md) | [贡献指南](CONTRIBUTING.md) | [变更日志](CHANGELOG.md) | [安全策略](SECURITY.md)
 
 ## 目录
 
@@ -28,19 +28,14 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 
 ## 快速开始
 
-最低要求 `genesis-world>=1.2.0`；当前已在 Python 3.13、Genesis World 1.2.1、PyTorch 2.10.0+cu128 下验证。
+v0.2.5 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。已验证环境为 Python 3.13、Genesis World 1.2.1、PyTorch 2.10.0+cu128。
 
 ```bash
-# 1. 安装 Genesis（按平台选择：CPU / CUDA / macOS / AMD）
-#    参考官方指南：https://genesis-world.readthedocs.io/
-pip install "genesis-world>=1.2.0"
-
-# 2. 安装 ufactory_genesis
-pip install -r requirements.txt
-pip install -e .
+# 在已克隆仓库根目录
+pip install -e ".[sim]"
 
 # 可选依赖：
-#   pip install -e ".[real]"      # xArm SDK / 真机命令
+#   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal 安全后端
 #   pip install -e ".[rl]"        # RL 训练与评估示例
 #   pip install -e ".[showcase]"  # 物理装箱展示 scipy 依赖
 
@@ -48,6 +43,9 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 # 预览 xArm 6 GLB 模型
 python examples/view_robot_glb.py --robot xarm6
+
+# 本地质量报告（不替代 pytest / 发布证据）
+project-check
 ```
 
 2024 年起新发货 xArm 均为 **XI1305** 硬件版本。短名 `xarm5` / `xarm6` / `xarm7` 会解析为 `xarm5_1305` / `xarm6_1305` / `xarm7_1305`；显式 `*_1305` 键名仍兼容。旧型号码（11、12、1300–1304）不在本仓库内置，请通过 `--urdf` 或 `prepare_robot_model_for_verification(robot_model=...)` 传入自有 URDF。
@@ -106,59 +104,77 @@ python examples/view_robot_glb.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-五机型共享路点/LSPB 抓取-放置。默认 Genesis 回放使用接触摩擦抓取（无距离 weld）。真机路径支持 `servo_cartesian`（固件 IK）与 `servo_j`（上位机 Genesis IK）。MoveL 时间律由 `--speed-mm-s` / `--mvacc-mm-s2` 控制（默认 150 mm/s、800 mm/s²）。完整命令矩阵、接触参数、镜像模式与 SDK 仿真验证见 [examples/README_cn.md](examples/README_cn.md)。
+v0.2.5 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
-| xArm5 | `python examples/xarm5/xarm5_grasp_place_traj.py --headless --rate 50` | 仅仿真和 dry-run（`servo_cartesian` / `servo_j`） |
-| xArm6 | `python examples/xarm6/xarm6_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian`、上位机 IK `servo_j` |
-| xArm7 | `python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian` / `servo_j` |
-| UF850 | `python examples/uf850/uf850_grasp_place_traj.py --headless --rate 50` | 仿真、dry-run、真机 `servo_cartesian` / `servo_j` |
-| Lite6 | `python examples/lite6/lite6_grasp_place_traj.py --headless --rate 50` | Lite6 反装夹爪，30 mm 方块；`servo_cartesian` / `servo_j` |
+| xArm5 | `ufactory-grasp-place --robot xarm5 --mode dry-run --executor servo_j` | 两种执行器 |
+| xArm6 | `ufactory-grasp-place --robot xarm6 --mode dry-run --executor servo_j` | 两种执行器 |
+| xArm7 | `ufactory-grasp-place --robot xarm7 --mode dry-run --executor servo_j` | 两种执行器 |
+| UF850 | `ufactory-grasp-place --robot uf850 --mode dry-run --executor servo_j` | 两种执行器 |
+| Lite6 | `ufactory-grasp-place --robot lite6 --mode dry-run --executor servo_j` | 真机夹爪为二值能力 |
 
 ```bash
-# Genesis 三维窗口，GLB visual + STL collision。
-python examples/xarm6/xarm6_grasp_place_traj.py --visual --rate 50
+# 仅解析最终配置，不初始化 Genesis、不连接机械臂。
+ufactory-grasp-place --robot xarm6 --mode dry-run --executor servo_j --print-config
 
-# 真机路径 dry-run：只打印分段和 servo 安全检查，不运动机械臂。
-python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
+# 离线预测预检。
+ufactory-grasp-place --robot xarm6 --mode dry-run --executor servo_j
 
-# 上位机 IK dry-run：保留同一套 MoveL tick 时间律，不运动机械臂。
-python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo_j --dry-run --rate 50 --z-min-mm 0
+# 真机必须使用逐台严格校准并显式确认。
+# 任务轨迹从 default_qpos 规划；若当前姿态偏离起点，--confirm-real 会先用
+# MODE_POSITION 的 set_servo_angle 预定位，再切换 servo 流式执行。
+XARM_IP=192.168.1.xx ufactory-grasp-place --robot xarm6 --mode real \
+  --executor servo_j --calibration path/to/exact.yaml --confirm-real
 
-# 真机机械臂执行；确认物理夹爪安装并测试正常后，才添加 --real-gripper。
-python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo_cartesian --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
-
-# 上位机 IK 真机执行；传入 --ip 后会按 SN 自动使用逐台运动学 YAML。
-python examples/xarm6/xarm6_grasp_place_traj.py \
-  --executor servo_j --ip 192.168.1.xx --z-min-mm 0 --no-dry-run
+# 真机 + 运动学镜像窗口（开环 teleport，异步更新，不进 servo 关键路径）。
+XARM_IP=192.168.1.xx ufactory-grasp-place --robot xarm6 --mode real \
+  --executor servo_j --calibration path/to/exact.yaml --confirm-real --visual
 ```
 
-真机路径的 `--visual` 是同一条轨迹的运动学镜像，不是接触仿真。
+`--visual`：`--mode sim` 强制打开 Genesis viewer；`--mode real` 打开 kinematic mirror（非接触物理）。通用抓放镜像使用有上限的非阻塞更新；装箱命令在独立进程中跑满速 Genesis/GLB viewer，按正常 60 Hz 重绘消费全部 50 Hz 镜像状态，不与 servo 发送端共享同一 Python 调度器。窗口保持打开直至关闭或 Ctrl+C。`dry-run` / `sdk-sim` 不支持该标志。
+
+v0.2.5 已硬禁用在线真机策略部署与随机动作真机模式（见 [SECURITY.md](SECURITY.md)）。训练、仿真评估、静态 FK 对齐与离线动作预检仍可用。
 
 ## 展示场景（xArm6 + Gripper G2 物理装箱）
 
-黄色桌面（臂固定在桌面长边）、真实物理抓取红色木块、放入开口快递纸箱。GLB 高模 G2 可动 combo + 碰撞/惯性一体。首次运行需生成纸箱贴图：
+墨绿色桌面（机械臂固定在桌面长边），通过接触与摩擦抓取红色木块，并在方块底面高于箱口 50 mm 处投放。方块/home 名义基座坐标与抓放示例完全一致（`[0.300, 0, 0.015]` / `[0.300, 0, 0.300]`），纸箱/投放中心也使用抓放目标 XY `(0.300, 0.300)`。纸箱基座系尺寸为 `300 × 200 × 150 mm`，长边沿基座 X；展示基座绕 Z 轴 `+90°`，所以画面中长边沿世界 Y。只有 Genesis 物理仿真对抓取/home 列使用 X `+2.5 mm` 补偿和 `1.5` 倍机械臂刚度，释放仍严格位于无补偿箱心；dry-run、SDK 仿真和真机全程使用名义轨迹。闭合与搬运只驱动 G2 主关节；到达箱心后先保留配置中的静止等待，再用 `0.2 s` 将计划夹口从 `22 mm` 缓释到 `29 mm`，随后短暂同步驱动六个联动关节，夹指可见间距增加 `3 mm` 后改由主关节与右外指节继续张开，方块离开后再完成全开。每个 `20 ms` 指令周期使用 32 个物理子步，方块、夹指和纸箱摩擦属性不变。仿真不会把方块绑定到夹爪。首次运行需生成纸箱贴图：
 
 ```bash
 export NUMBA_CACHE_DIR=~/.cache/numba
 python scripts/generate_showcase_textures.py
 
-# 完整展示（默认循环）
+# 默认执行一次，然后保持最终画面
 python examples/xarm6/xarm6_g2_showcase.py
 
-# 单周期后保持画面；加快节奏
-python examples/xarm6/xarm6_g2_showcase.py --no-loop --speed 1.5
+# 可靠执行三次；或显式无限循环
+python examples/xarm6/xarm6_g2_showcase.py --cycles 3
+python examples/xarm6/xarm6_g2_showcase.py --loop
+
+# 使用版本化装箱几何执行完整离线碰撞预检（两种执行器）
+ufactory-packaging-showcase --mode dry-run --executor servo_j
+ufactory-packaging-showcase --mode dry-run --executor servo_cartesian
+
+# 首次真机前保存逐项安全预检与耗时（可同时传入逐台标定）
+ufactory-packaging-showcase --mode dry-run --executor servo_j \
+  --calibration path/to/exact.yaml --report reports/packaging_preflight.json
+
+# xArm6 + G2 真机：每次批准只执行一轮。现场基坐标布局必须与
+# assets/configs/runtime/tasks/packaging_showcase.yaml 的测量值一致。
+XARM_IP=192.168.1.65 ufactory-packaging-showcase --mode real \
+  --executor servo_j --calibration path/to/exact.yaml --confirm-real
 ```
+
+`servo_j` 启动时会先构建 Genesis 逆运动学场景，再对完整轨迹做安全预检。终端以 `[ik-compile]` 和 `[preflight]` 标出阶段、采样数及耗时；`preflight=PASS` 之前真机只做身份校验，运动保持未授权。Genesis 的 neutral self-collision 过滤提示和 Quadrants 的 `ast.keyword(..., ctx=...)` Python 3.15 弃用提示属于上游信息，在当前验证过的 Python 3.13 / Genesis 1.2.1 组合中不是失败。碰撞预检仍检查每个轨迹采样和每个几何对，但先使用配置的 5 mm 安全裕量筛选候选，仅对候选计算精确距离；若后端不支持该能力则自动回退到全距离检查。
 
 | 参数 | 说明 |
 |------|------|
 | `--table-height` | 桌面顶面高度（米，默认 0.75） |
 | `--speed` | 动作速度倍率（>1 更快） |
-| `--loop` / `--no-loop` | 是否循环 pick-place（默认循环） |
+| `--cycles N` | 精确执行 N 次仿真任务（默认 1 次） |
+| `--loop` / `--no-loop` | 显式无限循环 / 兼容的单次别名 |
+
+多轮仿真会在每轮恢复方块位置、单位四元数及零速度，并清除全部释放专用夹爪控制后再抓取；抓起、落箱或回零失败会停止后续轮次并保留现场画面。真机模式也支持 `servo_cartesian`，必须使用逐台精确标定并显式确认，且始终只执行一轮。硬件验收前应分别运行两种执行器的 `sdk-sim`；`servo_cartesian` 真机执行还会在同一进程取得匹配的 SDK 仿真证据。
 
 ## API 快速参考
 
@@ -177,26 +193,26 @@ import ufactory
 | `ufactory.robot_visual_glb_urdf(key, with_*=..., movable=...)` | GLB 视觉 URDF 绝对路径 |
 | `ufactory.robot_assets(name)` | 机器人资产目录 |
 | `ufactory.kinematics_user_dir(robot_name)` | 逐台标定 YAML 目录 |
-| `ufactory.get_robot_runtime_profile(key)` | typed runtime profile |
+| `ufactory.RepositoryAssetStore` | 校验源码资产布局与清单 |
 
 高级 API 从所属功能模块导入：
 
 | 功能域 | 规范导入路径 |
 |--------|--------------|
-| 机器人注册、路径、运行参数 | `ufactory.robots.registry`, `ufactory.robots.paths`, `ufactory.robots.runtime` |
+| 机器人注册与源码资产 | `ufactory.robots.registry`, `ufactory.robots.paths` |
+| 版本化运行配置 | `ufactory.config` |
 | 运动学校准与 FK/IK 验证 | `ufactory.kinematics.calibration`, `ufactory.kinematics.validation` |
-| 动力学仿真与真机验证 | `ufactory.dynamics` |
+| 动力学报告与验证服务 | `ufactory.dynamics` |
 | 真机 SDK/session/hold 观测 | `ufactory.hardware.xarm`, `ufactory.hardware.session`, `ufactory.hardware.observe` |
 | 夹爪命令转换与控制器 | `ufactory.grippers.g2`, `ufactory.grippers.bio_g2` |
-| 轨迹与抓放辅助 | `ufactory.trajectory`, `ufactory.manipulation.frames` |
+| 经批准的规划/预检/执行 | `ufactory.trajectory`, `ufactory.safety` |
 | GLB 可视化 | `ufactory.visualization.glb` |
-| 策略部署 | `ufactory.deploy` |
+| 策略部署 | `ufactory.deploy`（v0.2.5 已硬禁用在线真机策略） |
 
 ```python
-from ufactory.kinematics.calibration import build_calibrated_urdf
-from ufactory.dynamics import dynamics_default_configs
-from ufactory.grippers.g2 import gripper_g2_gap_m_to_sdk_pos_mm
-from ufactory.visualization.glb import enable_glb_pbr_surfaces
+from ufactory.config import load_runtime_config
+from ufactory.safety import SafetyGate, ApprovedProgram
+from ufactory.trajectory import preflight_program, execute_real
 ```
 
 v0.2.0 已移除旧根模块入口，例如 `ufactory.paths`、`ufactory.robot_params`、
@@ -215,7 +231,7 @@ v0.2.0 已移除旧根模块入口，例如 `ufactory.paths`、`ufactory.robot_p
 | Lite6 | `≥ 1006` | 可能有 |
 | UF850 | 任意 | **一定有** |
 
-示例 SN：`XI130506D43A0A` → 型号码 `1305`（xArm6，需标定）。
+示例 SN：`XI130506XXXXXX` → 型号码 `1305`（xArm6，需标定）。
 
 ```bash
 # 仅当 SN 规则允许时才会导出；suffix 默认为 SN 最后 6 字符
@@ -225,7 +241,7 @@ python scripts/gen_kinematics_params.py <ip>
 python examples/fk_verify_robot.py --robot xarm6 --ip <ip>
 python examples/ik_verify_robot.py --robot lite6 --ip <ip>
 dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-hardware-check --robot xarm6 --ip <ip>
+dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
 dynamics-sim-collision-check --robot xarm6 --ip <ip>   # 仿真模式串联自碰撞预检
 # 其他机型：将 --robot 换成 xarm5 / xarm7 / uf850 / lite6。
 ```
@@ -236,11 +252,15 @@ UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自
 
 ## xArm 6
 
-xArm 6 是本仓库参考机型，`examples/xarm6/` 保留兼容入口；新的通用入口优先使用 `--robot`，例如 `examples/view_robot_glb.py --robot xarm6 --diagnose` 与 `examples/packaging_showcase.py --robot xarm6 --gripper-g2`。
+xArm 6 是本仓库参考机型，`examples/xarm6/` 保留兼容入口；新的通用入口优先使用 `--robot`，例如 `examples/view_robot_glb.py --robot xarm6 --diagnose` 与 `examples/packaging_showcase.py --robot xarm6 --gripper-g2`。`examples/xarm6/xarm6_reach_deploy.py` 中在线真机策略与随机动作模式在 v0.2.5 已硬禁用；对齐与离线预检路径仍可用。
 
 ## 项目结构
 
 ```
+ufactory/config/          # 版本化运行时 YAML 加载与哈希
+ufactory/safety/          # SafetyGate、ApprovedProgram、碰撞/时序端口
+ufactory/cli/             # 控制台入口（抓放、装箱）
+ufactory/quality/         # 本地 project-check 报告
 ufactory/robots/          # 机型注册、资产路径、运行参数
 ufactory/kinematics/      # 运动学校准与 FK/IK 验证
 ufactory/dynamics/        # 动力学仿真、验证、报告与 CLI
@@ -248,8 +268,10 @@ ufactory/hardware/        # xArm SDK/session 与 hold 电流观察
 ufactory/grippers/        # 夹爪命令转换与控制器
 ufactory/trajectory/      # 轨迹 profile、segment、仿真/真机执行器
 ufactory/manipulation/    # 任务坐标系辅助
+ufactory/simulation/      # 共享 Genesis 运行时所有权
+ufactory/training/        # 安全检查点 YAML/清单辅助
 ufactory/visualization/   # GLB/PBR 可视化辅助
-ufactory/deploy/          # 策略部署辅助
+ufactory/deploy/          # 策略辅助（在线真机策略已硬禁用）
 assets/                   # URDF、mesh、配置与场景资产
 examples/                 # 使用示例（预览、FK/IK、RL）
 scripts/                  # 用户可用辅助脚本

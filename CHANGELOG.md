@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-07-14
+
+### Added
+
+- Versioned immutable YAML configuration with strict validation, deterministic source precedence, canonical hashes, `--print-config`, and source-tree asset integrity checks.
+- `SafetyGate`, structured violations/reports, hash-bound `ApprovedProgram`, calibrated Pinocchio 4/Coal full-sample collision prediction, and injected kinematics/collision/clock/transport ports.
+- Unified `ufactory-grasp-place` entry point, monotonic fail-closed real executor, same-run SDK simulation evidence for `servo_cartesian`, strict calibration manifests, and capability-driven G2/Lite6 adapters.
+- Safe checkpoint YAML/manifests, scoped Genesis 1.2.1 PBR integration, `project-check` local quality reports, and a reproducible `uv.lock`.
+
+### Changed
+
+- **Breaking:** v0.2.5 supports cloned source repositories installed with `pip install -e .` only; wheel/sdist installation is unsupported.
+- **Breaking:** configuration, trajectory and safety APIs are replaced by `ResolvedRuntimeConfig`, `preflight_program()`, `ApprovedProgram`, `execute_sim()` and `execute_real()`; no compatibility shim is promised.
+- Maintainer technical notes live under the local gitignored `dev/docs/` workspace and are not published with the repository; breaking API changes are recorded in this CHANGELOG.
+- Whole-program motion statistics now use signed velocity, vector acceleration, wrapped orientation differences and static endpoint velocities. Genesis initialization has a single runtime owner.
+- Dynamics reports write schema v4 while readers retain v1-v3 support. Genesis and Torch are pinned to the validated 1.2.1 / 2.10.0 environment.
+- Grasp-place trajectory, training/evaluation, and packaging examples now resolve one runtime-configured 30 mm, 17 g reference block; its table-resting base-frame center is consistently 15 mm in Genesis and predictive collision scenes.
+- Pinocchio Cartesian shadow IK now enforces the shared gripper-down full pose with nominal `1e-6` damping and bounded near-singularity regularization. Offline Cartesian simulation uses a simulation-only approval while hardware approval still requires same-run, hash-bound SDK evidence no older than five minutes.
+
+### Fixed
+
+- Fixed Lite6 grasp-place preflight failures caused by a 5 mm object-height mismatch and non-existent collision-exemption stage names. Failure output now groups the complete violation set instead of silently showing only the first 20 samples.
+- Simulation final metrics now hold the last approved target for two physics ticks before observation, eliminating end-of-tick tracking-lag false failures without changing the grasp-place command stream.
+
+### Security
+
+- Online real policy deployment and random-action real modes are hard-disabled. Runtime pickle loading is removed; checkpoints use `weights_only=True` and integrity manifests.
+- Real execution never automatically clears errors, resets, resumes or catches up missed servo deadlines. Real mode requires exact serial/calibration binding and `--confirm-real`.
+
 ## [0.2.4] — 2026-07-09
 
 ### Changed
@@ -17,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Real gripper execution treats same-gap gripper hold segments as paced no-ops, so `grip-settle` and `place-settle` do not resend SDK gripper commands.
 - Grasp-place MoveL source timing is now controlled by `--speed-mm-s` / `--mvacc-mm-s2` for sim, dry-run, `servo_cartesian`, and `servo_j`; defaults are 150 mm/s and 800 mm/s².
 - Host-side IK `servo_j` now preserves the source Cartesian tick count and duration instead of silently retiming, so unsafe custom speeds fail through the real executor's finite-difference safety checks.
-- UF850 host-side IK uses higher damping during `servo_j` compilation to keep the calibrated F54B07 wrist solution continuous near singular poses.
+- UF850 host-side IK uses higher damping during `servo_j` compilation to keep a calibrated unit's wrist solution continuous near singular poses.
 - Root README (EN/ZH): simplified GLB preview and trajectory grasp-place sections; added English Showcase section; aligned dynamics CLI examples.
 
 ## [0.2.3] — 2026-07-09
@@ -96,7 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tests reorganized by module**: `tests/robots/`, `tests/dynamics/`, `tests/hardware/`, `tests/trajectory/`, `tests/deploy/`, `tests/manipulation/`.
 - **`test_public_api_layout.py`**: asserts canonical subpackage imports and that legacy root modules raise `ModuleNotFoundError`.
 - **`test_xarm5_collision_mesh_equivalence.py`**: git OBJ vs working-tree STL Hausdorff/volume equivalence.
-- **`test_xarm5_pose4_stl_collision.py`**: documents link3↔link5 Genesis self-contact and `pd_tracking_saturation` gate bypass.
+- **`test_xarm5_pose4_stl_collision.py`**: documents link3↔link5 Genesis self-contact and `pd_tracking_saturation` check bypass.
 - **`assets/urdf/xarm{5,6,7}/README.md`**: collision/visual mesh layout notes.
 
 ### Changed
@@ -114,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known Issues
 
-- **xArm5 pose 4 (Genesis)**: link3↔link5 self-contact persists in kinematic and PD-hold modes (mesh geometry overlap in simulation). Real robot and SDK collision checks pass; `pd_tracking_saturation` gate allows hardware validation when Pinocchio gravity at the target is nominal.
+- **xArm5 pose 4 (Genesis)**: link3↔link5 self-contact persists in kinematic and PD-hold modes (mesh geometry overlap in simulation). Real robot and SDK collision checks pass; `pd_tracking_saturation` check allows hardware validation when Pinocchio gravity at the target is nominal.
 
 ## [0.1.6] — 2026-07-02
 

@@ -25,6 +25,7 @@ from conftest import PROJECT_ROOT
 PYTHON = sys.executable
 NUMBA_CACHE_DIR = os.path.expanduser("~/.cache/numba")
 LITE6_TABLE_CUBE_CENTER_Z_MM = 415.0
+pytestmark = pytest.mark.integration
 
 
 def _run_example(script: str, extra_args: list[str] | None = None, timeout: int = 300) -> subprocess.CompletedProcess:
@@ -123,7 +124,7 @@ def test_xarm6_grasp_place_servo_j_dry_run_compiles_host_ik():
 
 
 @pytest.mark.integration
-def test_uf850_f54b07_servo_j_dry_run_uses_stable_ik_damping():
+def test_uf850_servo_j_dry_run_uses_stable_ik_damping():
     result = _run_example(
         "examples/uf850/uf850_grasp_place_traj.py",
         [
@@ -134,13 +135,11 @@ def test_uf850_f54b07_servo_j_dry_run_uses_stable_ik_damping():
             "50",
             "--z-min-mm",
             "0",
-            "--kinematics-suffix",
-            "F54B07",
         ],
         timeout=600,
     )
     assert result.returncode == 0, (
-        f"uf850 F54B07 servo_j dry-run failed (exit {result.returncode})\n"
+        f"uf850 servo_j dry-run failed (exit {result.returncode})\n"
         f"stdout:\n{result.stdout[-4000:]}\n"
         f"stderr:\n{result.stderr[-4000:]}"
     )

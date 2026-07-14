@@ -31,7 +31,9 @@ def run_standalone_gripper_viewer(
     scene = gs.Scene(
         show_viewer=not args.headless,
         sim_options=gs.options.SimOptions(dt=0.01),
-        viewer_options=gs.options.ViewerOptions(camera_pos=CAMERA_POS, camera_lookat=CAMERA_LOOKAT, camera_fov=CAMERA_FOV),
+        viewer_options=gs.options.ViewerOptions(
+            camera_pos=CAMERA_POS, camera_lookat=CAMERA_LOOKAT, camera_fov=CAMERA_FOV
+        ),
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
     robot = scene.add_entity(gs.morphs.URDF(file=urdf_path, fixed=True), surface=glb_view_surface())

@@ -12,9 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-import numpy as np
-
-from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
+from ufactory.config import ResolvedRuntimeConfig, load_runtime_config
 from ufactory.trajectory.segments import (
     JointLimits,
     Program,
@@ -29,6 +27,7 @@ from ufactory.trajectory.validation import (
     validate_program,
     validate_rate,
 )
+from ufactory.types import FloatArray
 
 
 @dataclass(frozen=True)
@@ -47,14 +46,15 @@ class TrajectoryPlannerConfig:
     linear_speed_m_s: float | None = None
     linear_acc_m_s2: float | None = None
     z_min_m: float | None = None
+    runtime_config: ResolvedRuntimeConfig | None = None
 
     @property
-    def runtime(self) -> RobotRuntimeProfile:
-        return get_robot_runtime_profile(self.robot_key)
+    def runtime(self) -> ResolvedRuntimeConfig:
+        return self.runtime_config or load_runtime_config(self.robot_key)
 
     @property
     def canonical_robot_key(self) -> str:
-        return self.runtime.model.key
+        return self.runtime.robot.key
 
     @property
     def limits(self) -> JointLimits:
@@ -102,7 +102,7 @@ def _program(config: TrajectoryPlannerConfig, segments: list[Segment], *, kind: 
         "planner": "ufactory.trajectory.planner",
         "kind": kind,
         "robot_key": config.canonical_robot_key,
-        "ee_link": config.runtime.arm.ee_link,
+        "ee_link": config.runtime.robot.ee_link,
     }
     program = Program(
         segments=segments,
@@ -123,7 +123,7 @@ def plan_joint_waypoints(
     """Plan chained MoveJ segments from ``start_q`` through ``waypoints``."""
     config.validate()
     runtime = config.runtime
-    current = validate_joint_vector(start_q, dof=runtime.model.dof, name="start_q")
+    current = validate_joint_vector(start_q, dof=runtime.robot.dof, name="start_q")
     segments: list[Segment] = []
     for index, wp in enumerate(waypoints):
         if isinstance(wp, JointWaypoint):
@@ -132,7 +132,7 @@ def plan_joint_waypoints(
         else:
             target = wp
             label = f"movej-{index}"
-        q_target = validate_joint_vector(target, dof=runtime.model.dof, name=label)
+        q_target = validate_joint_vector(target, dof=runtime.robot.dof, name=label)
         segments.append(make_movej(current, q_target, rate=config.rate, limits=config.limits, label=label))
         current = q_target
     return _program(config, segments, kind="joint")
@@ -175,11 +175,7 @@ def plan_mixed_waypoints(
     """
     config.validate()
     runtime = config.runtime
-    current_q = (
-        validate_joint_vector(start_q, dof=runtime.model.dof, name="start_q")
-        if start_q is not None
-        else None
-    )
+    current_q = validate_joint_vector(start_q, dof=runtime.robot.dof, name="start_q") if start_q is not None else None
     current_xyz = validate_cartesian_xyz(start_xyz, name="start_xyz") if start_xyz is not None else None
     segments: list[Segment] = []
 
@@ -187,9 +183,11 @@ def plan_mixed_waypoints(
         if isinstance(wp, JointWaypoint):
             if current_q is None:
                 raise ValueError("JointWaypoint requires start_q or a previous joint waypoint")
-            target = validate_joint_vector(wp.q, dof=runtime.model.dof, name=wp.label or f"movej-{index}")
+            target = validate_joint_vector(wp.q, dof=runtime.robot.dof, name=wp.label or f"movej-{index}")
             segments.append(
-                make_movej(current_q, target, rate=config.rate, limits=config.limits, label=wp.label or f"movej-{index}")
+                make_movej(
+                    current_q, target, rate=config.rate, limits=config.limits, label=wp.label or f"movej-{index}"
+                )
             )
             current_q = target
             continue
@@ -199,7 +197,9 @@ def plan_mixed_waypoints(
                 raise ValueError("CartesianWaypoint requires start_xyz or a previous Cartesian waypoint")
             target = validate_cartesian_xyz(wp.xyz, name=wp.label or f"movel-{index}")
             segments.append(
-                make_movel(current_xyz, target, rate=config.rate, limits=config.limits, label=wp.label or f"movel-{index}")
+                make_movel(
+                    current_xyz, target, rate=config.rate, limits=config.limits, label=wp.label or f"movel-{index}"
+                )
             )
             current_xyz = target
             continue
@@ -225,9 +225,9 @@ def _segment_from_mapping(
     wp: Mapping[str, Any],
     *,
     index: int,
-    current_q: np.ndarray | None,
-    current_xyz: np.ndarray | None,
-) -> tuple[Segment, np.ndarray | None, np.ndarray | None]:
+    current_q: FloatArray | None,
+    current_xyz: FloatArray | None,
+) -> tuple[Segment, FloatArray | None, FloatArray | None]:
     runtime = config.runtime
     wp_type = str(wp["type"]).strip().lower()
     label = str(wp.get("label", f"{wp_type}-{index}"))
@@ -237,8 +237,8 @@ def _segment_from_mapping(
         q1_raw = wp.get("q_end", wp.get("q"))
         if q0_raw is None or q1_raw is None:
             raise ValueError(f"MoveJ waypoint {label!r} requires q_start/q_end or chained q")
-        q0 = validate_joint_vector(q0_raw, dof=runtime.model.dof, name=f"{label}.q_start")
-        q1 = validate_joint_vector(q1_raw, dof=runtime.model.dof, name=f"{label}.q_end")
+        q0 = validate_joint_vector(q0_raw, dof=runtime.robot.dof, name=f"{label}.q_start")
+        q1 = validate_joint_vector(q1_raw, dof=runtime.robot.dof, name=f"{label}.q_end")
         return make_movej(q0, q1, rate=config.rate, limits=config.limits, label=label), q1, current_xyz
 
     if wp_type == "movel":

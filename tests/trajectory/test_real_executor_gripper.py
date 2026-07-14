@@ -18,7 +18,9 @@ from ufactory.trajectory.segments import Segment
 
 
 def _grip_segment(gap_start=0.084, gap_end=0.024, duration=2.0, label="grip") -> Segment:
-    return Segment(kind="gripper", duration=duration, v_max=0.0, a_max=0.0, label=label, gap_start=gap_start, gap_end=gap_end)
+    return Segment(
+        kind="gripper", duration=duration, v_max=0.0, a_max=0.0, label=label, gap_start=gap_start, gap_end=gap_end
+    )
 
 
 def _make_gripper_arm():
@@ -38,7 +40,7 @@ def _make_gripper_arm():
         (False, False, True, True),
     ],
 )
-def test_gripper_motion_enabled_gating(dry_run, sdk_sim_validate, real_gripper, expected):
+def test_gripper_motion_enabled_conditions(dry_run, sdk_sim_validate, real_gripper, expected):
     cfg = RealExecutorConfig(
         dry_run=dry_run,
         sdk_sim_validate=sdk_sim_validate,

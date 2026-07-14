@@ -14,9 +14,9 @@ v0.2.0 中，动力学验证公开入口统一为 `ufactory.dynamics` 子包；�
 | `cli` | 4 个 CLI 入口 + sim collision 串联 + 打印辅助。 |
 | `__init__` | re-export 公开 API；`__all__` 完整。 |
 
-## 报告 schema v3
+## 报告 schema v4
 
-`run_config.version = "3"`。CSV/JSONL 的主判定字段使用显式单位命名：
+`run_config.version = "4"`。CSV/JSONL 的主判定字段使用显式单位命名：
 
 - `torque_l2_err_nm = sqrt(sum((genesis_tau_nm - sdk_tau_mean_nm)^2))`。
 - 每关节字段使用 `genesis_tau_J{i}_nm`、`sdk_tau_mean_J{i}_nm`、`abs_err_J{i}_nm`、`rel_err_J{i}`。
@@ -27,7 +27,7 @@ v0.2.0 中，动力学验证公开入口统一为 `ufactory.dynamics` 子包；�
 `reports/dyn_ver_<SN或robot_key>/<YYYYMMDD_HHMM>/dyn_ver_<SN或robot_key>_<YYYYMMDD_HHMMSS>.*`。
 硬件报告会额外生成同名 `_torque.png`，按关节绘制 Genesis 理论力矩与 SDK 采样均值。
 
-`read_report_records` 版本感知：CSV 读 `schema_version` 列，JSONL 读 `run_config.version`；v1/v2 旧报告仍可解析并用于 `compare_report_records`。
+`read_report_records` 版本感知：CSV 读 `schema_version` 列，JSONL 读 `run_config.version`；v1–v3 旧报告仍可解析并用于 `compare_report_records`。新写入始终使用 schema v4。
 
 ## CLI 入口
 

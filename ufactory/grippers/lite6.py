@@ -26,6 +26,7 @@ LITE6_GRIPPER_OPEN_GAP_M = 0.038
 
 LITE6_GRIPPER_SIM_CLOSED_DRIVE = 0.0
 LITE6_GRIPPER_SIM_OPEN_DRIVE = LITE6_GRIPPER_FINGER_TRAVEL_M
+LITE6_GRIPPER_DEMO_HOLD_STEPS = 200
 
 # Deprecated legacy binary-close offset retained for compatibility. The default
 # trajectory sim now uses the physical 20 mm minimum gap with rigid contact and
@@ -62,8 +63,20 @@ def lite6_gripper_sim_drive_to_gap_m(drive: float) -> float:
     if span <= 0.0:
         return LITE6_GRIPPER_CLOSED_GAP_M
     open_fraction = (clipped - LITE6_GRIPPER_SIM_CLOSED_DRIVE) / span
-    return LITE6_GRIPPER_CLOSED_GAP_M + open_fraction * (
-        LITE6_GRIPPER_OPEN_GAP_M - LITE6_GRIPPER_CLOSED_GAP_M
+    return LITE6_GRIPPER_CLOSED_GAP_M + open_fraction * (LITE6_GRIPPER_OPEN_GAP_M - LITE6_GRIPPER_CLOSED_GAP_M)
+
+
+def lite6_gripper_demo_drive(step: int, *, hold_steps: int = LITE6_GRIPPER_DEMO_HOLD_STEPS) -> float:
+    """Pure open/closed keyframe law shared by viewers and diagnostics."""
+    if int(step) < 0 or int(hold_steps) < 1:
+        raise ValueError("step must be non-negative and hold_steps must be positive")
+    phase = (int(step) // int(hold_steps)) % 2
+    return LITE6_GRIPPER_SIM_CLOSED_DRIVE if phase else LITE6_GRIPPER_SIM_OPEN_DRIVE
+
+
+def lite6_gripper_demo_label(step: int, *, hold_steps: int = LITE6_GRIPPER_DEMO_HOLD_STEPS) -> str:
+    return (
+        "closed" if lite6_gripper_demo_drive(step, hold_steps=hold_steps) == LITE6_GRIPPER_SIM_CLOSED_DRIVE else "open"
     )
 
 
@@ -72,14 +85,20 @@ def _finger_mesh_vertices() -> tuple[np.ndarray, np.ndarray]:
     if _FINGER1_VERTS is None or _FINGER2_VERTS is None:
         import trimesh
 
-        _FINGER1_VERTS = np.asarray(
-            trimesh.load(_FINGER_MESH_DIR / "finger1.stl", force="mesh").vertices,
-            dtype=np.float64,
-        ) + _FINGER1_VISUAL_ORIGIN_M
-        _FINGER2_VERTS = np.asarray(
-            trimesh.load(_FINGER_MESH_DIR / "finger2.stl", force="mesh").vertices,
-            dtype=np.float64,
-        ) + _FINGER2_VISUAL_ORIGIN_M
+        _FINGER1_VERTS = (
+            np.asarray(
+                trimesh.load(_FINGER_MESH_DIR / "finger1.stl", force="mesh").vertices,
+                dtype=np.float64,
+            )
+            + _FINGER1_VISUAL_ORIGIN_M
+        )
+        _FINGER2_VERTS = (
+            np.asarray(
+                trimesh.load(_FINGER_MESH_DIR / "finger2.stl", force="mesh").vertices,
+                dtype=np.float64,
+            )
+            + _FINGER2_VISUAL_ORIGIN_M
+        )
     return _FINGER1_VERTS, _FINGER2_VERTS
 
 
@@ -110,7 +129,6 @@ def _lite6_glb_inner_contact_geometry(ctx, obj_pos=None) -> tuple[float, float, 
     half_y = float(ctx.obj_size[1]) / 2.0
     half_z = float(ctx.obj_size[2]) / 2.0
     z0, z1 = obj_pos[2] - half_z, obj_pos[2] + half_z
-    oy0, oy1 = obj_pos[1] - half_y, obj_pos[1] + half_y
     finger1, finger2 = _finger_mesh_vertices()
     w1 = _link_world_vertices(ctx.left_finger, finger1)
     w2 = _link_world_vertices(ctx.right_finger, finger2)
@@ -141,11 +159,11 @@ def measure_lite6_glb_side_clearance_m(ctx, obj_pos=None) -> tuple[float, float]
 def snap_object_to_lite6_glb_grasp(ctx) -> float:
     """Center the block between measured GLB inner pad Y coordinates.
 
-  A single Y translation cannot close both air gaps when the pad span exceeds
-    the cube width; centering removes left/right asymmetry so the residual
-    clearance is ``(gap_neg + gap_pos) / 2`` per face.
+    A single Y translation cannot close both air gaps when the pad span exceeds
+      the cube width; centering removes left/right asymmetry so the residual
+      clearance is ``(gap_neg + gap_pos) / 2`` per face.
 
-    Returns the applied Y shift in metres.
+      Returns the applied Y shift in metres.
     """
     _, _, gap_neg, gap_pos = _lite6_glb_inner_contact_geometry(ctx)
     shift_y = 0.5 * (gap_pos - gap_neg)

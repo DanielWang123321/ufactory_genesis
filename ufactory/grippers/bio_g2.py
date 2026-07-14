@@ -17,9 +17,9 @@ import numpy as np
 # Joint zero is the CLOSED pose (real 71 mm two-finger gap) and the dof opens the jaws
 # symmetrically up to STROKE (real 150 mm gap).  Per finger the travel is
 # (150 - 71) / 2 = 39.5 mm, so the full finger stroke is 0.0395 m.
-STROKE = 0.0395      # Per-finger prismatic travel: closed (0) → open (0.0395 m).
-CLOSE_POS = 0.0      # Right-finger joint value when gripper is fully closed (71 mm gap).
-OPEN_POS = 0.0395    # Right-finger joint value when gripper is fully open (150 mm gap).
+STROKE = 0.0395  # Per-finger prismatic travel: closed (0) → open (0.0395 m).
+CLOSE_POS = 0.0  # Right-finger joint value when gripper is fully closed (71 mm gap).
+OPEN_POS = 0.0395  # Right-finger joint value when gripper is fully open (150 mm gap).
 
 # Physical two-finger gap (meters) at each stroke extreme — the real Bio Gripper G2
 # mechanical range.  Gap scales linearly: GAP ≈ CLOSED_GAP + 2 * right_joint_value.

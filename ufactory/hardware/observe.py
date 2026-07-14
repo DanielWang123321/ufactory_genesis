@@ -166,7 +166,6 @@ def _interpret_summary(summary: HoldObserveSummary) -> str:
     if not math.isfinite(a.tau_mean) or not math.isfinite(c.tau_mean):
         return "insufficient samples"
     tau_drift = abs(a.tau_mean - c.tau_mean)
-    current_early_std = a.current_std
     current_late_std = c.current_std
     if summary.current_zero_crossings >= 4 or summary.current_peak_count >= 6:
         if summary.tau_current_corr_all is not None and abs(summary.tau_current_corr_all) > 0.8:

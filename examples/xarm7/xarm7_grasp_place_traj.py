@@ -1,31 +1,12 @@
-"""
-xArm7 Grasp-Place — trajectory-planned pipeline.
-
-Same grasp-place sequence, gripper (Gripper G2), and workspace coordinates as
-``xarm6/xarm6_grasp_place_traj.py`` (xArm5/6/7 share a 700 mm reach and G2
-mount geometry); this is a thin per-robot CLI wrapper around the shared
-``examples/_grasp_place_traj.py`` module.
-
-Usage (sim):
-    conda activate py313
-    python examples/xarm7/xarm7_grasp_place_traj.py --headless --rate 50
-    python examples/xarm7/xarm7_grasp_place_traj.py --visual --rate 50
-
-Real path (dry-run digest only by default):
-    python examples/xarm7/xarm7_grasp_place_traj.py \
-        --executor servo_cartesian --dry-run --rate 50 --z-min-mm 0
-    python examples/xarm7/xarm7_grasp_place_traj.py \
-        --executor servo_j --dry-run --rate 50 --z-min-mm 0
-
-To move the real arm, add ``--no-dry-run`` and ``--ip 192.168.1.xx``.
-Physical Gripper G2 commands are opt-in via ``--real-gripper`` after the
-accessory is installed.
-"""
+"""Thin xArm7 wrapper for the unified v0.2.5 grasp-place command."""
 
 from __future__ import annotations
 
+import sys
+
 import _bootstrap  # noqa: F401
-from _grasp_place_traj import main
+from ufactory.cli.grasp_place import main
+
 
 if __name__ == "__main__":
-    raise SystemExit(main("xarm7", robot_label="xArm7"))
+    raise SystemExit(main(["--robot", "xarm7", *sys.argv[1:]]))

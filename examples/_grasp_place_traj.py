@@ -23,20 +23,20 @@ from ufactory.kinematics.calibration import (
     validate_kinematics_calibration_request,
 )
 from ufactory.robots.runtime import get_robot_runtime_profile
-from ufactory.trajectory import (
+from ufactory.trajectory.mirror_executor import (
     AsyncMirrorBridge,
-    CartesianWaypoint,
-    EXECUTOR_SERVO_J,
     KinematicCarryTracker,
+    TrajKinematicMirror,
+)
+from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
+from ufactory.trajectory.planner import CartesianWaypoint, TrajectoryPlannerConfig, plan_mixed_waypoints
+from ufactory.trajectory.real_executor import (
+    EXECUTOR_SERVO_J,
     RealExecutorConfig,
     ServoLimits,
-    TrajKinematicMirror,
-    TrajectoryPlannerConfig,
-    compile_cartesian_program_to_joint_stream,
-    plan_mixed_waypoints,
     replay_real,
-    replay_sim,
 )
+from ufactory.trajectory.sim_executor import replay_sim
 from ufactory.trajectory.mirror_executor import resolve_segment_start_arm_q
 from ufactory.trajectory.scene import (
     build_scene,
@@ -246,7 +246,7 @@ def _run_sim(robot_key, args) -> int:
     base_mm = [v * 1000.0 for v in ctx.base_pos_world]
     print(
         f"\n[sim] robot={ctx.robot_key} gripper={ctx.gripper.family} rate={args.rate}Hz "
-        f"dt={1.0/args.rate:.4f}s substeps={args.substeps}  "
+        f"dt={1.0 / args.rate:.4f}s substeps={args.substeps}  "
         f"visual_model={ctx.visual_model} base=[{base_mm[0]:.0f},{base_mm[1]:.0f},{base_mm[2]:.0f}]mm  "
         f"finger_z_offset={ctx.finger_z_offset:.4f}m grasp_z={ctx.grasp_link6_z:.4f}m "
         f"grip_gap={args.grip_gap_mm:.1f}mm sim_hold_bias={args.sim_grip_hold_bias_gap_mm:.1f}mm "
@@ -264,10 +264,11 @@ def _run_sim(robot_key, args) -> int:
         on_phase=_print_phase,
     )
     print("\n" + "=" * 60)
-    print(f"  Place error:    {report.place_error_mm:7.1f} mm  "
-          f"{'OK' if report.place_error_mm < 50 else 'MISS'} (<50mm)")
-    print(f"  Home drift:     {report.home_drift_mm:7.1f} mm  "
-          f"{'OK' if report.home_drift_mm < 10 else 'DRIFT'} (<10mm)")
+    print(
+        f"  Place error:    {report.place_error_mm:7.1f} mm  {'OK' if report.place_error_mm < 50 else 'MISS'} (<50mm)"
+    )
+    print(f"  Home drift:     {report.home_drift_mm:7.1f} mm  {'OK' if report.home_drift_mm < 10 else 'DRIFT'} (<10mm)")
+    print(f"  Metric settle:  {report.metric_settle_ticks:7d} physics ticks (final target held)")
     print(f"  Total ticks:    {report.total_ticks}  duration={report.total_duration:.2f}s")
     print("=" * 60)
     if args.visual:
@@ -423,14 +424,10 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
     grip_open_mm = runtime.gripper.open_gap_m * 1000.0
     grip_closed_mm = runtime.gripper.closed_gap_m * 1000.0
     default_hold_bias_m = (
-        LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M
-        if runtime.gripper.family == "lite6"
-        else DEFAULT_GRIPPER_HOLD_BIAS_GAP_M
+        LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M if runtime.gripper.family == "lite6" else DEFAULT_GRIPPER_HOLD_BIAS_GAP_M
     )
 
-    parser = argparse.ArgumentParser(
-        description=f"{robot_label} trajectory-planned grasp-place (RoboDK-style)"
-    )
+    parser = argparse.ArgumentParser(description=f"{robot_label} trajectory-planned grasp-place (RoboDK-style)")
     parser.add_argument(
         "--rate",
         type=float,
@@ -464,7 +461,7 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
         dest="sim_grasp_weld",
         action="store_true",
         default=False,
-        help="Sim-only debug: add a contact-gated weld after real bilateral finger/object contact.",
+        help="Sim-only debug: add a weld after real bilateral finger/object contact.",
     )
     parser.add_argument(
         "--no-sim-grasp-weld",
@@ -475,8 +472,7 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
     # Sim-only
     g_sim = parser.add_mutually_exclusive_group()
     g_sim.add_argument("--headless", action="store_true", help="Run sim without viewer (default)")
-    g_sim.add_argument("--visual", action="store_true",
-                        help="Sim: Genesis viewer; real path: kinematic mirror viewer")
+    g_sim.add_argument("--visual", action="store_true", help="Sim: Genesis viewer; real path: kinematic mirror viewer")
     parser.add_argument(
         "--visual-start-hold-s",
         type=float,
@@ -484,8 +480,12 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
         help="--visual: hold the initial program pose after the viewer opens before replay starts.",
     )
     # Real path
-    parser.add_argument("--executor", default=None, choices=("servo_j", "servo_cartesian"),
-                        help="Enable the real path: servo_cartesian uses firmware IK; servo_j uses host-side Genesis IK")
+    parser.add_argument(
+        "--executor",
+        default=None,
+        choices=("servo_j", "servo_cartesian"),
+        help="Enable the real path: servo_cartesian uses firmware IK; servo_j uses host-side Genesis IK",
+    )
     parser.add_argument("--ip", default=None)
     parser.add_argument("--z-min-mm", type=float, default=0.0)
     parser.add_argument("--kinematics-suffix", default=os.environ.get("XARM_KINEMATICS_SUFFIX"))
@@ -508,10 +508,15 @@ def build_arg_parser(robot_key: str, *, robot_label: str) -> argparse.ArgumentPa
         default=DEFAULT_GRASP_PLACE_LINEAR_ACC_MM_S2,
         help="MoveL linear acceleration for sim, dry-run, servo_cartesian, and servo_j source timing.",
     )
-    parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=True,
-                        help="Real path: print digest only (default)")
-    parser.add_argument("--no-dry-run", dest="dry_run", action="store_false",
-                        help="Real path: actually stream to the arm (requires --ip)")
+    parser.add_argument(
+        "--dry-run", dest="dry_run", action="store_true", default=True, help="Real path: print digest only (default)"
+    )
+    parser.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+        help="Real path: actually stream to the arm (requires --ip)",
+    )
     parser.add_argument(
         "--real-gripper",
         action="store_true",
@@ -540,10 +545,7 @@ def main(robot_key: str, *, robot_label: str) -> int:
     grip_open_mm = args._grip_open_mm
     grip_closed_mm = args._grip_closed_mm
     if not grip_closed_mm - 1e-3 <= args.grip_gap_mm <= grip_open_mm + 1e-3:
-        parser.error(
-            f"--grip-gap-mm must be between {grip_closed_mm:.1f} and {grip_open_mm:.1f}"
-        )
-    runtime = get_robot_runtime_profile(robot_key)
+        parser.error(f"--grip-gap-mm must be between {grip_closed_mm:.1f} and {grip_open_mm:.1f}")
     if args.visual_start_hold_s < 0.0:
         parser.error("--visual-start-hold-s must be non-negative")
     if args.sdk_sim_report_csv and not args.sdk_sim_validate:

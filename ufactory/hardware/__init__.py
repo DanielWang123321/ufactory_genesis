@@ -25,6 +25,7 @@ from ufactory.hardware.xarm import (
     prepare_arm_for_motion,
     prepare_gripper_g2_for_motion,
 )
+from ufactory.hardware.transport import XArmTransport
 
 __all__ = [
     "MOVE_STRATEGIES",
@@ -42,4 +43,5 @@ __all__ = [
     "format_arm_status",
     "prepare_arm_for_motion",
     "prepare_gripper_g2_for_motion",
+    "XArmTransport",
 ]

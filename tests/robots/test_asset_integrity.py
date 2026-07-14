@@ -415,7 +415,9 @@ def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> Non
             )
             visual_center = (visual_vertices.min(axis=0) + visual_vertices.max(axis=0)) / 2.0
             collision_center = (collision_vertices.min(axis=0) + collision_vertices.max(axis=0)) / 2.0
-            collision_center += np.asarray(_xyz_tuple(collision_origin.get("xyz") if collision_origin is not None else None))
+            collision_center += np.asarray(
+                _xyz_tuple(collision_origin.get("xyz") if collision_origin is not None else None)
+            )
             delta_mm = float(np.linalg.norm((collision_center - visual_center) * 1000.0))
             if delta_mm > 1.0:
                 bad.append(
@@ -775,11 +777,7 @@ def test_lite6_vacuum_collision_uses_visual_stl() -> None:
     }
     bad: list[str] = []
     for urdf, expected in expected_by_urdf.items():
-        actual = {
-            filename
-            for filename in _collision_mesh_filenames(urdf)
-            if "vacuum_gripper_lite.stl" in filename
-        }
+        actual = {filename for filename in _collision_mesh_filenames(urdf) if "vacuum_gripper_lite.stl" in filename}
         if actual != expected:
             bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: expected {sorted(expected)}, got {sorted(actual)}")
     assert bad == []
@@ -787,8 +785,6 @@ def test_lite6_vacuum_collision_uses_visual_stl() -> None:
 
 def test_no_collision_obj_meshes_in_public_assets() -> None:
     obj_files = sorted(
-        p.relative_to(PROJECT_ROOT)
-        for p in _public_files()
-        if "collision" in str(p) and p.suffix == ".obj"
+        p.relative_to(PROJECT_ROOT) for p in _public_files() if "collision" in str(p) and p.suffix == ".obj"
     )
     assert obj_files == []

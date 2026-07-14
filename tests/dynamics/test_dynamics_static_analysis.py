@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from ufactory.dynamics import (
+from ufactory.dynamics.analysis import (
     LAYER_L2A,
     LAYER_L2B,
     LAYER_L3A,
@@ -22,12 +22,12 @@ from ufactory.dynamics import (
     parse_strict_static_layers,
     summarize_static_layers,
 )
-from ufactory.dynamics import (
+from ufactory.dynamics.report import (
     GenesisDynamicsSample,
     SafePose,
     ValidationStatus,
-    build_dynamics_sample,
 )
+from ufactory.dynamics.analysis import build_dynamics_sample
 from ufactory.robots.runtime import get_robot_runtime_profile
 
 
@@ -185,7 +185,7 @@ def test_analyze_pin_vs_real_uses_scaled_limits():
     assert layer.severity in {"warn", "fail"}
 
 
-def test_pd_hold_gate_xarm5_pose4_tracking_saturation_bypass():
+def test_pd_hold_check_xarm5_pose4_tracking_saturation_bypass():
     """Regression: pose 4 saturated pd_hold_tau on J4 while pin_G stays ~1 Nm."""
     from ufactory.dynamics.analysis import (
         evaluate_pd_hold_gate,

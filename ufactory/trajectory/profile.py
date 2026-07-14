@@ -127,7 +127,9 @@ def joint_lspb_samples(
     duration = max(durations)
     if duration <= _EPS:
         duration = max(_EPS, float(np.max(dist)) / max(v_max, _EPS))
-    n = max(1, int(round(duration * rate)))
+    # Never round a time-optimal duration down: doing so silently violates the
+    # requested velocity/acceleration limits on the discrete command stream.
+    n = max(1, int(math.ceil(duration * rate - _EPS)))
     duration = float(n) / float(rate)
     u = _sample_grid(n)
     q = np.empty((n, q0.size), dtype=np.float64)
@@ -167,7 +169,7 @@ def linear_cartesian_samples(
     duration = lspb_duration(length, v_max, a_max)
     if duration <= _EPS:
         duration = max(_EPS, length / max(v_max, _EPS))
-    n = max(1, int(round(duration * rate)))
+    n = max(1, int(math.ceil(duration * rate - _EPS)))
     duration = float(n) / float(rate)
     u = _sample_grid(n)
     alpha = _lspb_alpha_for_duration(length, v_max, a_max, duration)
@@ -197,10 +199,10 @@ def gap_lspb_samples(
     if duration <= _EPS:
         return np.array([[float(gap_end)]], dtype=np.float64), 1, 0.0
     if d < _EPS:
-        n = max(1, int(round(duration * rate)))
+        n = max(1, int(math.ceil(duration * rate - _EPS)))
         duration = float(n) / float(rate)
         return np.full((n, 1), float(gap_end), dtype=np.float64), n, duration
-    n = max(1, int(round(duration * rate)))
+    n = max(1, int(math.ceil(duration * rate - _EPS)))
     duration = float(n) / float(rate)
     u = _sample_grid(n)
     v_cap = d / duration + a_max * duration

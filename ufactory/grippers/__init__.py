@@ -13,6 +13,14 @@ from ufactory.grippers.g2 import (
     gripper_g2_sdk_pos_mm_to_gap_m,
     gripper_g2_sim_drive_to_gap_m,
 )
+from ufactory.grippers.adapters import (
+    ConfiguredGripperAdapter,
+    G2Adapter,
+    GripperAdapter,
+    GripperCapabilities,
+    Lite6Adapter,
+    create_gripper_adapter,
+)
 
 __all__ = [
     "BioGripperG2",
@@ -26,4 +34,10 @@ __all__ = [
     "gripper_g2_gap_m_to_sim_drive",
     "gripper_g2_sdk_pos_mm_to_gap_m",
     "gripper_g2_sim_drive_to_gap_m",
+    "ConfiguredGripperAdapter",
+    "G2Adapter",
+    "GripperAdapter",
+    "GripperCapabilities",
+    "Lite6Adapter",
+    "create_gripper_adapter",
 ]

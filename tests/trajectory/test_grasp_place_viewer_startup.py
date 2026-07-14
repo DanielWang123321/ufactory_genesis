@@ -30,9 +30,7 @@ class _FakeRobot:
         self.control_calls = []
 
     def set_dofs_position(self, values, dofs_idx, zero_velocity=False) -> None:
-        self.set_calls.append(
-            (np.asarray(values, dtype=np.float64).copy(), list(dofs_idx), bool(zero_velocity))
-        )
+        self.set_calls.append((np.asarray(values, dtype=np.float64).copy(), list(dofs_idx), bool(zero_velocity)))
 
     def control_dofs_position(self, values, dofs_idx) -> None:
         self.control_calls.append((np.asarray(values, dtype=np.float64).copy(), list(dofs_idx)))
@@ -136,6 +134,7 @@ def test_run_sim_defers_viewer_until_after_program_start(grasp_traj, monkeypatch
             home_drift_mm=0.0,
             total_ticks=program.total_ticks,
             total_duration=program.total_duration,
+            metric_settle_ticks=2,
         )
 
     monkeypatch.setattr(grasp_traj, "build_scene", fake_build_scene)
@@ -167,6 +166,7 @@ def test_run_sim_headless_does_not_open_deferred_viewer(grasp_traj, monkeypatch)
             home_drift_mm=0.0,
             total_ticks=program.total_ticks,
             total_duration=program.total_duration,
+            metric_settle_ticks=2,
         ),
     )
 

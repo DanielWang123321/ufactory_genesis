@@ -48,7 +48,7 @@ def expand_round_trip(
 ) -> list[np.ndarray]:
     """Expand one home-endpoint round trip into ``2 * segments`` poses (radians).
 
-  Forward: t = 1/segments … 1 (endpoint). Return: t = (segments-1)/segments … 0 (home).
+    Forward: t = 1/segments … 1 (endpoint). Return: t = (segments-1)/segments … 0 (home).
     """
     if segments < 1:
         raise ValueError(f"segments must be >= 1, got {segments}")

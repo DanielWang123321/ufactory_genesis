@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,12 +34,10 @@ from ufactory.dynamics.analysis import (
     format_torque_row,
     genesis_sample_for_torque_compare,
     parse_strict_static_layers,
-    static_layer_l2,
     summarize_static_layers,
     validate_urdf_dynamics,
 )
 from ufactory.dynamics.report import (
-    DynamicsRunConfig,
     DynamicsSample,
     TorqueCompareResult,
     ValidationStatus,
@@ -145,7 +142,10 @@ def print_compare_table(
         rows = joint_torque_rows(r, runtime_profile=runtime_profile)
         printed = False
         for row in rows:
-            if row["joint_status"] == "PASS" and summary["status"] in {ValidationStatus.FAIL_BIAS.value, ValidationStatus.FAIL_MODEL.value}:
+            if row["joint_status"] == "PASS" and summary["status"] in {
+                ValidationStatus.FAIL_BIAS.value,
+                ValidationStatus.FAIL_MODEL.value,
+            }:
                 continue
             printed = True
             print(
@@ -201,10 +201,7 @@ def print_static_layer_summary(
     print("  L2a/L2b/L3b are Nm L2 residuals; L3a is mass-matrix relative Frobenius error.")
     for layer in STATIC_LAYERS:
         bucket = counts.get(layer, {"pass": 0, "warn": 0, "fail": 0})
-        print(
-            f"  {layer}: pass={bucket.get('pass', 0)} "
-            f"warn={bucket.get('warn', 0)} fail={bucket.get('fail', 0)}"
-        )
+        print(f"  {layer}: pass={bucket.get('pass', 0)} warn={bucket.get('warn', 0)} fail={bucket.get('fail', 0)}")
     if strict_layers:
         print(f"  strict layers: {','.join(sorted(strict_layers))} -> {'FAIL' if strict_fail else 'PASS'}")
     return counts, strict_fail
@@ -256,7 +253,9 @@ def _run_genesis_samples(
     return out
 
 
-def _sdk_path_z_reasons(session, start_q: Sequence[float], target_q: Sequence[float], z_min_mm: float, steps: int = 10) -> list[str]:
+def _sdk_path_z_reasons(
+    session, start_q: Sequence[float], target_q: Sequence[float], z_min_mm: float, steps: int = 10
+) -> list[str]:
     reasons: list[str] = []
     start = np.asarray(start_q, dtype=np.float64)
     target = np.asarray(target_q, dtype=np.float64)
@@ -313,10 +312,7 @@ def _hardware_path_reasons_by_waypoint(
         )
         segment_reasons.extend(_sdk_path_z_reasons(session, segment_start, waypoint, z_min_mm))
         if segment_reasons:
-            reasons.extend(
-                f"waypoint {i}/{len(waypoints)} [{move_strategy}]: {reason}"
-                for reason in segment_reasons
-            )
+            reasons.extend(f"waypoint {i}/{len(waypoints)} [{move_strategy}]: {reason}" for reason in segment_reasons)
             break
         segment_start = waypoint
     return reasons
@@ -342,6 +338,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
     parser.add_argument("--ip", type=str, default=None, help="xArm IP (required unless --dry-run)")
     parser.add_argument("--dry-run", action="store_true", help="Genesis torques + safe poses only")
+    parser.add_argument("--confirm-real", action="store_true", help="Required before any controller operation")
     parser.add_argument("--hold-current-only", action="store_true", help="Read real torque at current pose")
     parser.add_argument("--kinematics-suffix", type=str, default=None)
     parser.add_argument("--kinematics-yaml", type=str, default=None)
@@ -404,8 +401,10 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
     if args.speed is None:
         args.speed = runtime.dynamics.default_move_speed_rad_s
 
-    if not args.dry_run and not args.hold_current_only and not args.ip:
-        parser.error("--ip is required unless --dry-run or --hold-current-only")
+    if not args.dry_run and not args.ip:
+        parser.error("--ip is required unless --dry-run")
+    if not args.dry_run and not args.confirm_real:
+        parser.error("v0.2.5 requires --confirm-real before dynamics controller access")
     if not args.dry_run and not args.hold_current_only and not runtime.dynamics.supports_hardware_validation:
         parser.error(f"{runtime.model.key} has no hardware dynamics validation pose profile yet")
 
@@ -436,6 +435,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
         robot_name=runtime.model.robot_name,
         joint_count=runtime.model.dof,
         output_dir=args.calibrated_output_dir,
+        serial_number=resolved_sn,
     )
 
     print("=" * 78)
@@ -606,10 +606,12 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                         reference=reference,
                     )
                     if gate.block_hardware:
-                        status = ValidationStatus.NOT_SETTLED if not genesis_sample.settled else ValidationStatus.SATURATED
+                        status = (
+                            ValidationStatus.NOT_SETTLED if not genesis_sample.settled else ValidationStatus.SATURATED
+                        )
                         print(
                             f"  [{pose.name}] repeat {repeat_i + 1}: {status.value}; "
-                            f"Genesis PD hold gate failed (not settled or saturated); not moving hardware"
+                            f"Genesis PD hold check failed (not settled or saturated); not moving hardware"
                         )
                         results.append(
                             DynamicsSample(
@@ -727,7 +729,11 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
             return 1
         return 0
 
-    eval_results = [r for r in results if r.status not in {ValidationStatus.NOT_SETTLED, ValidationStatus.SATURATED, ValidationStatus.UNSAFE}]
+    eval_results = [
+        r
+        for r in results
+        if r.status not in {ValidationStatus.NOT_SETTLED, ValidationStatus.SATURATED, ValidationStatus.UNSAFE}
+    ]
     n_pass = sum(1 for r in eval_results if r.status == ValidationStatus.PASS)
     n_total = len(eval_results)
     n_unsafe = sum(1 for r in results if r.status == ValidationStatus.UNSAFE)
@@ -750,7 +756,9 @@ def cli_sim_check(argv: Sequence[str] | None = None) -> int:
         description=f"UFACTORY Genesis dynamics simulation regression. PD hold torque: {_PD_HOLD_TORQUE_DEF}"
     )
     parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
-    parser.add_argument("--ip", type=str, default=None, help="Optional robot IP to auto-resolve kinematics suffix from SN")
+    parser.add_argument(
+        "--ip", type=str, default=None, help="Optional robot IP to auto-resolve kinematics suffix from SN"
+    )
     parser.add_argument("--robot-model", type=str, default=None)
     parser.add_argument("--kinematics-suffix", type=str, default=None)
     parser.add_argument("--kinematics-yaml", type=str, default=None)
@@ -927,7 +935,7 @@ def run_sim_collision_chain(
                         message="self-collision (error_code=22) after move",
                     )
                 )
-                print(f"  FAIL: self-collision error_code=22")
+                print("  FAIL: self-collision error_code=22")
                 session.recover_after_motion_error()
                 continue
             results.append(SimCollisionResult(pose_name=name, passed=True))
@@ -1068,7 +1076,9 @@ def cli_report_compare(argv: Sequence[str] | None = None) -> int:
     old_records = read_report_records(args.old_report)
     new_records = read_report_records(args.new_report)
     stats = compare_report_records(old_records, new_records)
-    print(f"{'Joint':>5} {'old_bias':>10} {'new_bias':>10} {'d_bias':>10} {'old_rmse':>10} {'new_rmse':>10} {'d_rmse':>10}")
+    print(
+        f"{'Joint':>5} {'old_bias':>10} {'new_bias':>10} {'d_bias':>10} {'old_rmse':>10} {'new_rmse':>10} {'d_rmse':>10}"
+    )
     for row in stats:
         print(
             f"J{int(row['joint']):<4} "

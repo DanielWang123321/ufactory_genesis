@@ -1,0 +1,18 @@
+schema_version: 1
+safety:
+  schema_version: 1
+  joint_limit_margin_rad: 0.02
+  workspace_lower_m: [-0.80, -0.80, 0.00]
+  workspace_upper_m: [0.80, 0.80, 1.20]
+  z_min_m: 0.05
+  min_collision_distance_m: 0.005
+  max_ik_jump_rad: 0.35
+  max_orientation_step_rad: 0.20
+  max_shadow_joint_error_rad: 0.05
+  max_shadow_ee_error_m: 0.005
+  minor_lateness_ratio: 0.25
+  minor_lateness_limit_per_s: 3
+  feedback_stale_periods: 2.0
+  require_kinematics: true
+  require_collision: true
+  exemptions: []

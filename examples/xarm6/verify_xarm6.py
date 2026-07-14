@@ -235,7 +235,7 @@ def genesis_fk(xarm6, qpos_np, ee_link_idx):
                 f"EE link index out of range: idx={ee_link_idx}, "
                 f"n_links={links_pos.shape[0]}, fk_shape={tuple(links_pos.shape)}"
             )
-        pos = links_pos[ee_link_idx].cpu().numpy()    # (3,) meters
+        pos = links_pos[ee_link_idx].cpu().numpy()  # (3,) meters
         quat = links_quat[ee_link_idx].cpu().numpy()  # (4,) w,x,y,z
     elif links_pos.ndim == 3:
         if ee_link_idx < 0 or ee_link_idx >= links_pos.shape[1]:
@@ -243,12 +243,10 @@ def genesis_fk(xarm6, qpos_np, ee_link_idx):
                 f"EE link index out of range: idx={ee_link_idx}, "
                 f"n_links={links_pos.shape[1]}, fk_shape={tuple(links_pos.shape)}"
             )
-        pos = links_pos[0, ee_link_idx].cpu().numpy()    # (3,) meters
+        pos = links_pos[0, ee_link_idx].cpu().numpy()  # (3,) meters
         quat = links_quat[0, ee_link_idx].cpu().numpy()  # (4,) w,x,y,z
     else:
-        raise RuntimeError(
-            f"Unexpected forward_kinematics output shape for xarm6: {tuple(links_pos.shape)}"
-        )
+        raise RuntimeError(f"Unexpected forward_kinematics output shape for xarm6: {tuple(links_pos.shape)}")
 
     return pos, quat
 
@@ -275,7 +273,7 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
 
     # Test joint configurations
     test_configs = [
-        ("home",     np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])),
+        ("home", np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])),
         ("config A", np.array([0.5, -0.3, 0.0, 0.0, 0.3, 0.0])),
         ("config B", np.array([0.0, -0.5, -0.1, 0.5, 0.5, 0.0])),
         ("config C", np.array([-0.3, 0.2, -0.15, 0.3, -0.2, 0.1])),
@@ -315,22 +313,14 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
 
         print(f"[{name}] Send q (rad):      [{', '.join(f'{v:8.4f}' for v in q)}]")
         print(f"{'':12}Send q (deg):      [{', '.join(f'{v:8.2f}' for v in q_deg)}]")
-        print(
-            f"{'':12}Genesis FK pos (mm): [{gs_pos_mm[0]:8.2f}, {gs_pos_mm[1]:8.2f}, {gs_pos_mm[2]:8.2f}]"
-        )
-        print(
-            f"{'':12}SDK FK pos (mm):    [{sdk_pos_mm[0]:8.2f}, {sdk_pos_mm[1]:8.2f}, {sdk_pos_mm[2]:8.2f}]"
-        )
+        print(f"{'':12}Genesis FK pos (mm): [{gs_pos_mm[0]:8.2f}, {gs_pos_mm[1]:8.2f}, {gs_pos_mm[2]:8.2f}]")
+        print(f"{'':12}SDK FK pos (mm):    [{sdk_pos_mm[0]:8.2f}, {sdk_pos_mm[1]:8.2f}, {sdk_pos_mm[2]:8.2f}]")
         print(
             f"{'':12}Pos delta (GS-SDK): [{pos_delta_mm[0]:8.2f}, {pos_delta_mm[1]:8.2f}, {pos_delta_mm[2]:8.2f}]  "
             f"norm={pos_diff:8.4f} mm"
         )
-        print(
-            f"{'':12}Genesis RPY (deg):  [{gs_rpy_deg[0]:7.2f}, {gs_rpy_deg[1]:7.2f}, {gs_rpy_deg[2]:7.2f}]"
-        )
-        print(
-            f"{'':12}SDK FK RPY (deg):   [{sdk_rpy_deg[0]:7.2f}, {sdk_rpy_deg[1]:7.2f}, {sdk_rpy_deg[2]:7.2f}]"
-        )
+        print(f"{'':12}Genesis RPY (deg):  [{gs_rpy_deg[0]:7.2f}, {gs_rpy_deg[1]:7.2f}, {gs_rpy_deg[2]:7.2f}]")
+        print(f"{'':12}SDK FK RPY (deg):   [{sdk_rpy_deg[0]:7.2f}, {sdk_rpy_deg[1]:7.2f}, {sdk_rpy_deg[2]:7.2f}]")
         print(
             f"{'':12}RPY delta (deg):    [{rpy_diff_deg[0]:7.2f}, {rpy_diff_deg[1]:7.2f}, {rpy_diff_deg[2]:7.2f}]  "
             f"max={rpy_diff_deg.max():.2f}°"
@@ -356,15 +346,17 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
             input_is_radian=True,
             return_is_radian=True,
         )
-        assert code == 0, f"SDK FK failed"
+        assert code == 0, "SDK FK failed"
         target_pos_mm = np.array(sdk_pose[:3])
         target_rpy = np.array(sdk_pose[3:6])
         target_rpy_deg = target_rpy * 180.0 / math.pi
 
         print(f"[{name}] Target ref q (rad): [{', '.join(f'{v:8.4f}' for v in q_ref)}]")
         print(f"{'':14}Target ref q (deg): [{', '.join(f'{v:8.2f}' for v in q_ref_deg)}]")
-        print(f"[{name}] Target TCP: pos(mm)=[{target_pos_mm[0]:.2f}, {target_pos_mm[1]:.2f}, {target_pos_mm[2]:.2f}] "
-              f"rpy(deg)=[{target_rpy_deg[0]:.2f}, {target_rpy_deg[1]:.2f}, {target_rpy_deg[2]:.2f}]")
+        print(
+            f"[{name}] Target TCP: pos(mm)=[{target_pos_mm[0]:.2f}, {target_pos_mm[1]:.2f}, {target_pos_mm[2]:.2f}] "
+            f"rpy(deg)=[{target_rpy_deg[0]:.2f}, {target_rpy_deg[1]:.2f}, {target_rpy_deg[2]:.2f}]"
+        )
 
         # SDK IK
         code, sdk_ik_angles = arm.get_inverse_kinematics(
@@ -380,13 +372,9 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
         sdk_joints_rad = np.array(sdk_ik_angles[:6])
 
         # Genesis IK: convert target to Genesis format (m + quat)
-        target_pos_m = torch.tensor(
-            target_pos_mm / 1000.0, dtype=torch.float32, device=gs.device
-        ).unsqueeze(0)
+        target_pos_m = torch.tensor(target_pos_mm / 1000.0, dtype=torch.float32, device=gs.device).unsqueeze(0)
         w, x, y, z = rpy_to_quat(target_rpy[0], target_rpy[1], target_rpy[2])
-        target_quat = torch.tensor(
-            [w, x, y, z], dtype=torch.float32, device=gs.device
-        ).unsqueeze(0)
+        target_quat = torch.tensor([w, x, y, z], dtype=torch.float32, device=gs.device).unsqueeze(0)
 
         gs_ik_qpos = xarm6.inverse_kinematics(
             link=ee_link,
@@ -402,13 +390,13 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
         gs_joints_deg = gs_joints_rad * 180.0 / math.pi
 
         # Joint angle comparison
-        joint_diff_deg = np.array(
-            [angle_diff_deg(a, b) for a, b in zip(gs_joints_rad, sdk_joints_rad)]
-        )
+        joint_diff_deg = np.array([angle_diff_deg(a, b) for a, b in zip(gs_joints_rad, sdk_joints_rad)])
 
         print(f"  SDK IK joints (deg):     [{', '.join(f'{a:8.2f}' for a in sdk_joints_rad * 180 / math.pi)}]")
         print(f"  Genesis IK joints (deg): [{', '.join(f'{a:8.2f}' for a in gs_joints_deg)}]")
-        print(f"  Joint diff (deg):        [{', '.join(f'{d:8.2f}' for d in joint_diff_deg)}]  max={joint_diff_deg.max():.2f}°")
+        print(
+            f"  Joint diff (deg):        [{', '.join(f'{d:8.2f}' for d in joint_diff_deg)}]  max={joint_diff_deg.max():.2f}°"
+        )
         print(f"  Joint diff L2 norm:      {np.linalg.norm(joint_diff_deg):.4f} deg")
 
         # Verify both IK solutions with FK
@@ -419,9 +407,7 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
         gs_verify_rpy_deg = gs_verify_rpy * 180.0 / math.pi
         gs_verify_err = np.linalg.norm(gs_verify_pos_mm - target_pos_mm)
         gs_verify_pos_delta_mm = gs_verify_pos_mm - target_pos_mm
-        gs_verify_rpy_delta_deg = np.array(
-            [angle_diff_deg(a, b) for a, b in zip(gs_verify_rpy, target_rpy)]
-        )
+        gs_verify_rpy_delta_deg = np.array([angle_diff_deg(a, b) for a, b in zip(gs_verify_rpy, target_rpy)])
 
         # SDK FK(SDK IK result)
         _, sdk_verify_pose = arm.get_forward_kinematics(
@@ -434,9 +420,7 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
         sdk_verify_rpy_deg = sdk_verify_rpy * 180.0 / math.pi
         sdk_verify_err = np.linalg.norm(sdk_verify_pos_mm - target_pos_mm)
         sdk_verify_pos_delta_mm = sdk_verify_pos_mm - target_pos_mm
-        sdk_verify_rpy_delta_deg = np.array(
-            [angle_diff_deg(a, b) for a, b in zip(sdk_verify_rpy, target_rpy)]
-        )
+        sdk_verify_rpy_delta_deg = np.array([angle_diff_deg(a, b) for a, b in zip(sdk_verify_rpy, target_rpy)])
 
         print(
             f"  Genesis FK from IK pos(mm): [{gs_verify_pos_mm[0]:8.2f}, {gs_verify_pos_mm[1]:8.2f}, {gs_verify_pos_mm[2]:8.2f}]"
@@ -502,8 +486,7 @@ def run_real_robot_comparison(xarm6, ee_link, real_ip):
 def main():
     parser = argparse.ArgumentParser(description="xArm 6 Verification")
     parser.add_argument("-v", "--vis", action="store_true", default=False)
-    parser.add_argument("--robot-model", type=str, default=None,
-                        help="Robot URDF model path. Default: xarm6_1305.urdf")
+    parser.add_argument("--robot-model", type=str, default=None, help="Robot URDF model path. Default: xarm6_1305.urdf")
     parser.add_argument(
         "--kinematics-suffix",
         type=str,
@@ -522,8 +505,7 @@ def main():
         default=None,
         help="Directory used to auto-find kinematics yaml when only suffix is provided.",
     )
-    parser.add_argument("--real-ip", type=str, default=None,
-                        help="Real xArm IP for IK comparison")
+    parser.add_argument("--real-ip", type=str, default=None, help="Real xArm IP for IK comparison")
     parser.add_argument(
         "--skip-ik",
         action="store_true",

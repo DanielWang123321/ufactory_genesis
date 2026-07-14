@@ -12,96 +12,96 @@ from ufactory.robots.registry import get_robot_profile, robot_cli_choices
 
 
 def main() -> None:
-  parser = argparse.ArgumentParser(description="View robot GLB visual model")
-  parser.add_argument("--robot", required=True, choices=robot_cli_choices())
-  parser.add_argument(
-    "--bio-gripper-g2",
-    action="store_true",
-    help="Load Bio Gripper G2 static visual combo URDF",
-  )
-  parser.add_argument(
-    "--lite6-gripper",
-    action="store_true",
-    help="Load Lite6 parallel gripper visual combo URDF (lite6 only)",
-  )
-  parser.add_argument(
-    "--lite6-vacuum-gripper",
-    action="store_true",
-    help="Load Lite6 vacuum gripper static visual combo URDF (lite6 only)",
-  )
-  parser.add_argument(
-    "--gripper-g2",
-    action="store_true",
-    help="Load Gripper G2 visual combo URDF",
-  )
-  parser.add_argument(
-    "--movable",
-    action="store_true",
-    help="Per-link GLBs for gripper open/close (requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2)",
-  )
-  parser.add_argument(
-    "--gripper-demo",
-    action="store_true",
-    help="Cycle gripper open/close (requires --movable with a gripper flag)",
-  )
-  parser.add_argument("--headless", action="store_true")
-  parser.add_argument("--diagnose", action="store_true", help="Headless STL/GLB link-pose diagnostic")
-  parser.add_argument(
-    "--pd",
-    action="store_true",
-    help="Joint motion demo (smooth ~0.873 rad/s waypoints; visual only, not stiff PD)",
-  )
-  parser.add_argument(
-    "--show-tcp",
-    action="store_true",
-    help="Show red DH TCP debug marker on EE flange (default: hidden)",
-  )
-  args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="View robot GLB visual model")
+    parser.add_argument("--robot", required=True, choices=robot_cli_choices())
+    parser.add_argument(
+        "--bio-gripper-g2",
+        action="store_true",
+        help="Load Bio Gripper G2 static visual combo URDF",
+    )
+    parser.add_argument(
+        "--lite6-gripper",
+        action="store_true",
+        help="Load Lite6 parallel gripper visual combo URDF (lite6 only)",
+    )
+    parser.add_argument(
+        "--lite6-vacuum-gripper",
+        action="store_true",
+        help="Load Lite6 vacuum gripper static visual combo URDF (lite6 only)",
+    )
+    parser.add_argument(
+        "--gripper-g2",
+        action="store_true",
+        help="Load Gripper G2 visual combo URDF",
+    )
+    parser.add_argument(
+        "--movable",
+        action="store_true",
+        help="Per-link GLBs for gripper open/close (requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2)",
+    )
+    parser.add_argument(
+        "--gripper-demo",
+        action="store_true",
+        help="Cycle gripper open/close (requires --movable with a gripper flag)",
+    )
+    parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--diagnose", action="store_true", help="Headless STL/GLB link-pose diagnostic")
+    parser.add_argument(
+        "--pd",
+        action="store_true",
+        help="Joint motion demo (smooth ~0.873 rad/s waypoints; visual only, not stiff PD)",
+    )
+    parser.add_argument(
+        "--show-tcp",
+        action="store_true",
+        help="Show red DH TCP debug marker on EE flange (default: hidden)",
+    )
+    args = parser.parse_args()
 
-  profile = get_robot_profile(args.robot)
-  accessory_flags = (
-    args.bio_gripper_g2,
-    args.gripper_g2,
-    args.lite6_gripper,
-    args.lite6_vacuum_gripper,
-  )
-  if sum(accessory_flags) > 1:
-    parser.error("Only one end-effector flag may be set at a time")
-  if args.movable and not (args.gripper_g2 or args.lite6_gripper or args.bio_gripper_g2):
-    parser.error("--movable requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2")
-  if args.gripper_demo and not args.movable:
-    parser.error("--gripper-demo requires --movable")
-  if args.bio_gripper_g2 and not profile.supports_bio_gripper_g2:
-    parser.error(f"{args.robot} does not support Bio Gripper G2")
-  if args.gripper_g2 and not profile.supports_gripper_g2:
-    parser.error(f"{args.robot} does not support Gripper G2")
-  if args.lite6_gripper and not profile.supports_lite6_gripper:
-    parser.error(f"{args.robot} does not support Lite6 Gripper")
-  if args.lite6_vacuum_gripper and not profile.supports_lite6_vacuum_gripper:
-    parser.error(f"{args.robot} does not support Lite6 Vacuum Gripper")
+    profile = get_robot_profile(args.robot)
+    accessory_flags = (
+        args.bio_gripper_g2,
+        args.gripper_g2,
+        args.lite6_gripper,
+        args.lite6_vacuum_gripper,
+    )
+    if sum(accessory_flags) > 1:
+        parser.error("Only one end-effector flag may be set at a time")
+    if args.movable and not (args.gripper_g2 or args.lite6_gripper or args.bio_gripper_g2):
+        parser.error("--movable requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2")
+    if args.gripper_demo and not args.movable:
+        parser.error("--gripper-demo requires --movable")
+    if args.bio_gripper_g2 and not profile.supports_bio_gripper_g2:
+        parser.error(f"{args.robot} does not support Bio Gripper G2")
+    if args.gripper_g2 and not profile.supports_gripper_g2:
+        parser.error(f"{args.robot} does not support Gripper G2")
+    if args.lite6_gripper and not profile.supports_lite6_gripper:
+        parser.error(f"{args.robot} does not support Lite6 Gripper")
+    if args.lite6_vacuum_gripper and not profile.supports_lite6_vacuum_gripper:
+        parser.error(f"{args.robot} does not support Lite6 Vacuum Gripper")
 
-  if args.diagnose:
-    run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2)
-    return
+    if args.diagnose:
+        run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2)
+        return
 
-  urdf_path = robot_visual_glb_urdf(
-    args.robot,
-    with_bio_gripper_g2=args.bio_gripper_g2,
-    with_gripper_g2=args.gripper_g2,
-    with_lite6_gripper=args.lite6_gripper,
-    with_lite6_vacuum_gripper=args.lite6_vacuum_gripper,
-    movable=args.movable,
-  )
-  print(f"Loading: {urdf_path}")
-  run_glb_viewer(
-    profile,
-    urdf_path,
-    headless=args.headless,
-    pd_demo=args.pd,
-    gripper_demo=args.gripper_demo,
-    show_tcp=args.show_tcp,
-  )
+    urdf_path = robot_visual_glb_urdf(
+        args.robot,
+        with_bio_gripper_g2=args.bio_gripper_g2,
+        with_gripper_g2=args.gripper_g2,
+        with_lite6_gripper=args.lite6_gripper,
+        with_lite6_vacuum_gripper=args.lite6_vacuum_gripper,
+        movable=args.movable,
+    )
+    print(f"Loading: {urdf_path}")
+    run_glb_viewer(
+        profile,
+        urdf_path,
+        headless=args.headless,
+        pd_demo=args.pd,
+        gripper_demo=args.gripper_demo,
+        show_tcp=args.show_tcp,
+    )
 
 
 if __name__ == "__main__":
-  main()
+    main()

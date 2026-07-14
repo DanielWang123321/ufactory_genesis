@@ -7,29 +7,29 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from ufactory.dynamics import (
+from ufactory.dynamics.analysis import (
+    build_dynamics_sample,
+    classify_torque_result,
+    validate_urdf_dynamics,
+)
+from ufactory.dynamics.cli import run_sim_collision_chain
+from ufactory.dynamics.plot import torque_plot_layout, write_torque_plot
+from ufactory.dynamics.poses import dynamics_default_configs, xarm6_default_dynamics_configs
+from ufactory.dynamics.report import (
     ABS_ERR_LIMITS,
     REPORT_SCHEMA_VERSION,
+    DynamicsRunConfig,
     GenesisDynamicsSample,
     SafePose,
     ValidationStatus,
-    build_dynamics_sample,
-    classify_torque_result,
     compare_report_records,
     dynamics_report_paths,
     joint_torque_rows,
     read_report_records,
     sanitize_report_identity,
-    torque_plot_layout,
-    run_sim_collision_chain,
     torque_summary,
-    validate_urdf_dynamics,
     write_csv_report,
     write_jsonl_report,
-    write_torque_plot,
-    DynamicsRunConfig,
-    dynamics_default_configs,
-    xarm6_default_dynamics_configs,
 )
 from ufactory.dynamics.cli import print_compare_table
 from ufactory.kinematics.calibration import build_calibrated_urdf
@@ -161,7 +161,7 @@ def test_report_jsonl_and_csv_roundtrip(tmp_path: Path):
     assert read_report_records(jsonl)[0]["pose"] == "0"
     assert read_report_records(csv)[0]["pose"] == "0"
     csv_text = csv.read_text(encoding="utf-8")
-    assert f"schema_version,pose" in csv_text
+    assert "schema_version,pose" in csv_text
     assert "torque_l2_err_nm" in csv_text
     assert "genesis_tau_J1_nm" in csv_text
     assert "sdk_tau_mean_J1_nm" in csv_text
@@ -178,7 +178,9 @@ def test_default_dynamics_report_paths_use_identity_and_run_stamps(tmp_path: Pat
     )
 
     assert sanitize_report_identity("XI1305/ABC 123") == "XI1305_ABC_123"
-    assert csv_path == tmp_path / "dyn_ver_XI1305_ABC_123" / "20260702_1032" / "dyn_ver_XI1305_ABC_123_20260702_103201.csv"
+    assert (
+        csv_path == tmp_path / "dyn_ver_XI1305_ABC_123" / "20260702_1032" / "dyn_ver_XI1305_ABC_123_20260702_103201.csv"
+    )
     assert jsonl_path == csv_path.with_suffix(".jsonl")
     assert plot_path == csv_path.with_name("dyn_ver_XI1305_ABC_123_20260702_103201_torque.png")
 
@@ -239,8 +241,7 @@ def test_v3_report_rows_expose_human_readable_torque_fields(tmp_path: Path):
 def test_read_report_records_supports_legacy_v2_csv(tmp_path: Path):
     csv = tmp_path / "legacy.csv"
     csv.write_text(
-        "schema_version,pose,status,l2_err,q1,pd_hold_tau1,tau_real1,abs_err1\n"
-        "2,home,PASS,1.0,0.0,3.0,1.0,2.0\n",
+        "schema_version,pose,status,l2_err,q1,pd_hold_tau1,tau_real1,abs_err1\n2,home,PASS,1.0,0.0,3.0,1.0,2.0\n",
         encoding="utf-8",
     )
 
@@ -351,8 +352,7 @@ def test_non_xarm6_dynamics_configs_match_dof():
 
 def test_calibrated_urdf_defaults_to_cache(tmp_path: Path):
     kinematics = {
-        f"joint{i}": {"x": 0.0, "y": 0.0, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
-        for i in range(1, 7)
+        f"joint{i}": {"x": 0.0, "y": 0.0, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0} for i in range(1, 7)
     }
     out = Path(build_calibrated_urdf(xarm6_1305_urdf(), kinematics, suffix="unit", output_dir=str(tmp_path)))
     assert out.parent == tmp_path

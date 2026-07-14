@@ -8,23 +8,21 @@ matching the grasp-place demo and reach env.
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import torch
 
 import genesis as gs
-from genesis.utils.geom import xyz_to_quat
+from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
+
 
 # Gripper-down orientation quaternion (roll=180deg), reused across MoveL ticks.
 def down_quat(device=None, dtype=None) -> torch.Tensor:
     dev = device or gs.device
     dt = dtype or gs.tc_float
-    return xyz_to_quat(
-        torch.tensor([[math.pi, 0.0, 0.0]], device=dev, dtype=dt),
-        rpy=True,
-        degrees=False,
-    )
+    x, y, z, w = GRIPPER_DOWN_QUAT_XYZW
+    # Genesis uses WXYZ at its IK boundary; the public kinematics contract is
+    # XYZW, so convert explicitly instead of defining another orientation.
+    return torch.tensor([[w, x, y, z]], device=dev, dtype=dt)
 
 
 def solve_link6_ik(

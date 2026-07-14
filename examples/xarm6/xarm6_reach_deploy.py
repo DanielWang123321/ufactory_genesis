@@ -160,10 +160,7 @@ def _resolve_checkpoint(log_dir: Path, checkpoint: str | Path | None) -> Path:
         if iter_n is not None and iter_n > 0:
             alt = ckpt.parent / f"model_{iter_n - 1}.pt"
             if alt.exists():
-                print(
-                    f"[INFO] {ckpt} not found; using {alt} "
-                    f"(rsl-rl checkpoints are 0-based: iteration {iter_n - 1})"
-                )
+                print(f"[INFO] {ckpt} not found; using {alt} (rsl-rl checkpoints are 0-based: iteration {iter_n - 1})")
                 return alt
 
     pts = _list_checkpoints(log_dir if ckpt.parent == Path(".") else ckpt.parent)
@@ -225,11 +222,13 @@ def _deploy_report_fieldnames(dof: int) -> list[str]:
     return names
 
 
-def _deploy_report_row(step: int, obs: np.ndarray, action: np.ndarray, q_cmd: np.ndarray, command, target: np.ndarray) -> dict:
+def _deploy_report_row(
+    step: int, obs: np.ndarray, action: np.ndarray, q_cmd: np.ndarray, command, target: np.ndarray
+) -> dict:
     dof = q_cmd.size
     q = obs[:dof]
     ee_start = dof * 2
-    ee = obs[ee_start:ee_start + 3]
+    ee = obs[ee_start : ee_start + 3]
     dist = float(np.linalg.norm(target - ee))
     row = {
         "step": step,
@@ -260,13 +259,13 @@ def run_deploy(
     action_contract: str,
     report_csv: str | None,
 ) -> None:
-    cfgs = log_dir / "cfgs.pkl"
-    if not cfgs.exists():
-        raise SystemExit(f"Missing training config: {cfgs}")
+    config_path = log_dir / "config.yaml"
+    if not config_path.exists():
+        raise SystemExit(f"Missing training config: {config_path}")
     if not checkpoint.exists():
         raise SystemExit(f"Missing checkpoint: {checkpoint}")
 
-    policy = ReachPolicyRunner.from_checkpoint(checkpoint, cfgs, device="cpu")
+    policy = ReachPolicyRunner.from_checkpoint(checkpoint, config_path, device="cpu")
     runtime_config = session.config
     _warn_action_contract_mismatch(policy.config, runtime_config)
     if action_contract == ACTION_CONTRACT_CHECKPOINT:
@@ -328,8 +327,7 @@ def run_deploy(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="xArm6 Reach sim-to-real deploy")
-    parser.add_argument("--mode", required=True,
-                        choices=("align", "smoke-zero", "smoke-random", "replay", "deploy"))
+    parser.add_argument("--mode", required=True, choices=("align", "smoke-zero", "smoke-random", "replay", "deploy"))
     parser.add_argument("--ip", default=None)
     parser.add_argument("--robot", default="xarm6")
     parser.add_argument("--kinematics-suffix", default=os.environ.get("XARM_KINEMATICS_SUFFIX"))
@@ -361,13 +359,24 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.mode in {"deploy", "smoke-random"}:
+        print(
+            "[BLOCKED] v0.2.5 disables online real-policy motion and random-action hardware smoke tests. "
+            "Training, simulation evaluation, static FK alignment, and offline action preflight remain available.",
+            file=sys.stderr,
+        )
+        return 2
+
     if args.mode == "align":
         ip = _default_ip(args.ip)
         kinematics_suffix = _resolve_kinematics_suffix(ip, args.robot, args.kinematics_suffix)
         argv = [
-            "--robot", args.robot,
-            "--ip", ip,
-            "--poses", args.align_poses,
+            "--robot",
+            args.robot,
+            "--ip",
+            ip,
+            "--poses",
+            args.align_poses,
         ]
         if kinematics_suffix:
             argv.extend(["--kinematics-suffix", kinematics_suffix])
@@ -379,9 +388,9 @@ def main() -> int:
     log_dir = Path("logs") / args.exp_name
     ckpt: Path | None = None
     if args.mode == "deploy":
-        cfgs = log_dir / "cfgs.pkl"
-        if not cfgs.exists():
-            raise SystemExit(f"Missing training config: {cfgs}")
+        config_path = log_dir / "config.yaml"
+        if not config_path.exists():
+            raise SystemExit(f"Missing training config: {config_path}")
         ckpt = _resolve_checkpoint(log_dir, args.checkpoint)
 
     session = ReachDeploySession(ip, robot_key=args.robot, z_min_mm=args.z_min_mm, executor=args.executor)

@@ -1,0 +1,11 @@
+schema_version: 1
+simulation:
+  backend: gpu
+  precision: "32"
+  seed: 1
+  substeps: 8
+  solver_iterations: 100
+  noslip_iterations: 5
+  constraint_time_constant_s: 0.005
+  use_gjk_collision: null
+  show_viewer: false

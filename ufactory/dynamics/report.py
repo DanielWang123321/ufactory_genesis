@@ -5,7 +5,7 @@ readers, report comparison) and the run-config factory. It deliberately has no
 runtime dependency on the analysis/probe/cli submodules so importers can pick
 just the report types without pulling the simulation stack.
 
-Report schema version 3 (see ``DynamicsRunConfig.version``):
+Report schema version 4 (see ``DynamicsRunConfig.version``):
 * L2b is ``pd_hold_tau vs pin_G(q_actual)`` (not the legacy ``gravity_est``)
 * ``clamp_slack_est``/``clamp_slack_l2`` replace the old ``pd_residual_est``/
   ``gravity_est`` (kept only as a saturation diagnostic)
@@ -47,7 +47,7 @@ SATURATION_MARGIN = 0.995
 ABS_ERR_LIMITS = np.array((5.0, 5.0, 3.2, 3.2, 3.2, 2.0), dtype=np.float64)
 L2_ERR_LIMIT = float(np.linalg.norm(ABS_ERR_LIMITS))
 REL_ERR_LIMIT = 0.15  # fraction of effort limit
-REPORT_SCHEMA_VERSION = "3"
+REPORT_SCHEMA_VERSION = "4"
 REPORT_STEM = "dyn_ver"
 
 
@@ -83,6 +83,11 @@ class DynamicsRunConfig:
     urdf_sha256: str | None = None
     kinematics_yaml_path: str | None = None
     kinematics_yaml_sha256: str | None = None
+    runtime_config_sha256: str | None = None
+    safety_policy_sha256: str | None = None
+    collision_backend: str | None = None
+    collision_backend_version: str | None = None
+    collision_exemptions_sha256: str | None = None
     genesis_version: str | None = None
     genesis_backend: str | None = None
     sim_dt: float = SIM_DT
@@ -520,6 +525,11 @@ def make_run_config(
     sim_substeps: int = SIM_SUBSTEPS,
     mode: str,
     session: Any | None = None,
+    runtime_config_sha256: str | None = None,
+    safety_policy_sha256: str | None = None,
+    collision_backend: str | None = None,
+    collision_backend_version: str | None = None,
+    collision_exemptions_sha256: str | None = None,
 ) -> DynamicsRunConfig:
     genesis_version = None
     genesis_backend = None
@@ -559,6 +569,11 @@ def make_run_config(
         urdf_sha256=sha256_file(urdf_path),
         kinematics_yaml_path=str(kinematics_yaml_path) if kinematics_yaml_path else None,
         kinematics_yaml_sha256=sha256_file(kinematics_yaml_path),
+        runtime_config_sha256=runtime_config_sha256,
+        safety_policy_sha256=safety_policy_sha256,
+        collision_backend=collision_backend,
+        collision_backend_version=collision_backend_version,
+        collision_exemptions_sha256=collision_exemptions_sha256,
         genesis_version=genesis_version,
         genesis_backend=genesis_backend,
         sim_dt=sim_dt,
@@ -729,7 +744,7 @@ def read_report_records(path: str | Path) -> list[dict[str, Any]]:
     records = []
     for row in rows:
         schema_version = row.get("schema_version") or "1"
-        l2_value = row.get("torque_l2_err_nm") if schema_version == REPORT_SCHEMA_VERSION else row.get("l2_err")
+        l2_value = row.get("torque_l2_err_nm") if schema_version in {"3", "4"} else row.get("l2_err")
         rec: dict[str, Any] = {
             "pose": row.get("pose"),
             "status": row.get("status") or ("PASS" if row.get("passed") == "1" else "FAIL_MODEL"),
@@ -787,14 +802,10 @@ def compare_report_records(
         dof = max(dof, len(signed))
     for j in range(dof):
         old_vals = [
-            float(r["signed_err"][j])
-            for r in old_records
-            if r.get("signed_err") and r["signed_err"][j] is not None
+            float(r["signed_err"][j]) for r in old_records if r.get("signed_err") and r["signed_err"][j] is not None
         ]
         new_vals = [
-            float(r["signed_err"][j])
-            for r in new_records
-            if r.get("signed_err") and r["signed_err"][j] is not None
+            float(r["signed_err"][j]) for r in new_records if r.get("signed_err") and r["signed_err"][j] is not None
         ]
         old_arr = np.asarray(old_vals, dtype=np.float64)
         new_arr = np.asarray(new_vals, dtype=np.float64)
