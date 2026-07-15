@@ -461,7 +461,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
 
 
 class StageAwareObjectCollisionBackend:
-    """Relocate the grasp-place cube obstacle after the object has been moved.
+    """Relocate the pick-place cube obstacle after the object has been moved.
 
     Preflight keeps a single static ``object`` box. After place, the real cube is
     at the target, but a spawn-only model falsely flags the return-to-home path

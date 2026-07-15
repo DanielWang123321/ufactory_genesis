@@ -7,7 +7,7 @@ import pytest
 from ufactory.cli.packaging import _backends, _model_and_hashes, _sdk_evidence_path
 from ufactory.config import ConfigError, load_runtime_config
 from ufactory.robots.runtime import get_robot_runtime_profile
-from ufactory.trajectory.packaging import (
+from ufactory.manipulation.packaging import (
     build_packaging_program,
     packaging_layout,
     packaging_obstacles,
@@ -29,7 +29,7 @@ def test_packaging_profiles_are_available_for_all_supported_robots(robot: str) -
     assert config.gripper is not None
     assert layout.object_size_m == pytest.approx((0.030, 0.030, 0.030))
     assert layout.object_mass_kg == pytest.approx(0.017)
-    assert layout.simulation_substeps == 32
+    assert layout.simulation_substeps == 8
 
 
 @pytest.mark.parametrize("robot", G2_ROBOTS)
@@ -48,8 +48,8 @@ def test_lite6_packaging_profile_uses_lite6_gripper_geometry_and_safe_box_center
 
     assert "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml" in config.sources
     assert layout.object_position_m == pytest.approx((0.200, 0.000, 0.015))
-    assert layout.target_position_m == pytest.approx((0.200, 0.220, 0.018))
-    assert layout.box_center_xy_m == pytest.approx((0.200, 0.220))
+    assert layout.target_position_m == pytest.approx((0.200, 0.280, 0.018))
+    assert layout.box_center_xy_m == pytest.approx((0.200, 0.280))
     assert layout.home_position_m == pytest.approx((0.200, 0.000, 0.200))
     assert layout.grasp_gap_m == pytest.approx(0.020)
     assert layout.grasp_link6_z_m == pytest.approx(0.0963)
@@ -202,15 +202,10 @@ def test_packaging_sdk_report_name_is_robot_specific() -> None:
 
 
 def test_packaging_sim_forwarding_preserves_selected_robot(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import ModuleType
-    import sys
-
     from ufactory.cli import packaging
 
     received: list[str] = []
-    fake = ModuleType("_packaging_showcase")
-    fake.main = lambda argv: received.extend(argv) or 0  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "_packaging_showcase", fake)
+    monkeypatch.setattr(packaging, "_packaging_simulation_main", lambda argv: received.extend(argv) or 0)
 
     class Args:
         robot = "lite6"
@@ -231,9 +226,9 @@ def test_packaging_sim_forwarding_preserves_selected_robot(monkeypatch: pytest.M
 @pytest.mark.integration
 @pytest.mark.parametrize("robot", ROBOTS)
 @pytest.mark.parametrize("executor", ("servo_j", "servo_cartesian"))
-def test_multi_robot_packaging_physics_single_cycle(robot: str, executor: str) -> None:
-    from examples._packaging_scene import build_packaging_scene
-    from examples.xarm6.xarm6_g2_showcase import (
+def test_multi_robot_packaging_physics_three_cycles(robot: str, executor: str) -> None:
+    from ufactory.manipulation.packaging.scene import build_packaging_scene
+    from ufactory.manipulation.packaging.simulation import (
         _cycle_failure_reason,
         init_showcase_robot,
         prepare_packaging_cycle,
@@ -256,16 +251,25 @@ def test_multi_robot_packaging_physics_single_cycle(robot: str, executor: str) -
             scene,
             runtime_config=config,
         )
-        prepare_packaging_cycle(scene, robot_entity, block, display_layout, context)
-        report = run_pick_place_cycle(
-            scene,
-            robot_entity,
-            block,
-            display_layout,
-            ctx=context,
-            robot_key=config.robot.key,
-            executor=executor,
-        )
+        for cycle in range(1, 4):
+            prepare_packaging_cycle(scene, robot_entity, block, display_layout, context)
+            report = run_pick_place_cycle(
+                scene,
+                robot_entity,
+                block,
+                display_layout,
+                ctx=context,
+                robot_key=config.robot.key,
+                executor=executor,
+            )
 
-    assert report is not None
-    assert _cycle_failure_reason(report, display_layout, task_layout) is None
+            assert report is not None
+            assert _cycle_failure_reason(report, display_layout, task_layout) is None, (
+                f"{robot}/{executor} cycle {cycle} failed"
+            )
+            phases = {phase.label: phase for phase in report.phases}
+            assert phases["lift"].obj_pos_mm[2] > (display_layout.table_top_z + 0.100) * 1000.0
+            # simulation_substeps=8 trades GPU cost for placement scatter; keep a
+            # soft physics gate rather than the prior 25 mm substeps=32 bar.
+            assert report.place_error_mm < 100.0
+            assert report.home_drift_mm < 10.0

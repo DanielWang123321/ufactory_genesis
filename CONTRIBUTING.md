@@ -19,9 +19,9 @@ pip install -e ".[sim,dev]"
 # Optional: Pinocchio for dynamics unit tests in the fast tier
 pip install -e ".[dynamics,dev]"
 
-# Optional: real robot / RL / showcase workflows
+# Optional: real robot / RL library APIs / showcase workflows
 pip install -e ".[real]"
-pip install -e ".[rl]"
+pip install -e ".[sim,rl]"   # ufactory.training (no public examples/rl tree in v0.2.7)
 pip install -e ".[showcase]"
 ```
 
@@ -29,10 +29,10 @@ The `[sim]` extra requires `genesis-world>=1.2.2` (see also `requirements.txt`),
 
 The `tests/` suite is for **contributors and maintainers**, not end-user onboarding. Library users should start from `examples/` and the dynamics CLI entry points.
 
-Local quality reports (not a substitute for pytest):
+Local quality reports (not a substitute for hardware evidence):
 
 ```bash
-project-check
+project-check fast
 ```
 
 ## Running Tests
@@ -56,7 +56,7 @@ pytest -m "not hardware"
 XARM_IP=192.168.1.xx pytest -m hardware
 ```
 
-Online real-policy deployment and random-action real modes have been hard-disabled since v0.2.5; see [SECURITY.md](SECURITY.md).
+Online real-policy deployment, random-action real modes, and the `ufactory.deploy` package were removed in v0.2.7; see [SECURITY.md](SECURITY.md).
 
 ### Markers
 
@@ -64,7 +64,7 @@ Online real-policy deployment and random-action real modes have been hard-disabl
 |--------|---------|
 | `hardware` | Real UFACTORY robot + xArm SDK (`XARM_IP`) |
 | `gpu` | In-process Genesis GPU simulation |
-| `integration` | Subprocess smoke tests (`examples/`, short RL runs) |
+| `integration` | Subprocess smoke tests (`examples/` public entries) |
 | `display` | Visual subprocess dry-run (`DISPLAY` required) |
 
 ### Layout
@@ -82,8 +82,7 @@ Tests are grouped under `tests/` by `ufactory` module:
 | `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
 | `tests/training/` | `ufactory.training` | `test_artifacts.py` |
 | `tests/visualization/` | `ufactory.visualization` | `test_pbr_scope.py` |
-| `tests/deploy/` | `ufactory.deploy` | `test_deploy.py` |
-| `tests/manipulation/` | `ufactory.manipulation` | `test_grasp_place_contract.py` |
+| `tests/manipulation/` | `ufactory.manipulation` | `test_pick_place_contract.py` |
 
 - Unmarked files — unit / mock tests (fast tier)
 - `test_*_smoke.py` — integration smoke tests
@@ -108,21 +107,20 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 |-----------|---------|
 | `ufactory/config/` | Versioned runtime YAML loading, validation, and hashes |
 | `ufactory/safety/` | SafetyGate, ApprovedProgram, collision/timing ports |
-| `ufactory/cli/` | Console entry points (`ufactory-grasp-place`, packaging) |
+| `ufactory/cli/` | Console entry points (`ufactory-pick-place`, packaging) |
 | `ufactory/quality/` | Local `project-check` reports |
 | `ufactory/robots/` | Robot registry, asset paths, and runtime profiles |
 | `ufactory/kinematics/` | Calibration and Genesis FK/IK validation helpers |
 | `ufactory/dynamics/` | Dynamics simulation, validation, reports, and CLIs |
 | `ufactory/hardware/` | xArm SDK/session helpers and hold-current observation |
 | `ufactory/grippers/` | Gripper command conversions and controllers |
-| `ufactory/trajectory/`, `ufactory/manipulation/` | Trajectory planning/preflight/execution and task helpers |
+| `ufactory/trajectory/`, `ufactory/manipulation/` | Trajectory planning/preflight/execution and reusable task helpers |
 | `ufactory/simulation/` | Shared Genesis runtime ownership |
-| `ufactory/training/` | Safe checkpoint YAML/manifest helpers |
+| `ufactory/training/` | RL task configuration, action scaling, and safe checkpoint artifacts |
 | `ufactory/visualization/` | GLB/PBR visualization helpers |
-| `ufactory/deploy/` | Policy helpers (online real policy hard-disabled since v0.2.5) |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
-| `examples/` | Usage examples (viewer, FK/IK verification, RL) |
+| `examples/` | Task-oriented visualization, kinematics, pick_place, and packaging entries |
 | `scripts/` | User-facing helper scripts |
 | `tests/` | Contributor pytest suite (not required for library use) |
 

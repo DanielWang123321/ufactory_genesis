@@ -6,13 +6,12 @@ import argparse
 from dataclasses import asdict
 import os
 from pathlib import Path
-import sys
 import time
 from typing import Any, Sequence
 
 import numpy as np
 
-from ufactory.cli.grasp_place import (
+from ufactory.cli.pick_place import (
     _connect,
     _ensure_cartesian_program_start,
     _ensure_program_start,
@@ -31,6 +30,14 @@ from ufactory.config import dump_runtime_config, load_runtime_config
 from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn
+from ufactory.manipulation.packaging.core import (
+    OBJECT_RELOCATED_STAGES,
+    build_packaging_program,
+    packaging_layout,
+    packaging_obstacles,
+    packaging_scene_sha256,
+    validate_payload_box_clearance,
+)
 from ufactory.robots.registry import robot_cli_choices
 from ufactory.safety import validate_sdk_simulation
 from ufactory.safety.adapters import PinocchioCollisionBackend, PinocchioKinematicsBackend
@@ -40,30 +47,16 @@ from ufactory.simulation import GenesisRuntimeManager
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
-from ufactory.trajectory.packaging import (
-    OBJECT_RELOCATED_STAGES,
-    build_packaging_program,
-    packaging_layout,
-    packaging_obstacles,
-    packaging_scene_sha256,
-    validate_payload_box_clearance,
-)
 from ufactory.trajectory.preflight import create_safety_gate
 
 
-def _example_paths() -> Path:
-    root = Path(__file__).resolve().parents[2]
-    examples = root / "examples"
-    value = str(examples)
-    if value not in sys.path:
-        sys.path.insert(0, value)
-    return examples
-
-
 def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = False) -> Any:
-    _example_paths()
-    from _packaging_scene import build_packaging_scene
-    from _packaging_showcase import _trajectory_context, init_showcase_robot, stiffen_gripper_mimic_constraints
+    from ufactory.manipulation.packaging.scene import build_packaging_scene
+    from ufactory.manipulation.packaging.simulation import (
+        _trajectory_context,
+        init_showcase_robot,
+        stiffen_gripper_mimic_constraints,
+    )
 
     scene, robot, block, display_layout = build_packaging_scene(
         sim_dt=1.0 / float(config.motion.rate_hz),
@@ -121,10 +114,13 @@ def _backends(config: Any, urdf: Path) -> tuple[Any, Any]:
     return kinematics, collision
 
 
-def _run_sim(args: argparse.Namespace) -> int:
-    _example_paths()
-    from _packaging_showcase import main as showcase_main
+def _packaging_simulation_main(argv: list[str]) -> int:
+    from ufactory.manipulation.packaging.simulation import main as packaging_simulation_main
 
+    return int(packaging_simulation_main(argv))
+
+
+def _run_sim(args: argparse.Namespace) -> int:
     sim_args = [
         "--robot",
         getattr(args, "robot", "xarm6"),
@@ -143,7 +139,7 @@ def _run_sim(args: argparse.Namespace) -> int:
         sim_args.extend(("--config", str(args.config)))
     if args.capture_keyframes:
         sim_args.append("--capture-keyframes")
-    return int(showcase_main(sim_args))
+    return _packaging_simulation_main(sim_args)
 
 
 def _positive_cycles(value: str) -> int:

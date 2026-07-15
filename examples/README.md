@@ -1,130 +1,193 @@
-# examples/
+# Task-oriented examples
 
 [中文](README_cn.md)
 
-Catalog of example scripts. For install, grasp-place modes, and real-robot safety, see the repository root [README.md](../README.md).
+v0.2.7 organizes public examples by task. Shared implementations live in `ufactory`; these scripts only parse user-facing arguments and start the requested workflow.
 
-## Quick Start
+## Prerequisites
 
-| File | Description |
-|------|-------------|
-| `view_robot_glb.py` | Unified GLB viewer for all robot profiles and end effectors |
+1. Clone this repository and run commands from the repository root.
+2. Editable install (source-only; wheels/sdists are unsupported):
 
 ```bash
-python examples/view_robot_glb.py --robot xarm6
+pip install -e ".[sim]"
+
+# Optional:
+#   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
+#   pip install -e ".[showcase]"  # packaging box textures (scipy)
 ```
 
-## Robot Visualization
+3. Set a writable Numba cache directory before Genesis-backed runs:
 
-Per-robot wrappers are equivalent to `view_robot_glb.py --robot <key>`:
+```bash
+export NUMBA_CACHE_DIR=~/.cache/numba
+```
 
-| Directory | Preview command |
-|-----------|-----------------|
-| `xarm5/` | `python examples/xarm5/view_xarm5_glb.py` |
-| `xarm6/` | `python examples/xarm6/view_xarm6_glb.py` |
-| `xarm7/` | `python examples/xarm7/view_xarm7_glb.py` |
-| `lite6/` | `python examples/lite6/view_lite6_glb.py` |
-| `uf850/` | `python examples/uf850/view_uf850_glb.py` |
+4. Supported `--robot` keys: `xarm5`, `xarm6`, `xarm7`, `uf850`, `lite6`.
 
-## Gripper Demos
+Public directories in this release:
 
-| Directory | Description |
-|-----------|-------------|
-| `gripper_g2/` | Movable Gripper G2 visual demo |
-| `bio_gripper_g2/` | Movable Bio Gripper G2 visual demo |
-| `lite6_gripper/` | Movable Lite6 parallel gripper visual demo |
+| Directory | Purpose |
+|---|---|
+| `visualization/` | GLB robot and gripper viewers |
+| `kinematics/` | FK/IK / robot verification wrappers |
+| `pick_place/` | Multi-robot pick-place entry + optional overlay |
+| `packaging/` | Multi-robot packaging showcase entry + optional overlay |
 
-## Robot Validation
+RL example scripts are not part of the v0.2.7 public tree. Library helpers remain under `ufactory.training` when `.[rl]` is installed.
 
-| File | Description |
-|------|-------------|
-| `verify_robot.py` | Generic FK/PD smoke test for all supported robots |
-| `fk_verify_robot.py` | Generic FK validation, including optional real-robot comparison |
-| `ik_verify_robot.py` | Generic IK validation, including optional real-robot comparison |
-| `packaging_showcase.py` | YAML-driven five-robot packaging entry |
+## Visualization
 
-Dynamics validation uses installed console scripts:
+```bash
+# Bare arm
+python examples/visualization/view_robot.py --robot xarm6
+
+# Gripper G2 (static combo)
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
+
+# Movable fingers + open/close demo
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo
+
+# Bio Gripper G2 / Lite6 grippers
+python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
+python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
+python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
+
+# Standalone gripper viewers
+python examples/visualization/view_gripper_g2.py
+python examples/visualization/view_bio_gripper_g2.py
+python examples/visualization/view_lite6_gripper.py
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--robot` | Required profile key |
+| `--gripper-g2` / `--bio-gripper-g2` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
+| `--movable` | Per-link movable gripper meshes (requires a supported gripper flag) |
+| `--gripper-demo` | Cycle open/close (requires `--movable`) |
+| `--pd` | Smooth joint-motion demo (~0.873 rad/s), visual only |
+| `--show-tcp` | Red flange TCP marker (hidden by default) |
+| `--diagnose` | Headless STL/GLB link-pose diagnostic |
+| `--headless` | No viewer window |
+
+## Kinematics
+
+```bash
+# Offline robot / asset sanity (no controller)
+python examples/kinematics/verify_robot.py --robot xarm6
+
+# Compare Genesis URDF FK/IK against the xArm SDK (requires network + IP)
+python examples/kinematics/verify_fk.py --robot xarm6 --ip <ip>
+python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
+```
+
+Dynamics validation stays on the console commands:
 
 ```bash
 dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-hardware-check --robot xarm6 --ip <ip>
+dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
+dynamics-sim-collision-check --robot xarm6 --ip <ip>
 ```
 
-## Trajectory Grasp-Place
+## Pick-place
 
-Thin wrappers around the installed `ufactory-grasp-place` CLI (`ufactory.cli.grasp_place`). Full mode/executor docs live in the root [README.md](../README.md#trajectory-grasp-place).
+`examples/pick_place/run.py` delegates to the stable `ufactory-pick-place` console command. Both forms accept the same flags.
 
-| File | Description |
-|------|-------------|
-| `xarm5/xarm5_grasp_place_traj.py` | Wrapper for `--robot xarm5` |
-| `xarm6/xarm6_grasp_place_traj.py` | Wrapper for `--robot xarm6` |
-| `xarm7/xarm7_grasp_place_traj.py` | Wrapper for `--robot xarm7` |
-| `uf850/uf850_grasp_place_traj.py` | Wrapper for `--robot uf850` |
-| `lite6/lite6_grasp_place_traj.py` | Wrapper for `--robot lite6` |
+| Flag | Values / notes |
+|------|----------------|
+| `--robot` | Required: `xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
+| `--mode` | Required: `sim` (Genesis), `dry-run` (offline preflight, no controller), `sdk-sim` (controller simulation), `real` |
+| `--executor` | Required: `servo_j` or `servo_cartesian` |
+| `--config` | Optional strict partial overlay YAML |
+| `--print-config` | Print resolved runtime YAML and exit |
+| `--ip` | Controller IP (or set `XARM_IP`) for `sdk-sim` / `real` |
+| `--calibration` | Exact per-unit kinematics YAML (required for real) |
+| `--confirm-real` | Explicit confirmation gate for `--mode real` |
+| `--visual` | `sim`: force Genesis viewer; `real`: kinematic mirror (not for dry-run/sdk-sim) |
+| `--report` | Optional report output path |
 
 ```bash
-python examples/xarm6/xarm6_grasp_place_traj.py --mode dry-run --executor servo_j
-# Equivalent:
-# ufactory-grasp-place --robot xarm6 --mode dry-run --executor servo_j
+# Resolve configuration only
+python examples/pick_place/run.py \
+  --robot xarm6 --mode dry-run --executor servo_j --print-config
 
-# Real + kinematic mirror (see root README):
-# ufactory-grasp-place --robot xarm6 --mode real --executor servo_j \
-#   --calibration path/to/exact.yaml --confirm-real --visual
+# Offline predictive preflight
+python examples/pick_place/run.py \
+  --robot xarm6 --mode dry-run --executor servo_j
+
+# Genesis simulation with viewer
+python examples/pick_place/run.py \
+  --robot lite6 --mode sim --executor servo_cartesian --visual
+
+# Optional overlay (only listed fields override assets/configs/runtime)
+python examples/pick_place/run.py \
+  --robot xarm6 --mode dry-run --executor servo_j \
+  --config examples/pick_place/runtime.example.yaml
+
+# Real motion (exact calibration + confirmation required)
+XARM_IP=<ip> python examples/pick_place/run.py \
+  --robot xarm6 --mode real --executor servo_j \
+  --calibration path/to/exact.yaml --confirm-real
 ```
 
-## xArm 6 — Reference Implementation
+`runtime.example.yaml` is a strict partial overlay. Omitted robot, geometry, motion, safety, and simulation values continue to resolve from `assets/configs/runtime`.
 
-xArm 6 has the broadest example coverage.
+## Packaging
 
-### Kinematics
-
-| File | Description |
-|------|-------------|
-| `xarm6/verify_xarm6.py` | FK + PD smoke test |
-| `xarm6/fk_verify.py` | Compatibility wrapper; default `--robot xarm6` |
-| `xarm6/ik_verify.py` | Compatibility wrapper; default `--robot xarm6` |
-
-### Reinforcement Learning
-
-| File | Description |
-|------|-------------|
-| `xarm6/xarm6_reach_env.py` / `_train.py` | Reach task environment and training |
-| `xarm6/xarm6_reach_deploy.py` | Reach deploy helper: align / offline preflight remain available; **v0.2.5 hard-disables** online real-policy `deploy` and `smoke-random` modes (see [SECURITY.md](../SECURITY.md)) |
-| `xarm6/xarm6_grasp_place_env.py` / `_train.py` / `_eval.py` | Grasp-place RL task |
-
-### Packaging Showcase
-
-| File | Description |
-|------|-------------|
-| `packaging_showcase.py` | Generic CLI wrapper for xArm5/6/7, UF850, and Lite6 |
-| `_packaging_showcase.py` | Shared physical execution implementation (internal) |
-| `xarm6/xarm6_g2_showcase.py` | Compatibility wrapper selecting `--robot xarm6` |
-
-The shared YAML defines the cube, table, box, path, timing, contact policy, and success thresholds. Lite6 adds a robot-specific task overlay and its own gripper geometry. All five robots support simulation, dry-run, and SDK simulation with both executors. Full real packaging is enabled only for xArm6 + G2 and Lite6 + Lite6 Gripper; the other profiles reject real mode before connection.
+Generate box textures once before the first packaging run (requires `.[showcase]`):
 
 ```bash
-# Simulation defaults to one cycle; finite repetition is explicit
-python examples/packaging_showcase.py --robot lite6 --mode sim --executor servo_j
-python examples/packaging_showcase.py --robot lite6 --mode sim --executor servo_j --cycles 3
-python examples/packaging_showcase.py --robot xarm7 --mode sim --executor servo_cartesian
-
-python examples/packaging_showcase.py --robot uf850 --mode dry-run --executor servo_j
-python examples/packaging_showcase.py --robot xarm5 --mode dry-run --executor servo_cartesian
-XARM_IP=<ip> python examples/packaging_showcase.py --robot lite6 --mode real \
-  --executor servo_j --calibration path/to/exact.yaml --confirm-real
+python scripts/generate_showcase_textures.py
 ```
 
-## Internal Modules
+`examples/packaging/run.py` delegates to `ufactory-packaging-showcase`.
 
-Files with a `_` prefix are shared internals, not user entry points:
+| Flag | Values / notes |
+|------|----------------|
+| `--robot` | Default `xarm6`; all five families supported in sim/dry-run/sdk-sim |
+| `--mode` | Default `sim`; same four modes as pick-place |
+| `--executor` | Default `servo_j`; also `servo_cartesian` |
+| `--cycles N` | Exact simulation cycle count (default 1) |
+| `--speed` | Simulation playback multiplier (`>1` is faster) |
+| `--table-height` | Simulation display height only; base-frame geometry unchanged |
+| `--config` / `--print-config` / `--ip` / `--calibration` / `--confirm-real` / `--visual` / `--report` | Same roles as pick-place |
 
-| File | Purpose |
-|------|---------|
-| `_bootstrap.py` | Adds the project root to `sys.path` |
-| `_robot_viewer.py` | Shared Genesis GLB viewer core |
-| `_gripper_demo.py` | Gripper G2 open/close control |
-| `_bio_gripper_g2_demo.py` | Bio Gripper G2 open/close control |
-| `_lite6_gripper_demo.py` | Lite6 gripper open/close control |
-| `_packaging_scene.py` | Showcase scene builder |
-| `_grasp_place_traj.py` | Legacy shared module (tests still import); user path is `ufactory-grasp-place` |
-| `_standalone_gripper_viewer.py` | Standalone gripper viewer helper |
+```bash
+# One simulation cycle, then hold the final frame
+python examples/packaging/run.py \
+  --robot xarm6 --mode sim --executor servo_j
+
+# Three-cycle regression
+python examples/packaging/run.py \
+  --robot lite6 --mode sim --executor servo_j --cycles 3
+
+# Offline preflight / controller simulation
+python examples/packaging/run.py \
+  --robot xarm7 --mode dry-run --executor servo_j
+python examples/packaging/run.py \
+  --robot lite6 --mode sdk-sim --executor servo_cartesian \
+  --ip <ip> --calibration path/to/exact.yaml
+
+# Real packaging is enabled only for xArm6 + G2 and Lite6 + Lite6 Gripper
+XARM_IP=<ip> python examples/packaging/run.py \
+  --robot lite6 --mode real --executor servo_j \
+  --calibration path/to/exact.yaml --confirm-real
+
+# Optional overlay
+python examples/packaging/run.py \
+  --robot xarm6 --mode sim --executor servo_j \
+  --config examples/packaging/runtime.example.yaml
+```
+
+Real mode never loops. xArm5, xArm7, and UF850 `--mode real` fail before controller connection until a real gripper path is enabled.
+
+## Migration from v0.2.6
+
+| Old category | v0.2.7 path |
+|---|---|
+| `examples/view_robot_glb.py`, per-robot viewers | `examples/visualization/view_robot.py --robot <key>` |
+| Root/per-robot FK and IK wrappers | `examples/kinematics/verify_{robot,fk,ik}.py` |
+| Per-robot pick-place wrappers | `examples/pick_place/run.py --robot <key>` |
+| Root/xArm6 packaging wrappers | `examples/packaging/run.py --robot <key>` |
+
+Old paths, bootstrap files, and underscore-prefixed example internals were removed without compatibility wrappers. RL example entry points are not published in this release.

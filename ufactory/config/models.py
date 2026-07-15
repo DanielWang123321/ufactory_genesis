@@ -147,7 +147,7 @@ class TaskProfile:
 
 @dataclass(frozen=True)
 class GraspObjectSpec:
-    """Shared physical specification for the grasp-place reference object."""
+    """Shared physical specification for the pick-place reference object."""
 
     size_m: tuple[float, float, float]
     mass_kg: float
@@ -173,7 +173,7 @@ def resolve_manipulation_object_spec(config: ResolvedRuntimeConfig | TaskProfile
     """Resolve the shared manipulation-object contract from task configuration."""
 
     task = config.task if isinstance(config, ResolvedRuntimeConfig) else config
-    if task.name not in {"grasp_place", "packaging_showcase"}:
+    if task.name not in {"pick_place", "packaging_showcase"}:
         raise ValueError(f"task {task.name!r} has no manipulation-object specification")
     size = tuple(float(value) for value in task.parameters["object_size_m"])
     return GraspObjectSpec(
@@ -182,12 +182,12 @@ def resolve_manipulation_object_spec(config: ResolvedRuntimeConfig | TaskProfile
     )
 
 
-def resolve_grasp_object_spec(config: ResolvedRuntimeConfig | TaskProfile) -> GraspObjectSpec:
-    """Backward-compatible grasp-place object resolver."""
+def resolve_pick_place_object_spec(config: ResolvedRuntimeConfig | TaskProfile) -> GraspObjectSpec:
+    """Resolve the pick-place reference-object specification."""
 
     task = config.task if isinstance(config, ResolvedRuntimeConfig) else config
-    if task.name != "grasp_place":
-        raise ValueError(f"task {task.name!r} has no grasp-place object specification")
+    if task.name != "pick_place":
+        raise ValueError(f"task {task.name!r} has no pick-place object specification")
     return resolve_manipulation_object_spec(task)
 
 

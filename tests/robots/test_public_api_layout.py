@@ -26,8 +26,9 @@ CANONICAL_MODULES = (
     "ufactory.grippers.bio_g2",
     "ufactory.trajectory",
     "ufactory.manipulation",
+    "ufactory.manipulation.packaging",
+    "ufactory.training",
     "ufactory.visualization",
-    "ufactory.deploy",
 )
 
 REMOVED_MODULES = (
@@ -43,6 +44,7 @@ REMOVED_MODULES = (
     "ufactory.dynamics_validation",
     "ufactory.dynamics_static_analysis",
     "ufactory.dynamics_verify",
+    "ufactory.deploy",
 )
 
 

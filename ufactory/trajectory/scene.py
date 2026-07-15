@@ -1,7 +1,7 @@
-"""Scene construction for the trajectory grasp-place pipeline.
+"""Scene construction for the trajectory pick-place pipeline.
 
-Robot-generic Genesis scene builder for the grasp-place trajectory pipeline
-(originally written for xArm6 scripted grasp-place demos). Returns a typed
+Robot-generic Genesis scene builder for the pick-place trajectory pipeline
+(originally written for xArm6 scripted pick-place demos). Returns a typed
 context (entities, dof indices, PD gains, finger offsets, key heights) reused
 across xArm5/6/7, UF850 (Gripper G2) and Lite6 (parallel gripper). Single
 environment, robot base at table height.
@@ -18,7 +18,7 @@ import torch
 
 import genesis as gs
 from genesis.utils.geom import xyz_to_quat
-from ufactory.config import load_runtime_config, resolve_grasp_object_spec
+from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
@@ -84,7 +84,7 @@ RIGID_CONSTRAINT_TIMECONST = 0.005
 MIMIC_CONSTRAINT_SOL_PARAMS = (0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0)
 
 # Painted wood block and silicone fingertip pads. Size and mass come from the
-# shared grasp-place runtime configuration; contact stiffness remains code policy.
+# shared pick-place runtime configuration; contact stiffness remains code policy.
 OBJ_FRICTION = 1.0
 FINGER_FRICTION = 1.2
 LITE6_OBJ_FRICTION = OBJ_FRICTION
@@ -192,7 +192,7 @@ def _robot_defaults(robot_key: str) -> dict:
     runtime = get_robot_runtime_profile(robot_key)
     config = load_runtime_config(runtime.model.key)
     params = config.task.parameters
-    object_spec = resolve_grasp_object_spec(config)
+    object_spec = resolve_pick_place_object_spec(config)
     gripper_profile = config.gripper
     if gripper_profile is None:
         raise ValueError(f"{runtime.model.key} has no configured gripper geometry")
@@ -394,19 +394,11 @@ def build_scene(
         ),
     )
 
-    robot_morph_kwargs = {}
-    if gripper.family == "lite6":
-        # The Lite6 gripper finger is L-shaped. Genesis's default processed
-        # convex proxy bridges that concavity and contacts the cube top before
-        # the visible/URDF STL pad reaches the cube side, so keep the raw STL
-        # surface for this gripper.
-        robot_morph_kwargs.update(convexify=False, decimate=False, watertighten=None)
     robot_morph = gs.morphs.URDF(
         file=robot_urdf_path,
         pos=robot_base,
         fixed=True,
         requires_jac_and_IK=True,
-        **robot_morph_kwargs,
     )
     if use_glb_visual:
         with glb_pbr_surfaces():

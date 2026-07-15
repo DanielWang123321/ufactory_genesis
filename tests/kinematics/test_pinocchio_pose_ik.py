@@ -99,7 +99,7 @@ def test_genesis_ik_quaternion_is_converted_from_shared_xyzw_contract():
 
 
 def test_uf850_gripper_down_shadow_stays_below_joint_acceleration_limit():
-    from ufactory.cli.grasp_place import _build_program, _model_and_hashes
+    from ufactory.cli.pick_place import _build_program, _model_and_hashes
     from ufactory.trajectory.preflight import create_safety_gate
 
     config, kinematics = _kinematics("uf850")

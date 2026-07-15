@@ -10,14 +10,6 @@ from pathlib import Path
 _TESTS_ROOT = Path(__file__).resolve().parents[1]
 if str(_TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_TESTS_ROOT))
-from conftest import PROJECT_ROOT
-
-EXAMPLES_ROOT = PROJECT_ROOT / "examples"
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-if str(EXAMPLES_ROOT) not in sys.path:
-    sys.path.insert(0, str(EXAMPLES_ROOT))
-
 from ufactory.grippers.lite6 import (  # noqa: E402
     LITE6_GRIPPER_SIM_CLOSED_DRIVE,
     LITE6_GRIPPER_SIM_OPEN_DRIVE,
@@ -125,7 +117,7 @@ def _load_robot_viewer(monkeypatch):
         import genesis  # noqa: F401
     except ModuleNotFoundError:
         monkeypatch.setitem(sys.modules, "genesis", types.SimpleNamespace())
-    return importlib.import_module("_robot_viewer")
+    return importlib.import_module("ufactory.visualization.robot_viewer")
 
 
 def test_gripper_demo_without_pd_holds_arm_kinematically(monkeypatch):
@@ -182,7 +174,7 @@ def test_kinematic_step_reholds_before_visual_update(monkeypatch):
 
 
 def test_lite6_viewer_gripper_demo_uses_reversed_open_close_semantics():
-    lite6_demo = importlib.import_module("_lite6_gripper_demo")
+    lite6_demo = importlib.import_module("ufactory.visualization.lite6_gripper_viewer")
 
     assert lite6_demo.LITE6_GRIPPER_CLOSE == LITE6_GRIPPER_SIM_CLOSED_DRIVE
     assert lite6_demo.LITE6_GRIPPER_OPEN == LITE6_GRIPPER_SIM_OPEN_DRIVE

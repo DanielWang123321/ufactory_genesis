@@ -45,10 +45,11 @@ def _require_xarm_ip() -> str:
 @pytest.mark.parametrize(
     "script,extra_args",
     [
-        ("examples/xarm6/verify_xarm6.py", []),
-        ("examples/xarm6/xarm6_grasp_place_traj.py", ["--headless", "--rate", "50"]),
-        ("examples/xarm6/xarm6_reach_train.py", ["-B", "1", "--max_iterations", "3"]),
-        ("examples/xarm6/xarm6_grasp_place_train.py", ["-B", "1", "--max_iterations", "2"]),
+        ("examples/kinematics/verify_robot.py", ["--robot", "xarm6"]),
+        (
+            "examples/pick_place/run.py",
+            ["--robot", "xarm6", "--mode", "sim", "--executor", "servo_cartesian"],
+        ),
     ],
 )
 def test_xarm6_smoke(script: str, extra_args: list[str]):
@@ -58,19 +59,6 @@ def test_xarm6_smoke(script: str, extra_args: list[str]):
         f"stdout:\n{result.stdout[-4000:]}\n"
         f"stderr:\n{result.stderr[-4000:]}"
     )
-    if script == "examples/xarm6/xarm6_grasp_place_train.py":
-        cfgs_path = PROJECT_ROOT / "logs" / "xarm6-grasp-place-joint-g2" / "config.yaml"
-        metrics_path = PROJECT_ROOT / "logs" / "xarm6-grasp-place-joint-g2" / "metrics.csv"
-        assert cfgs_path.exists()
-        assert metrics_path.exists()
-        from ufactory.training import load_training_config
-
-        env_cfg = load_training_config(cfgs_path)["env"]
-        assert env_cfg["num_envs"] == 1
-        assert env_cfg["num_obs"] == 30
-        assert env_cfg["num_actions"] == 7
-        assert env_cfg["action_scale"] == pytest.approx(0.01)
-        assert env_cfg["max_joint_delta_rad"] == pytest.approx(0.01)
 
 
 @pytest.mark.integration
@@ -117,12 +105,12 @@ def test_dynamics_verify_real():
 @pytest.mark.hardware
 def test_fk_verify():
     ip = _require_xarm_ip()
-    result = _run_example("examples/xarm6/fk_verify.py", ["--ip", ip])
+    result = _run_example("examples/kinematics/verify_fk.py", ["--robot", "xarm6", "--ip", ip])
     assert result.returncode == 0, result.stderr[-2000:]
 
 
 @pytest.mark.hardware
 def test_ik_verify():
     ip = _require_xarm_ip()
-    result = _run_example("examples/xarm6/ik_verify.py", ["--ip", ip], timeout=900)
+    result = _run_example("examples/kinematics/verify_ik.py", ["--robot", "xarm6", "--ip", ip], timeout=900)
     assert result.returncode == 0, result.stderr[-2000:]

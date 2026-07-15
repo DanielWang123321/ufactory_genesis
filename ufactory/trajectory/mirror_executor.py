@@ -362,7 +362,7 @@ class KinematicCarryTracker:
     """Kinematically "attaches" ``ctx.obj`` to the gripper once closed near it.
 
     Mirrors the ``carry_offset``/``carry_quat`` latch technique already proven
-    in ``examples/xarm6/xarm6_g2_showcase.py``: once attached, the object's
+    in the reusable packaging simulation: once attached, the object's
     pose is forcibly slaved to the finger-center frame every tick (no contact
     physics), then handed back to the physics engine on release. This avoids
     coupling a kinematically-teleported gripper to real contact dynamics,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.6"
+version = "0.2.7"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -79,7 +79,7 @@ dynamics-sim-collision-check = "ufactory.dynamics.cli:cli_sim_collision_check"
 dynamics-hardware-check = "ufactory.dynamics.cli:cli_hardware_check"
 dynamics-report-compare = "ufactory.dynamics.cli:cli_report_compare"
 observe-hold-current = "ufactory.hardware.observe:cli_observe_hold_current"
-ufactory-grasp-place = "ufactory.cli.grasp_place:main"
+ufactory-pick-place = "ufactory.cli.pick_place:main"
 ufactory-packaging-showcase = "ufactory.cli.packaging:main"
 project-check = "ufactory.quality.project_check:main"
 
@@ -92,7 +92,6 @@ relative_files = true
 # sim/sdk-sim/hardware layers instead of being imported by fast tests.
 omit = [
     "ufactory/cli/*",
-    "ufactory/deploy/*",
     "ufactory/hardware/*",
     "ufactory/quality/*",
     "ufactory/safety/adapters/*",
@@ -105,6 +104,9 @@ omit = [
     "ufactory/grippers/lite6.py",
     "ufactory/kinematics/genesis.py",
     "ufactory/kinematics/validation.py",
+    "ufactory/manipulation/packaging/drop.py",
+    "ufactory/manipulation/packaging/scene.py",
+    "ufactory/manipulation/packaging/simulation.py",
     "ufactory/robots/paths.py",
     "ufactory/robots/runtime.py",
     "ufactory/trajectory/backends.py",
@@ -113,6 +115,11 @@ omit = [
     "ufactory/trajectory/real_executor.py",
     "ufactory/trajectory/scene.py",
     "ufactory/trajectory/sim_executor.py",
+    "ufactory/visualization/bio_gripper_g2_viewer.py",
+    "ufactory/visualization/gripper_g2_viewer.py",
+    "ufactory/visualization/lite6_gripper_viewer.py",
+    "ufactory/visualization/robot_viewer.py",
+    "ufactory/visualization/standalone_gripper.py",
 ]
 
 [tool.coverage.report]
@@ -129,7 +136,6 @@ ignore = ["E402", "E741"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
-"examples/grasp_place_env.py" = ["F401"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -140,7 +146,7 @@ check_untyped_defs = true
 
 # Source delivery policy: only a cloned repository plus ``pip install -e .``
 # is supported. Wheels/sdists and remote asset downloads are intentionally not
-# part of v0.2.6; RepositoryAssetStore fails closed outside this layout.
+# part of v0.2.7; RepositoryAssetStore fails closed outside this layout.
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -153,7 +159,7 @@ norecursedirs = ["dev"]
 markers = [
     "hardware: tests requiring xArm SDK or real robot network",
     "gpu: in-process Genesis GPU simulation",
-    "integration: end-to-end subprocess smoke tests (examples, short RL runs)",
+    "integration: end-to-end subprocess smoke tests (examples)",
     "display: subprocess tests requiring DISPLAY for visual dry-run",
     "slow: long-running dev/ref_scripts capture tests",
 ]

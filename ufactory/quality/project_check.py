@@ -1,4 +1,4 @@
-"""Local quality checks for v0.2.6 (no remote CI required)."""
+"""Local quality checks for v0.2.7 (no remote CI required)."""
 
 from __future__ import annotations
 
@@ -258,8 +258,8 @@ class ProjectCheck:
                 result.data["snapshot_report"] = json.loads(report_path.read_text(encoding="utf-8"))
 
     def release(self, version: str | None) -> None:
-        if version != "0.2.6":
-            self.results.append(CheckResult("release-version", "FAIL", 0.0, reason="--version must be 0.2.6"))
+        if version != "0.2.7":
+            self.results.append(CheckResult("release-version", "FAIL", 0.0, reason="--version must be 0.2.7"))
         else:
             self.results.append(CheckResult("release-version", "PASS", 0.0))
         if self.dirty:

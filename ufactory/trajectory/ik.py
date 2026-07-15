@@ -1,6 +1,6 @@
 """Host-side IK compilation for trajectory programs.
 
-The grasp-place real ``servo_j`` path keeps the Cartesian waypoint program as
+The pick-place real ``servo_j`` path keeps the Cartesian waypoint program as
 the source of truth, then compiles each MoveL tick into an explicit joint
 target using the same Genesis link6 IK already used by sim and mirror replay.
 

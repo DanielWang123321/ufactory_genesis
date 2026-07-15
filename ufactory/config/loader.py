@@ -185,7 +185,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
     task_parameters = task_data["parameters"]
     if not isinstance(task_parameters, Mapping):
         raise ConfigError("task.parameters must be a mapping")
-    if task_name in {"grasp_place", "packaging_showcase"}:
+    if task_name in {"pick_place", "packaging_showcase"}:
         object_size = _tuple_floats(
             task_parameters["object_size_m"],
             field="task.parameters.object_size_m",
@@ -195,7 +195,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             raise ConfigError("task.parameters.object_size_m values must be positive")
         _positive(task_parameters["object_mass_kg"], field="task.parameters.object_mass_kg")
         position_fields = ["fixed_object_position_m", "fixed_target_position_m", "default_ee_position_m"]
-        if task_name == "grasp_place":
+        if task_name == "pick_place":
             position_fields.extend(
                 ("object_spawn_lower_m", "object_spawn_upper_m", "target_spawn_lower_m", "target_spawn_upper_m")
             )
@@ -378,7 +378,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
 def load_runtime_config(
     robot_key: str,
     *,
-    task: str = "grasp_place",
+    task: str = "pick_place",
     config_path: str | Path | None = None,
     overrides: Mapping[str, Any] | None = None,
     asset_store: RepositoryAssetStore | None = None,

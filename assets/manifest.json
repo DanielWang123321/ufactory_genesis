@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "manifest_version": "0.2.6",
+  "manifest_version": "0.2.7",
   "required_paths": [
     "assets/configs/runtime/motion/default.yaml",
     "assets/configs/runtime/safety/default.yaml",
     "assets/configs/runtime/simulation/default.yaml",
-    "assets/configs/runtime/tasks/grasp_place.yaml",
+    "assets/configs/runtime/tasks/pick_place.yaml",
     "assets/configs/runtime/tasks/packaging_showcase.yaml",
     "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml",
     "assets/configs/runtime/tasks/reach.yaml",
-    "assets/configs/runtime/tasks/robots/lite6_grasp_place.yaml",
+    "assets/configs/runtime/tasks/robots/lite6_pick_place.yaml",
     "assets/configs/runtime/safety/robots/lite6.yaml",
     "assets/configs/runtime/robots/xarm5_1305.yaml",
     "assets/configs/runtime/robots/xarm6_1305.yaml",
@@ -26,12 +26,12 @@
     "assets/configs/runtime/motion/default.yaml": "ce961bb044f0c95a803fac693bffb7c75b3e78df61ce90e4ab2644e79be73f03",
     "assets/configs/runtime/safety/default.yaml": "29fd72f5863759e2b9167b34fe25723868fc5a633cf1837e7776e12112d71c06",
     "assets/configs/runtime/simulation/default.yaml": "c275f024e6360bb5bd81d23f3c485c7d1e745bb23b78266380f5896b2b587214",
-    "assets/configs/runtime/tasks/grasp_place.yaml": "da2c77c3c4ae3e7a59612b90a622ebf45dfc24ae6047356d7e35924a2de4391a",
-    "assets/configs/runtime/tasks/packaging_showcase.yaml": "80706c1910cd62bebb93372fd5ec9c9bb211b2e14d7ea19617388c0fb5ff6489",
-    "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "cbb1e3051daca5b886f2472cb0ef2396987fe6bcb10e0c63cdf2e7cfbf49d7b3",
+    "assets/configs/runtime/tasks/pick_place.yaml": "c881b4aa78e82e349db65b034924f7439c72349a539d2dfbd2307b30844b0b63",
+    "assets/configs/runtime/tasks/packaging_showcase.yaml": "c40d3ff4df580b8108d7228435618602615e36e24ad746b48b28a43ff8b1a451",
+    "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "6c3b455f0a6f43186376a72caa605b65b426f993b8a5b1cebdc79f1925aff5b7",
     "assets/configs/runtime/tasks/reach.yaml": "f8627924a78cd73f3885c80cb672b5e6bac478603f245fd05bba5f48d72fed36",
-    "assets/configs/runtime/tasks/robots/lite6_grasp_place.yaml": "5bb90db80f2ec2bcd727f189c1fa547b27be992a257694be2da2b3ad937a0d00",
-    "assets/configs/runtime/safety/robots/lite6.yaml": "c0c3363694d09f6dc3cf3d8636e8a4083e9f4fe2e91319c00306397613991f60",
+    "assets/configs/runtime/tasks/robots/lite6_pick_place.yaml": "ba25ff726165172833aa0ae2aa58ce10bc1286069b0598de8d47e3843bdde3a1",
+    "assets/configs/runtime/safety/robots/lite6.yaml": "ce0286385ed3c5b1f809e9c45243bf22f4f9e166df657005c861cdfbdc7a1ecd",
     "assets/configs/runtime/robots/xarm5_1305.yaml": "7898771ef766ef175b367a6092f45933897337fea100997f8a2c4cd9fa6f2377",
     "assets/configs/runtime/robots/xarm6_1305.yaml": "b2c51b92237e1d5d9ee5d749a09fa29a39ff609220625be244c553167ce734e7",
     "assets/configs/runtime/robots/xarm7_1305.yaml": "f9fe4255a9ef5c4ea1d19ba354069dc5cd556b92e531473c5e0e5e1c5f0f9f05",
@@ -41,6 +41,6 @@
     "assets/urdf/xarm6/xarm6_1305_g2_movable_visual.urdf": "a5516832bbee90118bf789920d51201cb08acf07169ca4c74c94c5611f7eb23b",
     "assets/urdf/xarm7/xarm7_1305_g2_movable_visual.urdf": "03cc080348c7c745ebe9b0e47b671c258f501872c7699fecbcea19aa44fb88ea",
     "assets/urdf/uf850/uf850_g2_movable_visual.urdf": "e5b55d65dcd4f57c2d0895b5f81801a7673f2c7b379f7f34de67c77f5fc7a43e",
-    "assets/urdf/lite6/lite6_with_gripper.urdf": "18a77c939c94345828289ffd3b45223b1d21c125c9d85ee97936dff29f189764"
+    "assets/urdf/lite6/lite6_with_gripper.urdf": "51cca3c710bb1f09a4dd27bb2a1be180a2a6cfc5f77b65f7d9a79d8d77873e9d"
   }
 }

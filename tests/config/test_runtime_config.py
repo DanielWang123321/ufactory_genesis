@@ -10,7 +10,7 @@ from ufactory.config import (
     RepositoryAssetStore,
     dump_runtime_config,
     load_runtime_config,
-    resolve_grasp_object_spec,
+    resolve_pick_place_object_spec,
 )
 
 
@@ -63,7 +63,7 @@ def test_dump_config_contains_sources_and_hash_without_importing_genesis():
 @pytest.mark.parametrize("robot", ROBOTS)
 def test_all_robots_share_the_30mm_17g_table_object(robot: str):
     config = load_runtime_config(robot)
-    spec = resolve_grasp_object_spec(config)
+    spec = resolve_pick_place_object_spec(config)
     assert spec.size_m == pytest.approx((0.030, 0.030, 0.030))
     assert spec.mass_kg == pytest.approx(0.017)
     assert spec.rest_center_z_m == pytest.approx(0.015)
@@ -108,5 +108,5 @@ def test_invalid_grasp_object_configuration_is_rejected(tmp_path: Path, body: st
 def test_object_mass_override_changes_config_hash():
     base = load_runtime_config("xarm6")
     changed = load_runtime_config("xarm6", overrides={"task.parameters.object_mass_kg": 0.018})
-    assert resolve_grasp_object_spec(changed).mass_kg == pytest.approx(0.018)
+    assert resolve_pick_place_object_spec(changed).mass_kg == pytest.approx(0.018)
     assert changed.sha256 != base.sha256

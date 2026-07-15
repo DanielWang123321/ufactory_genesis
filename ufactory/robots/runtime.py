@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import xml.etree.ElementTree as ET
-from typing import Any
 
 from ufactory.robots.registry import RobotModelSpec, get_robot_profile, joint_names, robot_cli_choices
 
@@ -89,10 +88,8 @@ class TaskProfile:
     """Task-level defaults and capability flags."""
 
     reach_supported: bool = True
-    grasp_place_supported: bool = False
+    pick_place_supported: bool = False
     showcase_supported: bool = False
-    reach_env_defaults: dict[str, Any] = field(default_factory=dict)
-    grasp_place_env_defaults: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -277,46 +274,10 @@ def _dynamics_params(profile: RobotModelSpec, arm: ArmControlParams) -> Dynamics
 
 
 def _task_profile(profile: RobotModelSpec) -> TaskProfile:
-    reach_env_defaults = {
-        "num_obs": profile.dof * 2 + 6,
-        "num_actions": profile.dof,
-        "action_scale": 0.05,
-        "action_clip": 1.0,
-        "episode_length_s": 5.0,
-        "ctrl_dt": 0.02,
-        "servo_speed_rad_s": 0.5,
-        "target_pos_lower": [0.15, -0.3, 0.05],
-        "target_pos_upper": [0.55, 0.3, 0.50],
-    }
-    grasp_defaults = {
-        "num_obs": 30,
-        "num_actions": 7,
-        "action_scale": 0.01,
-        "action_clip": 1.0,
-        "max_joint_delta_rad": 0.01,
-        "gripper_open_mm": 84.0,
-        "gripper_close_mm": 0.0,
-        "gripper_delta_mm": 4.0,
-        "episode_length_s": 10.0,
-        "ctrl_dt": 0.02,
-        "table_height": 0.4,
-        "default_ee_pos": [0.30, 0.00, 0.30],
-        "workspace_lower": [0.10, -0.35, -0.02],
-        "workspace_upper": [0.65, 0.35, 0.55],
-        "grasp_center_offset_z": 0.065,
-        "lift_height_m": 0.08,
-        "place_success_dist_m": 0.04,
-        "success_hold_steps": 10,
-        "success_history_len": 2000,
-        "stiffen_gripper_mimic": True,
-        "substeps": 4,
-    }
     return TaskProfile(
         reach_supported=True,
-        grasp_place_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
+        pick_place_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
         showcase_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
-        reach_env_defaults=reach_env_defaults,
-        grasp_place_env_defaults=grasp_defaults,
     )
 
 

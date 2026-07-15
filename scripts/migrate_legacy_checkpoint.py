@@ -15,7 +15,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Migrate a trusted legacy cfgs.pkl to v0.2.5 safe artifacts")
     parser.add_argument("legacy_cfgs")
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--task", required=True, choices=("reach", "grasp_place"))
+    parser.add_argument("--task", required=True, choices=("reach", "pick_place"))
     parser.add_argument("--robot-key", required=True)
     parser.add_argument("--action-contract", required=True)
     parser.add_argument("--output-dir", required=True)

@@ -43,7 +43,7 @@ def _packaging_mirror_worker(
         from ufactory.config import load_runtime_config
         from ufactory.simulation import GenesisRuntimeManager
         from ufactory.trajectory.mirror_executor import KinematicCarryTracker, TrajKinematicMirror
-        from ufactory.trajectory.packaging import packaging_layout
+        from ufactory.manipulation.packaging import packaging_layout
         from ufactory.visualization import start_deferred_viewer
 
         config = load_runtime_config(

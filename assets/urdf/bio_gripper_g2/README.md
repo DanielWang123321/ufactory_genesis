@@ -88,9 +88,9 @@ for step in range(1000):
 
 ```bash
 # 独立
-python examples/bio_gripper_g2/view_bio_gripper_g2_movable.py
+python examples/visualization/view_bio_gripper_g2.py
 # 搭配机械臂（开合演示）
-python examples/view_robot_glb.py --robot xarm6_1305 --bio-gripper-g2 --movable --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6_1305 --bio-gripper-g2 --movable --gripper-demo
 ```
 
 Collision 检查命令：

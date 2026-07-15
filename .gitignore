@@ -38,4 +38,6 @@ agent.md
 worklog.md
 release_checklist.md
 versions.md
+# Local-only RL example tree; not part of the v0.2.7 public checkout.
+examples/rl/
 .vscode

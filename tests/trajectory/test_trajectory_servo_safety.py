@@ -45,7 +45,7 @@ def test_cartesian_jump_at_100hz_fails_with_reported_mm_per_second():
         validate_servo_stream("c", samples, start, rate=100.0, limits=ServoLimits(), label="bad-cart")
 
 
-def test_default_grasp_place_program_passes_servo_stream_limits_at_50hz():
+def test_default_pick_place_program_passes_servo_stream_limits_at_50hz():
     program = build_pickplace_program(
         rate=50.0,
         speed_rad_s=0.35,

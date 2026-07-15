@@ -6,7 +6,7 @@ from __future__ import annotations
 def world_to_base_pos(pos, base_pos):
     """Translate a world-frame xyz value into a robot-base-frame xyz value.
 
-    The current xArm6 grasp-place setup mounts the robot base without yaw or
+    The current xArm6 pick-place setup mounts the robot base without yaw or
     pitch/roll, so frame conversion is a pure translation.
     """
     return pos - base_pos

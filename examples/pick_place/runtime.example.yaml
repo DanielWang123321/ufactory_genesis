@@ -1,0 +1,6 @@
+schema_version: 1
+# Optional strict overlay used with --config. Core defaults remain under
+# assets/configs/runtime and omitted fields inherit from those defaults.
+motion:
+  cartesian_speed_m_s: 0.150
+  cartesian_acceleration_m_s2: 0.800

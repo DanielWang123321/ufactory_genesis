@@ -11,7 +11,7 @@ from ufactory.config.models import (
     RobotSpec,
     SimulationConfig,
     TaskProfile,
-    resolve_grasp_object_spec,
+    resolve_pick_place_object_spec,
     resolve_manipulation_object_spec,
 )
 
@@ -30,6 +30,6 @@ __all__ = [
     "dump_runtime_config",
     "load_runtime_config",
     "runtime_config_dict",
-    "resolve_grasp_object_spec",
+    "resolve_pick_place_object_spec",
     "resolve_manipulation_object_spec",
 ]

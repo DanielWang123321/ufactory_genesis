@@ -86,11 +86,28 @@ def test_lite6_movable_gripper_defaults_to_reversed_assets() -> None:
             "uflite_finger1": "../lite6_gripper/meshes/collision/finger1.stl",
             "uflite_finger2": "../lite6_gripper/meshes/collision/finger2.stl",
         }
-        for link_name in ("uflite_finger1", "uflite_finger2"):
+        expected_boxes = {
+            "uflite_finger1": [
+                ("0 0.00775 0.002", "0.02 0.0155 0.0095"),
+                ("0 0.013375 0.016875", "0.02 0.00425 0.01975"),
+            ],
+            "uflite_finger2": [
+                ("0 -0.00775 0.002", "0.02 0.0155 0.0095"),
+                ("0 -0.013375 0.016875", "0.02 0.00425 0.01975"),
+            ],
+        }
+        for link_name, boxes in expected_boxes.items():
             link = root.find(f".//link[@name='{link_name}']")
-            collision_origin = link.find("./collision/origin") if link is not None else None
-            visual_origin = link.find("./visual/origin") if link is not None else None
-            assert collision_origin is not None
+            assert link is not None
+            visual_origin = link.find("./visual/origin")
             assert visual_origin is not None
-            assert collision_origin.get("xyz") == "0 0 0"
             assert visual_origin.get("xyz") == "0 0 0"
+            collisions = link.findall("collision")
+            assert len(collisions) == 2
+            actual = []
+            for collision in collisions:
+                assert collision.find("./geometry/mesh") is None
+                box = collision.find("./geometry/box")
+                assert box is not None
+                actual.append((collision.find("origin").get("xyz"), box.get("size")))
+            assert actual == boxes

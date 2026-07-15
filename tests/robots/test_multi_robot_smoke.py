@@ -38,13 +38,13 @@ def _run(cmd: list[str], timeout: int = 300) -> subprocess.CompletedProcess:
 
 @pytest.mark.parametrize("robot", ROBOTS)
 def test_verify_robot_headless(robot: str):
-    result = _run([PYTHON, "examples/verify_robot.py", "--robot", robot])
+    result = _run([PYTHON, "examples/kinematics/verify_robot.py", "--robot", robot])
     assert result.returncode == 0, result.stderr[-3000:]
 
 
 @pytest.mark.parametrize("robot", ROBOTS)
 def test_view_robot_headless(robot: str):
-    result = _run([PYTHON, "examples/view_robot_glb.py", "--robot", robot, "--headless"])
+    result = _run([PYTHON, "examples/visualization/view_robot.py", "--robot", robot, "--headless"])
     assert result.returncode == 0, result.stderr[-3000:]
 
 
@@ -56,5 +56,5 @@ def test_view_robot_headless(robot: str):
     ],
 )
 def test_view_robot_gripper_demo_headless(args: list[str]):
-    result = _run([PYTHON, "examples/view_robot_glb.py", *args])
+    result = _run([PYTHON, "examples/visualization/view_robot.py", *args])
     assert result.returncode == 0, result.stderr[-3000:]

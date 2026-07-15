@@ -161,6 +161,34 @@ def write_checkpoint_manifest(
     return target
 
 
+def write_artifact_inventory(
+    path: str | Path,
+    *,
+    training_config: Mapping[str, Any],
+    checkpoints: list[Path],
+    selected_checkpoint: Path | None = None,
+) -> Path:
+    """Write the complete resolved config and deterministic checkpoint inventory."""
+
+    body = {
+        "schema_version": 1,
+        "training_config": _plain(training_config),
+        "checkpoints": [
+            {
+                "file": checkpoint.name,
+                "sha256": _file_sha256(checkpoint),
+                "manifest": checkpoint.with_suffix(".checkpoint_manifest.json").name,
+            }
+            for checkpoint in checkpoints
+        ],
+        "selected_checkpoint": None if selected_checkpoint is None else selected_checkpoint.name,
+    }
+    _finite(body)
+    target = Path(path)
+    target.write_text(yaml.safe_dump(body, sort_keys=False), encoding="utf-8")
+    return target
+
+
 def load_checkpoint_manifest(path: str | Path) -> CheckpointManifest:
     source = Path(path)
     try:

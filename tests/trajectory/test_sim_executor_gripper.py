@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from ufactory.robots.runtime import G2_GRIPPER_PARAMS, LITE6_GRIPPER_PARAMS
-from ufactory.config import load_runtime_config, resolve_grasp_object_spec
+from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.trajectory.mirror_executor import gap_m_from_drive
 from ufactory.trajectory.segments import Program, Segment
 from ufactory.trajectory.scene import (
@@ -76,7 +76,7 @@ def test_lite6_default_grasp_height_targets_flat_finger_pad():
 
     # Positive clearance keeps the low boss/stop region above the cube top while
     # the large flat inner pad still spans the cube sides.
-    cube_size = resolve_grasp_object_spec(load_runtime_config("lite6")).size_m
+    cube_size = resolve_pick_place_object_spec(load_runtime_config("lite6")).size_m
     cube_top_below_fc = fc_above_table - cube_size[2]
     assert cube_top_below_fc == pytest.approx(0.012)
     boss_reach_below_fc = 0.0065

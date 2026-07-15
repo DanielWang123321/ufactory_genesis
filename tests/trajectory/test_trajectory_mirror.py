@@ -170,7 +170,7 @@ def test_mirror_grip_drive_floors_g2_and_lite6_visual_gap():
     )
 
 
-def test_default_grasp_place_program_uses_mixed_waypoint_planner():
+def test_default_pick_place_program_uses_mixed_waypoint_planner():
     program = _default_program()
 
     assert program.robot_key == "xarm6_1305"
@@ -476,20 +476,21 @@ def test_kinematic_carry_tracker_does_not_attach_when_object_out_of_reach(shared
 
 @pytest.mark.display
 @pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="No DISPLAY for visual dry-run subprocess")
-def test_real_visual_dry_run_subprocess():
-    script = PROJECT_ROOT / "examples" / "xarm6" / "xarm6_grasp_place_traj.py"
+def test_visual_sim_subprocess():
+    script = PROJECT_ROOT / "examples" / "pick_place" / "run.py"
     env = os.environ.copy()
     env.setdefault("NUMBA_CACHE_DIR", os.path.expanduser("~/.cache/numba"))
     proc = subprocess.run(
         [
             sys.executable,
             str(script),
+            "--robot",
+            "xarm6",
+            "--mode",
+            "sim",
             "--executor",
             "servo_cartesian",
             "--visual",
-            "--dry-run",
-            "--rate",
-            "50",
         ],
         cwd=PROJECT_ROOT,
         env=env,
@@ -499,8 +500,8 @@ def test_real_visual_dry_run_subprocess():
         check=False,
     )
     assert proc.returncode == 0, (
-        f"visual dry-run failed (exit {proc.returncode})\n"
+        f"visual simulation failed (exit {proc.returncode})\n"
         f"stdout:\n{proc.stdout[-4000:]}\n"
         f"stderr:\n{proc.stderr[-4000:]}"
     )
-    assert "[mirror]" in proc.stdout
+    assert "preflight=PASS" in proc.stdout

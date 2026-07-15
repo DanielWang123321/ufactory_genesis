@@ -7,26 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.6] — 2026-07-14
+## [0.2.7] — 2026-07-15
 
 ### Added
 
+- Task-oriented public examples under `visualization/`, `kinematics/`, `pick_place/`, and `packaging/`, with strict runtime overlays beside their entry points. The local `examples/rl/` tree is intentionally gitignored and is not part of the v0.2.7 public checkout.
+- `ufactory.manipulation.packaging` as the reusable packaging geometry, planning, scene, simulation, and natural-drop diagnostics package.
+- Shared `ufactory.visualization` viewer implementations, package-level RL configuration builders in `ufactory.training`, reach simulation evaluation helpers, overwrite-safe training directories, and complete checkpoint/config inventories.
+- Architecture tests that reject production imports from `examples`, public `sys.path` mutation, legacy bootstrap paths, and Pinocchio/Coal leakage into the simulation/RL extras.
 - Runtime compatibility checks for the Genesis version, GLB PBR hooks, deferred Viewer internals, and FK/IK scratch allocation. Versions newer than the validated 1.2.2 baseline emit a one-time warning and fail early when required hooks have changed.
 - YAML-driven packaging profiles for xArm5, xArm6, xArm7, UF850, and Lite6, including strict box/table/target/gripper validation, robot-specific gripper geometry, effective scene hashing, and a Lite6 task overlay.
 - Full real-packaging capability for Lite6 with its binary open/close gripper adapter; xArm6 + Gripper G2 remains enabled.
 
 ### Changed
 
+- **Breaking:** public examples are organized by task rather than robot; the old per-robot wrappers and root underscore modules are removed without compatibility shims. See the English and Chinese example indexes for migration commands.
+- **Breaking:** the shared trajectory task identity, CLI, and example paths are renamed from `grasp_place` to `pick_place` (`ufactory-pick-place`, `task.name: pick_place`, `examples/pick_place/`) with no compatibility aliases. Packaging remains `packaging_showcase` / `examples/packaging/`. Public RL example paths are deferred; library APIs stay under `ufactory.training`.
+- Reach retains the current multi-robot environment while pick-place RL now explicitly accepts only xArm6 + Gripper G2. Both bind `env.runtime_config_sha256`; recipes contain only RL environment/reward/PPO/run settings and physical values resolve from `ResolvedRuntimeConfig`.
+- Packaging release and post-release motion remains entirely Genesis contact-driven. The isolated drop report records impact, post-impact velocity, rebound peak, and settle time without imposing a minimum visible bounce.
+- Pinocchio 4/Coal remain optional public backends: absent from `.[sim,rl]`, present in `.[real]` for safety preflight and `.[dynamics]` for reference dynamics.
 - The simulation extra now requires `genesis-world>=1.2.2` and `packaging>=24`; the reproducible lock remains on the validated Genesis World 1.2.2 and PyTorch 2.10.0 stack.
 - Existing manipulation physics settings remain unchanged while inheriting Genesis 1.2.2 contact-pruning, non-convex collision, thin-shell, and no-slip solver fixes.
-- Packaging scene construction and physical execution are robot-generic. The old `examples/xarm6/xarm6_g2_showcase.py` path delegates to the shared implementation with xArm6 selected.
+- Packaging scene construction and physical execution are robot-generic and now exposed through the task-oriented packaging example and unchanged console command.
 - Packaging CLI, report names, calibrated URDF selection, SDK simulation, and isolated real-time mirrors now preserve the selected robot key. xArm5, xArm7, and UF850 real packaging fails before controller connection while their simulation and SDK-simulation paths remain available.
 - `box_floor_top_z_m` is consumed as the actual floor top, placement uses `fixed_target_position_m`, and grasp/release link heights derive from configured gripper geometry instead of G2-only constants.
+- Packaging showcase `simulation_substeps` is restored from 32 to 8 to cut per-step physics cost during the motion phase (about 4× less work per control step on the measured packaging scene). The GPU three-cycle place-success gate is softened to 100 mm to match that tradeoff.
+- Lite6 gripper finger collision uses dual convex boxes (inner pad + outer boss) that preserve the L-shaped concavity. Trajectory and packaging scenes no longer disable Genesis `convexify`/`decimate`/`watertighten` for Lite6 whole-robot URDFs. Safety exemptions for opposing-finger pairs are bound to both the nominal and SN-calibrated Lite6 URDF hashes; the Lite6 packaging box center is moved to Y=0.280 so calibrated preflight clears the near wall.
+
+### Removed
+
+- The disabled `ufactory.deploy` package, xArm6 reach deployment entry point, online policy/session/action adapters, legacy `SafetyGuard`, random-action execution, and their tests.
+- Duplicate reach/grasp RL defaults from `TaskProfile`, the legacy `_grasp_place_traj.py`, all `_bootstrap.py` files, and per-robot public example wrappers.
 
 ### Fixed
 
 - Removed the obsolete exact-1.2.1 runtime gate that rejected the validated Genesis 1.2.2 environment before scene initialization.
 - Lite6 packaging no longer fails the two prior inverse-kinematics points or reports the gripper-stage collision set; its collision exemptions are limited to the two verified settle stages and bound to the current URDF hash.
+
+### Security
+
+- The public package no longer ships online real-policy execution code. Training-only action scaling lives in `ufactory.training.actions`; real robot motion continues to require predictive safety checks, exact calibration binding, and explicit confirmation.
 
 ## [0.2.5] — 2026-07-14
 

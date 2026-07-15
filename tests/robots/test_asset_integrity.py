@@ -261,6 +261,33 @@ def _collision_meshes_by_link(urdf: Path) -> dict[str, list[str]]:
     return out
 
 
+def _collision_links(urdf: Path) -> set[str]:
+    root = ET.parse(urdf).getroot()
+    return {
+        link.get("name") or ""
+        for link in root.findall("link")
+        if link.get("name") and link.find("collision") is not None
+    }
+
+
+def _collision_boxes_by_link(urdf: Path) -> dict[str, tuple[tuple[str, str], ...]]:
+    """Map link name -> ((origin_xyz, box_size), ...) for box collision geoms."""
+    root = ET.parse(urdf).getroot()
+    out: dict[str, tuple[tuple[str, str], ...]] = {}
+    for link in root.findall("link"):
+        link_name = link.get("name") or ""
+        boxes: list[tuple[str, str]] = []
+        for collision in link.findall("collision"):
+            box = collision.find("./geometry/box")
+            if box is None:
+                continue
+            origin = collision.find("origin")
+            boxes.append((origin.get("xyz") if origin is not None else "0 0 0", box.get("size") or ""))
+        if boxes:
+            out[link_name] = tuple(boxes)
+    return out
+
+
 def _collision_origin_pose_by_link(
     urdf: Path,
 ) -> dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]]:
@@ -475,10 +502,14 @@ def test_standalone_movable_accessory_collision_links_are_movable() -> None:
     }
     bad: list[str] = []
     for urdf, moving_links in expected.items():
-        collision_by_link = _collision_meshes_by_link(urdf)
+        collision_mesh_by_link = _collision_meshes_by_link(urdf)
+        collision_links = _collision_links(urdf)
         non_fixed_children = _non_fixed_joint_children(urdf)
         for link in sorted(moving_links):
-            if link not in collision_by_link:
+            if link not in collision_links:
+                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link} has no collision geometry")
+            # Mesh-based accessories still require a collision mesh; Lite6 fingers use boxes.
+            if urdf.name != "lite6_gripper_movable_visual.urdf" and link not in collision_mesh_by_link:
                 bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link} has no collision mesh")
             if link not in non_fixed_children:
                 bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link} is not child of a movable joint")
@@ -544,6 +575,19 @@ def test_arm_movable_accessory_collision_links_match_standalone_models() -> None
     )
     bad: list[str] = []
     for standalone, moving_links, combos in cases:
+        if standalone.name == "lite6_gripper_movable_visual.urdf":
+            standalone_boxes = _collision_boxes_by_link(standalone)
+            expected = {link: standalone_boxes.get(link, ()) for link in moving_links}
+            for combo in combos:
+                combo_boxes = _collision_boxes_by_link(combo)
+                for link, expected_boxes in expected.items():
+                    actual_boxes = combo_boxes.get(link, ())
+                    if actual_boxes != expected_boxes:
+                        bad.append(
+                            f"{combo.relative_to(PROJECT_ROOT)}: {link} collision boxes {actual_boxes} "
+                            f"do not match standalone {expected_boxes}"
+                        )
+            continue
         standalone_meshes = _resolved_collision_meshes_by_link(standalone)
         expected = {link: standalone_meshes.get(link, ()) for link in moving_links}
         for combo in combos:
@@ -565,17 +609,16 @@ _LITE6_GRIPPER_REVERSIBLE_URDFS = (
     PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_with_gripper.urdf",
 )
 
-
-def _lite6_gripper_collision_origin_by_link(urdf: Path) -> dict[str, np.ndarray]:
-    root = ET.parse(urdf).getroot()
-    out: dict[str, np.ndarray] = {}
-    for link_name in ("uflite_finger1", "uflite_finger2"):
-        link = root.find(f".//link[@name='{link_name}']")
-        if link is None:
-            continue
-        origin = link.find("./collision/origin")
-        out[link_name] = np.asarray(_xyz_tuple(origin.get("xyz") if origin is not None else None), dtype=np.float64)
-    return out
+_LITE6_FINGER_BOXES = {
+    "uflite_finger1": (
+        ("0 0.00775 0.002", "0.02 0.0155 0.0095"),
+        ("0 0.013375 0.016875", "0.02 0.00425 0.01975"),
+    ),
+    "uflite_finger2": (
+        ("0 -0.00775 0.002", "0.02 0.0155 0.0095"),
+        ("0 -0.013375 0.016875", "0.02 0.00425 0.01975"),
+    ),
+}
 
 
 def _lite6_gripper_visual_origin_by_link(urdf: Path) -> dict[str, np.ndarray]:
@@ -609,16 +652,16 @@ def _lite6_gripper_root_inner_gap_mm(
     finger2_origin_xyz: tuple[float, float, float],
     finger1_axis_xyz: tuple[float, float, float],
     finger2_axis_xyz: tuple[float, float, float],
-    finger1_collision_origin_xyz: tuple[float, float, float],
-    finger2_collision_origin_xyz: tuple[float, float, float],
+    finger1_visual_origin_xyz: tuple[float, float, float],
+    finger2_visual_origin_xyz: tuple[float, float, float],
     q_m: float,
 ) -> float:
     origin1 = np.asarray(finger1_origin_xyz, dtype=np.float64) + np.asarray(finger1_axis_xyz, dtype=np.float64) * q_m
     origin2 = np.asarray(finger2_origin_xyz, dtype=np.float64) + np.asarray(finger2_axis_xyz, dtype=np.float64) * q_m
-    coll1 = np.asarray(finger1_collision_origin_xyz, dtype=np.float64)
-    coll2 = np.asarray(finger2_collision_origin_xyz, dtype=np.float64)
-    w1 = finger1_vertices + origin1 + coll1
-    w2 = finger2_vertices + origin2 + coll2
+    vis1 = np.asarray(finger1_visual_origin_xyz, dtype=np.float64)
+    vis2 = np.asarray(finger2_visual_origin_xyz, dtype=np.float64)
+    w1 = finger1_vertices + origin1 + vis1
+    w2 = finger2_vertices + origin2 + vis2
     z_root = finger1_origin_xyz[2]
     root1 = w1[(w1[:, 2] >= z_root) & (w1[:, 2] <= z_root + 0.008)]
     root2 = w2[(w2[:, 2] >= z_root) & (w2[:, 2] <= z_root + 0.008)]
@@ -633,16 +676,16 @@ def _lite6_gripper_finger_center_separation_mm(
     finger2_origin_xyz: tuple[float, float, float],
     finger1_axis_xyz: tuple[float, float, float],
     finger2_axis_xyz: tuple[float, float, float],
-    finger1_collision_origin_xyz: tuple[float, float, float],
-    finger2_collision_origin_xyz: tuple[float, float, float],
+    finger1_visual_origin_xyz: tuple[float, float, float],
+    finger2_visual_origin_xyz: tuple[float, float, float],
     q_m: float,
 ) -> float:
     origin1 = np.asarray(finger1_origin_xyz, dtype=np.float64) + np.asarray(finger1_axis_xyz, dtype=np.float64) * q_m
     origin2 = np.asarray(finger2_origin_xyz, dtype=np.float64) + np.asarray(finger2_axis_xyz, dtype=np.float64) * q_m
-    coll1 = np.asarray(finger1_collision_origin_xyz, dtype=np.float64)
-    coll2 = np.asarray(finger2_collision_origin_xyz, dtype=np.float64)
-    w1 = finger1_vertices + origin1 + coll1
-    w2 = finger2_vertices + origin2 + coll2
+    vis1 = np.asarray(finger1_visual_origin_xyz, dtype=np.float64)
+    vis2 = np.asarray(finger2_visual_origin_xyz, dtype=np.float64)
+    w1 = finger1_vertices + origin1 + vis1
+    w2 = finger2_vertices + origin2 + vis2
     center1 = (w1.min(axis=0) + w1.max(axis=0)) / 2.0
     center2 = (w2.min(axis=0) + w2.max(axis=0)) / 2.0
     return float(abs(center2[1] - center1[1]) * 1000.0)
@@ -663,25 +706,27 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
         origin2 = _xyz_tuple(j2.find("origin").get("xyz"))
         axis1 = _xyz_tuple(j1.find("axis").get("xyz"))
         axis2 = _xyz_tuple(j2.find("axis").get("xyz"))
-        collision_origins = _lite6_gripper_collision_origin_by_link(urdf)
-        coll1 = tuple(collision_origins.get("uflite_finger1", np.zeros(3)).tolist())
-        coll2 = tuple(collision_origins.get("uflite_finger2", np.zeros(3)).tolist())
         visual_origins = _lite6_gripper_visual_origin_by_link(urdf)
         vis1 = tuple(visual_origins.get("uflite_finger1", np.zeros(3)).tolist())
         vis2 = tuple(visual_origins.get("uflite_finger2", np.zeros(3)).tolist())
         visual_meshes = _lite6_gripper_visual_mesh_by_link(urdf)
-        assert coll1 == (0.0, 0.0, 0.0), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 collision origin should align with the mesh frame, got {coll1}"
+        boxes = _collision_boxes_by_link(urdf)
+        assert vis1 == (0.0, 0.0, 0.0), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 visual origin should align with the mesh frame, got {vis1}"
         )
-        assert coll2 == (0.0, 0.0, 0.0), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 collision origin should align with the mesh frame, got {coll2}"
+        assert vis2 == (0.0, 0.0, 0.0), (
+            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 visual origin should align with the mesh frame, got {vis2}"
         )
-        assert vis1 == coll1
-        assert vis2 == coll2
         assert visual_meshes == {
             "uflite_finger1": "../lite6_gripper/meshes/collision/finger1.stl",
             "uflite_finger2": "../lite6_gripper/meshes/collision/finger2.stl",
         }
+        assert boxes.get("uflite_finger1") == _LITE6_FINGER_BOXES["uflite_finger1"], (
+            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 dual-box collision mismatch"
+        )
+        assert boxes.get("uflite_finger2") == _LITE6_FINGER_BOXES["uflite_finger2"], (
+            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 dual-box collision mismatch"
+        )
 
         closed_sep = _lite6_gripper_finger_center_separation_mm(
             finger1_vertices,
@@ -690,8 +735,8 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             finger2_origin_xyz=origin2,
             finger1_axis_xyz=axis1,
             finger2_axis_xyz=axis2,
-            finger1_collision_origin_xyz=coll1,
-            finger2_collision_origin_xyz=coll2,
+            finger1_visual_origin_xyz=vis1,
+            finger2_visual_origin_xyz=vis2,
             q_m=0.0,
         )
         open_sep = _lite6_gripper_finger_center_separation_mm(
@@ -701,8 +746,8 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             finger2_origin_xyz=origin2,
             finger1_axis_xyz=axis1,
             finger2_axis_xyz=axis2,
-            finger1_collision_origin_xyz=coll1,
-            finger2_collision_origin_xyz=coll2,
+            finger1_visual_origin_xyz=vis1,
+            finger2_visual_origin_xyz=vis2,
             q_m=0.0089,
         )
 
@@ -713,8 +758,8 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             finger2_origin_xyz=origin2,
             finger1_axis_xyz=axis1,
             finger2_axis_xyz=axis2,
-            finger1_collision_origin_xyz=coll1,
-            finger2_collision_origin_xyz=coll2,
+            finger1_visual_origin_xyz=vis1,
+            finger2_visual_origin_xyz=vis2,
             q_m=0.0,
         )
         mid_gap = _lite6_gripper_root_inner_gap_mm(
@@ -724,8 +769,8 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             finger2_origin_xyz=origin2,
             finger1_axis_xyz=axis1,
             finger2_axis_xyz=axis2,
-            finger1_collision_origin_xyz=coll1,
-            finger2_collision_origin_xyz=coll2,
+            finger1_visual_origin_xyz=vis1,
+            finger2_visual_origin_xyz=vis2,
             q_m=0.00445,
         )
         open_gap = _lite6_gripper_root_inner_gap_mm(
@@ -735,8 +780,8 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             finger2_origin_xyz=origin2,
             finger1_axis_xyz=axis1,
             finger2_axis_xyz=axis2,
-            finger1_collision_origin_xyz=coll1,
-            finger2_collision_origin_xyz=coll2,
+            finger1_visual_origin_xyz=vis1,
+            finger2_visual_origin_xyz=vis2,
             q_m=0.0089,
         )
 
