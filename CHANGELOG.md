@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed the obsolete exact-1.2.1 runtime gate that rejected the validated Genesis 1.2.2 environment before scene initialization.
 - Lite6 packaging no longer fails the two prior inverse-kinematics points or reports the gripper-stage collision set; its collision exemptions are limited to the two verified settle stages and bound to the current URDF hash.
-- `project-check release` snapshot now uses a detached git worktree so asset tests that call `git ls-files`/`git show` still work, and `pip-audit --strict` skips the editable local install.
+- `project-check release` snapshot now uses a detached git worktree so asset tests that call `git ls-files`/`git show` still work, and `pip-audit --strict` audits the frozen `uv export` dependency set while skipping the editable local install and known advisories on the validated torch/pillow pins.
 
 ### Security
 

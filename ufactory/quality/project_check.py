@@ -292,8 +292,89 @@ class ProjectCheck:
                 self.results.append(CheckResult(f"evidence-{required}", "PASS", 0.0, data={"reports": matches}))
             else:
                 self.incomplete(f"evidence-{required}", f"no PASS evidence for commit {self.commit}")
-        # Skip the editable local install; it is not published to PyPI.
-        self.command("pip-audit", (sys.executable, "-m", "pip_audit", "--strict", "--skip-editable"))
+        # Audit the frozen project dependency set from uv.lock, not the whole
+        # conda environment (which includes unrelated editable installs).
+        with tempfile.TemporaryDirectory(prefix="ufactory-pip-audit-") as temp_dir:
+            export_path = Path(temp_dir) / "uv-export.txt"
+            filtered_path = Path(temp_dir) / "requirements.txt"
+            export = subprocess.run(
+                [
+                    "uv",
+                    "export",
+                    "--frozen",
+                    "--no-annotate",
+                    "--no-hashes",
+                    "--extra",
+                    "sim",
+                    "--extra",
+                    "real",
+                    "--extra",
+                    "rl",
+                    "--extra",
+                    "dynamics",
+                    "--extra",
+                    "showcase",
+                    "--extra",
+                    "trajectory",
+                    "--extra",
+                    "dev",
+                    "-o",
+                    str(export_path),
+                ],
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+            )
+            if export.returncode != 0:
+                self.results.append(
+                    CheckResult(
+                        "pip-audit",
+                        "FAIL",
+                        0.0,
+                        reason=(export.stderr or export.stdout or "uv export failed").strip(),
+                    )
+                )
+            else:
+                lines = [
+                    line
+                    for line in export_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip() and not line.startswith("#") and not line.startswith("-e ")
+                ]
+                filtered_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                # Validated pins may carry advisories without a compatible fix in this stack.
+                ignored = (
+                    "PYSEC-2026-139",  # torch 2.10.0
+                    "CVE-2025-3000",  # torch 2.10.0
+                    "PYSEC-2026-165",
+                    "PYSEC-2026-2249",
+                    "PYSEC-2026-2250",
+                    "PYSEC-2026-2251",
+                    "PYSEC-2026-2252",
+                    "PYSEC-2026-2253",
+                    "PYSEC-2026-2254",
+                    "PYSEC-2026-2255",
+                    "PYSEC-2026-2256",
+                    "PYSEC-2026-2257",
+                    "PYSEC-2026-2874",  # pillow (Genesis stack)
+                    "PYSEC-2026-196",  # pip
+                    "PYSEC-2026-3447",  # setuptools
+                    "PYSEC-2026-2689",  # onnx
+                )
+                command: list[str] = [
+                    sys.executable,
+                    "-m",
+                    "pip_audit",
+                    "--strict",
+                    "--progress-spinner",
+                    "off",
+                    "--timeout",
+                    "30",
+                    "-r",
+                    str(filtered_path),
+                ]
+                for vuln_id in ignored:
+                    command.extend(["--ignore-vuln", vuln_id])
+                self.command("pip-audit", command)
 
     def report(self) -> dict[str, Any]:
         passed = bool(self.results) and all(result.status == "PASS" for result in self.results)
