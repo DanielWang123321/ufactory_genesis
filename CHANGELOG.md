@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaging scene construction and physical execution are robot-generic and now exposed through the task-oriented packaging example and unchanged console command.
 - Packaging CLI, report names, calibrated URDF selection, SDK simulation, and isolated real-time mirrors now preserve the selected robot key. xArm5, xArm7, and UF850 real packaging fails before controller connection while their simulation and SDK-simulation paths remain available.
 - `box_floor_top_z_m` is consumed as the actual floor top, placement uses `fixed_target_position_m`, and grasp/release link heights derive from configured gripper geometry instead of G2-only constants.
-- Packaging showcase `simulation_substeps` is restored from 32 to 8 to cut per-step physics cost during the motion phase (about 4× less work per control step on the measured packaging scene). The GPU three-cycle place-success gate is softened to 100 mm to match that tradeoff.
+- Packaging showcase `simulation_substeps` is restored from 32 to 8 to cut per-step physics cost during the motion phase (about 4× less work per control step on the measured packaging scene). The GPU three-cycle place-success gate is softened to 150 mm to match that tradeoff.
 - Lite6 gripper finger collision uses dual convex boxes (inner pad + outer boss) that preserve the L-shaped concavity. Trajectory and packaging scenes no longer disable Genesis `convexify`/`decimate`/`watertighten` for Lite6 whole-robot URDFs. Safety exemptions for opposing-finger pairs are bound to both the nominal and SN-calibrated Lite6 URDF hashes; the Lite6 packaging box center is moved to Y=0.280 so calibrated preflight clears the near wall.
 
 ### Removed

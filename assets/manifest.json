@@ -27,7 +27,7 @@
     "assets/configs/runtime/safety/default.yaml": "29fd72f5863759e2b9167b34fe25723868fc5a633cf1837e7776e12112d71c06",
     "assets/configs/runtime/simulation/default.yaml": "c275f024e6360bb5bd81d23f3c485c7d1e745bb23b78266380f5896b2b587214",
     "assets/configs/runtime/tasks/pick_place.yaml": "c881b4aa78e82e349db65b034924f7439c72349a539d2dfbd2307b30844b0b63",
-    "assets/configs/runtime/tasks/packaging_showcase.yaml": "c40d3ff4df580b8108d7228435618602615e36e24ad746b48b28a43ff8b1a451",
+    "assets/configs/runtime/tasks/packaging_showcase.yaml": "00dba3138dc2ecbf1d3866e40d9717d79e106b6cf37d719ac5553b3caf5278d9",
     "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "6c3b455f0a6f43186376a72caa605b65b426f993b8a5b1cebdc79f1925aff5b7",
     "assets/configs/runtime/tasks/reach.yaml": "f8627924a78cd73f3885c80cb672b5e6bac478603f245fd05bba5f48d72fed36",
     "assets/configs/runtime/tasks/robots/lite6_pick_place.yaml": "ba25ff726165172833aa0ae2aa58ce10bc1286069b0598de8d47e3843bdde3a1",

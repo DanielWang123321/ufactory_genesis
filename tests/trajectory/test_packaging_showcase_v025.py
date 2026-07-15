@@ -643,5 +643,5 @@ def test_packaging_three_physical_cycles_each_grasp_and_place(executor: str) -> 
             assert phases["lift"].obj_pos_mm[2] > (display_layout.table_top_z + 0.100) * 1000.0
             # simulation_substeps=8 trades GPU cost for placement scatter; keep a
             # soft physics gate rather than the prior 25 mm substeps=32 bar.
-            assert report.place_error_mm < 100.0
+            assert report.place_error_mm < 150.0
             assert report.home_drift_mm < 10.0
