@@ -12,7 +12,6 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
-import tarfile
 import tempfile
 import time
 from typing import Any, Sequence
@@ -233,27 +232,39 @@ class ProjectCheck:
                 result.data.update(robot_key=key, serial_number=serial)
 
     def snapshot_fast(self) -> None:
+        # Use a detached worktree so snapshot tests that call ``git ls-files`` /
+        # ``git show`` still have repository metadata (``git archive`` does not).
         with tempfile.TemporaryDirectory(prefix="ufactory-release-") as temp_dir:
-            archive_path = Path(temp_dir) / "source.tar"
-            with archive_path.open("wb") as stream:
-                run = subprocess.run(["git", "archive", "HEAD"], cwd=self.root, stdout=stream, stderr=subprocess.PIPE)
-            if run.returncode != 0:
-                self.results.append(CheckResult("snapshot-fast", "FAIL", 0.0, reason=run.stderr.decode()))
-                return
             snapshot = Path(temp_dir) / "source"
-            snapshot.mkdir()
-            with tarfile.open(archive_path) as archive:
-                archive.extractall(snapshot, filter="data")
+            add = subprocess.run(
+                ["git", "worktree", "add", "--detach", str(snapshot), "HEAD"],
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+            )
+            if add.returncode != 0:
+                self.results.append(
+                    CheckResult("snapshot-fast", "FAIL", 0.0, reason=add.stderr.strip() or add.stdout.strip())
+                )
+                return
             report_path = Path(temp_dir) / "snapshot-report.json"
             env = {**os.environ, "PYTHONPATH": str(snapshot), "CUDA_VISIBLE_DEVICES": ""}
             original_root = self.root
-            self.root = snapshot
-            result = self.command(
-                "snapshot-fast",
-                (sys.executable, "-m", "ufactory.quality.project_check", "fast", "--report", str(report_path)),
-                env=env,
-            )
-            self.root = original_root
+            try:
+                self.root = snapshot
+                result = self.command(
+                    "snapshot-fast",
+                    (sys.executable, "-m", "ufactory.quality.project_check", "fast", "--report", str(report_path)),
+                    env=env,
+                )
+            finally:
+                self.root = original_root
+                subprocess.run(
+                    ["git", "worktree", "remove", "--force", str(snapshot)],
+                    cwd=self.root,
+                    capture_output=True,
+                    text=True,
+                )
             if result.status == "PASS" and report_path.is_file():
                 result.data["snapshot_report"] = json.loads(report_path.read_text(encoding="utf-8"))
 
@@ -281,7 +292,8 @@ class ProjectCheck:
                 self.results.append(CheckResult(f"evidence-{required}", "PASS", 0.0, data={"reports": matches}))
             else:
                 self.incomplete(f"evidence-{required}", f"no PASS evidence for commit {self.commit}")
-        self.command("pip-audit", (sys.executable, "-m", "pip_audit", "--strict"))
+        # Skip the editable local install; it is not published to PyPI.
+        self.command("pip-audit", (sys.executable, "-m", "pip_audit", "--strict", "--skip-editable"))
 
     def report(self) -> dict[str, Any]:
         passed = bool(self.results) and all(result.status == "PASS" for result in self.results)
