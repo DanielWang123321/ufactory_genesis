@@ -49,7 +49,7 @@ Use **`project-check`** as the single quality entry. Pytest markers remain ortho
 | **sim** (pre-release GPU) | `project-check sim` | `fast` + `-m "gpu and not slow"`; minutes |
 | **sdk-sim** | `project-check sdk-sim --inventory <yaml>` | Five-robot cabinet evidence |
 | **hardware** | `project-check hardware --inventory <yaml> --confirm-real` | Real robot acceptance |
-| **release** | `project-check release --version X.Y.Z` | Snapshot/reuse fast + evidence + pip-audit |
+| **release** | `project-check release --version X.Y.Z` | Snapshot/reuse fast + evidence + lock `pip-audit` (`--no-deps`, parallel with snapshot) |
 | **deep** (optional maintainer) | `project-check deep` | Heavy markers only: `gpu or integration or display or slow` (run `fast` first). Target ≤15–20 min |
 
 ```bash

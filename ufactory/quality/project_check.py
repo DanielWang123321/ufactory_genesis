@@ -52,6 +52,30 @@ FAST_CHECK_NAMES = (
     "pytest-safety-coverage",
 )
 
+# Validated pins may carry advisories without a compatible fix in this stack.
+PIP_AUDIT_IGNORED_VULNS = (
+    "PYSEC-2026-139",  # torch 2.10.0
+    "CVE-2025-3000",  # torch 2.10.0
+    "PYSEC-2026-165",
+    "PYSEC-2026-2249",
+    "PYSEC-2026-2250",
+    "PYSEC-2026-2251",
+    "PYSEC-2026-2252",
+    "PYSEC-2026-2253",
+    "PYSEC-2026-2254",
+    "PYSEC-2026-2255",
+    "PYSEC-2026-2256",
+    "PYSEC-2026-2257",
+    "PYSEC-2026-2874",  # pillow (Genesis stack)
+    "PYSEC-2026-3451",  # pillow (Genesis stack)
+    "PYSEC-2026-3453",  # pillow (Genesis stack)
+    "PYSEC-2026-196",  # pip
+    "PYSEC-2026-3447",  # setuptools
+    "PYSEC-2026-2689",  # onnx
+)
+
+UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "showcase", "trajectory", "dev")
+
 
 @dataclass
 class CheckResult:
@@ -112,6 +136,85 @@ def _fast_report_complete(report: dict[str, Any]) -> bool:
     return set(FAST_CHECK_NAMES).issubset(names)
 
 
+def filter_uv_export_lines(text: str) -> list[str]:
+    """Drop comments and editable lines from ``uv export`` output."""
+    return [
+        line for line in text.splitlines() if line.strip() and not line.startswith("#") and not line.startswith("-e ")
+    ]
+
+
+def build_pip_audit_command(requirements_path: Path, *, python: str | None = None) -> list[str]:
+    """Audit a fully pinned requirements file without creating a temp venv or downloading wheels."""
+    command: list[str] = [
+        python or sys.executable,
+        "-m",
+        "pip_audit",
+        "--strict",
+        "--no-deps",
+        "--disable-pip",
+        "--progress-spinner",
+        "off",
+        "--timeout",
+        "30",
+        "-r",
+        str(requirements_path),
+    ]
+    for vuln_id in PIP_AUDIT_IGNORED_VULNS:
+        command.extend(["--ignore-vuln", vuln_id])
+    return command
+
+
+def compare_lock_to_installed(requirement_lines: Sequence[str]) -> dict[str, Any]:
+    """Compare active exact pins to the current environment.
+
+    Installed version drift is a hard failure signal for callers. Packages listed
+    in the lock export but not installed are reported only (extras may be absent).
+    """
+    from packaging.requirements import Requirement
+    from packaging.version import InvalidVersion, Version
+
+    mismatches: list[dict[str, str]] = []
+    missing: list[dict[str, str]] = []
+    matched = 0
+    skipped = 0
+    for line in requirement_lines:
+        try:
+            req = Requirement(line)
+        except ValueError:
+            skipped += 1
+            continue
+        if req.marker is not None and not req.marker.evaluate():
+            continue
+        pinned: str | None = None
+        for spec in req.specifier:
+            if spec.operator != "==":
+                pinned = None
+                break
+            pinned = spec.version
+        if pinned is None:
+            skipped += 1
+            continue
+        try:
+            installed = importlib.metadata.version(req.name)
+        except importlib.metadata.PackageNotFoundError:
+            missing.append({"name": req.name, "locked": pinned})
+            continue
+        try:
+            same = Version(installed) == Version(pinned)
+        except InvalidVersion:
+            same = installed == pinned
+        if same:
+            matched += 1
+        else:
+            mismatches.append({"name": req.name, "locked": pinned, "installed": installed})
+    return {
+        "matched": matched,
+        "missing": missing,
+        "mismatches": mismatches,
+        "skipped": skipped,
+    }
+
+
 class ProjectCheck:
     def __init__(self, root: Path, mode: str) -> None:
         self.root = root
@@ -131,12 +234,13 @@ class ProjectCheck:
         *,
         env: dict[str, str] | None = None,
         record: bool = True,
+        cwd: Path | None = None,
     ) -> CheckResult:
         started = time.perf_counter()
         try:
             run = subprocess.run(
                 list(command),
-                cwd=self.root,
+                cwd=cwd or self.root,
                 env=env,
                 capture_output=True,
                 text=True,
@@ -399,10 +503,11 @@ class ProjectCheck:
         report["_reused_from"] = str(path)
         return report
 
-    def snapshot_fast(self) -> None:
+    def snapshot_fast(self, *, record: bool = True) -> list[CheckResult]:
+        results: list[CheckResult] = []
         reused = self._find_reusable_fast_report()
         if reused is not None:
-            self.results.append(
+            results.append(
                 CheckResult(
                     "snapshot-fast",
                     "PASS",
@@ -411,7 +516,9 @@ class ProjectCheck:
                     data={"snapshot_report": reused, "reused_from": reused.get("_reused_from")},
                 )
             )
-            return
+            if record:
+                self.results.extend(results)
+            return results
 
         # Use a detached worktree so snapshot tests that call ``git ls-files`` /
         # ``git show`` still have repository metadata (``git archive`` does not).
@@ -424,22 +531,23 @@ class ProjectCheck:
                 text=True,
             )
             if add.returncode != 0:
-                self.results.append(
+                results.append(
                     CheckResult("snapshot-fast", "FAIL", 0.0, reason=add.stderr.strip() or add.stdout.strip())
                 )
-                return
+                if record:
+                    self.results.extend(results)
+                return results
             report_path = Path(temp_dir) / "snapshot-report.json"
             env = {**os.environ, "PYTHONPATH": str(snapshot), "CUDA_VISIBLE_DEVICES": ""}
-            original_root = self.root
             try:
-                self.root = snapshot
                 result = self.command(
                     "snapshot-fast",
                     (sys.executable, "-m", "ufactory.quality.project_check", "fast", "--report", str(report_path)),
                     env=env,
+                    record=False,
+                    cwd=snapshot,
                 )
             finally:
-                self.root = original_root
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", str(snapshot)],
                     cwd=self.root,
@@ -448,6 +556,10 @@ class ProjectCheck:
                 )
             if result.status == "PASS" and report_path.is_file():
                 result.data["snapshot_report"] = json.loads(report_path.read_text(encoding="utf-8"))
+            results.append(result)
+        if record:
+            self.results.extend(results)
+        return results
 
     def _collect_evidence(self, required: str) -> list[str]:
         evidence_dir = self.root / "reports" / "project-check"
@@ -468,6 +580,75 @@ class ProjectCheck:
                 matches.append(str(path))
         return matches
 
+    def _export_and_audit(self) -> list[CheckResult]:
+        """Frozen uv.lock audit without temp-venv wheel downloads, plus installed drift check."""
+        results: list[CheckResult] = []
+        with tempfile.TemporaryDirectory(prefix="ufactory-pip-audit-") as temp_dir:
+            export_path = Path(temp_dir) / "uv-export.txt"
+            filtered_path = Path(temp_dir) / "requirements.txt"
+            export_cmd: list[str] = [
+                "uv",
+                "export",
+                "--frozen",
+                "--no-annotate",
+                "--no-hashes",
+            ]
+            for extra in UV_EXPORT_EXTRAS:
+                export_cmd.extend(["--extra", extra])
+            export_cmd.extend(["-o", str(export_path)])
+            export = subprocess.run(
+                export_cmd,
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+            )
+            if export.returncode != 0:
+                results.append(
+                    CheckResult(
+                        "pip-audit",
+                        "FAIL",
+                        0.0,
+                        reason=(export.stderr or export.stdout or "uv export failed").strip(),
+                    )
+                )
+                return results
+
+            lines = filter_uv_export_lines(export_path.read_text(encoding="utf-8"))
+            filtered_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            results.append(self.command("pip-audit", build_pip_audit_command(filtered_path), record=False))
+
+            comparison = compare_lock_to_installed(lines)
+            mismatches = comparison["mismatches"]
+            if mismatches:
+                sample = ", ".join(
+                    f"{item['name']} locked={item['locked']} installed={item['installed']}" for item in mismatches[:5]
+                )
+                more = f" (+{len(mismatches) - 5} more)" if len(mismatches) > 5 else ""
+                results.append(
+                    CheckResult(
+                        "lock-installed-match",
+                        "FAIL",
+                        0.0,
+                        reason=f"{len(mismatches)} installed version drift(s): {sample}{more}",
+                        data=comparison,
+                    )
+                )
+            else:
+                results.append(
+                    CheckResult(
+                        "lock-installed-match",
+                        "PASS",
+                        0.0,
+                        reason=(
+                            f"matched={comparison['matched']} "
+                            f"missing={len(comparison['missing'])} "
+                            f"(missing extras not failing)"
+                        ),
+                        data=comparison,
+                    )
+                )
+        return results
+
     def release(self, version: str | None) -> None:
         expected = package_version(self.root)
         if version != expected:
@@ -485,96 +666,22 @@ class ProjectCheck:
             self.results.append(CheckResult("clean-worktree", "FAIL", 0.0, reason="release requires a clean worktree"))
             return
         self.results.append(CheckResult("clean-worktree", "PASS", 0.0))
-        self.snapshot_fast()
+
+        # Snapshot (local) and lock audit (network/vuln DB) in parallel; stable append order.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            snap_future = pool.submit(self.snapshot_fast, record=False)
+            audit_future = pool.submit(self._export_and_audit)
+            snapshot_results = snap_future.result()
+            audit_results = audit_future.result()
+        self.results.extend(snapshot_results)
+        self.results.extend(audit_results)
+
         for required in ("sim", "sdk-sim", "hardware"):
             matches = self._collect_evidence(required)
             if matches:
                 self.results.append(CheckResult(f"evidence-{required}", "PASS", 0.0, data={"reports": matches}))
             else:
                 self.incomplete(f"evidence-{required}", f"no PASS evidence for commit {self.commit}")
-        # Audit the frozen project dependency set from uv.lock, not the whole
-        # conda environment (which includes unrelated editable installs).
-        with tempfile.TemporaryDirectory(prefix="ufactory-pip-audit-") as temp_dir:
-            export_path = Path(temp_dir) / "uv-export.txt"
-            filtered_path = Path(temp_dir) / "requirements.txt"
-            export = subprocess.run(
-                [
-                    "uv",
-                    "export",
-                    "--frozen",
-                    "--no-annotate",
-                    "--no-hashes",
-                    "--extra",
-                    "sim",
-                    "--extra",
-                    "real",
-                    "--extra",
-                    "rl",
-                    "--extra",
-                    "dynamics",
-                    "--extra",
-                    "showcase",
-                    "--extra",
-                    "trajectory",
-                    "--extra",
-                    "dev",
-                    "-o",
-                    str(export_path),
-                ],
-                cwd=self.root,
-                capture_output=True,
-                text=True,
-            )
-            if export.returncode != 0:
-                self.results.append(
-                    CheckResult(
-                        "pip-audit",
-                        "FAIL",
-                        0.0,
-                        reason=(export.stderr or export.stdout or "uv export failed").strip(),
-                    )
-                )
-            else:
-                lines = [
-                    line
-                    for line in export_path.read_text(encoding="utf-8").splitlines()
-                    if line.strip() and not line.startswith("#") and not line.startswith("-e ")
-                ]
-                filtered_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-                # Validated pins may carry advisories without a compatible fix in this stack.
-                ignored = (
-                    "PYSEC-2026-139",  # torch 2.10.0
-                    "CVE-2025-3000",  # torch 2.10.0
-                    "PYSEC-2026-165",
-                    "PYSEC-2026-2249",
-                    "PYSEC-2026-2250",
-                    "PYSEC-2026-2251",
-                    "PYSEC-2026-2252",
-                    "PYSEC-2026-2253",
-                    "PYSEC-2026-2254",
-                    "PYSEC-2026-2255",
-                    "PYSEC-2026-2256",
-                    "PYSEC-2026-2257",
-                    "PYSEC-2026-2874",  # pillow (Genesis stack)
-                    "PYSEC-2026-196",  # pip
-                    "PYSEC-2026-3447",  # setuptools
-                    "PYSEC-2026-2689",  # onnx
-                )
-                command: list[str] = [
-                    sys.executable,
-                    "-m",
-                    "pip_audit",
-                    "--strict",
-                    "--progress-spinner",
-                    "off",
-                    "--timeout",
-                    "30",
-                    "-r",
-                    str(filtered_path),
-                ]
-                for vuln_id in ignored:
-                    command.extend(["--ignore-vuln", vuln_id])
-                self.command("pip-audit", command)
 
     def report(self) -> dict[str, Any]:
         passed = bool(self.results) and all(result.status == "PASS" for result in self.results)

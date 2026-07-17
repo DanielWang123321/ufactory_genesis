@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fast-tier demotion: `test_default_pick_place_program_preflight_passes_servo_j` is marked `gpu` (Genesis compile); `test_servo_cartesian_packaging_preflight_passes_for_all_robots` is marked `slow` (Pinocchio multi-robot, not in-process GPU).
 - Test module filenames drop historical `_v025` / `_v026` / `_v027` suffixes (no compatibility aliases); CONTRIBUTING examples updated.
 - Integration example smoke is consolidated into `tests/robots/test_representative_example_smoke.py` (xArm6 representative + strong pick-place assertions); duplicate weak `verify_robot` / exit-only pick-place paths removed. Ad-hoc real FK/IK/dynamics stay in `tests/hardware/test_xarm6_real.py`.
+- `project-check release` audits the frozen `uv export` set with `pip-audit --no-deps --disable-pip` (no temp-venv wheel downloads), runs that audit in parallel with `snapshot_fast`, and adds `lock-installed-match` (installed version drift fails; lock-only missing extras are reported but do not fail).
 
 ### Removed
 
