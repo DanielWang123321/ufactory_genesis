@@ -1,0 +1,39 @@
+# Third-party notices
+
+This repository's Python code is licensed under the MIT License (see `LICENSE`).
+Robot description files and mesh assets under `assets/urdf/` include material
+derived from upstream UFACTORY / xArm ROS packages. Those assets are **not**
+pure original MIT-only content.
+
+## Upstream robot assets
+
+### xArm / UF850 / Lite6 URDF and meshes
+
+- **Upstream:** [xArm-Developer/xarm_ros2](https://github.com/xArm-Developer/xarm_ros2)
+  (and related xArm ROS description packages historically used to generate
+  standalone URDFs in this tree).
+- **Typical upstream license:** BSD-3-Clause (see the upstream repository's
+  `LICENSE` / package metadata; a full copy is not vendored here).
+- **This repository's modifications include (non-exhaustive):**
+  - Standalone URDF layouts and combo URDFs for Genesis (arm + end-effector).
+  - Collision mesh packaging and visual GLB conversion / Draco compression.
+  - Shared `visual_glb/` layouts and link-canonical gripper visuals.
+  - Runtime manifests, overlays, and integrity budgets used by tests.
+
+### End-effectors (Gripper G2, Bio Gripper G2, Lite6 Gripper, Lite6 Vacuum)
+
+Visual and collision meshes for accessories follow the same upstream family
+where noted in each `assets/urdf/<name>/README.md`. Combo URDFs, movable
+visual variants, and compressed GLBs are maintained in this repository.
+
+## Trademarks
+
+xArm, UF850, Lite6, UFACTORY, and related names are trademarks of their
+respective owners. Use of those names here describes hardware compatibility
+only and does not imply official product endorsement of this preview (0.2.x)
+repository.
+
+## Contact
+
+For attribution corrections, open an issue on the GitHub repository listed in
+`pyproject.toml` / `README.md`.

@@ -87,7 +87,6 @@ class GripperControlParams:
 class TaskProfile:
     """Task-level defaults and capability flags."""
 
-    reach_supported: bool = True
     pick_place_supported: bool = False
     showcase_supported: bool = False
 
@@ -275,7 +274,6 @@ def _dynamics_params(profile: RobotModelSpec, arm: ArmControlParams) -> Dynamics
 
 def _task_profile(profile: RobotModelSpec) -> TaskProfile:
     return TaskProfile(
-        reach_supported=True,
         pick_place_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
         showcase_supported=profile.supports_gripper_g2 or profile.supports_lite6_gripper,
     )

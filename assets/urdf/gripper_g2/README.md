@@ -15,18 +15,17 @@ gripper_g2/
 ├── gripper_g2.urdf                   # standalone 模板 URDF
 ├── gripper_g2_movable_visual.urdf    # 仅夹爪可动视觉 URDF（调试用）
 ├── meshes/
-│   ├── collision/                    # STL 碰撞网格
+│   ├── collision/                    # STL 碰撞网格（保持原密度，不做抽面）
 │   │   ├── base_link.stl
-│   │   ├── left_finger.stl
-│   │   ├── left_inner_knuckle.stl
-│   │   ├── left_outer_knuckle.stl
-│   │   ├── right_finger.stl
-│   │   ├── right_inner_knuckle.stl
-│   │   └── right_outer_knuckle.stl
-│   └── visual/                       # GLB 视觉网格
-│       ├── gripper_g2_static_*.glb   # 合并静态 GLB（分 link5/link6/link7）
-│       └── visual_glb/               # 可动分体 GLB
+│   │   ├── left_finger.stl / right_finger.stl
+│   │   ├── left_inner_knuckle.stl / right_inner_knuckle.stl
+│   │   └── left_outer_knuckle.stl / right_outer_knuckle.stl
+│   └── visual/                       # GLB 视觉网格（link6 canonical + 原生 Draco）
+│       ├── gripper_g2_static.glb     # 合并静态高模（全机型共用）
+│       └── visual_glb/               # 可动分体 GLB（base + fingers/knuckles）
 ```
+
+视觉面数保持不变，用原生 `draco_encoder` 压 **视觉 GLB**（合计目标 **< 1 MiB**）。xArm5/xArm7 通过 visual origin 吸收相对 link6 的法兰平移差；collision STL 与 collision origin 不动。
 
 ## 加载方式
 
@@ -55,3 +54,8 @@ python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --gripper-g
 python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --gripper-g2 --movable --gripper-state open
 python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --gripper-g2 --movable --gripper-state closed
 ```
+
+## Source / License
+
+- 模板与网格源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。
+- 本仓库维护 standalone / 组合 URDF、共享 `visual_glb/`（link6 canonical）与 Draco 压缩 GLB。

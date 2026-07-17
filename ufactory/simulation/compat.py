@@ -1,8 +1,9 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.2.2 is the validated physics baseline.  Newer releases may run when
-the small set of internal hooks used by this project is still available, but
-they remain unvalidated until the full simulation and hardware matrix passes.
+Genesis 1.2.2 is the reference (pinned) physics baseline. Newer releases may run when
+the small set of internal hooks used by this project is still available, but they are
+not treated as a maintainer-verified physics or hardware baseline until the local
+simulation and hardware checks pass.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from packaging.version import InvalidVersion, Version
 
 
 MIN_GENESIS_VERSION = Version("1.2.2")
-VALIDATED_GENESIS_VERSION = Version("1.2.2")
+VALIDATED_GENESIS_VERSION = Version("1.2.2")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -63,8 +64,8 @@ def _warn_unvalidated_version(version: Version) -> None:
             return
         warnings.warn(
             f"Genesis {version} satisfies the minimum version, but only {VALIDATED_GENESIS_VERSION} "
-            "has completed this project's physics and hardware validation matrix. Compatibility hooks "
-            "will be checked before use.",
+            "is the project's reference baseline with maintainer sim/hardware verification. "
+            "Compatibility hooks will be checked before use.",
             RuntimeWarning,
             stacklevel=3,
         )

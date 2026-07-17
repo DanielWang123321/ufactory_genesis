@@ -1,6 +1,6 @@
 # Lite6 Gripper Assets
 
-Lite6 平行夹爪。
+Lite6 平行夹爪。Visual GLB 为高模 + 原生 Draco（合计 < 1MB）；collision / 手指 visual STL 保持原密度，不做抽面。
 
 ## 模板 URDF
 
@@ -38,3 +38,8 @@ python dev/ref_scripts/view_pose_collision.py --robot lite6 --pose 4 --lite6-gri
 python dev/ref_scripts/view_pose_collision.py --robot lite6 --pose 4 --lite6-gripper --movable --gripper-state open
 python dev/ref_scripts/view_pose_collision.py --robot lite6 --pose 4 --lite6-gripper --movable --gripper-state closed
 ```
+
+## Source / License
+
+- 模板与网格源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。
+- 本仓库维护组合 URDF 与 Draco 压缩视觉 GLB（配件合计目标 < 1 MiB）。

@@ -205,6 +205,15 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
                 field=f"task.parameters.{field_name}",
                 size=3,
             )
+    if task_name == "pick_place":
+        if gripper is None:
+            raise ConfigError("pick_place requires a configured gripper")
+        grasp_gap = _positive(task_parameters["grasp_gap_m"], field="task.parameters.grasp_gap_m")
+        if not gripper.closed_gap_m <= grasp_gap <= gripper.open_gap_m:
+            raise ConfigError(
+                "task.parameters.grasp_gap_m must be within the configured gripper gap range "
+                f"[{gripper.closed_gap_m}, {gripper.open_gap_m}]"
+            )
     if task_name == "packaging_showcase":
         table_size = _tuple_floats(task_parameters["table_size_m"], field="task.parameters.table_size_m", size=3)
         box_size = _tuple_floats(task_parameters["box_outer_size_m"], field="task.parameters.box_outer_size_m", size=3)

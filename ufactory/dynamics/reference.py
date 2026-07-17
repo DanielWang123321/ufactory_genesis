@@ -3,7 +3,7 @@
 Holds :class:`PinocchioReference` and the gravity default vector. This module
 imports ``pinocchio`` lazily inside the constructor so that merely importing the
 report/analysis layer never hard-requires Pinocchio; ``load_reference_backend``
-gates the ``--require-reference`` CLI option.
+controls the ``--require-reference`` CLI option.
 """
 
 from __future__ import annotations

@@ -14,7 +14,6 @@ build/
 .cursor/
 .kilo
 logs/
-debug/
 data/
 dev/*
 outputs/
@@ -25,7 +24,6 @@ assets/urdf/**/visual_glb_raw/
 assets/urdf/**/visual_glb_src/
 assets/urdf/**/relocalize_metrics.json
 assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2.glb
-assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb
 assets/urdf/lite6_gripper/meshes/collision/gripper_lite.stl
 *.patch
 .DS_Store
@@ -38,6 +36,10 @@ agent.md
 worklog.md
 release_checklist.md
 versions.md
-# Local-only RL example tree; not part of the v0.2.7 public checkout.
+# Local-only RL example tree; not part of the public checkout until v0.2.9.
 examples/rl/
+# Local maintainer RL experiment scripts (not part of the public surface).
+scripts/rl_*.sh
+scripts/rl_checkpoint_hub.py
+scripts/rl_sync.sh
 .vscode

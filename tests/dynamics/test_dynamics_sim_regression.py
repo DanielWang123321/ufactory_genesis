@@ -56,8 +56,17 @@ def _load_jsonl(path):
     return out
 
 
-@pytest.mark.parametrize("robot_key", _HARDWARE_DYNAMICS_ROBOTS)
+def test_dynamics_sim_regression_layers_finite_representative(tmp_path):
+    _assert_dynamics_sim_regression(tmp_path, "xarm6")
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("robot_key", [key for key in _HARDWARE_DYNAMICS_ROBOTS if key != "xarm6"])
 def test_dynamics_sim_regression_layers_finite(tmp_path, robot_key: str):
+    _assert_dynamics_sim_regression(tmp_path, robot_key)
+
+
+def _assert_dynamics_sim_regression(tmp_path, robot_key: str) -> None:
     runtime = get_robot_runtime_profile(robot_key)
     n_dof = len(runtime.arm.joint_names)
     csv_path = tmp_path / f"sim_{robot_key}.csv"

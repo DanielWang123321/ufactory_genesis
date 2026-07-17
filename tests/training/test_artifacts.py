@@ -20,7 +20,7 @@ def test_safe_checkpoint_manifest_and_weights_only_compatible(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,
-        task="reach",
+        task="pick_place",
         robot_key="xarm6_1305",
         env={"num_obs": 18, "num_actions": 6},
         reward={},
@@ -36,7 +36,7 @@ def test_safe_checkpoint_manifest_and_weights_only_compatible(tmp_path: Path):
         executor_action_contract="servo_j",
     )
     validated, manifest = validate_checkpoint_artifacts(
-        checkpoint, config_path, expected_task="reach", expected_robot_key="xarm6_1305"
+        checkpoint, config_path, expected_task="pick_place", expected_robot_key="xarm6_1305"
     )
     assert validated["config_sha256"] == manifest.config_sha256
     loaded = torch.load(checkpoint, weights_only=True, map_location="cpu")
@@ -47,7 +47,7 @@ def test_checkpoint_tamper_is_rejected(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,
-        task="reach",
+        task="pick_place",
         robot_key="xarm6_1305",
         env={"num_obs": 18, "num_actions": 6},
         reward={},
@@ -92,10 +92,10 @@ def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_pat
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,
-        task="reach",
+        task="pick_place",
         robot_key="xarm6_1305",
         env={"num_obs": 18, "num_actions": 6, "runtime_config_sha256": "runtime"},
-        reward={"reach": 1.0},
+        reward={"keypoints": 1.0},
         robot={"joint_names": [f"joint{i}" for i in range(1, 7)]},
         train={"seed": 1},
     )

@@ -1,8 +1,10 @@
 """Unit tests for SN-based kinematics calibration eligibility."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 from ufactory.kinematics.calibration import (
     has_per_unit_kinematics_calibration,
@@ -11,6 +13,18 @@ from ufactory.kinematics.calibration import (
     resolve_kinematics_suffix,
     validate_kinematics_calibration_request,
 )
+
+
+def _lite6_user_yaml(path: Path, *, serial: str = "LI100307XXXXXX") -> Path:
+    data = {
+        "schema_version": 1,
+        "robot_key": "lite6",
+        "serial_number": serial,
+        "units": {"position": "m", "angle": "rad"},
+        "joints": {f"joint{i}": {name: 0.0 for name in ("x", "y", "z", "roll", "pitch", "yaw")} for i in range(1, 7)},
+    }
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return path
 
 
 def test_parse_sn_model_code():
@@ -38,12 +52,13 @@ def test_uf850_always_has_calibration():
     assert has_per_unit_kinematics_calibration("XF130012345678", "uf850")
 
 
-def test_validate_kinematics_rejects_old_lite6_sn_without_override():
+def test_validate_kinematics_rejects_old_lite6_sn_without_override(tmp_path: Path):
     with pytest.raises(ValueError, match="1003 < 1006"):
         validate_kinematics_calibration_request(
             "LI100307XXXXXX",
             "lite6",
             kinematics_suffix="lite6_192_168_1_10",
+            kinematics_yaml_dir=str(tmp_path),
         )
 
 
@@ -54,6 +69,21 @@ def test_validate_kinematics_allows_old_lite6_sn_with_override():
         kinematics_suffix="lite6_192_168_1_10",
         allow_sn_override=True,
     )
+
+
+def test_validate_kinematics_allows_old_lite6_sn_when_matching_user_yaml_exists(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    _lite6_user_yaml(tmp_path / "lite6_kinematics_XXXXXX.yaml")
+    validate_kinematics_calibration_request(
+        "LI100307XXXXXX",
+        "lite6",
+        kinematics_suffix="XXXXXX",
+        kinematics_yaml_dir=str(tmp_path),
+    )
+    captured = capsys.readouterr().out
+    assert "found user YAML" in captured
+    assert "XXXXXX" in captured
 
 
 def test_kinematics_suffix_from_sn():
@@ -101,14 +131,28 @@ def test_resolve_kinematics_suffix_priority():
     )
 
 
-def test_resolve_kinematics_suffix_skips_old_lite6_sn():
+def test_resolve_kinematics_suffix_skips_old_lite6_sn_without_user_yaml(tmp_path: Path):
     assert (
         resolve_kinematics_suffix(
             kinematics_suffix=None,
             sn="LI100307XXXXXX",
             robot_name="lite6",
+            kinematics_yaml_dir=str(tmp_path),
         )
         is None
+    )
+
+
+def test_resolve_kinematics_suffix_loads_old_lite6_sn_when_user_yaml_exists(tmp_path: Path):
+    _lite6_user_yaml(tmp_path / "lite6_kinematics_XXXXXX.yaml")
+    assert (
+        resolve_kinematics_suffix(
+            kinematics_suffix=None,
+            sn="LI100307XXXXXX",
+            robot_name="lite6",
+            kinematics_yaml_dir=str(tmp_path),
+        )
+        == "XXXXXX"
     )
 
 

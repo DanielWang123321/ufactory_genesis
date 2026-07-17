@@ -192,6 +192,38 @@ def find_kinematics_yaml(
     )
 
 
+def user_kinematics_yaml_exists(
+    robot_name: str,
+    kinematics_suffix: str,
+    *,
+    kinematics_yaml_dir: str | None = None,
+) -> bool:
+    """Return True when a user kinematics YAML for ``kinematics_suffix`` is on disk."""
+    try:
+        find_kinematics_yaml(kinematics_suffix, kinematics_yaml_dir, robot_name=robot_name)
+    except (FileNotFoundError, ValueError):
+        return False
+    return True
+
+
+def sn_matching_user_kinematics_yaml_exists(
+    sn: str,
+    robot_name: str,
+    *,
+    kinematics_suffix: str | None = None,
+    kinematics_yaml_dir: str | None = None,
+) -> bool:
+    """True when suffix matches SN last-6 and the corresponding user YAML exists."""
+    try:
+        sn_suffix = kinematics_suffix_from_sn(sn)
+    except ValueError:
+        return False
+    suffix = (kinematics_suffix or sn_suffix).strip()
+    if suffix != sn_suffix:
+        return False
+    return user_kinematics_yaml_exists(robot_name, suffix, kinematics_yaml_dir=kinematics_yaml_dir)
+
+
 def build_calibrated_urdf(
     base_urdf_path: str,
     kinematics: KinematicsCalibration | dict[str, dict[str, float]],
@@ -404,8 +436,13 @@ def resolve_kinematics_suffix(
     sn: str | None = None,
     robot_name: str | None = None,
     env_suffix: str | None = None,
+    kinematics_yaml_dir: str | None = None,
 ) -> str | None:
-    """Resolve kinematics suffix from CLI, env, or SN (when eligible)."""
+    """Resolve kinematics suffix from CLI, env, or SN (when eligible).
+
+    When the SN rule says no factory compensation, still auto-select the SN
+    suffix if a matching user YAML already exists on disk (post-factory POE).
+    """
     if kinematics_yaml is not None:
         explicit = (kinematics_suffix or "").strip() or None
         return explicit
@@ -418,7 +455,17 @@ def resolve_kinematics_suffix(
     if env_value:
         return env_value
 
-    if sn and robot_name and has_per_unit_kinematics_calibration(sn, robot_name):
+    if not sn or not robot_name:
+        return None
+
+    if has_per_unit_kinematics_calibration(sn, robot_name):
+        return kinematics_suffix_from_sn(sn)
+
+    if sn_matching_user_kinematics_yaml_exists(
+        sn,
+        robot_name,
+        kinematics_yaml_dir=kinematics_yaml_dir,
+    ):
         return kinematics_suffix_from_sn(sn)
     return None
 
@@ -451,6 +498,7 @@ def resolve_kinematics_suffix_from_ip(
     kinematics_suffix: str | None = None,
     kinematics_yaml: str | None = None,
     env_suffix: str | None = None,
+    kinematics_yaml_dir: str | None = None,
 ) -> tuple[str | None, str]:
     """Resolve suffix using robot IP; returns ``(suffix, sn)``."""
     sn = fetch_robot_sn_from_ip(ip)
@@ -460,6 +508,7 @@ def resolve_kinematics_suffix_from_ip(
         sn=sn,
         robot_name=robot_name,
         env_suffix=env_suffix,
+        kinematics_yaml_dir=kinematics_yaml_dir,
     )
     return suffix, sn
 
@@ -471,6 +520,7 @@ def validate_kinematics_calibration_request(
     kinematics_yaml: str | None = None,
     kinematics_suffix: str | None = None,
     allow_sn_override: bool = False,
+    kinematics_yaml_dir: str | None = None,
 ) -> None:
     """Raise ValueError if calibration files are requested but SN rules them out."""
     wants_calib = kinematics_yaml is not None or kinematics_suffix is not None
@@ -491,6 +541,23 @@ def validate_kinematics_calibration_request(
         )
         return
 
+    if kinematics_suffix and sn_matching_user_kinematics_yaml_exists(
+        sn,
+        robot_name,
+        kinematics_suffix=kinematics_suffix,
+        kinematics_yaml_dir=kinematics_yaml_dir,
+    ):
+        yaml_path = find_kinematics_yaml(
+            kinematics_suffix,
+            kinematics_yaml_dir,
+            robot_name=robot_name,
+        )
+        print(
+            f"[WARN] {rule}: SN rule does not expect factory compensation, but found user YAML "
+            f"{yaml_path}; loading it anyway (e.g. POE / after-sales calibration)."
+        )
+        return
+
     raise ValueError(
         f"{rule}: this unit has no per-unit kinematics compensation in firmware. "
         "Do not pass --kinematics-suffix/--kinematics-yaml; use the nominal URDF only. "
@@ -505,6 +572,7 @@ def log_kinematics_sn_status(
     kinematics_yaml: str | None = None,
     kinematics_suffix: str | None = None,
     allow_sn_override: bool = False,
+    kinematics_yaml_dir: str | None = None,
 ) -> None:
     """Print SN / calibration eligibility and warn on likely misconfiguration."""
     model_code = parse_sn_model_code(sn)
@@ -526,6 +594,7 @@ def log_kinematics_sn_status(
                 kinematics_yaml=kinematics_yaml,
                 kinematics_suffix=kinematics_suffix,
                 allow_sn_override=allow_sn_override,
+                kinematics_yaml_dir=kinematics_yaml_dir,
             )
     else:
         print(f"kinematics     : per-unit calibration may be required (model code {model_code})")

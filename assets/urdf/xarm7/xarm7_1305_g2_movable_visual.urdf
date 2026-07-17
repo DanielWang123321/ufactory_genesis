@@ -246,9 +246,9 @@
       <inertia ixx="0.00047106" ixy="3.9292e-07" ixz="2.6537e-06" iyy="0.00033072" iyz="-1.0975e-05" izz="0.00025642" />
     </inertial>
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0.002325 0.002572 -0.000373" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/visual/visual_glb/link7/base.glb" />
+        <mesh filename="../gripper_g2/meshes/visual/visual_glb/base.glb" />
       </geometry>
     </visual>
     <collision>

@@ -3,7 +3,7 @@
 Wraps :meth:`gs.RigidEntity.inverse_kinematics` so sim/replay code streams
 Cartesian (MoveL) targets one tick at a time and gets back per-tick arm joint
 angles. The orientation is fixed gripper-down (roll=pi) for v1 (``tcp_offset=0``),
-matching the pick-place demo and reach env.
+matching the pick-place demo.
 """
 
 from __future__ import annotations

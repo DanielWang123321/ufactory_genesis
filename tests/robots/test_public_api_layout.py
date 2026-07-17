@@ -85,7 +85,7 @@ def test_root_namespace_is_core_robot_api_only() -> None:
         assert not hasattr(ufactory, name)
 
 
-def test_v025_trajectory_api_does_not_export_unsafe_legacy_replay() -> None:
+def test_trajectory_api_does_not_export_unsafe_legacy_replay() -> None:
     import ufactory.trajectory as trajectory
 
     assert set(trajectory.__all__) == {
@@ -98,7 +98,7 @@ def test_v025_trajectory_api_does_not_export_unsafe_legacy_replay() -> None:
         assert not hasattr(trajectory, name)
 
 
-def test_v025_dynamics_api_is_report_and_validation_only() -> None:
+def test_dynamics_api_is_report_and_validation_only() -> None:
     import ufactory.dynamics as dynamics
 
     assert "DynamicsValidationService" in dynamics.__all__

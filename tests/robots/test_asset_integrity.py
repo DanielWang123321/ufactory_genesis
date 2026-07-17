@@ -47,11 +47,22 @@ def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
         "visual_glb_src",
         "relocalize_metrics.json",
         "assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2.glb",
-        "assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb",
         "assets/urdf/lite6_gripper/meshes/collision/gripper_lite.stl",
         "scripts/relocalize_",
         "scripts/diagnose_",
         "scripts/vendor_robot_assets.py",
+        "bio_gripper_g2_visual_link5.glb",
+        "bio_gripper_g2_visual_link6.glb",
+        "bio_gripper_g2_visual_link7.glb",
+        "bio_gripper_g2/meshes/visual/visual_glb/link5/",
+        "bio_gripper_g2/meshes/visual/visual_glb/link6/",
+        "bio_gripper_g2/meshes/visual/visual_glb/link7/",
+        "gripper_g2_static_link5.glb",
+        "gripper_g2_static_link6.glb",
+        "gripper_g2_static_link7.glb",
+        "gripper_g2/meshes/visual/visual_glb/link5/",
+        "gripper_g2/meshes/visual/visual_glb/link6/",
+        "gripper_g2/meshes/visual/visual_glb/link7/",
     ]
     forbidden_script_shapes = [
         ("scripts/generate_", "_combo_urdf.py"),
@@ -139,61 +150,23 @@ _BIO_GRIPPER_G2_LINKS = (
     "bio_gripper_g2_right_finger",
 )
 
+# Canonical Bio G2 visual GLBs are shared across arms; collision origins are unified.
 _BIO_GRIPPER_G2_COLLISION_ORIGINS = {
-    "link5": {
-        "bio_gripper_g2_base_link": (-0.022557, -0.000816, -0.004553),
-        "bio_gripper_g2_left_finger": (-0.013325, -0.011400, -0.000890),
-        "bio_gripper_g2_right_finger": (-0.014244, 0.012006, 0.000303),
-    },
-    "link6": {
-        "bio_gripper_g2_base_link": (-0.022475, -0.000830, -0.004696),
-        "bio_gripper_g2_left_finger": (-0.012870, -0.011316, -0.002219),
-        "bio_gripper_g2_right_finger": (-0.013790, 0.011745, -0.001039),
-    },
-    "link7": {
-        "bio_gripper_g2_base_link": (-0.022701, -0.000960, -0.004557),
-        "bio_gripper_g2_left_finger": (-0.013576, -0.011335, -0.001188),
-        "bio_gripper_g2_right_finger": (-0.013875, 0.011611, 0.000165),
-    },
+    "bio_gripper_g2_base_link": (-0.022475, -0.00083, -0.004696),
+    "bio_gripper_g2_left_finger": (-0.01287, -0.011316, -0.002219),
+    "bio_gripper_g2_right_finger": (-0.01379, 0.011745, -0.001039),
 }
 
-_BIO_GRIPPER_G2_COLLISION_ORIGIN_CASES = (
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
-        "link6",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_visual.glb.urdf",
-        "link5",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
-        "link5",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_visual.glb.urdf",
-        "link6",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-        "link6",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_visual.glb.urdf",
-        "link7",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
-        "link7",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_visual.glb.urdf",
-        "link6",
-    ),
-    (
-        PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_movable_visual.glb.urdf",
-        "link6",
-    ),
+_BIO_GRIPPER_G2_COLLISION_ORIGIN_URDFS = (
+    PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_visual.glb.urdf",
+    PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_movable_visual.glb.urdf",
 )
 
 _BIO_GRIPPER_G2_MOVABLE_COLLISION_ALIGNMENT_URDFS = (
@@ -221,6 +194,32 @@ def _rounded_xyz(value: str | None) -> tuple[float, float, float]:
 
 
 def _mesh_vertices(mesh_path: Path, trimesh_module) -> np.ndarray:
+    """Load mesh vertices, including Draco-compressed GLB visuals."""
+    if mesh_path.suffix.lower() == ".glb":
+        try:
+            from pygltflib import GLTF2
+            import DracoPy
+        except ImportError:
+            DracoPy = None  # type: ignore[assignment]
+            GLTF2 = None  # type: ignore[assignment]
+        if GLTF2 is not None and DracoPy is not None:
+            glb = GLTF2().load(str(mesh_path))
+            if glb.extensionsUsed and "KHR_draco_mesh_compression" in glb.extensionsUsed:
+                blob = glb.binary_blob() or b""
+                chunks: list[np.ndarray] = []
+                for mesh in glb.meshes or []:
+                    for prim in mesh.primitives or []:
+                        extensions = prim.extensions or {}
+                        draco = extensions.get("KHR_draco_mesh_compression")
+                        if not draco:
+                            continue
+                        view = glb.bufferViews[draco["bufferView"]]
+                        offset = view.byteOffset or 0
+                        decoded = DracoPy.decode(blob[offset : offset + view.byteLength])
+                        chunks.append(np.asarray(decoded.points, dtype=np.float64))
+                if chunks:
+                    return np.vstack(chunks)
+
     scene = trimesh_module.load(mesh_path, force="scene", process=False)
     vertices: list[np.ndarray] = []
     for node_name in scene.graph.nodes_geometry:
@@ -397,10 +396,9 @@ def test_bio_gripper_g2_urdfs_do_not_reference_legacy_short_stl_names() -> None:
 
 def test_bio_gripper_g2_collision_origins_align_stl_to_glb_reference() -> None:
     bad: list[str] = []
-    for urdf, reference in _BIO_GRIPPER_G2_COLLISION_ORIGIN_CASES:
+    for urdf in _BIO_GRIPPER_G2_COLLISION_ORIGIN_URDFS:
         actual = _collision_origin_pose_by_link(urdf)
-        expected = _BIO_GRIPPER_G2_COLLISION_ORIGINS[reference]
-        for link_name, expected_xyz in expected.items():
+        for link_name, expected_xyz in _BIO_GRIPPER_G2_COLLISION_ORIGINS.items():
             pose = actual.get(link_name)
             if pose is None:
                 bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: missing collision origin for {link_name}")
@@ -421,6 +419,8 @@ def test_bio_gripper_g2_collision_origins_align_stl_to_glb_reference() -> None:
 
 def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> None:
     trimesh = pytest.importorskip("trimesh")
+    pytest.importorskip("DracoPy")
+    pytest.importorskip("pygltflib")
     bad: list[str] = []
     for urdf in _BIO_GRIPPER_G2_MOVABLE_COLLISION_ALIGNMENT_URDFS:
         root = ET.parse(urdf).getroot()
@@ -452,6 +452,160 @@ def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> Non
                     f"{delta_mm:.3f} mm from visual GLB center"
                 )
     assert bad == []
+
+
+def test_bio_gripper_g2_visual_glb_budget() -> None:
+    """High-poly + native Draco should keep Bio G2 visual GLBs under 1 MiB."""
+    package_dir = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2"
+    visual_dir = package_dir / "meshes" / "visual"
+    glbs = sorted(
+        path
+        for path in visual_dir.rglob("*.glb")
+        if "visual_glb_src" not in path.parts and "visual_glb_raw" not in path.parts
+    )
+    assert glbs, "expected Bio G2 visual GLBs"
+    glb_total = sum(path.stat().st_size for path in glbs)
+    # Same tris as pre-slim hipoly; native draco_encoder ~0.65 MB vs DracoPy ~5.5 MB.
+    # Collision STL stay at original density; only GLB size is the optimization target.
+    assert glb_total < 1_000_000, f"Bio G2 visual GLBs total {glb_total} bytes; expected < 1 MB"
+    names = {path.name for path in glbs}
+    assert "bio_gripper_g2_visual.glb" in names
+    assert "bio_gripper_g2_base.glb" in names
+    assert "bio_gripper_g2_left_finger.glb" in names
+    assert "bio_gripper_g2_right_finger.glb" in names
+    assert not any(name.startswith("bio_gripper_g2_visual_link") for name in names)
+
+
+def test_gripper_g2_visual_glb_budget() -> None:
+    """Canonical Gripper G2 visual GLBs (native Draco) must stay under 1 MiB."""
+    package_dir = PROJECT_ROOT / "assets" / "urdf" / "gripper_g2"
+    visual_dir = package_dir / "meshes" / "visual"
+    glbs = sorted(
+        path
+        for path in visual_dir.rglob("*.glb")
+        if "visual_glb_src" not in path.parts and "visual_glb_raw" not in path.parts
+    )
+    assert glbs, "expected Gripper G2 visual GLBs"
+    glb_total = sum(path.stat().st_size for path in glbs)
+    assert glb_total < 1_000_000, f"Gripper G2 visual GLBs total {glb_total} bytes; expected < 1 MB"
+    names = {path.name for path in glbs}
+    assert "gripper_g2_static.glb" in names
+    assert "base.glb" in names
+    assert "left_finger.glb" in names
+    assert "right_finger.glb" in names
+    assert not any(name.startswith("gripper_g2_static_link") for name in names)
+    assert not any(part in {"link5", "link6", "link7"} for path in glbs for part in path.parts)
+
+
+def test_lite6_gripper_visual_glb_budget() -> None:
+    """Lite6 gripper visual GLBs (native Draco) must stay under 1 MiB."""
+    package_dir = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper"
+    visual_dir = package_dir / "meshes" / "visual"
+    glbs = sorted(visual_dir.rglob("*.glb"))
+    assert glbs, "expected Lite6 gripper visual GLBs"
+    glb_total = sum(path.stat().st_size for path in glbs)
+    assert glb_total < 1_000_000, f"Lite6 gripper visual GLBs total {glb_total} bytes; expected < 1 MB"
+    names = {path.name for path in glbs}
+    assert "lite6_gripper_static_link6.glb" in names
+    assert "shell.glb" in names
+    assert "finger1.glb" in names
+    assert "finger2.glb" in names
+
+
+def test_lite6_vacuum_gripper_visual_glb_budget() -> None:
+    """Lite6 vacuum gripper visual GLB (native Draco) must stay under 1 MiB."""
+    package_dir = PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper"
+    visual_dir = package_dir / "meshes" / "visual"
+    glbs = sorted(visual_dir.rglob("*.glb"))
+    assert glbs, "expected Lite6 vacuum gripper visual GLBs"
+    glb_total = sum(path.stat().st_size for path in glbs)
+    assert glb_total < 1_000_000, f"Lite6 vacuum visual GLBs total {glb_total} bytes; expected < 1 MB"
+    names = {path.name for path in glbs}
+    assert "lite6_vacuum_gripper_visual_link6.glb" in names
+
+
+@pytest.mark.parametrize(
+    ("arm", "visual_glb_dir", "budget", "expected_names"),
+    [
+        (
+            "xarm5",
+            "assets/urdf/xarm5/meshes/xarm5_1305/visual_glb",
+            1_500_000,
+            {"link_base.glb", "link1.glb", "link2.glb", "link3.glb", "link4.glb", "link5.glb"},
+        ),
+        (
+            "xarm6",
+            "assets/urdf/xarm6/meshes/xarm6_1305/visual_glb",
+            1_500_000,
+            {
+                "link_base.glb",
+                "link1.glb",
+                "link2.glb",
+                "link3.glb",
+                "link4.glb",
+                "link5.glb",
+                "link6.glb",
+            },
+        ),
+        (
+            "xarm7",
+            "assets/urdf/xarm7/meshes/xarm7_1305/visual_glb",
+            1_000_000,
+            {
+                "link_base.glb",
+                "link1.glb",
+                "link2.glb",
+                "link3.glb",
+                "link4.glb",
+                "link5.glb",
+                "link6.glb",
+                "link7.glb",
+            },
+        ),
+        (
+            "uf850",
+            "assets/urdf/uf850/meshes/uf850/visual_glb",
+            1_000_000,
+            {
+                "link_base.glb",
+                "link1.glb",
+                "link2.glb",
+                "link3.glb",
+                "link4.glb",
+                "link5.glb",
+                "link6.glb",
+            },
+        ),
+        (
+            "lite6",
+            "assets/urdf/lite6/meshes/lite6/visual_glb",
+            1_000_000,
+            {
+                "link_base.glb",
+                "link1.glb",
+                "link2.glb",
+                "link3.glb",
+                "link4.glb",
+                "link5.glb",
+                "link6.glb",
+            },
+        ),
+    ],
+)
+def test_arm_body_visual_glb_budget(
+    arm: str,
+    visual_glb_dir: str,
+    budget: int,
+    expected_names: set[str],
+) -> None:
+    """Arm-body visual GLBs (native Draco, STL untouched) stay within per-arm budgets."""
+    visual_dir = PROJECT_ROOT / visual_glb_dir
+    glbs = sorted(visual_dir.glob("*.glb"))
+    assert glbs, f"expected {arm} visual GLBs under {visual_glb_dir}"
+    glb_total = sum(path.stat().st_size for path in glbs)
+    assert glb_total < budget, f"{arm} visual GLBs total {glb_total} bytes; expected < {budget}"
+    names = {path.name for path in glbs}
+    assert names == expected_names, f"{arm} GLB names {names} != {expected_names}"
 
 
 def test_accessory_collision_meshes_are_stl_files() -> None:

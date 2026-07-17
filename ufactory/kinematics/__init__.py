@@ -18,9 +18,16 @@ from ufactory.kinematics.calibration import (
     resolve_kinematics_suffix,
     resolve_kinematics_suffix_from_ip,
     robot_name_from_firmware,
+    sn_matching_user_kinematics_yaml_exists,
+    user_kinematics_yaml_exists,
     validate_kinematics_calibration_request,
 )
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW, GRIPPER_DOWN_RPY_RAD
+from ufactory.kinematics.tcp_offset import (
+    pose_flange_to_tcp,
+    pose_tcp_to_flange,
+    read_tcp_offset,
+)
 
 __all__ = [
     "DEFAULT_KINEMATICS_SUFFIX_ENV",
@@ -38,9 +45,14 @@ __all__ = [
     "load_kinematics_calibration",
     "log_kinematics_sn_status",
     "parse_sn_model_code",
+    "pose_flange_to_tcp",
+    "pose_tcp_to_flange",
     "prepare_robot_model_for_verification",
+    "read_tcp_offset",
     "resolve_kinematics_suffix",
     "resolve_kinematics_suffix_from_ip",
     "robot_name_from_firmware",
+    "sn_matching_user_kinematics_yaml_exists",
+    "user_kinematics_yaml_exists",
     "validate_kinematics_calibration_request",
 ]

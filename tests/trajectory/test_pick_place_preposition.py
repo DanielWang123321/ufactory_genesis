@@ -301,7 +301,7 @@ def test_build_program_with_q_home_prepends_start_movej():
     assert np.allclose(home_seg.pose_start[:3], (0.30, 0.00, 0.30), atol=1e-3)
 
 
-def test_default_pick_place_layout_matches_v024_sequence():
+def test_default_pick_place_layout_matches_reference_sequence():
     config = load_runtime_config("xarm6")
     params = config.task.parameters
     assert tuple(map(float, params["fixed_object_position_m"])) == pytest.approx((0.30, 0.00, 0.015))
@@ -355,6 +355,7 @@ def test_lite6_pick_place_program_has_place_settle_not_grip_settle():
     assert "grip-settle" not in labels
 
 
+@pytest.mark.gpu
 def test_default_pick_place_program_preflight_passes_servo_j():
     pytest.importorskip("pinocchio")
     pytest.importorskip("genesis")

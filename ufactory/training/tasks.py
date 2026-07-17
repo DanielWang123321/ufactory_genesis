@@ -27,48 +27,6 @@ def build_train_config(
     return train_cfg
 
 
-def build_reach_task_configs(
-    robot: str,
-    *,
-    recipe_path: str | Path,
-    runtime_config_path: str | Path | None = None,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Resolve reach environment, reward, and robot configuration."""
-
-    config = load_runtime_config(robot, task="reach", config_path=runtime_config_path)
-    recipe = load_training_recipe(recipe_path)
-    params = config.task.parameters
-    env_cfg = deepcopy(recipe["environment"])
-    env_cfg.update(
-        {
-            "runtime_config_sha256": config.sha256,
-            "num_obs": config.robot.dof * 2 + 6,
-            "num_actions": config.robot.dof,
-            "action_scale": float(params["action_scale_rad"]),
-            "action_clip": float(params["action_clip"]),
-            "episode_length_s": float(params["episode_length_s"]),
-            "ctrl_dt": float(params["control_dt_s"]),
-            "servo_speed_rad_s": float(params["servo_speed_rad_s"]),
-            "target_pos_lower": list(params["target_position_lower_m"]),
-            "target_pos_upper": list(params["target_position_upper_m"]),
-        }
-    )
-    robot_cfg = {
-        # Reach controls only the configured arm joints. The runtime robot
-        # URDF may include a manipulation gripper, so use the registered
-        # arm-only model and keep the policy state exactly DOF-sized.
-        "urdf_path": robot_urdf(config.robot.key),
-        "ee_link_name": config.robot.ee_link,
-        "joint_names": list(config.robot.joint_names),
-        "default_qpos": list(config.arm.default_qpos_rad),
-        "kp": list(config.arm.kp),
-        "kv": list(config.arm.kv),
-        "force_lower": list(config.arm.force_lower_nm),
-        "force_upper": list(config.arm.force_upper_nm),
-    }
-    return env_cfg, deepcopy(recipe["reward"]), robot_cfg
-
-
 def build_pick_place_task_configs(
     robot: str,
     *,
@@ -101,7 +59,8 @@ def build_pick_place_task_configs(
             "success_hold_steps": int(params["success_hold_steps"]),
             "substeps": int(params["substeps"]),
             "gripper_open_mm": config.gripper.open_gap_m * 1000.0,
-            "gripper_close_mm": config.gripper.closed_gap_m * 1000.0,
+            # Grasp preload target (~22 mm), not the hardware dead-closed gap (0 mm).
+            "gripper_close_mm": float(params["grasp_gap_m"]) * 1000.0,
             "obj_size": list(object_spec.size_m),
             "obj_mass_kg": object_spec.mass_kg,
             "fixed_obj_pos": list(params["fixed_object_position_m"]),
@@ -110,12 +69,17 @@ def build_pick_place_task_configs(
             "obj_spawn_upper": list(params["object_spawn_upper_m"]),
             "target_spawn_lower": list(params["target_spawn_lower_m"]),
             "target_spawn_upper": list(params["target_spawn_upper_m"]),
+            # Recipe may set fixed_demo_layout; default true matches trajectory demo poses.
+            "fixed_demo_layout": bool(env_cfg.get("fixed_demo_layout", True)),
+            "place_phase_reset_frac": float(env_cfg.get("place_phase_reset_frac", 0.25)),
+            "place_phase_hover_z_m": float(env_cfg.get("place_phase_hover_z_m", 0.07)),
         }
     )
     gripper = config.gripper
     robot_cfg = {
         "urdf_path": robot_urdf(config.robot.key, config.robot.urdf),
-        "base_pos": [0.0, 0.0, env_cfg["table_height"]],
+        # Match trajectory pick-place scene (DEFAULT_ROBOT_BASE_POS xy = 0.30, 0.00).
+        "base_pos": [0.30, 0.0, env_cfg["table_height"]],
         "ik_link_name": config.robot.ee_link,
         "gripper_link_names": list(gripper.finger_link_names),
         "arm_joint_names": list(config.robot.joint_names),

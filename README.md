@@ -3,16 +3,36 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.7-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.8-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
+  <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, and trajectory pick-place / packaging examples.
 
-[中文](README.zh.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md) | [Security](SECURITY.md)
+[中文](README.zh.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
+
+## Project status
+
+- **0.2.x is Alpha / preview.** Public APIs may break between minor versions; pin a git tag for secondary development. See [ROADMAP.md](ROADMAP.md).
+- Hosted today on a **personal GitHub account** (`DanielWang123321/ufactory_genesis`). This is **not** an official UFACTORY organization repository and is **not** an official product support channel.
+- **0.3.x is planned** to move into a UFACTORY official GitHub organization and become the first user-facing supported surface. Until then, treat 0.2 docs and APIs as transitional.
+- xArm / UF850 / UFACTORY are trademarks of their respective owners; this repository does not claim official SDK endorsement.
+
+## Verification boundary
+
+| Layer | What it proves | Where it runs |
+|-------|----------------|---------------|
+| **Public CI** (`project-check fast` equivalent) | Lint, typecheck subset, CPU unit tests | GitHub Actions (no GPU, no Genesis install) |
+| **Local sim** (`project-check sim`) | In-process GPU / Genesis regression | Maintainer machines with `[sim]` |
+| **Maintainer hardware** (`sdk-sim` / `hardware`) | Cabinet SDK sim and listed real robots | Maintainer lab; optional sanitized summary on GitHub Releases |
+
+The **reference (pinned) baseline** is Python 3.13, Genesis World 1.2.2, and PyTorch 2.10.0+cu128. Newer Genesis releases may run when compatibility hooks still match; they are **not** treated as a maintainer-verified physics or hardware baseline until the local sim and hardware checks pass. Public CI does **not** replace those checks.
 
 ## Table of Contents
 
+- [Project status](#project-status)
+- [Verification boundary](#verification-boundary)
 - [Quick Start](#quick-start)
 - [Supported Robots](#supported-robots)
 - [GLB Visual Preview](#glb-visual-preview)
@@ -28,7 +48,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 
 ## Quick Start
 
-v0.2.7 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.2 or newer is required; the validated stack is Python 3.13, Genesis World 1.2.2, and PyTorch 2.10.0+cu128. Newer Genesis releases are allowed only when the runtime compatibility hooks remain available and are not physics- or hardware-validated until the full project matrix passes.
+v0.2.8 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.2 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
 
 ```bash
 # From a cloned repository
@@ -44,8 +64,8 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 # Preview xArm 6 GLB model
 python examples/visualization/view_robot.py --robot xarm6
 
-# Local quality report (does not replace pytest / release evidence)
-project-check
+# Local CPU quality check (same class as public CI; does not replace sim/hardware evidence)
+project-check fast
 ```
 
 Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names `xarm5` / `xarm6` / `xarm7` resolve to `xarm5_1305` / `xarm6_1305` / `xarm7_1305`. The explicit `*_1305` keys remain supported. Older model codes (11, 12, 1300–1304) are not bundled — supply your own URDF via `--urdf` or `prepare_robot_model_for_verification(robot_model=...)`.
@@ -104,7 +124,7 @@ Standalone movable gripper viewers are available beside the robot viewer as `vie
 
 ## Trajectory Pick-Place
 
-The configuration-driven v0.2.7 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
+The configuration-driven v0.2.8 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -174,7 +194,7 @@ python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j
 ```
 
-`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the validated Python 3.13 / Genesis 1.2.2 stack. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
+`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the reference Python 3.13 / Genesis 1.2.2 baseline. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
 
 | Flag | Description |
 |------|-------------|
@@ -197,7 +217,7 @@ After release, the main packaging scene never resets the cube, clears its veloci
 | Real-robot predictive safety | `.[real]` | Required; missing backends fail before motion |
 | Independent dynamics reference | `.[dynamics]` | Required; missing backends report an actionable error |
 
-Public examples in v0.2.7 do not ship an RL entry tree. Use `ufactory.training` when you need recipe loading, action scaling, or checkpoint inventories.
+Public examples in v0.2.8 do not ship an RL entry tree. Use `ufactory.training` when you need recipe loading, action scaling, or checkpoint inventories.
 
 ## API Quick Reference
 
@@ -274,7 +294,7 @@ Default dynamics validation poses for UF850 / Lite6 / xArm5 / xArm7 come from
 
 ## xArm 6
 
-xArm 6 remains the reference robot, but v0.2.7 no longer publishes per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
+xArm 6 remains the reference robot, but v0.2.8 no longer publishes per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
 
 ## Project Layout
 
@@ -295,7 +315,7 @@ ufactory/training/        # Safe checkpoint YAML/manifest helpers
 ufactory/visualization/   # GLB/PBR visualization helpers
 assets/                   # URDF, mesh, config, and scene assets
 examples/                 # Task-oriented visualization, kinematics, pick-place, and packaging entries
-scripts/                  # User-facing helper scripts
+scripts/                  # User helpers + maintainer tools (see scripts/README.md)
 tests/                    # Contributor pytest suite
 ```
 
@@ -307,7 +327,8 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md) code of cond
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+- **Code** in this repository is MIT — see [LICENSE](LICENSE).
+- **Robot URDF / mesh assets** include material derived from upstream UFACTORY / xArm ROS packages; see [NOTICE](NOTICE) for attribution and license notes. Do not treat the entire `assets/` tree as original MIT-only content.
 
 ## Citation
 
@@ -315,9 +336,10 @@ If you use genesis-ufactory in your research, please cite:
 
 ```bibtex
 @misc{genesis-ufactory,
-  author = {UFACTORY},
+  author = {Wang, Daniel},
   title = {genesis-ufactory: UFACTORY Robot Models for Genesis Simulation},
   year = {2026},
+  note = {Preview 0.2.x on personal GitHub; planned 0.3.x move to a UFACTORY organization repository},
   publisher = {GitHub},
   url = {https://github.com/DanielWang123321/ufactory_genesis}
 }

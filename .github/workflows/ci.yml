@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  fast:
+    name: project-check fast (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package (dev only; no Genesis / Torch)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff check
+        run: python -m ruff check .
+
+      - name: Ruff format
+        run: python -m ruff format --check .
+
+      - name: Mypy (domain subset)
+        run: |
+          python -m mypy --strict --follow-imports=skip \
+            ufactory/config \
+            ufactory/safety/models.py \
+            ufactory/safety/interfaces.py \
+            ufactory/safety/statistics.py \
+            ufactory/safety/sdk_sim.py \
+            ufactory/safety/gate.py \
+            ufactory/safety/approved.py \
+            ufactory/safety/clock.py \
+            ufactory/trajectory/segments.py \
+            ufactory/trajectory/planner.py \
+            ufactory/trajectory/validation.py \
+            ufactory/trajectory/compile.py \
+            ufactory/trajectory/execution.py \
+            ufactory/trajectory/preflight.py
+
+      - name: Compileall
+        run: python -m compileall -q ufactory examples scripts
+
+      - name: Pytest fast (no GPU / no Genesis required)
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          QD_KERNEL_COVERAGE: "0"
+        run: |
+          python -m pytest -q \
+            -m "not slow and not gpu and not integration and not display and not hardware" \
+            --cov=ufactory --cov-branch --cov-fail-under=75 \
+            --cov-report=term-missing
+
+      - name: Safety coverage
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          QD_KERNEL_COVERAGE: "0"
+        run: |
+          python -m pytest -q tests/safety \
+            --cov=ufactory.safety --cov-branch --cov-fail-under=90 \
+            --cov-report=term-missing

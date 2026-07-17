@@ -34,7 +34,7 @@ def test_validated_version_is_accepted_without_warning(monkeypatch):
 def test_newer_version_warns_only_once(monkeypatch):
     monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.2.3")
 
-    with pytest.warns(RuntimeWarning, match="only 1.2.2 has completed") as caught:
+    with pytest.warns(RuntimeWarning, match="only 1.2.2 is the project's reference baseline") as caught:
         compat.require_genesis_version()
         compat.require_genesis_version()
     assert len(caught) == 1
@@ -42,9 +42,9 @@ def test_newer_version_warns_only_once(monkeypatch):
 
 def test_newer_version_with_complete_capabilities_passes_and_warns(monkeypatch):
     monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.2.3")
-    import genesis as gs
+    gs = pytest.importorskip("genesis")
 
-    with pytest.warns(RuntimeWarning, match="only 1.2.2 has completed") as caught:
+    with pytest.warns(RuntimeWarning, match="only 1.2.2 is the project's reference baseline") as caught:
         assert compat.require_genesis_capabilities(gs, pbr=True, deferred_viewer=True) is gs
     assert len(caught) == 1
 
@@ -140,11 +140,15 @@ def test_ik_scratch_contract_allocates_expected_shape(monkeypatch):
 
 
 def test_installed_genesis_122_matches_runtime_and_hook_contracts():
-    if str(compat.require_genesis_version()) != "1.2.2":
-        pytest.skip("the full installed-contract assertion targets the validated 1.2.2 baseline")
-    import genesis as gs
-    import genesis.utils.gltf as gltf_utils
-    import genesis.utils.mesh as mesh_utils
+    gs = pytest.importorskip("genesis")
+    gltf_utils = pytest.importorskip("genesis.utils.gltf")
+    mesh_utils = pytest.importorskip("genesis.utils.mesh")
+    try:
+        version = compat.require_genesis_version()
+    except compat.GenesisCompatibilityError as exc:
+        pytest.skip(f"genesis-world metadata unavailable: {exc}")
+    if str(version) != "1.2.2":
+        pytest.skip("the full installed-contract assertion targets the reference 1.2.2 baseline")
 
     assert compat.require_genesis_runtime(gs) is gs
     compat.require_pbr_hooks(gs, gltf_utils, mesh_utils)

@@ -12,11 +12,13 @@ import torch
 
 from ufactory.kinematics.calibration import (
     get_robot_sn,
+    has_per_unit_kinematics_calibration,
     log_kinematics_sn_status,
     prepare_robot_model_for_verification,
     resolve_kinematics_suffix,
     validate_kinematics_calibration_request,
 )
+from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, pose_tcp_to_flange, read_tcp_offset
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile, robot_runtime_cli_choices
 from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
@@ -101,7 +103,7 @@ def _connect_sdk(ip: str):
     return arm
 
 
-def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, str, str | None]:
+def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, str, str | None, np.ndarray]:
     arm = _connect_sdk(args.ip)
     sn = get_robot_sn(arm)
     cli_suffix = args.kinematics_suffix
@@ -110,9 +112,13 @@ def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, s
         kinematics_yaml=args.kinematics_yaml,
         sn=sn,
         robot_name=runtime.model.robot_name,
+        kinematics_yaml_dir=args.kinematics_yaml_dir,
     )
     if resolved_suffix and not cli_suffix and args.kinematics_yaml is None:
-        print(f"kinematics_suffix: {resolved_suffix} (auto from SN {sn})")
+        if has_per_unit_kinematics_calibration(sn, runtime.model.robot_name):
+            print(f"kinematics_suffix: {resolved_suffix} (auto from SN {sn})")
+        else:
+            print(f"kinematics_suffix: {resolved_suffix} (auto from existing user YAML for SN {sn})")
     args.kinematics_suffix = resolved_suffix
     validate_kinematics_calibration_request(
         sn,
@@ -120,6 +126,7 @@ def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, s
         kinematics_yaml=args.kinematics_yaml,
         kinematics_suffix=args.kinematics_suffix,
         allow_sn_override=getattr(args, "force_kinematics", False),
+        kinematics_yaml_dir=args.kinematics_yaml_dir,
     )
     log_kinematics_sn_status(
         sn,
@@ -127,7 +134,10 @@ def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, s
         kinematics_yaml=args.kinematics_yaml,
         kinematics_suffix=args.kinematics_suffix,
         allow_sn_override=getattr(args, "force_kinematics", False),
+        kinematics_yaml_dir=args.kinematics_yaml_dir,
     )
+    tcp_offset = read_tcp_offset(arm)
+    print(f"tcp_offset     : {tcp_offset.tolist()}  (xyz mm, rpy rad; applied in FK/IK checks)")
     arm.motion_enable(enable=True)
     arm.set_mode(0)
     arm.set_state(0)
@@ -142,12 +152,12 @@ def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, s
         robot_name=runtime.model.robot_name,
         joint_count=runtime.model.dof,
     )
-    return arm, urdf_path, kinematics_yaml_path
+    return arm, urdf_path, kinematics_yaml_path, tcp_offset
 
 
 def run_fk_validation(args) -> int:
     runtime = get_robot_runtime_profile(args.robot)
-    arm, urdf_path, kinematics_yaml_path = _prepare_sdk_and_urdf(args, runtime)
+    arm, urdf_path, kinematics_yaml_path, tcp_offset = _prepare_sdk_and_urdf(args, runtime)
     print(f"Robot: {runtime.model.key}")
     print(f"URDF : {Path(urdf_path).resolve()}")
     if kinematics_yaml_path:
@@ -161,13 +171,14 @@ def run_fk_validation(args) -> int:
         code, pose = arm.get_forward_kinematics(q.tolist(), input_is_radian=True, return_is_radian=True)
         if code != 0:
             raise RuntimeError(f"SDK FK failed for {name}: code={code}")
-        sdk_pos_mm = np.asarray(pose[:3], dtype=np.float64)
-        sdk_rpy = np.asarray(pose[3:6], dtype=np.float64)
+        sdk_pose = np.asarray(pose[:6], dtype=np.float64)
         g_pos, g_quat = genesis_fk(robot, q, int(ee_link.idx_local))
         g_pos_mm = np.asarray(g_pos, dtype=np.float64) * 1000.0
         g_rpy = np.asarray(quat_to_rpy(g_quat), dtype=np.float64)
-        pos_mm = float(np.linalg.norm(g_pos_mm - sdk_pos_mm))
-        rpy_deg = max(angle_diff_deg(a, b) for a, b in zip(g_rpy, sdk_rpy))
+        flange_pose = np.concatenate([g_pos_mm, g_rpy])
+        genesis_tcp = pose_flange_to_tcp(flange_pose, tcp_offset)
+        pos_mm = float(np.linalg.norm(genesis_tcp[:3] - sdk_pose[:3]))
+        rpy_deg = max(angle_diff_deg(a, b) for a, b in zip(genesis_tcp[3:6], sdk_pose[3:6]))
         ok = pos_mm < PASS_POS_MM and rpy_deg < PASS_RPY_DEG
         print(f"{'PASS' if ok else 'FAIL'} {name}: pos={pos_mm:.2f}mm rpy={rpy_deg:.2f}deg")
         failed += 0 if ok else 1
@@ -183,7 +194,7 @@ def run_ik_validation(args) -> int:
     import genesis as gs
 
     runtime = get_robot_runtime_profile(args.robot)
-    arm, urdf_path, kinematics_yaml_path = _prepare_sdk_and_urdf(args, runtime)
+    arm, urdf_path, kinematics_yaml_path, tcp_offset = _prepare_sdk_and_urdf(args, runtime)
     print(f"Robot: {runtime.model.key}")
     print(f"URDF : {Path(urdf_path).resolve()}")
     if kinematics_yaml_path:
@@ -200,10 +211,10 @@ def run_ik_validation(args) -> int:
         if code != 0:
             print(f"SKIP ik_{i}: SDK FK code={code}")
             continue
-        target_pos_mm = np.asarray(pose[:3], dtype=np.float64)
-        target_rpy = np.asarray(pose[3:6], dtype=np.float64)
-        target_pos = target_pos_mm / 1000.0
-        target_quat = np.asarray(rpy_to_quat(*target_rpy), dtype=np.float64)
+        target_tcp = np.asarray(pose[:6], dtype=np.float64)
+        flange_pose = pose_tcp_to_flange(target_tcp, tcp_offset)
+        target_pos = flange_pose[:3] / 1000.0
+        target_quat = np.asarray(rpy_to_quat(*flange_pose[3:6]), dtype=np.float64)
         init_q = torch.tensor(q_seed, dtype=torch.float32, device=gs.device)
         result = robot.inverse_kinematics(
             link=ee_link,
@@ -225,8 +236,9 @@ def run_ik_validation(args) -> int:
             print(f"FAIL ik_{i}: SDK FK(solution) code={code2}")
             failed += 1
             continue
-        pos_mm = float(np.linalg.norm(np.asarray(pose2[:3], dtype=np.float64) - target_pos_mm))
-        rpy_deg = max(angle_diff_deg(a, b) for a, b in zip(pose2[3:6], target_rpy))
+        pose2_tcp = np.asarray(pose2[:6], dtype=np.float64)
+        pos_mm = float(np.linalg.norm(pose2_tcp[:3] - target_tcp[:3]))
+        rpy_deg = max(angle_diff_deg(a, b) for a, b in zip(pose2_tcp[3:6], target_tcp[3:6]))
         ok = pos_mm < PASS_POS_MM and rpy_deg < PASS_RPY_DEG
         print(f"{'PASS' if ok else 'FAIL'} ik_{i}: pos={pos_mm:.2f}mm rpy={rpy_deg:.2f}deg")
         failed += 0 if ok else 1

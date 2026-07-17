@@ -1,8 +1,9 @@
-"""Local quality checks for v0.2.7 (no remote CI required)."""
+"""Local quality checks (no remote CI required)."""
 
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import importlib.metadata
@@ -10,11 +11,13 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import tempfile
 import time
 from typing import Any, Sequence
+import tomllib
 
 import yaml
 
@@ -22,8 +25,32 @@ from ufactory.config import RepositoryAssetStore, load_runtime_config
 from ufactory.safety.gate import sha256_file
 
 
-MODES = ("fast", "sim", "sdk-sim", "hardware", "release")
+MODES = ("fast", "sim", "sdk-sim", "hardware", "release", "deep")
 ROBOT_KEYS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850", "lite6")
+
+# Evidence from an earlier commit may be reused when HEAD only touches these paths.
+EVIDENCE_CARRY_PATH_PREFIXES = (
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "LICENSE",
+    "docs/",
+    "examples/README",
+    "examples/README_cn.md",
+)
+
+FAST_CHECK_NAMES = (
+    "config-assets",
+    "ruff-check",
+    "ruff-format",
+    "mypy-domain",
+    "compileall",
+    "pytest-fast",
+    "pytest-safety-coverage",
+)
 
 
 @dataclass
@@ -49,6 +76,42 @@ def _git(args: Sequence[str], root: Path) -> str:
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
 
 
+def package_version(root: Path) -> str:
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = data.get("project", {}).get("version")
+    if not isinstance(version, str) or not version.strip():
+        raise ValueError("pyproject.toml project.version is required")
+    return version.strip()
+
+
+def _path_allowed_for_evidence_carry(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    for prefix in EVIDENCE_CARRY_PATH_PREFIXES:
+        if normalized == prefix.rstrip("/") or normalized.startswith(prefix):
+            return True
+    return False
+
+
+def commits_differ_only_by_docs(root: Path, base: str, head: str) -> bool:
+    if base == head:
+        return True
+    try:
+        diff = _git(("diff", "--name-only", f"{base}..{head}"), root)
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    paths = [line.strip() for line in diff.splitlines() if line.strip()]
+    if not paths:
+        return True
+    return all(_path_allowed_for_evidence_carry(path) for path in paths)
+
+
+def _fast_report_complete(report: dict[str, Any]) -> bool:
+    if report.get("mode") != "fast" or report.get("passed") is not True:
+        return False
+    names = {item.get("name") for item in report.get("checks", []) if isinstance(item, dict)}
+    return set(FAST_CHECK_NAMES).issubset(names)
+
+
 class ProjectCheck:
     def __init__(self, root: Path, mode: str) -> None:
         self.root = root
@@ -61,7 +124,14 @@ class ProjectCheck:
             self.commit = "unknown"
             self.dirty = True
 
-    def command(self, name: str, command: Sequence[str], *, env: dict[str, str] | None = None) -> CheckResult:
+    def command(
+        self,
+        name: str,
+        command: Sequence[str],
+        *,
+        env: dict[str, str] | None = None,
+        record: bool = True,
+    ) -> CheckResult:
         started = time.perf_counter()
         try:
             run = subprocess.run(
@@ -90,7 +160,8 @@ class ProjectCheck:
                 command=list(command),
                 reason=str(exc),
             )
-        self.results.append(result)
+        if record:
+            self.results.append(result)
         return result
 
     def record(self, name: str, function: Any) -> CheckResult:
@@ -187,8 +258,40 @@ class ProjectCheck:
         self.fast()
         self.command(
             "pytest-sim",
-            (sys.executable, "-m", "pytest", "-q", "-m", "gpu", "--maxfail=1"),
+            (sys.executable, "-m", "pytest", "-q", "-m", "gpu and not slow", "--maxfail=1"),
         )
+
+    def deep(self) -> None:
+        """Optional maintainer heavy suite (run ``project-check fast`` first).
+
+        Collects only GPU / integration / display / slow markers — not the full
+        unmarked unit suite. Five-robot cabinet CLI evidence belongs in
+        ``sdk-sim`` (already parallel by robot IP); in-process GPU stays serial.
+        """
+        self.command(
+            "pytest-deep",
+            (
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "-m",
+                "gpu or integration or display or slow",
+                "--maxfail=1",
+            ),
+        )
+
+    def _run_inventory_command(
+        self,
+        name: str,
+        command: list[str],
+        *,
+        robot_key: str,
+        serial_number: str,
+    ) -> CheckResult:
+        result = self.command(name, command, record=False)
+        result.data.update(robot_key=robot_key, serial_number=serial_number)
+        return result
 
     def _inventory(self, path: Path | None, mode: str, *, confirm_real: bool) -> None:
         if path is None or not path.is_file():
@@ -210,9 +313,10 @@ class ProjectCheck:
         if mode == "hardware" and not confirm_real:
             self.results.append(CheckResult("hardware-confirmation", "FAIL", 0.0, reason="--confirm-real is required"))
             return
-        # Inventory commands are intentionally explicit, never inferred.  Each
-        # row must point to a local evidence-producing command approved by the
-        # operator; absent commands cannot be marked PASS.
+
+        # Validate rows first, then run one robot's command matrix per worker so
+        # distinct IPs proceed in parallel while the same robot stays serial.
+        jobs: list[tuple[str, str, list[list[str]]]] = []
         for key in ROBOT_KEYS:
             serial = str(by_key[key].get("serial_number", "")).strip()
             if len(serial) < 8 or serial == "REQUIRED":
@@ -222,16 +326,93 @@ class ProjectCheck:
             if not isinstance(commands, list) or not commands:
                 self.incomplete(f"{mode}-{key}", "inventory has no approved command matrix")
                 continue
+            normalized: list[list[str]] = []
+            invalid = False
             for index, command in enumerate(commands):
                 if not isinstance(command, list) or not all(isinstance(item, str) for item in command):
                     self.results.append(
                         CheckResult(f"{mode}-{key}-{index}", "FAIL", 0.0, reason="command must be argv list")
                     )
-                    continue
-                result = self.command(f"{mode}-{key}-{index}", command)
-                result.data.update(robot_key=key, serial_number=serial)
+                    invalid = True
+                    break
+                normalized.append(list(command))
+            if not invalid:
+                jobs.append((key, serial, normalized))
+
+        if not jobs:
+            return
+
+        def _robot_job(item: tuple[str, str, list[list[str]]]) -> list[CheckResult]:
+            key, serial, commands = item
+            robot_results: list[CheckResult] = []
+            for index, command in enumerate(commands):
+                robot_results.append(
+                    self._run_inventory_command(
+                        f"{mode}-{key}-{index}",
+                        command,
+                        robot_key=key,
+                        serial_number=serial,
+                    )
+                )
+            return robot_results
+
+        # Cap workers at robot count; hardware/sdk-sim use distinct IPs per key.
+        with ThreadPoolExecutor(max_workers=min(len(jobs), len(ROBOT_KEYS))) as pool:
+            futures = [pool.submit(_robot_job, job) for job in jobs]
+            for future in as_completed(futures):
+                self.results.extend(future.result())
+
+        # Stable report order: robot key then command index.
+        inventory_prefix = f"{mode}-"
+        inventory_results = [item for item in self.results if item.name.startswith(inventory_prefix)]
+        other_results = [item for item in self.results if not item.name.startswith(inventory_prefix)]
+
+        def _sort_key(result: CheckResult) -> tuple[str, int]:
+            match = re.fullmatch(rf"{re.escape(mode)}-(.+)-(\d+)", result.name)
+            if match is None:
+                return (result.name, 0)
+            return (match.group(1), int(match.group(2)))
+
+        self.results = other_results + sorted(inventory_results, key=_sort_key)
+
+    def _find_reusable_fast_report(self) -> dict[str, Any] | None:
+        evidence_dir = self.root / "reports" / "project-check"
+        if not evidence_dir.is_dir():
+            return None
+        candidates: list[tuple[float, Path, dict[str, Any]]] = []
+        for path in evidence_dir.glob("*_fast.json"):
+            try:
+                report = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if report.get("git", {}).get("commit") != self.commit:
+                continue
+            if not _fast_report_complete(report):
+                continue
+            mtime = path.stat().st_mtime
+            candidates.append((mtime, path, report))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        _, path, report = candidates[0]
+        report = dict(report)
+        report["_reused_from"] = str(path)
+        return report
 
     def snapshot_fast(self) -> None:
+        reused = self._find_reusable_fast_report()
+        if reused is not None:
+            self.results.append(
+                CheckResult(
+                    "snapshot-fast",
+                    "PASS",
+                    0.0,
+                    reason="reused same-commit fast report",
+                    data={"snapshot_report": reused, "reused_from": reused.get("_reused_from")},
+                )
+            )
+            return
+
         # Use a detached worktree so snapshot tests that call ``git ls-files`` /
         # ``git show`` still have repository metadata (``git archive`` does not).
         with tempfile.TemporaryDirectory(prefix="ufactory-release-") as temp_dir:
@@ -268,26 +449,45 @@ class ProjectCheck:
             if result.status == "PASS" and report_path.is_file():
                 result.data["snapshot_report"] = json.loads(report_path.read_text(encoding="utf-8"))
 
+    def _collect_evidence(self, required: str) -> list[str]:
+        evidence_dir = self.root / "reports" / "project-check"
+        matches: list[str] = []
+        if not evidence_dir.is_dir():
+            return matches
+        for path in evidence_dir.glob(f"*_{required}.json"):
+            try:
+                report = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if report.get("passed") is not True:
+                continue
+            evidence_commit = report.get("git", {}).get("commit")
+            if not isinstance(evidence_commit, str) or not evidence_commit:
+                continue
+            if evidence_commit == self.commit or commits_differ_only_by_docs(self.root, evidence_commit, self.commit):
+                matches.append(str(path))
+        return matches
+
     def release(self, version: str | None) -> None:
-        if version != "0.2.7":
-            self.results.append(CheckResult("release-version", "FAIL", 0.0, reason="--version must be 0.2.7"))
+        expected = package_version(self.root)
+        if version != expected:
+            self.results.append(
+                CheckResult(
+                    "release-version",
+                    "FAIL",
+                    0.0,
+                    reason=f"--version must match pyproject.toml ({expected})",
+                )
+            )
         else:
-            self.results.append(CheckResult("release-version", "PASS", 0.0))
+            self.results.append(CheckResult("release-version", "PASS", 0.0, data={"version": expected}))
         if self.dirty:
             self.results.append(CheckResult("clean-worktree", "FAIL", 0.0, reason="release requires a clean worktree"))
             return
         self.results.append(CheckResult("clean-worktree", "PASS", 0.0))
         self.snapshot_fast()
-        evidence_dir = self.root / "reports" / "project-check"
         for required in ("sim", "sdk-sim", "hardware"):
-            matches = []
-            for path in evidence_dir.glob(f"*_{required}.json") if evidence_dir.is_dir() else ():
-                try:
-                    report = json.loads(path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if report.get("git", {}).get("commit") == self.commit and report.get("passed") is True:
-                    matches.append(str(path))
+            matches = self._collect_evidence(required)
             if matches:
                 self.results.append(CheckResult(f"evidence-{required}", "PASS", 0.0, data={"reports": matches}))
             else:
@@ -411,6 +611,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         check.fast()
     elif args.mode == "sim":
         check.sim()
+    elif args.mode == "deep":
+        check.deep()
     elif args.mode == "sdk-sim":
         check._inventory(args.inventory, "sdk-sim", confirm_real=False)
     elif args.mode == "hardware":

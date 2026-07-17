@@ -2,7 +2,7 @@
 
 [中文](README_cn.md)
 
-v0.2.7 organizes public examples by task. Shared implementations live in `ufactory`; these scripts only parse user-facing arguments and start the requested workflow.
+v0.2.8 organizes public examples by task. Shared implementations live in `ufactory`; these scripts only parse user-facing arguments and start the requested workflow.
 
 ## Prerequisites
 
@@ -34,7 +34,7 @@ Public directories in this release:
 | `pick_place/` | Multi-robot pick-place entry + optional overlay |
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
 
-RL example scripts are not part of the v0.2.7 public tree. Library helpers remain under `ufactory.training` when `.[rl]` is installed.
+RL example scripts are not part of the v0.2.8 public tree. Library helpers remain under `ufactory.training` when `.[rl]` is installed.
 
 ## Visualization
 
@@ -102,7 +102,7 @@ dynamics-sim-collision-check --robot xarm6 --ip <ip>
 | `--print-config` | Print resolved runtime YAML and exit |
 | `--ip` | Controller IP (or set `XARM_IP`) for `sdk-sim` / `real` |
 | `--calibration` | Exact per-unit kinematics YAML (required for real) |
-| `--confirm-real` | Explicit confirmation gate for `--mode real` |
+| `--confirm-real` | Explicit confirmation requirement for `--mode real` |
 | `--visual` | `sim`: force Genesis viewer; `real`: kinematic mirror (not for dry-run/sdk-sim) |
 | `--report` | Optional report output path |
 
@@ -183,7 +183,7 @@ Real mode never loops. xArm5, xArm7, and UF850 `--mode real` fail before control
 
 ## Migration from v0.2.6
 
-| Old category | v0.2.7 path |
+| Old category | v0.2.8 path |
 |---|---|
 | `examples/view_robot_glb.py`, per-robot viewers | `examples/visualization/view_robot.py --robot <key>` |
 | Root/per-robot FK and IK wrappers | `examples/kinematics/verify_{robot,fk,ik}.py` |

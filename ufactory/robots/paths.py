@@ -194,15 +194,21 @@ def uf850_visual_glb_urdf(with_bio_gripper_g2: bool = False) -> str:
 
 
 def bio_gripper_g2_glb(ee_link: str = "link6") -> str:
-    return _existing_path(BIO_GRIPPER_G2_ASSETS / "meshes" / "visual" / f"bio_gripper_g2_visual_{ee_link}.glb")
+    """Return canonical Bio Gripper G2 static visual GLB (ee_link ignored; kept for API compat)."""
+    _ = ee_link
+    return _existing_path(BIO_GRIPPER_G2_ASSETS / "meshes" / "visual" / "bio_gripper_g2_visual.glb")
 
 
 def gripper_g2_static_glb(ee_link: str = "link6") -> str:
-    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / f"gripper_g2_static_{ee_link}.glb")
+    """Return canonical Gripper G2 static visual GLB (ee_link ignored; kept for API compat)."""
+    _ = ee_link
+    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / "gripper_g2_static.glb")
 
 
 def gripper_g2_base_glb(ee_link: str = "link6") -> str:
-    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / "visual_glb" / ee_link / "base.glb")
+    """Return canonical Gripper G2 movable base visual GLB (ee_link ignored; kept for API compat)."""
+    _ = ee_link
+    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / "visual_glb" / "base.glb")
 
 
 def gripper_g2_shared_glb(name: str) -> str:

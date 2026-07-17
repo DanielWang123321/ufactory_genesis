@@ -17,7 +17,7 @@
 
 Bio G2 的 STL collision 文件使用 `bio_gripper_g2_*.stl` 唯一文件名。不要把组合 URDF 改回 `link_base.stl` / `left_finger.stl` / `right_finger.stl`：Genesis 经 MuJoCo 回读 URDF collision mesh 时会按 mesh basename 建资产表，机械臂自身也有 `link_base.stl`，短名会让 Bio G2 底座误用机械臂底座 collision。
 
-组合 URDF 和 `bio_gripper_g2_movable_visual.urdf` 中的 Bio G2 STL collision 通过非零 `<collision><origin>` 对齐参考 GLB。xArm5 使用 link5 参考偏移，xArm6/UF850/standalone movable 使用 link6 参考偏移，xArm7 使用 link7 参考偏移。不要把这些 collision origin 改回 `0 0 0`，否则 collision 网格会相对 GLB 法兰/base 向前错位约 23 mm。
+组合 URDF 和 `bio_gripper_g2_movable_visual.urdf` 中的 Bio G2 STL collision 通过非零 `<collision><origin>` 对齐 canonical 视觉 GLB。所有机型共用同一套 collision origin（视觉几何已统一）；机型差异只体现在 `bio_gripper_g2_attach` joint origin。不要把这些 collision origin 改回 `0 0 0`，否则 collision 网格会相对 GLB 错位。
 
 Genesis standalone collision 检查使用 `bio_gripper_g2_movable_visual.urdf`：文件名保留 visual 历史命名，但 `view_accessory_collision.py` 以 `vis_mode="collision"` 渲染 `<collision>` 中的 STL。实际机械臂搭配仍应优先使用 `robot_visual_glb_urdf(..., with_bio_gripper_g2=True)` 返回的组合 URDF。
 
@@ -28,13 +28,14 @@ bio_gripper_g2/
 ├── bio_gripper_g2.urdf                      # standalone 模板 URDF
 ├── bio_gripper_g2_movable_visual.urdf       # 仅夹爪可动视觉 URDF（调试用）
 ├── meshes/
-│   └── visual/                           # GLB 视觉网格
-│       ├── bio_gripper_g2_visual_*.glb   # 合并静态 GLB（分 link5/link6/link7）
-│       ├── visual_glb/*/bio_gripper_g2_*.glb  # 可动分体 GLB（分 link5/link6/link7）
+│   └── visual/
+│       ├── bio_gripper_g2_visual.glb        # 合并静态高模 GLB（全机型共用，原生 Draco）
+│       ├── visual_glb/bio_gripper_g2_*.glb  # 可动分体高模 GLB（全机型共用，原生 Draco）
 │       ├── bio_gripper_g2_left_finger.stl / bio_gripper_g2_right_finger.stl
-│       ├── bio_gripper_g2_link_base.stl  # URDF collision 引用的唯一命名 STL
-│       └── left_finger.stl / right_finger.stl / link_base.stl  # 兼容旧路径的同内容别名
+│       └── bio_gripper_g2_link_base.stl     # URDF collision 引用的唯一命名 STL
 ```
+
+视觉保持 link6 高模面数（静态 ~479k / 可动 ~273k tris），用原生 `draco_encoder`（非 DracoPy.encode）压 **视觉 GLB** 体积（合计目标 **< 1 MiB**）。collision STL 保持原密度，不做抽面。
 
 ## 加载方式
 
@@ -106,3 +107,8 @@ python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripp
 python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripper-g2 --movable --gripper-state open
 python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripper-g2 --movable --gripper-state closed
 ```
+
+## Source / License
+
+- 模板与网格源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。
+- 本仓库维护组合 URDF、共享 `visual_glb/`（取消按 link5/6/7 重复副本）与 Draco 压缩 GLB。

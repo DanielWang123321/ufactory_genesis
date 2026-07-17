@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-v0.2.7 将公开示例改为按任务分类。共享实现已下沉到 `ufactory`，示例脚本仅解析用户参数并启动对应流程。
+v0.2.8 将公开示例改为按任务分类。共享实现已下沉到 `ufactory`，示例脚本仅解析用户参数并启动对应流程。
 
 ## 前置条件
 
@@ -34,7 +34,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 | `pick_place/` | 多机型抓放入口与可选覆盖配置 |
 | `packaging/` | 多机型装箱展示入口与可选覆盖配置 |
 
-强化学习示例脚本不在 v0.2.7 公开树中。安装 `.[rl]` 后仍可使用库级 `ufactory.training`。
+强化学习示例脚本不在 v0.2.8 公开树中。安装 `.[rl]` 后仍可使用库级 `ufactory.training`。
 
 ## 可视化
 
@@ -183,7 +183,7 @@ python examples/packaging/run.py \
 
 ## 从 v0.2.6 迁移
 
-| 旧类别 | v0.2.7 路径 |
+| 旧类别 | v0.2.8 路径 |
 |---|---|
 | `examples/view_robot_glb.py`、各机型查看器 | `examples/visualization/view_robot.py --robot <key>` |
 | 根目录/各机型 FK、IK 包装 | `examples/kinematics/verify_{robot,fk,ik}.py` |

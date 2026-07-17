@@ -48,9 +48,9 @@ def test_exception_restores_and_clears_material_queue(monkeypatch):
 
 
 def test_incompatible_hook_fails_before_any_global_patch(monkeypatch):
-    import genesis as gs
-    import genesis.utils.gltf as gltf_utils
-    import genesis.utils.mesh as mesh_utils
+    gs = pytest.importorskip("genesis")
+    gltf_utils = pytest.importorskip("genesis.utils.gltf")
+    mesh_utils = pytest.importorskip("genesis.utils.mesh")
 
     original_parse = gltf_utils.parse_mesh_glb
     original_from_trimesh = gs.Mesh.__dict__["from_trimesh"]

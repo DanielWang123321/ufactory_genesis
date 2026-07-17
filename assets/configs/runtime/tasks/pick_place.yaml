@@ -17,14 +17,17 @@ task:
     target_spawn_lower_m: [0.28, 0.25, 0.015]
     target_spawn_upper_m: [0.34, 0.35, 0.015]
     grasp_center_offset_z_m: 0.065
+    # RL grasp close target (not robot closed_gap_m=0). Matches trajectory DEFAULT_GRIPPER_GRASP_GAP_M.
+    grasp_gap_m: 0.022
     # Preserve the v0.2.6 RL lift-reward normalization and workspace contract.
     # CLI trajectory heights remain independently derived from dry_heights().
     lift_height_m: 0.08
     workspace_lower_m: [0.10, -0.35, -0.02]
     workspace_upper_m: [0.65, 0.35, 0.55]
     place_success_distance_m: 0.04
-    success_hold_steps: 10
-    substeps: 4
+    success_hold_steps: 5
+    # Match trajectory pick-place / runtime simulation default (build_scene substeps).
+    substeps: 8
   allowed_contacts:
     start: []
     "home->pregrasp": []

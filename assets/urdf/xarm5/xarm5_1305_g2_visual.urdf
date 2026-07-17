@@ -180,9 +180,9 @@
   </joint>
   <link name="gripper_g2_visual">
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0.001665 -0.002350 -0.000310" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../gripper_g2/meshes/visual/gripper_g2_static_link5.glb" />
+        <mesh filename="../gripper_g2/meshes/visual/gripper_g2_static.glb" />
       </geometry>
       <material name="White" />
     </visual>

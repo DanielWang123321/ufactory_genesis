@@ -74,9 +74,12 @@ rc = cli_hardware_check([
 ```bash
 pip install -e ".[dynamics,dev]"
 
-# PR 默认（秒级，无 GPU / 无子进程冒烟）
-pytest -m "not hardware and not gpu and not integration and not display"
+# 日常 / PR 默认
+project-check fast
 
-# 发版前完整仿真回归
-pytest -m "not hardware"
+# 发版前 GPU（不含 @pytest.mark.slow 全矩阵）
+project-check sim
+
+# 可选深测（维护者）
+project-check deep
 ```

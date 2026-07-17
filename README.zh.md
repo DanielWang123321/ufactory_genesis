@@ -3,16 +3,36 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.7-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.8-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
+  <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化、运动学校准，以及轨迹抓放 / 装箱示例。
 
-[English](README.md) | [贡献指南](CONTRIBUTING.md) | [变更日志](CHANGELOG.md) | [安全策略](SECURITY.md)
+[English](README.md) | [贡献指南](CONTRIBUTING.md) | [变更日志](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全策略](SECURITY.md)
+
+## 项目状态
+
+- **0.2.x 为 Alpha / 预览版。** 公开 API 可能在次版本之间破坏；二次开发请钉住 git tag。详见 [ROADMAP.md](ROADMAP.md)。
+- 当前托管在**个人 GitHub 账号**（`DanielWang123321/ufactory_genesis`）。**不是** UFACTORY 官方组织仓库，也**不是**官方产品支持渠道。
+- **计划在 0.3.x 迁入 UFACTORY 官方 GitHub 组织**，并作为首个面向用户的支持面。在此之前，将 0.2 文档与 API 视为过渡。
+- xArm / UF850 / UFACTORY 等为权利方商标；本仓库不宣称获得官方 SDK 背书。
+
+## 验证边界
+
+| 层级 | 能证明什么 | 在哪里跑 |
+|------|------------|----------|
+| **公开 CI**（等价 `project-check fast`） | 静态检查、部分类型检查、CPU 单元测试 | GitHub Actions（无 GPU、不安装 Genesis） |
+| **本地仿真**（`project-check sim`） | 进程内 GPU / Genesis 回归 | 维护者机器，需 `[sim]` |
+| **维护者真机**（`sdk-sim` / `hardware`） | 柜控 SDK 仿真与所列真机 | 维护者实验室；可选脱敏摘要挂在 GitHub Release |
+
+**参考（锁定）基线**为 Python 3.13、Genesis World 1.2.2、PyTorch 2.10.0+cu128。更高 Genesis 版本仅在运行时兼容钩子仍匹配时可运行；在本地仿真与真机检查通过前，**不**视为维护者已核实的物理或硬件基线。公开 CI **不能**替代上述检查。
 
 ## 目录
 
+- [项目状态](#项目状态)
+- [验证边界](#验证边界)
 - [快速开始](#快速开始)
 - [支持机型](#支持机型)
 - [GLB 视觉预览](#glb-视觉预览)
@@ -28,7 +48,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 
 ## 快速开始
 
-v0.2.7 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。最低要求 Genesis World 1.2.2；已验证环境为 Python 3.13、Genesis World 1.2.2、PyTorch 2.10.0+cu128。更高 Genesis 版本仅在项目依赖的运行时接口仍兼容时允许运行，完成全量仿真和真机矩阵前不视为已通过物理或硬件验证。
+v0.2.8 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。最低要求 Genesis World 1.2.2。视觉 GLB 已用 Draco 压缩（典型 `assets/` 检出约数十 MB 量级）。
 
 ```bash
 # 在已克隆仓库根目录
@@ -44,8 +64,8 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 # 预览 xArm 6 GLB 模型
 python examples/visualization/view_robot.py --robot xarm6
 
-# 本地质量报告（不替代 pytest / 发布证据）
-project-check
+# 本地 CPU 质量检查（与公开 CI 同级；不替代仿真/真机证据）
+project-check fast
 ```
 
 2024 年起新发货 xArm 均为 **XI1305** 硬件版本。短名 `xarm5` / `xarm6` / `xarm7` 会解析为 `xarm5_1305` / `xarm6_1305` / `xarm7_1305`；显式 `*_1305` 键名仍兼容。旧型号码（11、12、1300–1304）不在本仓库内置，请通过 `--urdf` 或 `prepare_robot_model_for_verification(robot_model=...)` 传入自有 URDF。
@@ -104,7 +124,7 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-v0.2.7 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
+v0.2.8 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
@@ -196,7 +216,7 @@ python examples/packaging/run.py \
 | 真机预测安全 | `.[real]` | 必需；缺失时在运动前明确失败 |
 | 独立动力学参考 | `.[dynamics]` | 必需；缺失时给出可执行的错误信息 |
 
-v0.2.7 公开示例不包含 RL 入口目录。需要 recipe 加载、动作缩放或检查点清单时，请直接使用 `ufactory.training`。
+v0.2.8 公开示例不包含 RL 入口目录。需要 recipe 加载、动作缩放或检查点清单时，请直接使用 `ufactory.training`。
 
 ## API 快速参考
 
@@ -275,7 +295,7 @@ UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自
 
 ## xArm 6
 
-xArm 6 仍是本仓库参考机型，但 v0.2.7 不再发布各机型包装目录。请通过按任务组织的入口选择它，例如 `examples/visualization/view_robot.py --robot xarm6` 或 `examples/packaging/run.py --robot xarm6 ...`。完整的 v0.2.6 路径迁移表见 [examples/README_cn.md](examples/README_cn.md)。
+xArm 6 仍是本仓库参考机型，但 v0.2.8 不再发布各机型包装目录。请通过按任务组织的入口选择它，例如 `examples/visualization/view_robot.py --robot xarm6` 或 `examples/packaging/run.py --robot xarm6 ...`。完整的 v0.2.6 路径迁移表见 [examples/README_cn.md](examples/README_cn.md)。
 
 ## 项目结构
 
@@ -296,7 +316,7 @@ ufactory/training/        # 安全检查点 YAML/清单辅助
 ufactory/visualization/   # GLB/PBR 可视化辅助
 assets/                   # URDF、mesh、配置与场景资产
 examples/                 # 按任务组织的可视化、运动学、抓放与装箱入口
-scripts/                  # 用户可用辅助脚本
+scripts/                  # 用户辅助脚本与维护者工具（见 scripts/README.md）
 tests/                    # 贡献者 Pytest 回归
 ```
 
@@ -308,7 +328,8 @@ tests/                    # 贡献者 Pytest 回归
 
 ## 开源协议
 
-MIT — 详见 [LICENSE](LICENSE)。
+- 本仓库**代码**为 MIT — 详见 [LICENSE](LICENSE)。
+- **机器人 URDF / 网格资产**含源自上游 UFACTORY / xArm ROS 软件包的内容；归属与许可说明见 [NOTICE](NOTICE)。请勿将整个 `assets/` 树视为纯原创 MIT 内容。
 
 ## 引用
 
@@ -316,9 +337,10 @@ MIT — 详见 [LICENSE](LICENSE)。
 
 ```bibtex
 @misc{genesis-ufactory,
-  author = {UFACTORY},
+  author = {Wang, Daniel},
   title = {genesis-ufactory: UFACTORY Robot Models for Genesis Simulation},
   year = {2026},
+  note = {Preview 0.2.x on personal GitHub; planned 0.3.x move to a UFACTORY organization repository},
   publisher = {GitHub},
   url = {https://github.com/DanielWang123321/ufactory_genesis}
 }

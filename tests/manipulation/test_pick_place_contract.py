@@ -47,19 +47,31 @@ def test_pick_place_task_defaults_are_runtime_bound():
     env_cfg, reward_cfg, robot_cfg = build_pick_place_task_configs("xarm6", recipe_path=recipe)
 
     assert env_cfg["num_obs"] == 30
-    assert env_cfg["num_actions"] == 7
+    assert env_cfg["num_actions"] == 4
     assert env_cfg["action_scale"] == pytest.approx(0.01)
-    assert env_cfg["max_joint_delta_rad"] == pytest.approx(0.01)
+    assert env_cfg["max_cartesian_delta_m"] == pytest.approx(0.01)
+    assert env_cfg["default_ee_pos"] == pytest.approx((0.30, 0.00, 0.30))
     assert env_cfg["gripper_open_mm"] == pytest.approx(84.0)
-    assert env_cfg["gripper_close_mm"] == pytest.approx(0.0)
+    assert env_cfg["gripper_close_mm"] == pytest.approx(22.0)
     assert env_cfg["gripper_delta_mm"] == pytest.approx(4.0)
+    assert env_cfg["success_hold_steps"] == 5
+    assert env_cfg["substeps"] == 8
+    assert env_cfg["fixed_demo_layout"] is True
+    assert env_cfg["place_phase_reset_frac"] == pytest.approx(0.25)
+    assert env_cfg["place_phase_hover_z_m"] == pytest.approx(0.07)
     object_spec = resolve_pick_place_object_spec(load_runtime_config("xarm6"))
     assert env_cfg["obj_size"] == pytest.approx(object_spec.size_m)
     assert env_cfg["obj_mass_kg"] == pytest.approx(object_spec.mass_kg)
-    assert env_cfg["runtime_config_sha256"] == load_runtime_config("xarm6").sha256
+    assert env_cfg["runtime_config_sha256"] == load_runtime_config("xarm6", task="pick_place").sha256
     assert env_cfg["fixed_obj_pos"] == pytest.approx((0.30, 0.00, 0.015))
     assert env_cfg["fixed_target_pos"] == pytest.approx((0.30, 0.30, 0.015))
-    assert robot_cfg["base_pos"] == [0.0, 0.0, env_cfg["table_height"]]
+    assert robot_cfg["base_pos"] == [0.30, 0.0, env_cfg["table_height"]]
+    assert "keypoints" in reward_cfg
+    assert "place_xy" in reward_cfg
+    assert "place_z" in reward_cfg
+    assert "lower" in reward_cfg
+    assert "holding_table" in reward_cfg
+    assert "place" not in reward_cfg
     assert "workspace_violation" in reward_cfg
 
 
