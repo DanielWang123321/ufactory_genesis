@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 from ufactory.dynamics.analysis import (
     build_dynamics_sample,
