@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public CI mypy `--strict` failures in `ufactory/safety/gate.py` (joint-bound annotations and orientation-step index typing).
 - `test_frac_down_on_grasp_forgetting` no longer depends on a local RL recipe's `place_phase_reset_frac` value.
 - Packaging simulation no longer opens a deferred viewer or hangs in `_hold_final_view` unless `--visual` is set (headless CPU/Windows runs can exit after cycles).
+- Public CI pytest collection skips Torch/Genesis-dependent modules (and the local-only RL next-params helper) when those stacks are not installed.
 
 ### Security
 
