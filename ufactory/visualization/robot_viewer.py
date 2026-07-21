@@ -137,11 +137,18 @@ def _fk_link_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
     return links_pos[0, idx].cpu().numpy()
 
 
-def run_glb_diagnose(profile: RobotModelSpec, *, with_gripper_g2: bool = False) -> None:
+def run_glb_diagnose(
+    profile: RobotModelSpec,
+    *,
+    with_gripper_g2: bool = False,
+    backend: str = "gpu",
+) -> None:
     """Headless GLB/STL link pose diagnostic for any supported arm."""
+    from ufactory.simulation import genesis_backend_constant
+
     require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
-    gs.init(backend=gs.gpu)
+    gs.init(backend=genesis_backend_constant(gs, backend))
     stl_path = robot_urdf(profile.key)
     glb_path = robot_visual_glb_urdf(profile.key, with_gripper_g2=with_gripper_g2)
     link_names = tuple(["link_base"] + [f"link{i}" for i in range(1, profile.dof + 1)])
@@ -323,10 +330,13 @@ def run_glb_viewer(
     gripper_demo: bool = False,
     show_tcp: bool = False,
     show_base_axes: bool = False,
+    backend: str = "gpu",
 ) -> None:
+    from ufactory.simulation import genesis_backend_constant
+
     require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
-    gs.init(backend=gs.gpu)
+    gs.init(backend=genesis_backend_constant(gs, backend))
     scene = gs.Scene(
         viewer_options=gs.options.ViewerOptions(
             camera_pos=(1.5, -1.5, 1.5),

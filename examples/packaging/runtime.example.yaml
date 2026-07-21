@@ -1,6 +1,11 @@
 schema_version: 1
 # Optional strict overlay used with --config. This example changes only a
 # user-facing task setting; robot, safety, and physical defaults stay central.
+#
+# Without a Genesis-supported GPU, force CPU:
+#   simulation:
+#     backend: cpu
+# Or pass --backend cpu on the CLI.
 task:
   parameters:
     post_release_settle_s: 0.500

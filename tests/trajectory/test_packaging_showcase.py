@@ -317,6 +317,7 @@ def test_packaging_cli_forwards_repetition_to_showcase(
         loop=loop,
         table_height=None,
         config=None,
+        backend=None,
         capture_keyframes=False,
     )
 

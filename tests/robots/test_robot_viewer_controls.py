@@ -97,6 +97,7 @@ class _FakeVisualizer:
 
 
 class _FakeGenesis:
+    cpu = "fake-cpu"
     gpu = "fake-gpu"
     options = types.SimpleNamespace(ViewerOptions=_FakeOptions, SimOptions=_FakeOptions)
     morphs = types.SimpleNamespace(URDF=_FakeURDF)

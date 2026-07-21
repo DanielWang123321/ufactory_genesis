@@ -59,6 +59,12 @@ def main() -> None:
         action="store_true",
         help="Show temporary robot-base RGB axes at origin (X=red, Y=green, Z=blue)",
     )
+    parser.add_argument(
+        "--backend",
+        choices=("cpu", "gpu"),
+        default="gpu",
+        help="Genesis backend (use cpu without a supported GPU)",
+    )
     args = parser.parse_args()
 
     profile = get_robot_profile(args.robot)
@@ -84,7 +90,7 @@ def main() -> None:
         parser.error(f"{args.robot} does not support Lite6 Vacuum Gripper")
 
     if args.diagnose:
-        run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2)
+        run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2, backend=args.backend)
         return
 
     urdf_path = robot_visual_glb_urdf(
@@ -104,6 +110,7 @@ def main() -> None:
         gripper_demo=args.gripper_demo,
         show_tcp=args.show_tcp,
         show_base_axes=args.show_base_axes,
+        backend=args.backend,
     )
 
 

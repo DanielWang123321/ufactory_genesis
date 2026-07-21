@@ -43,7 +43,7 @@ from ufactory.safety import validate_sdk_simulation
 from ufactory.safety.adapters import PinocchioCollisionBackend, PinocchioKinematicsBackend
 from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 from ufactory.safety.gate import program_sha256
-from ufactory.simulation import GenesisRuntimeManager
+from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
@@ -137,6 +137,10 @@ def _run_sim(args: argparse.Namespace) -> int:
         sim_args.extend(("--table-height", str(args.table_height)))
     if args.config is not None:
         sim_args.extend(("--config", str(args.config)))
+    if getattr(args, "backend", None) is not None:
+        sim_args.extend(("--backend", str(args.backend)))
+    if getattr(args, "visual", False):
+        sim_args.append("--visual")
     if args.capture_keyframes:
         sim_args.append("--capture-keyframes")
     return _packaging_simulation_main(sim_args)
@@ -161,6 +165,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--mode", default="sim", choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", default="servo_j", choices=("servo_j", "servo_cartesian"))
     parser.add_argument("--config", type=Path)
+    parser.add_argument(
+        "--backend",
+        choices=("cpu", "gpu"),
+        default=None,
+        help="Override simulation.backend for Genesis (use cpu without a supported GPU)",
+    )
     parser.add_argument("--print-config", action="store_true")
     parser.add_argument("--ip", default=None)
     parser.add_argument("--calibration", type=Path)
@@ -197,6 +207,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mode == "real":
         args.loop = False
     config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config)
+    if args.backend is not None:
+        config = override_simulation_backend(config, args.backend)
     if args.print_config:
         print(dump_runtime_config(config), end="")
         return 0

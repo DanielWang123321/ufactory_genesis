@@ -3,15 +3,42 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from dataclasses import replace
 import threading
 from types import TracebackType
+from typing import TYPE_CHECKING
 
 from ufactory.config.models import SimulationConfig
-from ufactory.simulation.compat import require_genesis_runtime
+
+if TYPE_CHECKING:
+    from ufactory.config.models import ResolvedRuntimeConfig
+
+BACKEND_INIT_HINT = (
+    "Genesis backend init failed. If this machine has no Genesis-supported GPU "
+    "(including older cards that still enumerate under CUDA), use --backend cpu "
+    "or set simulation.backend: cpu in a --config overlay, and install the CPU "
+    "PyTorch wheel from https://pytorch.org before pip install -e '.[sim]'."
+)
 
 
 class GenesisRuntimeError(RuntimeError):
     pass
+
+
+def override_simulation_backend(config: ResolvedRuntimeConfig, backend: str) -> ResolvedRuntimeConfig:
+    """Return config with simulation.backend replaced (cli/overlay override)."""
+    if backend not in {"cpu", "gpu"}:
+        raise ValueError("simulation backend must be cpu or gpu")
+    if config.simulation.backend == backend:
+        return config
+    return replace(config, simulation=replace(config.simulation, backend=backend))
+
+
+def genesis_backend_constant(gs_module: object, backend: str) -> object:
+    """Map config backend string to genesis.cpu / genesis.gpu."""
+    if backend not in {"cpu", "gpu"}:
+        raise ValueError("simulation backend must be cpu or gpu")
+    return gs_module.gpu if backend == "gpu" else gs_module.cpu
 
 
 class GenesisRuntimeManager(AbstractContextManager["GenesisRuntimeManager"]):
@@ -37,15 +64,19 @@ class GenesisRuntimeManager(AbstractContextManager["GenesisRuntimeManager"]):
         with self._lock:
             if self.__class__._active is not None:
                 raise GenesisRuntimeError("another GenesisRuntimeManager already owns this process")
-            gs = require_genesis_runtime()
+            from ufactory.simulation.compat import require_genesis_runtime
 
-            backend = gs.gpu if self.config.backend == "gpu" else gs.cpu
-            gs.init(
-                backend=backend,
-                precision=self.config.precision,
-                logging_level="warning",
-                seed=self.config.seed,
-            )
+            gs = require_genesis_runtime()
+            backend = genesis_backend_constant(gs, self.config.backend)
+            try:
+                gs.init(
+                    backend=backend,
+                    precision=self.config.precision,
+                    logging_level="warning",
+                    seed=self.config.seed,
+                )
+            except Exception as exc:  # noqa: BLE001 — surface actionable install/backend guidance
+                raise GenesisRuntimeError(BACKEND_INIT_HINT) from exc
             self.initialized = True
             self.__class__._active = self
         return self

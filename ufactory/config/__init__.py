@@ -1,6 +1,12 @@
 """Stable public API for v0.2.5 runtime configuration."""
 
-from ufactory.config.assets import AssetLayoutError, RepositoryAssetStore
+from ufactory.config.assets import (
+    AssetLayoutError,
+    AssetStore,
+    PackageAssetStore,
+    RepositoryAssetStore,
+    discover_asset_store,
+)
 from ufactory.config.loader import ConfigError, dump_runtime_config, load_runtime_config, runtime_config_dict
 from ufactory.config.models import (
     ArmControlProfile,
@@ -18,15 +24,18 @@ from ufactory.config.models import (
 __all__ = [
     "ArmControlProfile",
     "AssetLayoutError",
+    "AssetStore",
     "ConfigError",
     "GripperProfile",
     "GraspObjectSpec",
     "MotionConfig",
+    "PackageAssetStore",
     "RepositoryAssetStore",
     "ResolvedRuntimeConfig",
     "RobotSpec",
     "SimulationConfig",
     "TaskProfile",
+    "discover_asset_store",
     "dump_runtime_config",
     "load_runtime_config",
     "runtime_config_dict",

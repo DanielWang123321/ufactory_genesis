@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] — 2026-07-21
+
+### Added
+
+- Windows / CPU-only simulation path for pick-place and packaging: `--backend cpu|gpu`, packaging sim uses `GenesisRuntimeManager`, and bilingual install notes for CPU torch + unsupported GPUs.
+- `AssetStore` protocol with `RepositoryAssetStore` (default) and `PackageAssetStore` extension point for a future wheel layout; discovery remains fail-closed on a source checkout. PyPI upload is not part of this release.
+
+### Fixed
+
+- Public CI mypy `--strict` failures in `ufactory/safety/gate.py` (joint-bound annotations and orientation-step index typing).
+- `test_frac_down_on_grasp_forgetting` no longer depends on a local RL recipe's `place_phase_reset_frac` value.
+- Packaging simulation no longer opens a deferred viewer or hangs in `_hold_final_view` unless `--visual` is set (headless CPU/Windows runs can exit after cycles).
+
 ## [0.2.8] — 2026-07-17
 
 ### Added

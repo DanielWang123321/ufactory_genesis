@@ -5,9 +5,12 @@ and drop it into the configured open cardboard box.
 
 Usage:
     export NUMBA_CACHE_DIR=~/.cache/numba
+    # Windows PowerShell: $env:NUMBA_CACHE_DIR="$env:USERPROFILE\\.cache\\numba"
     python scripts/generate_showcase_textures.py   # first time only
     ufactory-packaging-showcase --robot xarm6 --mode sim
     ufactory-packaging-showcase --robot lite6 --mode sim --cycles 3
+    # Without a Genesis-supported GPU:
+    ufactory-packaging-showcase --robot xarm6 --mode sim --backend cpu
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from ufactory.manipulation.packaging.scene import (
     make_layout,
 )
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
 from ufactory.trajectory.scene import TrajSceneContext
@@ -637,6 +641,10 @@ def _cycle_failure_reason(report: SimReport, layout, task_layout) -> str | None:
 
 
 def _hold_final_view(scene) -> None:
+    visualizer = getattr(scene, "visualizer", None)
+    viewer = getattr(visualizer, "viewer", None) if visualizer is not None else None
+    if viewer is None:
+        return
     try:
         while True:
             scene.step()
@@ -687,12 +695,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--speed", type=float, default=1.0, help="Motion speed multiplier")
     parser.add_argument(
+        "--visual",
+        action="store_true",
+        help="Open the interactive viewer and hold the final frame until the window closes",
+    )
+    parser.add_argument(
         "--executor",
         choices=("servo_j", "servo_cartesian"),
         default="servo_cartesian",
         help="Simulation arm target stream (default: servo_cartesian)",
     )
     parser.add_argument("--config", type=Path, help="Optional packaging task YAML override")
+    parser.add_argument(
+        "--backend",
+        choices=("cpu", "gpu"),
+        default=None,
+        help="Override simulation.backend (use cpu without a Genesis-supported GPU)",
+    )
     repetition = parser.add_mutually_exclusive_group()
     repetition.add_argument(
         "--cycles",
@@ -713,10 +732,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     runtime_config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config)
+    if args.backend is not None:
+        runtime_config = override_simulation_backend(runtime_config, args.backend)
 
     require_genesis_capabilities(gs, pbr=True, deferred_viewer=True)
-    gs.init(backend=gs.gpu, precision="32", logging_level="warning", seed=1)
+    with GenesisRuntimeManager(runtime_config.simulation):
+        return _run_packaging_sim_body(args, runtime_config)
 
+
+def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
     table_top_z = (
         args.table_height if args.table_height is not None else make_layout(runtime_config=runtime_config).table_top_z
     )
@@ -731,6 +755,7 @@ def main(argv: list[str] | None = None) -> int:
     stiffen_gripper_mimic_constraints(robot)
 
     print(f"{runtime_config.robot.key} packaging showcase — Ctrl+C to exit")
+    print(f"  simulation.backend={runtime_config.simulation.backend}")
     infinite, cycle_limit = _resolve_repetition(args.cycles, args.loop)
     task_layout = packaging_layout(runtime_config)
     cycle_text = "infinite" if infinite else str(cycle_limit)
@@ -739,7 +764,8 @@ def main(argv: list[str] | None = None) -> int:
     ctx = init_showcase_robot(robot, layout, scene, runtime_config=runtime_config)
     hold_robot_home(robot, scene, ctx, steps=_scale_steps(SETTLE_STEPS, args.speed))
 
-    start_deferred_viewer(scene)
+    if args.visual:
+        start_deferred_viewer(scene)
 
     if args.capture_keyframes:
         _reset_block(block, layout)
@@ -772,12 +798,16 @@ def main(argv: list[str] | None = None) -> int:
                 break
             print(f"Cycle {cycle}/{total} complete.")
 
-        if failed:
-            print("No further cycles will run. Viewer stays open for inspection.")
-        elif not infinite:
-            print(f"\nCompleted {cycle_limit} cycle(s). Viewer stays open.")
-        if failed or not infinite:
+        if args.visual and (failed or not infinite):
+            if failed:
+                print("No further cycles will run. Viewer stays open for inspection.")
+            else:
+                print(f"\nCompleted {cycle_limit} cycle(s). Viewer stays open.")
             _hold_final_view(scene)
+        elif failed:
+            print("No further cycles will run.")
+        elif not infinite:
+            print(f"\nCompleted {cycle_limit} cycle(s).")
     except KeyboardInterrupt:
         return 1 if failed else 0
     return 1 if failed else 0

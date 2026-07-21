@@ -23,13 +23,21 @@ def run_standalone_gripper_viewer(
     *,
     headless_steps: int = 600,
 ) -> None:
+    from ufactory.simulation import genesis_backend_constant
+
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--headless", action="store_true", help="Run without viewer window")
+    parser.add_argument(
+        "--backend",
+        choices=("cpu", "gpu"),
+        default="gpu",
+        help="Genesis backend (use cpu without a supported GPU)",
+    )
     args = parser.parse_args()
 
     require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
-    gs.init(backend=gs.gpu, logging_level="error")
+    gs.init(backend=genesis_backend_constant(gs, args.backend), logging_level="error")
     scene = gs.Scene(
         show_viewer=not args.headless,
         sim_options=gs.options.SimOptions(dt=0.01),

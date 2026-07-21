@@ -20,10 +20,16 @@ pip install -e ".[sim]"
 3. 运行依赖 Genesis 的流程前，设置可写的 Numba 缓存目录：
 
 ```bash
+# Linux / macOS
 export NUMBA_CACHE_DIR=~/.cache/numba
+
+# Windows PowerShell
+# $env:NUMBA_CACHE_DIR="$env:USERPROFILE\.cache\numba"
 ```
 
 4. 支持的 `--robot`：`xarm5`、`xarm6`、`xarm7`、`uf850`、`lite6`。
+
+5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。详见根目录 README「Windows 与无可用 GPU 仿真」。
 
 本版公开目录：
 
@@ -69,6 +75,7 @@ python examples/visualization/view_lite6_gripper.py
 | `--show-tcp` | 法兰 TCP 红色标记（默认隐藏） |
 | `--diagnose` | 无窗口 STL/GLB 连杆位姿诊断 |
 | `--headless` | 不打开查看器窗口 |
+| `--backend` | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
 
 ## 运动学
 
@@ -98,6 +105,7 @@ dynamics-sim-collision-check --robot xarm6 --ip <ip>
 | `--robot` | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
 | `--mode` | 必选：`sim`（Genesis）、`dry-run`（离线预检，不连控制器）、`sdk-sim`（控制器仿真）、`real` |
 | `--executor` | 必选：`servo_j` 或 `servo_cartesian` |
+| `--backend` | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
 | `--config` | 可选的严格局部覆盖 YAML |
 | `--print-config` | 打印解析后的运行时 YAML 后退出 |
 | `--ip` | 控制器 IP（或设置 `XARM_IP`），用于 `sdk-sim` / `real` |
@@ -118,6 +126,10 @@ python examples/pick_place/run.py \
 # Genesis 仿真并打开查看器
 python examples/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
+
+# 仅 CPU / 不支持的显卡
+python examples/pick_place/run.py \
+  --robot lite6 --mode sim --executor servo_cartesian --backend cpu
 
 # 可选覆盖（仅写出的字段覆盖 assets/configs/runtime）
 python examples/pick_place/run.py \
@@ -147,15 +159,20 @@ python scripts/generate_showcase_textures.py
 | `--robot` | 默认 `xarm6`；五机型均支持 sim / dry-run / sdk-sim |
 | `--mode` | 默认 `sim`；与抓放相同的四种模式 |
 | `--executor` | 默认 `servo_j`；也可 `servo_cartesian` |
+| `--backend` | 可选：`cpu` / `gpu`；含义与抓放相同 |
 | `--cycles N` | 精确仿真轮数（默认 1） |
 | `--speed` | 仿真播放倍率（`>1` 更快） |
 | `--table-height` | 仅覆盖仿真展示高度，不改变基座系几何 |
 | `--config` / `--print-config` / `--ip` / `--calibration` / `--confirm-real` / `--visual` / `--report` | 含义与抓放相同 |
 
 ```bash
-# 一轮仿真并保持最终画面
+# 一轮仿真结束后退出（加 --visual 可保持最终画面）
 python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j
+
+# 仅 CPU / 不支持的显卡
+python examples/packaging/run.py \
+  --robot xarm6 --mode sim --executor servo_j --backend cpu
 
 # 三轮回归
 python examples/packaging/run.py \

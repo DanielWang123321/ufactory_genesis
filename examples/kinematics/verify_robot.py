@@ -38,13 +38,15 @@ def resolve_entity_name(entity, requested_name: str, kind: str) -> str:
     raise KeyError(f"{kind} not found: {requested_name}")
 
 
-def run_tests(profile_key: str, urdf_path: str, vis: bool) -> None:
+def run_tests(profile_key: str, urdf_path: str, vis: bool, *, backend: str = "gpu") -> None:
+    from ufactory.simulation import genesis_backend_constant
+
     profile = get_robot_profile(profile_key)
     jnames = joint_names(profile)
     ee = profile.ee_link
 
     require_genesis_runtime(gs)
-    gs.init(backend=gs.gpu)
+    gs.init(backend=genesis_backend_constant(gs, backend))
     scene = gs.Scene(show_viewer=vis, sim_options=gs.options.SimOptions(dt=0.01))
     robot = scene.add_entity(
         gs.morphs.URDF(file=urdf_path, fixed=True, requires_jac_and_IK=True),
@@ -87,6 +89,12 @@ def main() -> None:
     parser.add_argument("--kinematics-suffix", default=None)
     parser.add_argument("--kinematics-yaml", default=None)
     parser.add_argument("-v", "--vis", action="store_true")
+    parser.add_argument(
+        "--backend",
+        choices=("cpu", "gpu"),
+        default="gpu",
+        help="Genesis backend (use cpu without a supported GPU)",
+    )
     args = parser.parse_args()
 
     profile = get_robot_profile(args.robot)
@@ -98,7 +106,7 @@ def main() -> None:
         robot_name=profile.robot_name,
         joint_count=profile.dof,
     )
-    run_tests(profile.key, urdf_path, args.vis)
+    run_tests(profile.key, urdf_path, args.vis, backend=args.backend)
     print(f"\nAll checks passed for {profile.key}")
 
 

@@ -24,9 +24,11 @@ def _base() -> dict:
 
 
 def test_frac_down_on_grasp_forgetting():
+    base = _base()
+    base["environment"]["place_phase_reset_frac"] = 0.25
     tag, recipe = decide(
         {"grasp_pct": 40.0, "place_pct": 25.0, "success_pct": 5.0},
-        _base(),
+        base,
     )
     assert tag == "frac_down"
     assert recipe["environment"]["place_phase_reset_frac"] == 0.2

@@ -216,11 +216,59 @@ def test_packaging_sim_forwarding_preserves_selected_robot(monkeypatch: pytest.M
         loop = None
         table_height = None
         config = None
+        backend = None
+        visual = False
         capture_keyframes = False
 
     assert packaging._run_sim(Args()) == 0
     assert received[:2] == ["--robot", "lite6"]
     assert received[-2:] == ["--cycles", "3"]
+
+
+def test_packaging_sim_forwarding_includes_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ufactory.cli import packaging
+
+    received: list[str] = []
+    monkeypatch.setattr(packaging, "_packaging_simulation_main", lambda argv: received.extend(argv) or 0)
+
+    class Args:
+        robot = "xarm6"
+        speed = 1.0
+        executor = "servo_j"
+        cycles = None
+        loop = None
+        table_height = None
+        config = None
+        backend = "cpu"
+        visual = False
+        capture_keyframes = False
+
+    assert packaging._run_sim(Args()) == 0
+    assert "--backend" in received
+    assert received[received.index("--backend") + 1] == "cpu"
+    assert "--visual" not in received
+
+
+def test_packaging_sim_forwarding_includes_visual(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ufactory.cli import packaging
+
+    received: list[str] = []
+    monkeypatch.setattr(packaging, "_packaging_simulation_main", lambda argv: received.extend(argv) or 0)
+
+    class Args:
+        robot = "xarm6"
+        speed = 1.0
+        executor = "servo_j"
+        cycles = None
+        loop = None
+        table_height = None
+        config = None
+        backend = None
+        visual = True
+        capture_keyframes = False
+
+    assert packaging._run_sim(Args()) == 0
+    assert "--visual" in received
 
 
 def _run_packaging_physics_cycles(robot: str, executor: str, cycles: int) -> None:

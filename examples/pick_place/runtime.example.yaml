@@ -1,6 +1,12 @@
 schema_version: 1
 # Optional strict overlay used with --config. Core defaults remain under
 # assets/configs/runtime and omitted fields inherit from those defaults.
+#
+# Without a Genesis-supported GPU (CPU-only machine, or an unsupported card
+# such as older GeForce that still enumerates under CUDA), force CPU:
+#   simulation:
+#     backend: cpu
+# Or pass --backend cpu on the CLI.
 motion:
   cartesian_speed_m_s: 0.150
   cartesian_acceleration_m_s2: 0.800

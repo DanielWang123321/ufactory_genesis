@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.8-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.9-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
@@ -34,6 +34,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 - [项目状态](#项目状态)
 - [验证边界](#验证边界)
 - [快速开始](#快速开始)
+- [Windows 与无可用 GPU 仿真](#windows-与无可用-gpu-仿真)
 - [支持机型](#支持机型)
 - [GLB 视觉预览](#glb-视觉预览)
 - [轨迹抓放](#轨迹抓放)
@@ -48,7 +49,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 
 ## 快速开始
 
-v0.2.8 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。最低要求 Genesis World 1.2.2。视觉 GLB 已用 Draco 压缩（典型 `assets/` 检出约数十 MB 量级）。
+v0.2.9 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。最低要求 Genesis World 1.2.2。视觉 GLB 已用 Draco 压缩（典型 `assets/` 检出约数十 MB 量级）。
 
 ```bash
 # 在已克隆仓库根目录
@@ -69,6 +70,39 @@ project-check fast
 ```
 
 2024 年起新发货 xArm 均为 **XI1305** 硬件版本。短名 `xarm5` / `xarm6` / `xarm7` 会解析为 `xarm5_1305` / `xarm6_1305` / `xarm7_1305`；显式 `*_1305` 键名仍兼容。旧型号码（11、12、1300–1304）不在本仓库内置，请通过 `--urdf` 或 `prepare_robot_model_for_verification(robot_model=...)` 传入自有 URDF。
+
+## Windows 与无可用 GPU 仿真
+
+抓放 / 装箱的 `--mode sim`（以及 GLB 预览）可在 Windows、以及没有 Genesis 支持显卡的机器上运行。强化学习不在本路径范围内。
+
+**先安装 CPU 版 PyTorch**，再安装本包（Genesis World ≥ 1.2.2）：
+
+```bash
+# Linux / Windows — CPU torch（最新 CPU 源见 https://pytorch.org）
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -e ".[sim]"
+# 装箱贴图（可选）: pip install -e ".[showcase]"
+```
+
+默认 `simulation.backend` 为 `gpu`（维护机优先 GPU）。若机器有显卡但**不被 Genesis 支持**（例如仍会被 CUDA 枚举到的旧卡），**不要依赖** GPU→CPU 自动回退，请强制 CPU：
+
+```bash
+python examples/visualization/view_robot.py --robot xarm6 --backend cpu
+python examples/pick_place/run.py --robot lite6 --mode sim --executor servo_cartesian --backend cpu
+python examples/packaging/run.py --robot xarm6 --mode sim --executor servo_j --backend cpu
+```
+
+也可在 `--config` 覆盖里写 `simulation.backend: cpu`。可选设置 `QD_ENABLE_CUDA=0` 跳过 CUDA 探测。保持默认 `GS_ENABLE_NDARRAY=1`。Windows 上不要设置 `PYOPENGL_PLATFORM=osmesa`。
+
+**Windows（PowerShell）Numba 缓存：**
+
+```powershell
+$env:NUMBA_CACHE_DIR="$env:USERPROFILE\.cache\numba"
+# 不支持的显卡上可选：
+# $env:QD_ENABLE_CUDA="0"
+```
+
+`.[real]` / Pinocchio dry-run 不在本条 Windows/无可用 GPU 目标内。
 
 ## 支持机型
 
@@ -124,7 +158,7 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-v0.2.8 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
+v0.2.9 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
@@ -216,7 +250,7 @@ python examples/packaging/run.py \
 | 真机预测安全 | `.[real]` | 必需；缺失时在运动前明确失败 |
 | 独立动力学参考 | `.[dynamics]` | 必需；缺失时给出可执行的错误信息 |
 
-v0.2.8 公开示例不包含 RL 入口目录。需要 recipe 加载、动作缩放或检查点清单时，请直接使用 `ufactory.training`。
+v0.2.9 公开示例不包含 RL 入口目录。需要 recipe 加载、动作缩放或检查点清单时，请直接使用 `ufactory.training`。
 
 ## API 快速参考
 
@@ -295,7 +329,7 @@ UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自
 
 ## xArm 6
 
-xArm 6 仍是本仓库参考机型，但 v0.2.8 不再发布各机型包装目录。请通过按任务组织的入口选择它，例如 `examples/visualization/view_robot.py --robot xarm6` 或 `examples/packaging/run.py --robot xarm6 ...`。完整的 v0.2.6 路径迁移表见 [examples/README_cn.md](examples/README_cn.md)。
+xArm 6 仍是本仓库参考机型，但 v0.2.9 不再发布各机型包装目录。请通过按任务组织的入口选择它，例如 `examples/visualization/view_robot.py --robot xarm6` 或 `examples/packaging/run.py --robot xarm6 ...`。完整的 v0.2.6 路径迁移表见 [examples/README_cn.md](examples/README_cn.md)。
 
 ## 项目结构
 

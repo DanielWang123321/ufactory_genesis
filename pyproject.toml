@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.8"
+version = "0.2.9"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -147,7 +147,8 @@ check_untyped_defs = true
 
 # Source delivery policy: only a cloned repository plus ``pip install -e .``
 # is supported. Wheels/sdists and remote asset downloads are intentionally not
-# part of v0.2.8; RepositoryAssetStore fails closed outside this layout.
+# part of v0.2.x; discover_asset_store fails closed outside a source checkout.
+# PackageAssetStore is the 0.3.x extension point and is not populated yet.
 
 [tool.setuptools.packages.find]
 where = ["."]

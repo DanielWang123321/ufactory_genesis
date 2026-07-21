@@ -29,7 +29,7 @@ from ufactory.safety import validate_sdk_simulation
 from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBackend, PinocchioKinematicsBackend
 from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 from ufactory.safety.gate import program_sha256, sha256_file
-from ufactory.simulation import GenesisRuntimeManager
+from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real, execute_sim
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
@@ -646,6 +646,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--mode", required=True, choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", required=True, choices=("servo_j", "servo_cartesian"))
     parser.add_argument("--config", type=Path)
+    parser.add_argument(
+        "--backend",
+        choices=("cpu", "gpu"),
+        default=None,
+        help="Override simulation.backend for Genesis (use cpu without a supported GPU)",
+    )
     parser.add_argument("--print-config", action="store_true")
     parser.add_argument("--ip", default=None)
     parser.add_argument("--calibration", type=Path)
@@ -669,6 +675,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--visual is only supported with --mode sim or --mode real")
 
     config = load_runtime_config(args.robot, config_path=args.config)
+    if args.backend is not None:
+        config = override_simulation_backend(config, args.backend)
     if args.print_config:
         print(dump_runtime_config(config), end="")
         return 0

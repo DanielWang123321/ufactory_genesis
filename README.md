@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.8-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.2.9-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
@@ -34,6 +34,7 @@ The **reference (pinned) baseline** is Python 3.13, Genesis World 1.2.2, and PyT
 - [Project status](#project-status)
 - [Verification boundary](#verification-boundary)
 - [Quick Start](#quick-start)
+- [Windows and CPU-only simulation](#windows-and-cpu-only-simulation)
 - [Supported Robots](#supported-robots)
 - [GLB Visual Preview](#glb-visual-preview)
 - [Trajectory Pick-Place](#trajectory-pick-place)
@@ -48,7 +49,7 @@ The **reference (pinned) baseline** is Python 3.13, Genesis World 1.2.2, and PyT
 
 ## Quick Start
 
-v0.2.8 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.2 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
+v0.2.9 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.2 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
 
 ```bash
 # From a cloned repository
@@ -69,6 +70,39 @@ project-check fast
 ```
 
 Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names `xarm5` / `xarm6` / `xarm7` resolve to `xarm5_1305` / `xarm6_1305` / `xarm7_1305`. The explicit `*_1305` keys remain supported. Older model codes (11, 12, 1300–1304) are not bundled — supply your own URDF via `--urdf` or `prepare_robot_model_for_verification(robot_model=...)`.
+
+## Windows and CPU-only simulation
+
+Pick-place and packaging `--mode sim` (plus GLB preview) can run on Windows and on machines without a Genesis-supported GPU. Reinforcement learning is out of scope for this path.
+
+**Install CPU PyTorch first**, then this package (Genesis World ≥ 1.2.2):
+
+```bash
+# Linux / Windows — CPU torch (see https://pytorch.org for the current CPU index)
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -e ".[sim]"
+# Packaging textures (optional): pip install -e ".[showcase]"
+```
+
+Default `simulation.backend` is `gpu` (prefer GPU on maintainer machines). **Do not rely on automatic GPU→CPU fallback** when a card is present but unsupported by Genesis (for example older GeForce that still enumerates under CUDA). Force CPU:
+
+```bash
+python examples/visualization/view_robot.py --robot xarm6 --backend cpu
+python examples/pick_place/run.py --robot lite6 --mode sim --executor servo_cartesian --backend cpu
+python examples/packaging/run.py --robot xarm6 --mode sim --executor servo_j --backend cpu
+```
+
+Or set `simulation.backend: cpu` in a `--config` overlay. Optional: `QD_ENABLE_CUDA=0` to skip CUDA probing. Keep default `GS_ENABLE_NDARRAY=1`. Do not set `PYOPENGL_PLATFORM=osmesa` on Windows.
+
+**Windows (PowerShell) Numba cache:**
+
+```powershell
+$env:NUMBA_CACHE_DIR="$env:USERPROFILE\.cache\numba"
+# optional on unsupported GPUs:
+# $env:QD_ENABLE_CUDA="0"
+```
+
+`.[real]` / Pinocchio dry-run backends are not part of this Windows/CPU-only goal.
 
 ## Supported Robots
 
@@ -124,7 +158,7 @@ Standalone movable gripper viewers are available beside the robot viewer as `vie
 
 ## Trajectory Pick-Place
 
-The configuration-driven v0.2.8 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
+The configuration-driven v0.2.9 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -217,7 +251,7 @@ After release, the main packaging scene never resets the cube, clears its veloci
 | Real-robot predictive safety | `.[real]` | Required; missing backends fail before motion |
 | Independent dynamics reference | `.[dynamics]` | Required; missing backends report an actionable error |
 
-Public examples in v0.2.8 do not ship an RL entry tree. Use `ufactory.training` when you need recipe loading, action scaling, or checkpoint inventories.
+Public examples in v0.2.9 do not ship an RL entry tree. Use `ufactory.training` when you need recipe loading, action scaling, or checkpoint inventories.
 
 ## API Quick Reference
 
@@ -294,7 +328,7 @@ Default dynamics validation poses for UF850 / Lite6 / xArm5 / xArm7 come from
 
 ## xArm 6
 
-xArm 6 remains the reference robot, but v0.2.8 no longer publishes per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
+xArm 6 remains the reference robot, but v0.2.9 no longer publishes per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
 
 ## Project Layout
 

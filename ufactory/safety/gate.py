@@ -119,8 +119,8 @@ class SafetyGate:
         scene_sha256: str,
     ) -> None:
         self.config = config
-        self.joint_lower_rad = np.asarray(tuple(joint_lower_rad), dtype=np.float64)
-        self.joint_upper_rad = np.asarray(tuple(joint_upper_rad), dtype=np.float64)
+        self.joint_lower_rad: FloatArray = np.asarray(tuple(joint_lower_rad), dtype=np.float64)
+        self.joint_upper_rad: FloatArray = np.asarray(tuple(joint_upper_rad), dtype=np.float64)
         self.kinematics = kinematics
         self.collision = collision
         self.urdf_sha256 = str(urdf_sha256)
@@ -451,13 +451,14 @@ class SafetyGate:
                 dots = np.sum(timeline.quaternion_xyzw[:-1] * timeline.quaternion_xyzw[1:], axis=1)
                 steps = 2.0 * np.arccos(np.clip(np.abs(dots), 0.0, 1.0))
                 bad = np.flatnonzero(steps > self.config.safety.max_orientation_step_rad)
-                for index in bad:
+                for raw_index in bad:
+                    index = int(raw_index)
                     violations.append(
                         _violation(
                             ViolationType.ORIENTATION,
-                            timeline.stages[int(index) + 1],
+                            timeline.stages[index + 1],
                             "orientation step exceeds configured limit",
-                            sample_index=int(index) + 1,
+                            sample_index=index + 1,
                             actual=float(steps[index]),
                             limit=self.config.safety.max_orientation_step_rad,
                         )
