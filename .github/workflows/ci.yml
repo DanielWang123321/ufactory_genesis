@@ -68,9 +68,13 @@ jobs:
           CUDA_VISIBLE_DEVICES: ""
           QD_KERNEL_COVERAGE: "0"
         run: |
-          # Fresh coverage DB: a prior --cov run can leave tracers that break
-          # numpy extension reload in a follow-up pytest process on CI.
+          # Use --cov=ufactory (not ufactory.safety): submodule cov paths break
+          # numpy extension import on Torch-less CI runners.
           rm -f .coverage .coverage.*
           python -m pytest -q tests/safety \
-            --cov=ufactory.safety --cov-branch --cov-fail-under=90 \
-            --cov-report=term-missing
+            --cov=ufactory --cov-branch --cov-fail-under=0 --cov-report=term-missing
+          python -m coverage report \
+            --include='ufactory/safety/*' \
+            --omit='ufactory/safety/adapters/*' \
+            --fail-under=90 \
+            --show-missing

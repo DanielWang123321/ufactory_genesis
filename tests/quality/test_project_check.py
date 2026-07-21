@@ -57,6 +57,7 @@ def test_fast_report_complete_requires_all_checks() -> None:
             "compileall",
             "pytest-fast",
             "pytest-safety-coverage",
+            "safety-coverage-threshold",
         )
     ]
     assert _fast_report_complete({"mode": "fast", "passed": True, "checks": checks}) is True
