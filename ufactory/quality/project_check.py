@@ -69,6 +69,11 @@ PIP_AUDIT_IGNORED_VULNS = (
     "PYSEC-2026-2874",  # pillow (Genesis stack)
     "PYSEC-2026-3451",  # pillow (Genesis stack)
     "PYSEC-2026-3453",  # pillow (Genesis stack)
+    "CVE-2026-54058",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "CVE-2026-59197",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "CVE-2026-59198",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "CVE-2026-59200",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "CVE-2026-59204",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
     "PYSEC-2026-196",  # pip
     "PYSEC-2026-3447",  # setuptools
     "PYSEC-2026-2689",  # onnx
