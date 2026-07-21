@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test_frac_down_on_grasp_forgetting` no longer depends on a local RL recipe's `place_phase_reset_frac` value.
 - Packaging simulation no longer opens a deferred viewer or hangs in `_hold_final_view` unless `--visual` is set (headless CPU/Windows runs can exit after cycles).
 
+### Security
+
+- `project-check release` continues to ignore pillow advisories on the validated Genesis stack pin `11.3.0` (adds CVE-2026-54058 / 59197 / 59198 / 59200 / 59204; fix line is 12.3.0).
+
 ## [0.2.8] — 2026-07-17
 
 ### Added
