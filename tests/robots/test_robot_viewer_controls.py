@@ -115,6 +115,10 @@ class _FakeGenesis:
 
 def _load_robot_viewer(monkeypatch):
     try:
+        import torch  # noqa: F401
+    except ModuleNotFoundError:
+        monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace())
+    try:
         import genesis  # noqa: F401
     except ModuleNotFoundError:
         monkeypatch.setitem(sys.modules, "genesis", types.SimpleNamespace())

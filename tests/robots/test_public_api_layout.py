@@ -48,8 +48,18 @@ REMOVED_MODULES = (
 )
 
 
+TORCH_OPTIONAL_MODULES = frozenset(
+    {
+        "ufactory.kinematics.validation",
+        "ufactory.kinematics.genesis",
+    }
+)
+
+
 @pytest.mark.parametrize("module_name", CANONICAL_MODULES)
 def test_canonical_modules_import(module_name: str) -> None:
+    if module_name in TORCH_OPTIONAL_MODULES:
+        pytest.importorskip("torch")
     importlib.import_module(module_name)
 
 

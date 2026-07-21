@@ -116,11 +116,15 @@ omit = [
     "ufactory/trajectory/real_executor.py",
     "ufactory/trajectory/scene.py",
     "ufactory/trajectory/sim_executor.py",
+    "ufactory/trajectory/mirror_process.py",
+    "ufactory/training/logic/*",
     "ufactory/visualization/bio_gripper_g2_viewer.py",
     "ufactory/visualization/gripper_g2_viewer.py",
     "ufactory/visualization/lite6_gripper_viewer.py",
     "ufactory/visualization/robot_viewer.py",
     "ufactory/visualization/standalone_gripper.py",
+    "ufactory/visualization/viewer.py",
+    "ufactory/visualization/glb.py",
 ]
 
 [tool.coverage.report]

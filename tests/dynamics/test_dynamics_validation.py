@@ -285,6 +285,7 @@ def test_failure_detail_prints_theory_sdk_and_thresholds(capsys):
 
 
 def test_torque_plot_layouts_and_generation(tmp_path: Path):
+    pytest.importorskip("matplotlib")
     runtime6 = get_robot_runtime_profile("xarm6")
     runtime7 = get_robot_runtime_profile("xarm7")
     assert torque_plot_layout(6) == (2, 3)

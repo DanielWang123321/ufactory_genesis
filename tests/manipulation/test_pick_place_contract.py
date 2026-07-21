@@ -76,6 +76,7 @@ def test_pick_place_task_defaults_are_runtime_bound():
 
 
 def test_packaging_showcase_uses_shared_object_spec():
+    pytest.importorskip("torch")
     from ufactory.manipulation.packaging.scene import make_layout
     from ufactory.manipulation.packaging import packaging_layout
 
