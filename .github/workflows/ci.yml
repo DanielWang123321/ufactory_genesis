@@ -68,6 +68,9 @@ jobs:
           CUDA_VISIBLE_DEVICES: ""
           QD_KERNEL_COVERAGE: "0"
         run: |
+          # Fresh coverage DB: a prior --cov run can leave tracers that break
+          # numpy extension reload in a follow-up pytest process on CI.
+          rm -f .coverage .coverage.*
           python -m pytest -q tests/safety \
             --cov=ufactory.safety --cov-branch --cov-fail-under=90 \
             --cov-report=term-missing
