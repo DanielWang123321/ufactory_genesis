@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Release evidence summary fixture examples updated to the 1.2.3 Genesis baseline string.
 
+### Security
+
+- Locked `gitpython` to 3.1.54 (fixes GHSA-2f96-g7mh-g2hx / GHSA-v396-v7q4-x2qj / GHSA-956x-8gvw-wg5v on 3.1.50) and refreshed transitive pins so `project-check release` lock audit and installed-match pass.
+
 ## [0.2.9] — 2026-07-21
 
 ### Added
