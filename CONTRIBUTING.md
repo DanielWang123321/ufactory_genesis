@@ -27,7 +27,7 @@ pip install -e ".[sim,rl]"   # ufactory.training (no public examples/rl tree in 
 pip install -e ".[showcase]"
 ```
 
-The `[sim]` extra requires `genesis-world>=1.2.2` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.2.2. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
+The `[sim]` extra requires `genesis-world>=1.2.3` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.2.3. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
 
 0.2.x is Alpha: public APIs may break between minor versions. The first supported freeze is planned for 0.3.x after the move to a UFACTORY organization repository — see [ROADMAP.md](ROADMAP.md).
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.9"
+version = "0.2.10"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -55,12 +55,12 @@ real = [
     "coal==3.0.3",
 ]
 sim = [
-    "genesis-world>=1.2.2",
+    "genesis-world>=1.2.3",
     "packaging>=24",
     "torch==2.10.0",
 ]
 rl = [
-    "rsl-rl-lib==2.2.4",
+    "rsl-rl-lib>=5.0.0",
     "tensorboard",
     "huggingface_hub>=0.24",
 ]

@@ -1,6 +1,6 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.2.2 is the reference (pinned) physics baseline. Newer releases may run when
+Genesis 1.2.3 is the reference (pinned) physics baseline. Newer releases may run when
 the small set of internal hooks used by this project is still available, but they are
 not treated as a maintainer-verified physics or hardware baseline until the local
 simulation and hardware checks pass.
@@ -19,8 +19,8 @@ import warnings
 from packaging.version import InvalidVersion, Version
 
 
-MIN_GENESIS_VERSION = Version("1.2.2")
-VALIDATED_GENESIS_VERSION = Version("1.2.2")  # reference / pinned baseline alias
+MIN_GENESIS_VERSION = Version("1.2.3")
+VALIDATED_GENESIS_VERSION = Version("1.2.3")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False

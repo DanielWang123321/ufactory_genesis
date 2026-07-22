@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.10] — 2026-07-22
+
+### Changed
+
+- Raised the simulation baseline to Genesis World **1.2.3** (`genesis-world>=1.2.3`, lock pin, runtime `MIN`/`VALIDATED` versions, README badges, and hook-contract tests).
+- Raised the optional `[rl]` extra to **`rsl-rl-lib>=5.0.0`**. Public training recipe fixtures now use the rsl-rl 5.x `actor` / `critic` / `obs_groups` schema; the previous 2.x `policy` / `ActorCritic` shape is not compatible. Public examples still do not ship an RL entry tree.
+
+### Fixed
+
+- Release evidence summary fixture examples updated to the 1.2.3 Genesis baseline string.
+
 ## [0.2.9] — 2026-07-21
 
 ### Added

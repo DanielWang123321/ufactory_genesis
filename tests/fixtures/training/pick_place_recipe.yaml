@@ -45,13 +45,24 @@ train:
     schedule: adaptive
     use_clipped_value_loss: true
     value_loss_coef: 1.0
-  init_member_classes: {}
-  policy:
+    rnd_cfg: null
+    symmetry_cfg: null
+  actor:
+    class_name: MLPModel
+    hidden_dims: [256, 256, 128]
     activation: elu
-    actor_hidden_dims: [256, 256, 128]
-    critic_hidden_dims: [256, 256, 128]
-    init_noise_std: 0.5
-    class_name: ActorCritic
+    obs_normalization: false
+    distribution_cfg:
+      class_name: GaussianDistribution
+      init_std: 0.5
+  critic:
+    class_name: MLPModel
+    hidden_dims: [256, 256, 128]
+    activation: elu
+    obs_normalization: false
+  obs_groups:
+    actor: [policy]
+    critic: [policy]
   runner:
     checkpoint: -1
     experiment_name: xarm6-pick-place-cart-xyz-g2
@@ -62,8 +73,8 @@ train:
     resume: false
     resume_path: null
     run_name: ""
-  runner_class_name: OnPolicyRunner
   num_steps_per_env: 200
   save_interval: 100
-  empirical_normalization: null
   seed: 1
+  run_name: ""
+  logger: tensorboard

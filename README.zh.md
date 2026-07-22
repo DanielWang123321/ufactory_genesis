@@ -3,8 +3,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.9-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.10-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.2.3-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -27,7 +27,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 | **本地仿真**（`project-check sim`） | 进程内 GPU / Genesis 回归 | 维护者机器，需 `[sim]` |
 | **维护者真机**（`sdk-sim` / `hardware`） | 柜控 SDK 仿真与所列真机 | 维护者实验室；可选脱敏摘要挂在 GitHub Release |
 
-**参考（锁定）基线**为 Python 3.13、Genesis World 1.2.2、PyTorch 2.10.0+cu128。更高 Genesis 版本仅在运行时兼容钩子仍匹配时可运行；在本地仿真与真机检查通过前，**不**视为维护者已核实的物理或硬件基线。公开 CI **不能**替代上述检查。
+**参考（锁定）基线**为 Python 3.13、Genesis World 1.2.3、PyTorch 2.10.0+cu128。更高 Genesis 版本仅在运行时兼容钩子仍匹配时可运行；在本地仿真与真机检查通过前，**不**视为维护者已核实的物理或硬件基线。公开 CI **不能**替代上述检查。
 
 ## 目录
 
@@ -49,7 +49,7 @@ UFACTORY 机器人模型与 Genesis 仿真工具集 — 高保真 GLB 可视化�
 
 ## 快速开始
 
-v0.2.9 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。最低要求 Genesis World 1.2.2。视觉 GLB 已用 Draco 压缩（典型 `assets/` 检出约数十 MB 量级）。
+v0.2.10 仅支持克隆源码仓库后 editable install；不支持 wheel/sdist、远程资产下载或脱离 Git 源码树安装。仓库资产缺失时会以 `AssetLayoutError` 明确失败。最低要求 Genesis World 1.2.3。视觉 GLB 已用 Draco 压缩（典型 `assets/` 检出约数十 MB 量级）。
 
 ```bash
 # 在已克隆仓库根目录
@@ -75,7 +75,7 @@ project-check fast
 
 抓放 / 装箱的 `--mode sim`（以及 GLB 预览）可在 Windows、以及没有 Genesis 支持显卡的机器上运行。强化学习不在本路径范围内。
 
-**先安装 CPU 版 PyTorch**，再安装本包（Genesis World ≥ 1.2.2）：
+**先安装 CPU 版 PyTorch**，再安装本包（Genesis World ≥ 1.2.3）：
 
 ```bash
 # Linux / Windows — CPU torch（最新 CPU 源见 https://pytorch.org）
@@ -158,7 +158,7 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
 ## 轨迹抓放
 
-v0.2.9 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
+v0.2.10 使用一个配置驱动入口覆盖五机型。`dry-run` 不连接控制器，会完成校准 FK、全时间线运动学统计以及 Pinocchio/Coal 全采样碰撞检查。
 
 | 机型 | 命令 | 说明 |
 |------|------|------|
@@ -227,7 +227,7 @@ python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j
 ```
 
-`servo_j` 启动时会先构建 Genesis 逆运动学场景，再对完整轨迹做安全预检。终端以 `[ik-compile]` 和 `[preflight]` 标出阶段、采样数及耗时；`preflight=PASS` 之前真机只做身份校验，运动保持未授权。Genesis 的 neutral self-collision 过滤提示和 Quadrants 的 `ast.keyword(..., ctx=...)` Python 3.15 弃用提示属于上游信息，在当前验证过的 Python 3.13 / Genesis 1.2.2 组合中不是失败。碰撞预检仍检查每个轨迹采样和每个几何对，但先使用配置的 5 mm 安全裕量筛选候选，仅对候选计算精确距离；若后端不支持该能力则自动回退到全距离检查。
+`servo_j` 启动时会先构建 Genesis 逆运动学场景，再对完整轨迹做安全预检。终端以 `[ik-compile]` 和 `[preflight]` 标出阶段、采样数及耗时；`preflight=PASS` 之前真机只做身份校验，运动保持未授权。Genesis 的 neutral self-collision 过滤提示和 Quadrants 的 `ast.keyword(..., ctx=...)` Python 3.15 弃用提示属于上游信息，在当前验证过的 Python 3.13 / Genesis 1.2.3 组合中不是失败。碰撞预检仍检查每个轨迹采样和每个几何对，但先使用配置的 5 mm 安全裕量筛选候选，仅对候选计算精确距离；若后端不支持该能力则自动回退到全距离检查。
 
 | 参数 | 说明 |
 |------|------|
@@ -250,7 +250,7 @@ python examples/packaging/run.py \
 | 真机预测安全 | `.[real]` | 必需；缺失时在运动前明确失败 |
 | 独立动力学参考 | `.[dynamics]` | 必需；缺失时给出可执行的错误信息 |
 
-v0.2.9 公开示例不包含 RL 入口目录。需要 recipe 加载、动作缩放或检查点清单时，请直接使用 `ufactory.training`。
+v0.2.10 公开示例不包含 RL 入口目录。需要 recipe 加载、动作缩放或检查点清单时，请直接使用 `ufactory.training`。
 
 ## API 快速参考
 
@@ -329,7 +329,7 @@ UF850 / Lite6 / xArm5 / xArm7 默认动力学验证姿态来自
 
 ## xArm 6
 
-xArm 6 仍是本仓库参考机型，但 v0.2.9 不再发布各机型包装目录。请通过按任务组织的入口选择它，例如 `examples/visualization/view_robot.py --robot xarm6` 或 `examples/packaging/run.py --robot xarm6 ...`。完整的 v0.2.6 路径迁移表见 [examples/README_cn.md](examples/README_cn.md)。
+xArm 6 仍是本仓库参考机型，但 v0.2.10 不再发布各机型包装目录。请通过按任务组织的入口选择它，例如 `examples/visualization/view_robot.py --robot xarm6` 或 `examples/packaging/run.py --robot xarm6 ...`。完整的 v0.2.6 路径迁移表见 [examples/README_cn.md](examples/README_cn.md)。
 
 ## 项目结构
 

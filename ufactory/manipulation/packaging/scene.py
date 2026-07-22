@@ -311,7 +311,7 @@ def _add_packaging_robot(scene: gs.Scene, layout: PackagingLayout, urdf_path: st
         fixed=True,
         requires_jac_and_IK=True,
     )
-    # Genesis 1.2.2 otherwise replaces every GLB material with the fallback
+    # Genesis 1.2.3 otherwise replaces every GLB material with the fallback
     # surface passed to add_entity. Keep this scope on the actual GLB import so
     # metallic/roughness factors survive in every caller, including the spawned
     # real-robot mirror process (which intentionally starts with clean globals).

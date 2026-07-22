@@ -18,7 +18,7 @@ def test_summarize_report_redacts_ip_and_serial() -> None:
         "environment": {
             "python": "3.13.0",
             "platform": "Linux",
-            "genesis": "1.2.2",
+            "genesis": "1.2.3",
             "torch": "2.10.0",
             "xarm_sdk": "1.0.0",
             "pinocchio": None,
@@ -52,7 +52,7 @@ def test_write_evidence_summary_roundtrip(tmp_path: Path) -> None:
                 "passed": True,
                 "generated_at_utc": "2026-07-17T00:00:00+00:00",
                 "git": {"commit": "abc", "dirty": False},
-                "environment": {"python": "3.13.0", "platform": "Linux", "genesis": "1.2.2"},
+                "environment": {"python": "3.13.0", "platform": "Linux", "genesis": "1.2.3"},
                 "checks": [{"name": "pytest-gpu", "status": "PASS", "duration_s": 1.0, "reason": "ok"}],
             }
         ),

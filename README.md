@@ -3,8 +3,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.9-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.2.2-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.10-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.2.3-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -27,7 +27,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 | **Local sim** (`project-check sim`) | In-process GPU / Genesis regression | Maintainer machines with `[sim]` |
 | **Maintainer hardware** (`sdk-sim` / `hardware`) | Cabinet SDK sim and listed real robots | Maintainer lab; optional sanitized summary on GitHub Releases |
 
-The **reference (pinned) baseline** is Python 3.13, Genesis World 1.2.2, and PyTorch 2.10.0+cu128. Newer Genesis releases may run when compatibility hooks still match; they are **not** treated as a maintainer-verified physics or hardware baseline until the local sim and hardware checks pass. Public CI does **not** replace those checks.
+The **reference (pinned) baseline** is Python 3.13, Genesis World 1.2.3, and PyTorch 2.10.0+cu128. Newer Genesis releases may run when compatibility hooks still match; they are **not** treated as a maintainer-verified physics or hardware baseline until the local sim and hardware checks pass. Public CI does **not** replace those checks.
 
 ## Table of Contents
 
@@ -49,7 +49,7 @@ The **reference (pinned) baseline** is Python 3.13, Genesis World 1.2.2, and PyT
 
 ## Quick Start
 
-v0.2.9 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.2 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
+v0.2.10 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.2.3 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
 
 ```bash
 # From a cloned repository
@@ -75,7 +75,7 @@ Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names
 
 Pick-place and packaging `--mode sim` (plus GLB preview) can run on Windows and on machines without a Genesis-supported GPU. Reinforcement learning is out of scope for this path.
 
-**Install CPU PyTorch first**, then this package (Genesis World ≥ 1.2.2):
+**Install CPU PyTorch first**, then this package (Genesis World ≥ 1.2.3):
 
 ```bash
 # Linux / Windows — CPU torch (see https://pytorch.org for the current CPU index)
@@ -158,7 +158,7 @@ Standalone movable gripper viewers are available beside the robot viewer as `vie
 
 ## Trajectory Pick-Place
 
-The configuration-driven v0.2.9 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
+The configuration-driven v0.2.10 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -228,7 +228,7 @@ python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j
 ```
 
-`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the reference Python 3.13 / Genesis 1.2.2 baseline. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
+`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the reference Python 3.13 / Genesis 1.2.3 baseline. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
 
 | Flag | Description |
 |------|-------------|
@@ -251,7 +251,7 @@ After release, the main packaging scene never resets the cube, clears its veloci
 | Real-robot predictive safety | `.[real]` | Required; missing backends fail before motion |
 | Independent dynamics reference | `.[dynamics]` | Required; missing backends report an actionable error |
 
-Public examples in v0.2.9 do not ship an RL entry tree. Use `ufactory.training` when you need recipe loading, action scaling, or checkpoint inventories.
+Public examples in v0.2.10 do not ship an RL entry tree. Use `ufactory.training` when you need recipe loading, action scaling, or checkpoint inventories.
 
 ## API Quick Reference
 
@@ -328,7 +328,7 @@ Default dynamics validation poses for UF850 / Lite6 / xArm5 / xArm7 come from
 
 ## xArm 6
 
-xArm 6 remains the reference robot, but v0.2.9 no longer publishes per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
+xArm 6 remains the reference robot, but v0.2.10 no longer publishes per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
 
 ## Project Layout
 
