@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pinned the development Ruff formatter to the lock-validated 0.15.21 release so the Torch/Genesis-free CPU CI cannot silently resolve a new formatter contract (0.16.1 began reformatting fenced Python in previously unchanged Markdown files).
+
 ## [0.2.12] — 2026-08-03
 
 ### Added

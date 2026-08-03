@@ -39,7 +39,7 @@ Issues = "https://github.com/DanielWang123321/ufactory_genesis/issues"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=6.0",
-    "ruff>=0.12",
+    "ruff==0.15.21",
     "mypy>=1.16",
     "pip-audit>=2.9",
     "types-PyYAML",
