@@ -25,6 +25,7 @@ _TORCH_OR_GENESIS_COLLECTION_MODULES = frozenset(
         "test_logic_pick_place.py",
         "test_pick_place_quality_eval.py",
         "test_policy_contract_v5.py",
+        "test_transfer.py",
         "test_packaging_multi_robot.py",
         "test_packaging_showcase.py",
         "test_pick_place_preposition.py",
