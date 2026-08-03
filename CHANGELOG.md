@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Pinned the development Ruff formatter to the lock-validated 0.15.21 release so the Torch/Genesis-free CPU CI cannot silently resolve a new formatter contract (0.16.1 began reformatting fenced Python in previously unchanged Markdown files).
 - Excluded the new Torch/RSL-RL transfer test module from collection in the dev-only CPU CI environment, matching the existing handling for other simulation-stack training tests.
+- Excluded its Torch/RSL-RL-only model and transfer modules from the dev-only coverage denominator; their dedicated tests continue to run in the maintainer's simulation/RL environment.
 
 ## [0.2.12] — 2026-08-03
 

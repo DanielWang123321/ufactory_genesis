@@ -118,6 +118,8 @@ omit = [
     "ufactory/trajectory/sim_executor.py",
     "ufactory/trajectory/mirror_process.py",
     "ufactory/training/logic/*",
+    "ufactory/training/models.py",
+    "ufactory/training/transfer.py",
     "ufactory/visualization/bio_gripper_g2_viewer.py",
     "ufactory/visualization/gripper_g2_viewer.py",
     "ufactory/visualization/lite6_gripper_viewer.py",
