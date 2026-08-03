@@ -1,4 +1,4 @@
-"""Scoped Genesis 1.2.3+ GLB PBR preservation patch."""
+"""Scoped Genesis 1.3.0+ GLB PBR preservation patch."""
 
 from __future__ import annotations
 

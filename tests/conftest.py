@@ -23,6 +23,8 @@ _TORCH_OR_GENESIS_COLLECTION_MODULES = frozenset(
         "test_packaging_drop.py",
         "test_artifacts.py",
         "test_logic_pick_place.py",
+        "test_pick_place_quality_eval.py",
+        "test_policy_contract_v5.py",
         "test_packaging_multi_robot.py",
         "test_packaging_showcase.py",
         "test_pick_place_preposition.py",
@@ -37,10 +39,6 @@ _TORCH_OR_GENESIS_COLLECTION_MODULES = frozenset(
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:  # noqa: ARG001
     name = collection_path.name
-    if name == "test_pick_place_next_params.py":
-        decision = PROJECT_ROOT / "dev/rl/pick_place_next_params.py"
-        recipe = PROJECT_ROOT / "examples/rl/pick_place/recipe.yaml"
-        return not (decision.is_file() and recipe.is_file())
     if name in _TORCH_OR_GENESIS_COLLECTION_MODULES:
         try:
             import torch  # noqa: F401

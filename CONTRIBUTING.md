@@ -23,11 +23,11 @@ pip install -e ".[dynamics,dev]"
 
 # Optional: real robot / RL library APIs / showcase workflows
 pip install -e ".[real]"
-pip install -e ".[sim,rl]"   # ufactory.training (no public examples/rl tree in v0.2.8)
+pip install -e ".[sim,rl]"   # public fixed-layout RL example + ufactory.training
 pip install -e ".[showcase]"
 ```
 
-The `[sim]` extra requires `genesis-world>=1.2.3` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.2.3. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
+The `[sim]` extra requires `genesis-world>=1.3.0` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.3.0; `[rl]` requires RSL-RL 5.3.0+ and the lock pins 5.4.2. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
 
 0.2.x is Alpha: public APIs may break between minor versions. The first supported freeze is planned for 0.3.x after the move to a UFACTORY organization repository — see [ROADMAP.md](ROADMAP.md).
 
@@ -95,7 +95,7 @@ Tests are grouped under `tests/` by `ufactory` module:
 | `tests/dynamics/` | `ufactory.dynamics` | `test_dynamics_validation.py`, `test_dynamics_sim_regression.py` |
 | `tests/hardware/` | `ufactory.hardware` | `test_real_robot_session.py`, `test_xarm6_real.py` |
 | `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
-| `tests/training/` | `ufactory.training` | `test_artifacts.py` |
+| `tests/training/` | `ufactory.training` | `test_artifacts.py`, `test_public_rl_example.py`, `test_scenarios.py`, `test_acceptance_profiles.py` |
 | `tests/visualization/` | `ufactory.visualization` | `test_pbr_scope.py` |
 | `tests/manipulation/` | `ufactory.manipulation` | `test_pick_place_contract.py` |
 
@@ -136,6 +136,8 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
 | `examples/` | Task-oriented visualization, kinematics, pick_place, and packaging entries |
+| `examples/rl/pick_place/` | Linux/NVIDIA fixed-layout RL code, recipe, scenario bank, and validated checkpoint |
+| `/rl/` | Gitignored maintainer-only experiment archive; never a public dependency |
 | `scripts/` | User helpers and maintainer tools (see `scripts/README.md`) |
 | `tests/` | Contributor pytest suite (not required for library use) |
 

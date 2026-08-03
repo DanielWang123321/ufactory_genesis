@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-v0.2.8 将公开示例改为按任务分类。共享实现已下沉到 `ufactory`，示例脚本仅解析用户参数并启动对应流程。
+v0.2.11 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
 
 ## 前置条件
 
@@ -15,6 +15,7 @@ pip install -e ".[sim]"
 # 可选：
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
 #   pip install -e ".[showcase]"  # 装箱纸箱贴图（scipy）
+#   pip install -e ".[sim,rl]"    # Linux/NVIDIA 固定布局 RL 示例
 ```
 
 3. 运行依赖 Genesis 的流程前，设置可写的 Numba 缓存目录：
@@ -39,8 +40,9 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 | `kinematics/` | FK/IK / 机型校验包装 |
 | `pick_place/` | 多机型抓放入口与可选覆盖配置 |
 | `packaging/` | 多机型装箱展示入口与可选覆盖配置 |
+| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 固定布局 RL 示例 |
 
-强化学习示例脚本不在 v0.2.8 公开树中。安装 `.[rl]` 后仍可使用库级 `ufactory.training`。
+RL 边界见 [rl/README_cn.md](rl/README_cn.md)；安装、评估命令、训练与已知限制见 [rl/pick_place/README_cn.md](rl/pick_place/README_cn.md)。
 
 ## 可视化
 
@@ -207,4 +209,4 @@ python examples/packaging/run.py \
 | 各机型抓放包装 | `examples/pick_place/run.py --robot <key>` |
 | 根目录/xArm6 装箱包装 | `examples/packaging/run.py --robot <key>` |
 
-旧路径、bootstrap 文件和下划线前缀的示例内部模块均已直接删除，不提供兼容壳。本版不公开强化学习示例入口。
+旧路径、bootstrap 文件和下划线前缀的示例内部模块均已直接删除，不提供兼容壳。v0.2.11 RL 入口仅支持 `examples.rl.pick_place` 模块方式。

@@ -36,7 +36,7 @@ def build_pick_place_task_configs(
     """Resolve the retained xArm6 + Gripper G2 pick-place RL task."""
 
     if robot not in PICK_PLACE_RL_ROBOTS:
-        raise ValueError("the retained v0.2.7 pick-place RL environment supports only xArm6 + Gripper G2")
+        raise ValueError("the v0.2.11 pick-place RL environment supports only xArm6 + Gripper G2")
     config = load_runtime_config(robot, task="pick_place", config_path=runtime_config_path)
     if config.gripper is None or config.gripper.adapter != "g2":
         raise ValueError("the pick-place RL environment requires Gripper G2")
@@ -55,8 +55,10 @@ def build_pick_place_task_configs(
             "workspace_upper": list(params["workspace_upper_m"]),
             "grasp_center_offset_z": float(params["grasp_center_offset_z_m"]),
             "lift_height_m": float(params["lift_height_m"]),
-            "place_success_dist_m": float(params["place_success_distance_m"]),
-            "success_hold_steps": int(params["success_hold_steps"]),
+            # Recipes may deliberately tighten these task-level defaults so the
+            # training terminal condition matches the deployment acceptance test.
+            "place_success_dist_m": float(env_cfg.get("place_success_dist_m", params["place_success_distance_m"])),
+            "success_hold_steps": int(env_cfg.get("success_hold_steps", params["success_hold_steps"])),
             "substeps": int(params["substeps"]),
             "gripper_open_mm": config.gripper.open_gap_m * 1000.0,
             # Grasp preload target (~22 mm), not the hardware dead-closed gap (0 mm).

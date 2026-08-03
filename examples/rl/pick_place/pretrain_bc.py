@@ -1,0 +1,521 @@
+"""Behaviour-clone the scripted expert into the Beta actor used by PPO.
+
+Exploring a clean grasp from scratch is the hardest part of this task: the reward can
+only say "you dragged the cube" after the fact, while the expert already knows how to
+descend, close and lift without touching it. Fitting the actor to expert actions first
+turns the PPO run into refinement instead of discovery.
+
+The output is an ordinary run directory, so the public training and evaluation
+modules consume it exactly like any other checkpoint bundle.
+"""
+
+from __future__ import annotations
+
+import argparse
+from copy import deepcopy
+import hashlib
+from pathlib import Path
+
+import torch
+from tensordict import TensorDict
+
+from ufactory.config import load_runtime_config
+from ufactory.simulation.compat import require_genesis_runtime
+from ufactory.training import (
+    build_pick_place_task_configs,
+    build_train_config,
+    load_training_config,
+    write_artifact_inventory,
+    write_run_provenance,
+    write_training_config,
+    validate_and_load_rsl_checkpoint,
+)
+
+import genesis as gs
+
+from .env import XArm6PickPlaceEnv
+from .expert import (
+    ScriptedPickPlaceExpert,
+    expert_phase_sample_weights,
+)
+from .trace_utils import apply_deterministic_action_noise
+from .train import ArtifactOnPolicyRunner
+
+
+def collect_demonstrations(
+    env: XArm6PickPlaceEnv,
+    expert: ScriptedPickPlaceExpert,
+    steps: int,
+    actor=None,
+    *,
+    execution_noise_std: float = 0.0,
+    noise_generator: torch.Generator | None = None,
+    phase_weighting: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Record expert-labelled observations along a rollout.
+
+    With ``actor`` set, the student drives the arm while the expert still supplies the
+    label. Cloning only the expert's own trajectory leaves the policy untrained on the
+    states its own small errors lead to, which is what turns a millimetre of drift
+    during transport into centimetres by the time it reaches the target.
+    """
+    observations = []
+    actions = []
+    sample_weights = []
+    if execution_noise_std < 0.0:
+        raise ValueError("execution_noise_std must be non-negative")
+    if execution_noise_std > 0.0 and noise_generator is None:
+        raise ValueError("positive execution noise requires a seeded generator")
+    obs = env.get_observations()
+    for step in range(steps):
+        with torch.no_grad():
+            label = expert(obs)
+            # Keep the demonstrations on host memory: a full rollout at training batch
+            # size is larger than the spare device memory on the visualisation machine.
+            observations.append(obs["policy"].detach().to("cpu", copy=True))
+            actions.append(label.detach().to("cpu", copy=True))
+            weights = (
+                expert_phase_sample_weights(expert.phase)
+                if phase_weighting
+                else torch.ones_like(expert.phase, dtype=torch.float32)
+            )
+            sample_weights.append(weights.detach().to("cpu", copy=True))
+            driving = label if actor is None else actor(obs, stochastic_output=False)
+            if execution_noise_std > 0.0:
+                driving = apply_deterministic_action_noise(
+                    driving,
+                    std=float(execution_noise_std),
+                    generator=noise_generator,
+                    action_clip=float(env.action_clip),
+                )
+            obs, _reward, _done, _extras = env.step(driving.clamp(-1.0, 1.0))
+        if (step + 1) % 100 == 0:
+            print(f"  collected {step + 1}/{steps} steps", flush=True)
+    return torch.cat(observations), torch.cat(actions), torch.cat(sample_weights)
+
+
+def beta_mean_and_concentration(actor, obs_batch: torch.Tensor):
+    """Return the Beta mean in action units and its concentration, both differentiable."""
+    observations = TensorDict({"policy": obs_batch}, batch_size=[obs_batch.shape[0]])
+    latent = actor.get_latent(observations)
+    raw_alpha, raw_beta = torch.unbind(actor.mlp(latent), dim=-2)
+    alpha = torch.nn.functional.softplus(raw_alpha) + 1.0
+    beta = torch.nn.functional.softplus(raw_beta) + 1.0
+    low, high = (float(value) for value in actor.distribution.action_range)
+    mean = (alpha / (alpha + beta)) * (high - low) + low
+    return mean, alpha + beta
+
+
+def fit_actor(
+    actor,
+    observations: torch.Tensor,
+    actions: torch.Tensor,
+    sample_weights: torch.Tensor | None = None,
+    *,
+    device,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    target_concentration: float,
+    concentration_weight: float,
+    reference_actions: torch.Tensor | None = None,
+    reference_mask: torch.Tensor | None = None,
+    reference_anchor_weight: float = 0.0,
+) -> tuple[float, float]:
+    """Fit the Beta mean to the expert action and pin how wide the distribution is.
+
+    Matching the mean alone leaves the concentration wherever initialisation put it,
+    which makes the first PPO rollouts essentially random and throws away the cloned
+    grasp before the critic has learned anything. The second term fixes the sampling
+    spread so exploration starts as a small perturbation of the demonstrated action.
+    """
+    optimizer = torch.optim.Adam(actor.parameters(), lr=learning_rate)
+    sample_count = observations.shape[0]
+    if sample_weights is None:
+        sample_weights = torch.ones(sample_count, dtype=torch.float32)
+    if sample_weights.shape != (sample_count,):
+        raise ValueError(f"sample_weights must have shape ({sample_count},), got {tuple(sample_weights.shape)}")
+    if not bool(torch.all(sample_weights > 0.0)):
+        raise ValueError("sample_weights must be positive")
+    if reference_anchor_weight < 0.0:
+        raise ValueError("reference_anchor_weight must be non-negative")
+    if reference_actions is not None:
+        if reference_actions.shape != actions.shape:
+            raise ValueError("reference_actions must match the expert action shape")
+        if reference_mask is None or reference_mask.shape != (sample_count,):
+            raise ValueError("reference_mask must contain one value per sample")
+    log_target = torch.log(torch.tensor(float(target_concentration), device=device))
+    final_mse = float("nan")
+    final_concentration = float("nan")
+    for epoch in range(epochs):
+        # Genesis switches the default torch device to the GPU; the demonstrations stay
+        # on the host, so the shuffle has to be built there too.
+        order = torch.randperm(sample_count, device="cpu")
+        epoch_mse = 0.0
+        epoch_concentration = 0.0
+        batches = 0
+        for start in range(0, sample_count, batch_size):
+            index = order[start : start + batch_size]
+            obs_batch = observations[index].to(device, non_blocking=True)
+            action_batch = actions[index].to(device, non_blocking=True)
+            weight_batch = sample_weights[index].to(device, non_blocking=True)
+            predicted, concentration = beta_mean_and_concentration(actor, obs_batch)
+            weight_sum = weight_batch.sum().clamp_min(1e-8)
+            mse_per_sample = torch.mean(torch.square(predicted - action_batch), dim=-1)
+            mse = torch.sum(weight_batch * mse_per_sample) / weight_sum
+            spread_per_sample = torch.mean(
+                torch.square(torch.log(concentration) - log_target),
+                dim=-1,
+            )
+            spread = torch.sum(weight_batch * spread_per_sample) / weight_sum
+            loss = mse + concentration_weight * spread
+            if reference_actions is not None and reference_anchor_weight > 0.0:
+                anchor_mask = reference_mask[index].to(device, non_blocking=True)
+                if bool(anchor_mask.any()):
+                    reference_batch = reference_actions[index].to(
+                        device,
+                        non_blocking=True,
+                    )
+                    anchor = torch.mean(torch.square(predicted[anchor_mask] - reference_batch[anchor_mask]))
+                    loss = loss + float(reference_anchor_weight) * anchor
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(actor.parameters(), 1.0)
+            optimizer.step()
+            epoch_mse += float(mse.item())
+            epoch_concentration += float(concentration.mean().item())
+            batches += 1
+        final_mse = epoch_mse / max(batches, 1)
+        final_concentration = epoch_concentration / max(batches, 1)
+        print(
+            f"  epoch {epoch + 1}/{epochs}: action mse={final_mse:.6f}, concentration={final_concentration:.1f}",
+            flush=True,
+        )
+    return final_mse, final_concentration
+
+
+def _freeze_actor_except_beta_output(actor) -> tuple[int, ...]:
+    """Freeze inherited features and leave all alpha/beta output rows trainable."""
+
+    linear_layers = [module for module in actor.mlp.modules() if isinstance(module, torch.nn.Linear)]
+    if not linear_layers:
+        raise ValueError("actor does not expose a linear Beta output layer")
+    output = linear_layers[-1]
+    for parameter in actor.parameters():
+        parameter.requires_grad_(False)
+    output.weight.requires_grad_(True)
+    if output.bias is not None:
+        output.bias.requires_grad_(True)
+    return tuple(range(output.out_features))
+
+
+def _reference_actor_actions(
+    actor,
+    observations: torch.Tensor,
+    *,
+    device,
+    batch_size: int,
+) -> torch.Tensor:
+    """Run a frozen source actor over host observations without retaining a graph."""
+
+    outputs = []
+    with torch.no_grad():
+        for start in range(0, observations.shape[0], batch_size):
+            obs_batch = observations[start : start + batch_size].to(
+                device,
+                non_blocking=True,
+            )
+            tensor_dict = TensorDict(
+                {"policy": obs_batch},
+                batch_size=[obs_batch.shape[0]],
+            )
+            outputs.append(actor(tensor_dict, stochastic_output=False).detach().to("cpu"))
+    return torch.cat(outputs)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Behaviour cloning from the scripted expert")
+    parser.add_argument("--robot", default="xarm6")
+    parser.add_argument("--recipe", type=Path, default=Path(__file__).with_name("recipe.yaml"))
+    parser.add_argument("--runtime-config", type=Path)
+    parser.add_argument(
+        "--warm-start",
+        type=Path,
+        help="Load an architecture-compatible actor and critic before fitting demonstrations",
+    )
+    parser.add_argument(
+        "--fit-output-head-only",
+        action="store_true",
+        help="Freeze inherited actor features and fit only all Beta alpha/beta output rows",
+    )
+    parser.add_argument(
+        "--reference-anchor-weight",
+        type=float,
+        default=0.0,
+        help="Keep pre-grasp actions close to --warm-start while fitting the expert",
+    )
+    parser.add_argument("-e", "--exp-name", default="pp-bc")
+    parser.add_argument("--log-dir", type=Path)
+    parser.add_argument("-B", "--num-envs", type=int, default=2048)
+    parser.add_argument(
+        "--rollout-steps",
+        type=int,
+        default=600,
+        help="Control steps to record; one full episode is 500 steps",
+    )
+    parser.add_argument(
+        "--dagger-rounds",
+        type=int,
+        default=0,
+        help=(
+            "Extra rounds recorded along the student's own trajectory with expert labels. "
+            "Off by default: the expert latches its phase from history, so once the "
+            "student strays it keeps labelling for a phase the arm has already left and "
+            "the aggregated targets contradict each other"
+        ),
+    )
+    parser.add_argument(
+        "--target-concentration",
+        type=float,
+        default=400.0,
+        help="Beta alpha+beta to aim for; 400 is roughly 0.05 sampling std in action units",
+    )
+    parser.add_argument("--concentration-weight", type=float, default=0.01)
+    parser.add_argument(
+        "--execution-noise-std",
+        type=float,
+        default=None,
+        help=(
+            "When set, disable recipe training noise and apply this one seeded "
+            "Gaussian execution perturbation while collecting expert labels."
+        ),
+    )
+    parser.add_argument(
+        "--execution-noise-seed",
+        type=int,
+        default=20260801,
+        help="Independent generator seed used by --execution-noise-std",
+    )
+    parser.add_argument(
+        "--quality-phase-weighting",
+        action="store_true",
+        help="Weight set-down/settle samples 4x and release/retreat samples 2x",
+    )
+    parser.add_argument("--epochs", type=int, default=8)
+    parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--seed", type=int, default=1)
+    args = parser.parse_args()
+    if args.execution_noise_std is not None and args.execution_noise_std < 0.0:
+        parser.error("--execution-noise-std must be non-negative")
+    if args.reference_anchor_weight < 0.0:
+        parser.error("--reference-anchor-weight must be non-negative")
+    if args.reference_anchor_weight > 0.0 and args.warm_start is None:
+        parser.error("--reference-anchor-weight requires --warm-start")
+    if args.warm_start is not None and not args.warm_start.is_file():
+        parser.error(f"warm-start checkpoint not found: {args.warm_start}")
+
+    env_cfg, reward_cfg, robot_cfg = build_pick_place_task_configs(
+        args.robot,
+        runtime_config_path=args.runtime_config,
+        recipe_path=args.recipe,
+    )
+    env_cfg["num_envs"] = int(args.num_envs)
+    source_train_noise_std = float(env_cfg.get("train_action_noise_std", 0.0))
+    if args.execution_noise_std is not None:
+        env_cfg["train_action_noise_std"] = 0.0
+        env_cfg["train_action_noise_std_end"] = 0.0
+        env_cfg["noise_anneal_steps"] = 0
+        env_cfg["train_action_noise_clean_episode_frac"] = 1.0
+    train_cfg = build_train_config(
+        args.recipe,
+        experiment_name=args.exp_name,
+        max_iterations=0,
+    )
+    train_cfg["seed"] = int(args.seed)
+    train_cfg["runner"]["resume"] = False
+    train_cfg["runner"]["transfer_mode"] = (
+        "behaviour_cloning_from_actor_critic" if args.warm_start is not None else "behaviour_cloning_fresh"
+    )
+    if args.warm_start is not None:
+        with args.warm_start.open("rb") as source:
+            source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+        train_cfg["runner"]["transfer_checkpoint"] = str(args.warm_start)
+        train_cfg["runner"]["transfer_checkpoint_sha256"] = source_sha256
+    train_cfg["runner"]["bc_fit_output_head_only"] = bool(args.fit_output_head_only)
+    train_cfg["runner"]["bc_reference_anchor_weight"] = float(args.reference_anchor_weight)
+    train_cfg["runner"]["bc_source_train_action_noise_std"] = source_train_noise_std
+    train_cfg["runner"]["bc_execution_noise_std"] = (
+        None if args.execution_noise_std is None else float(args.execution_noise_std)
+    )
+    train_cfg["runner"]["bc_execution_noise_seed"] = int(args.execution_noise_seed)
+    train_cfg["runner"]["bc_quality_phase_weighting"] = bool(args.quality_phase_weighting)
+
+    log_dir = args.log_dir or Path("outputs") / "rl" / "pick_place" / args.exp_name
+    if log_dir.exists():
+        raise FileExistsError(f"refusing to overwrite behaviour-cloning run: {log_dir}")
+    log_dir.mkdir(parents=True)
+    runtime_config = load_runtime_config(
+        args.robot,
+        task="pick_place",
+        config_path=args.runtime_config,
+    )
+    warm_start_state = None
+    if args.warm_start is not None:
+        warm_start_state, _source_config, _source_manifest = validate_and_load_rsl_checkpoint(
+            args.warm_start,
+            args.warm_start.parent / "config.yaml",
+            map_location="cpu",
+            expected_task="pick_place",
+            expected_robot_key=runtime_config.robot.key,
+            expected_runtime_config_sha256=runtime_config.sha256,
+            expected_runtime_env=env_cfg,
+        )
+    write_training_config(
+        log_dir / "config.yaml",
+        task="pick_place",
+        robot_key=runtime_config.robot.key,
+        env=env_cfg,
+        reward=reward_cfg,
+        robot=robot_cfg,
+        train=train_cfg,
+    )
+    artifact = load_training_config(log_dir / "config.yaml")
+    repo_root = Path(__file__).resolve().parents[3]
+    provenance_sources = [
+        Path(__file__),
+        Path(__file__).with_name("env.py"),
+        Path(__file__).with_name("expert.py"),
+        Path(__file__).with_name("trace_utils.py"),
+        args.recipe,
+        repo_root / "ufactory/training/logic/pick_place.py",
+        repo_root / "ufactory/training/tasks.py",
+    ]
+    provenance_sources.extend(repo_root / source for source in runtime_config.sources)
+    write_run_provenance(
+        log_dir / "run_provenance.json",
+        training_config=artifact,
+        source_paths=provenance_sources,
+    )
+
+    require_genesis_runtime(gs)
+    gs.init(
+        backend=gs.gpu,
+        precision="32",
+        logging_level="warning",
+        seed=int(train_cfg["seed"]),
+        performance_mode=bool(env_cfg.get("genesis_performance_mode", False)),
+    )
+    env = XArm6PickPlaceEnv(
+        env_cfg=env_cfg,
+        reward_cfg=reward_cfg,
+        robot_cfg=robot_cfg,
+        show_viewer=False,
+    )
+    env.csv_log_path = str(log_dir / "metrics.csv")
+    runner = ArtifactOnPolicyRunner(env, train_cfg, str(log_dir), device=gs.device)
+    runner.checkpoint_training_config = artifact
+    runner.checkpoint_env = env
+    reference_actor = None
+    if args.warm_start is not None:
+        assert warm_start_state is not None
+        runner.alg.load(
+            warm_start_state,
+            {
+                "actor": True,
+                "critic": True,
+                "optimizer": False,
+                "iteration": False,
+                "rnd": False,
+            },
+            strict=True,
+        )
+        reference_actor = deepcopy(runner.alg.actor).eval()
+        print(
+            f"Warm-started BC actor and critic from {args.warm_start}; optimizer and iteration reset",
+            flush=True,
+        )
+    if args.fit_output_head_only:
+        rows = _freeze_actor_except_beta_output(runner.alg.actor)
+        print(f"BC fitting only Beta output rows {rows}", flush=True)
+
+    expert = ScriptedPickPlaceExpert(env)
+    observations: list[torch.Tensor] = []
+    actions: list[torch.Tensor] = []
+    sample_weights: list[torch.Tensor] = []
+    execution_noise_std = 0.0 if args.execution_noise_std is None else float(args.execution_noise_std)
+    noise_generator = None
+    if execution_noise_std > 0.0:
+        noise_generator = torch.Generator(device=gs.device)
+        noise_generator.manual_seed(int(args.execution_noise_seed))
+    final_loss = float("nan")
+    for round_index in range(int(args.dagger_rounds) + 1):
+        driver = None if round_index == 0 else runner.alg.actor
+        label = "expert" if round_index == 0 else "student"
+        print(
+            f"Round {round_index}: collecting {args.rollout_steps} steps x {args.num_envs} envs "
+            f"along the {label} trajectory",
+            flush=True,
+        )
+        round_obs, round_actions, round_weights = collect_demonstrations(
+            env,
+            expert,
+            int(args.rollout_steps),
+            actor=driver,
+            execution_noise_std=execution_noise_std,
+            noise_generator=noise_generator,
+            phase_weighting=bool(args.quality_phase_weighting),
+        )
+        observations.append(round_obs)
+        actions.append(round_actions)
+        sample_weights.append(round_weights)
+        dataset_obs = torch.cat(observations)
+        dataset_actions = torch.cat(actions)
+        dataset_weights = torch.cat(sample_weights)
+        print(f"  dataset: {dataset_obs.shape[0]} samples", flush=True)
+        dataset_reference_actions = None
+        reference_mask = None
+        if reference_actor is not None and args.reference_anchor_weight > 0.0:
+            dataset_reference_actions = _reference_actor_actions(
+                reference_actor,
+                dataset_obs,
+                device=gs.device,
+                batch_size=int(args.batch_size),
+            )
+            # Observation index 29 is the retained ever_grasped latch in every
+            # supported 44/47-dimensional policy layout.
+            reference_mask = dataset_obs[:, 29] < 0.5
+        final_loss, concentration = fit_actor(
+            runner.alg.actor,
+            dataset_obs,
+            dataset_actions,
+            dataset_weights,
+            device=gs.device,
+            epochs=int(args.epochs),
+            batch_size=int(args.batch_size),
+            learning_rate=float(args.learning_rate),
+            target_concentration=float(args.target_concentration),
+            concentration_weight=float(args.concentration_weight),
+            reference_actions=dataset_reference_actions,
+            reference_mask=reference_mask,
+            reference_anchor_weight=float(args.reference_anchor_weight),
+        )
+
+    checkpoint = log_dir / "model_0.pt"
+    runner.save(str(checkpoint))
+    write_artifact_inventory(
+        log_dir / "artifacts.yaml",
+        training_config=artifact,
+        checkpoints=[checkpoint],
+        selected_checkpoint=checkpoint,
+    )
+    sampling_std = 2.0 * (0.25 / (concentration + 1.0)) ** 0.5
+    print(
+        f"Behaviour-cloned actor written to {checkpoint} "
+        f"(action mse={final_loss:.6f}, concentration={concentration:.1f}, "
+        f"sampling std about {sampling_std:.3f} in action units)"
+    )
+
+
+if __name__ == "__main__":
+    main()

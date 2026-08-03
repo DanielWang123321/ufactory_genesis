@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 import hashlib
+from importlib import metadata
 import json
 import math
 from pathlib import Path
+import platform
 import subprocess
+import sys
 from typing import Any, Mapping
 
 import yaml
@@ -15,6 +19,32 @@ import yaml
 
 class ArtifactError(ValueError):
     pass
+
+
+_RUNTIME_ENV_CONTRACT_KEYS = (
+    "runtime_config_sha256",
+    "episode_length_s",
+    "ctrl_dt",
+    "table_height",
+    "default_ee_pos",
+    "workspace_lower",
+    "workspace_upper",
+    "grasp_center_offset_z",
+    "lift_height_m",
+    "place_success_dist_m",
+    "success_hold_steps",
+    "substeps",
+    "gripper_open_mm",
+    "gripper_close_mm",
+    "obj_size",
+    "obj_mass_kg",
+    "fixed_obj_pos",
+    "fixed_target_pos",
+    "obj_spawn_lower",
+    "obj_spawn_upper",
+    "target_spawn_lower",
+    "target_spawn_upper",
+)
 
 
 def _plain(value: Any) -> Any:
@@ -53,6 +83,102 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def runtime_env_contract(env: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the task fields that must agree with the resolved runtime YAML."""
+
+    return {key: _plain(env.get(key)) for key in _RUNTIME_ENV_CONTRACT_KEYS}
+
+
+def _git_provenance(cwd: Path) -> dict[str, Any]:
+    def run(*args: str) -> str | None:
+        try:
+            return subprocess.run(
+                ["git", *args],
+                cwd=cwd,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        except (OSError, subprocess.CalledProcessError):
+            return None
+
+    commit = run("rev-parse", "HEAD")
+    status = run("status", "--porcelain=v1", "--untracked-files=all")
+    diff = run("diff", "--binary", "HEAD")
+    return {
+        "commit": None if commit is None else commit.strip(),
+        "dirty": None if status is None else bool(status.strip()),
+        "status_sha256": None if status is None else hashlib.sha256(status.encode()).hexdigest(),
+        "diff_sha256": None if diff is None else hashlib.sha256(diff.encode()).hexdigest(),
+    }
+
+
+def write_run_provenance(
+    path: str | Path,
+    *,
+    training_config: Mapping[str, Any],
+    source_paths: list[str | Path],
+    scenario_bank_path: str | Path | None = None,
+) -> Path:
+    """Write machine, dependency, Git, config, scenario, and source hashes."""
+
+    target = Path(path)
+    resolved_sources: list[dict[str, str]] = []
+    for source_path in source_paths:
+        source = Path(source_path).resolve()
+        if not source.is_file():
+            raise ArtifactError(f"provenance source does not exist: {source}")
+        resolved_sources.append({"path": str(source), "sha256": _file_sha256(source)})
+
+    package_versions: dict[str, str | None] = {}
+    for name in ("genesis-world", "rsl-rl-lib", "torch", "tensordict", "numpy", "pyyaml"):
+        try:
+            package_versions[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            package_versions[name] = None
+
+    gpu_query = None
+    try:
+        gpu_query = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,driver_version,memory.total",
+                "--format=csv,noheader",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        pass
+
+    scenario = None
+    if scenario_bank_path is not None:
+        scenario_path = Path(scenario_bank_path).resolve()
+        if not scenario_path.is_file():
+            raise ArtifactError(f"scenario bank does not exist: {scenario_path}")
+        scenario = {"path": str(scenario_path), "sha256": _file_sha256(scenario_path)}
+
+    body = {
+        "schema_version": 1,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "python": {
+            "version": sys.version,
+            "executable": sys.executable,
+            "platform": platform.platform(),
+        },
+        "packages": package_versions,
+        "gpu": gpu_query,
+        "git": _git_provenance(Path.cwd()),
+        "training_config_sha256": str(training_config["config_sha256"]),
+        "runtime_env_contract_sha256": _canonical_sha256(runtime_env_contract(training_config["env"])),
+        "scenario_bank": scenario,
+        "sources": resolved_sources,
+    }
+    target.write_text(json.dumps(body, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return target
 
 
 def write_training_config(
@@ -212,6 +338,7 @@ def validate_checkpoint_artifacts(
     expected_task: str | None = None,
     expected_robot_key: str | None = None,
     expected_runtime_config_sha256: str | None = None,
+    expected_runtime_env: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], CheckpointManifest]:
     checkpoint = Path(checkpoint_path)
     config = load_training_config(config_path)
@@ -233,8 +360,62 @@ def validate_checkpoint_artifacts(
         expected_runtime_config_sha256
     ):
         failures.append("runtime config hash")
+    if expected_runtime_env is not None:
+        saved_contract = runtime_env_contract(env)
+        expected_contract = runtime_env_contract(expected_runtime_env)
+        mismatched_keys = [
+            key for key in _RUNTIME_ENV_CONTRACT_KEYS if saved_contract.get(key) != expected_contract.get(key)
+        ]
+        if mismatched_keys:
+            failures.append(f"runtime config body ({', '.join(mismatched_keys)})")
     if int(env["num_obs"]) != manifest.observation_dim or int(env["num_actions"]) != manifest.action_dim:
         failures.append("observation/action dimensions")
     if failures:
         raise ArtifactError(f"checkpoint artifact mismatch: {', '.join(failures)}")
     return config, manifest
+
+
+def validate_and_load_rsl_checkpoint(
+    checkpoint_path: str | Path,
+    config_path: str | Path,
+    manifest_path: str | Path | None = None,
+    *,
+    map_location: Any = "cpu",
+    expected_task: str | None = None,
+    expected_robot_key: str | None = None,
+    expected_runtime_config_sha256: str | None = None,
+    expected_runtime_env: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], CheckpointManifest]:
+    """Validate a complete artifact bundle before safely loading RSL-RL weights.
+
+    PyTorch's ``weights_only`` loader rejects arbitrary pickle globals.  Integrity
+    validation deliberately happens first so a public entry point never asks
+    PyTorch to deserialize an unverified checkpoint.
+    """
+
+    config, manifest = validate_checkpoint_artifacts(
+        checkpoint_path,
+        config_path,
+        manifest_path,
+        expected_task=expected_task,
+        expected_robot_key=expected_robot_key,
+        expected_runtime_config_sha256=expected_runtime_config_sha256,
+        expected_runtime_env=expected_runtime_env,
+    )
+
+    # Keep torch optional for configuration-only users and lightweight CI
+    # collection.  It is required only when weights are actually requested.
+    import torch
+
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location=map_location,
+        weights_only=True,
+    )
+    if not isinstance(checkpoint, dict):
+        raise ArtifactError("RSL-RL checkpoint payload must be a mapping")
+    required = {"actor_state_dict", "critic_state_dict"}
+    missing = sorted(required - set(checkpoint))
+    if missing:
+        raise ArtifactError(f"RSL-RL checkpoint is missing fields: {missing}")
+    return checkpoint, config, manifest

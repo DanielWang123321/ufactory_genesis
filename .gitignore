@@ -14,6 +14,8 @@ build/
 .cursor/
 .kilo
 logs/
+# Root compatibility symlink to the private RL log archive.
+/logs
 data/
 dev/*
 outputs/
@@ -36,9 +38,15 @@ agent.md
 worklog.md
 release_checklist.md
 versions.md
-# Local-only RL example tree; not part of the public checkout until v0.2.9.
-examples/rl/
-# Local maintainer RL experiment scripts (not part of the public surface).
+# Private RL experiment archive at repo root (logs, historical recipes, reports,
+# and server orchestration). The curated public example lives in examples/rl/.
+# Leading slash: only the root /rl/ tree (do not match other path segments).
+/rl/
+# Private historical checkpoint migration helper; not part of the v0.2.11 API.
+/ufactory/training/legacy_warm_start.py
+# Compat symlink at repo root → rl/worklog_rl.md
+worklog_rl.md
+# Legacy paths (scripts moved under rl/scripts/; keep ignores as belt-and-suspenders).
 scripts/rl_*.sh
 scripts/rl_checkpoint_hub.py
 scripts/rl_sync.sh

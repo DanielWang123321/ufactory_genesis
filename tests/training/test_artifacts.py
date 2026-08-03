@@ -9,6 +9,7 @@ import yaml
 from ufactory.training import (
     ArtifactError,
     load_training_config,
+    validate_and_load_rsl_checkpoint,
     validate_checkpoint_artifacts,
     write_artifact_inventory,
     write_checkpoint_manifest,
@@ -88,6 +89,39 @@ def test_checkpoint_with_stale_runtime_config_hash_is_rejected(tmp_path: Path):
         )
 
 
+def test_checkpoint_with_matching_hash_but_conflicting_runtime_body_is_rejected(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    saved_env = {
+        "num_obs": 35,
+        "num_actions": 4,
+        "runtime_config_sha256": "same",
+        "fixed_target_pos": [0.30, -0.30, 0.015],
+    }
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env=saved_env,
+        reward={},
+        robot={"joint_names": [f"joint{i}" for i in range(1, 7)]},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}}, checkpoint)
+    artifact = load_training_config(config_path)
+    write_checkpoint_manifest(checkpoint, training_config=artifact, executor_action_contract="cartesian_delta")
+
+    expected_env = dict(saved_env)
+    expected_env["fixed_target_pos"] = [0.30, 0.30, 0.015]
+    with pytest.raises(ArtifactError, match=r"runtime config body .*fixed_target_pos"):
+        validate_checkpoint_artifacts(
+            checkpoint,
+            config_path,
+            expected_runtime_config_sha256="same",
+            expected_runtime_env=expected_env,
+        )
+
+
 def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     write_training_config(
@@ -115,3 +149,89 @@ def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_pat
     assert inventory["selected_checkpoint"] == "model_0.pt"
     assert inventory["checkpoints"][0]["file"] == "model_0.pt"
     assert len(inventory["checkpoints"][0]["sha256"]) == 64
+
+
+def test_validated_rsl_loader_uses_weights_only_mode(tmp_path: Path, monkeypatch) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env={"num_obs": 44, "num_actions": 4},
+        reward={},
+        robot={},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    payload = {
+        "actor_state_dict": {"weight": torch.ones(2)},
+        "critic_state_dict": {"weight": torch.ones(2)},
+        "iter": 0,
+    }
+    torch.save(payload, checkpoint)
+    artifact = load_training_config(config_path)
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=artifact,
+        executor_action_contract="cartesian_delta",
+    )
+    real_load = torch.load
+    calls = []
+
+    def recording_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(torch, "load", recording_load)
+    loaded, validated, manifest = validate_and_load_rsl_checkpoint(
+        checkpoint,
+        config_path,
+        map_location="cpu",
+        expected_task="pick_place",
+    )
+
+    assert loaded["iter"] == 0
+    assert validated["config_sha256"] == manifest.config_sha256
+    assert calls == [{"map_location": "cpu", "weights_only": True}]
+
+
+def test_validated_rsl_loader_rejects_config_before_deserialization(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env={"num_obs": 44, "num_actions": 4},
+        reward={},
+        robot={},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save(
+        {"actor_state_dict": {}, "critic_state_dict": {}, "iter": 0},
+        checkpoint,
+    )
+    artifact = load_training_config(config_path)
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=artifact,
+        executor_action_contract="cartesian_delta",
+    )
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("num_obs: 44", "num_obs: 45"),
+        encoding="utf-8",
+    )
+    called = False
+
+    def forbidden_load(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("torch.load must not run before artifact validation")
+
+    monkeypatch.setattr(torch, "load", forbidden_load)
+    with pytest.raises(ArtifactError, match="training config hash mismatch"):
+        validate_and_load_rsl_checkpoint(checkpoint, config_path)
+    assert called is False

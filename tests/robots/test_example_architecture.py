@@ -1,4 +1,4 @@
-"""Architectural boundaries for the task-oriented v0.2.7 examples."""
+"""Architectural boundaries for the task-oriented public examples."""
 
 from __future__ import annotations
 
@@ -43,6 +43,18 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/pick_place/runtime.example.yaml",
         "examples/packaging/run.py",
         "examples/packaging/runtime.example.yaml",
+        "examples/rl/pick_place/env.py",
+        "examples/rl/pick_place/evaluate.py",
+        "examples/rl/pick_place/expert.py",
+        "examples/rl/pick_place/pretrain_bc.py",
+        "examples/rl/pick_place/train.py",
+        "examples/rl/pick_place/trace_utils.py",
+        "examples/rl/pick_place/recipe.yaml",
+        "examples/rl/pick_place/scenarios/fixed_seed17000_n512.json",
+        "examples/rl/pick_place/pretrained/model_199.pt",
+        "examples/rl/pick_place/pretrained/config.yaml",
+        "examples/rl/pick_place/pretrained/model_199.checkpoint_manifest.json",
+        "examples/rl/pick_place/pretrained/evaluation_summary.json",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
     assert not (PROJECT_ROOT / "examples" / "manipulation").exists()

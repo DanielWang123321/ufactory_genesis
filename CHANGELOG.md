@@ -7,12 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11] — 2026-08-03
+
+### Added
+
+- Published the initial Linux/NVIDIA `examples/rl/pick_place` workflow for xArm6 + Gripper G2 in a fixed `+Y` layout: expert reachability evaluation, behavior cloning, PPO training, checkpoint fine-tuning, trace diagnostics, one canonical recipe, and a fixed 512-episode scenario bank.
+- Bundled the 2.7 MB `model_199.pt` policy with a sanitized full configuration, regenerated SHA-256 manifest, and machine-readable evaluation summary. Public evaluation locates this bundle by default and explicit checkpoints resolve configuration from their own directory.
+- Promoted fixed scenario generation/loading, the immutable `contact_v1` acceptance profile, run provenance, runtime-config body validation, and safe validated RSL checkpoint loading through `ufactory.training`.
+- Added bilingual RL guides covering installation, GPU memory boundaries, viewer/headless/formal evaluation, training and fine-tuning, output locations, metric definitions, and scope limitations.
+
+### Performance
+
+- Viewer evaluation defaults to Genesis dynamic arrays, avoiding the former roughly 39-second static-array compilation wait; headless training and evaluation retain the saved performance-mode contract unless explicitly overridden.
+- The release checkpoint passes all nine deterministic seed/batch combinations and the fixed 64-episode gate (64/64).
+
+### Changed
+
+- Raised both the minimum and reference Genesis World version to **1.3.0** and locked it at 1.3.0. Raised the RSL-RL minimum to **5.3.0** and locked the training reference at 5.4.2.
+- Training and behavior-cloning outputs now default to ignored `outputs/rl/pick_place/` directories. The public evaluator is read-only with respect to the bundled checkpoint directory.
+- The root `/rl/` ignore protects the private experiment archive; public RL code is tracked only under `examples/rl/`. Historical recipes, migration/action-head experiments, large logs, and server orchestration remain private.
+
+### Fixed
+
+- Public RL modules now run as `python -m examples.rl.pick_place.<entry>` without `sys.path` mutation or dependence on the private root `/rl/` tree.
+- Checkpoint configuration and file hashes are verified before PyTorch deserialization; public entries use `weights_only=True` and do not call RSL-RL's unsafe default loader.
+- Documented the fixed action-noise result honestly: standard deviation 0.02 yields **442/512 (86.3%)** with 512/512 grasp/lift. The 99% robustness goal remains unmet, so v0.2.11 makes no random-layout or high-robustness claim.
+
 ## [0.2.10] — 2026-07-22
 
 ### Changed
 
 - Raised the simulation baseline to Genesis World **1.2.3** (`genesis-world>=1.2.3`, lock pin, runtime `MIN`/`VALIDATED` versions, README badges, and hook-contract tests).
-- Raised the optional `[rl]` extra to **`rsl-rl-lib>=5.0.0`**. Public training recipe fixtures now use the rsl-rl 5.x `actor` / `critic` / `obs_groups` schema; the previous 2.x `policy` / `ActorCritic` shape is not compatible. Public examples still do not ship an RL entry tree.
+- Raised the optional `[rl]` extra to **`rsl-rl-lib>=5.0.0`**. Training recipe fixtures moved to the rsl-rl 5.x `actor` / `critic` / `obs_groups` schema; the previous 2.x `policy` / `ActorCritic` shape is not compatible.
 
 ### Fixed
 
@@ -79,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Task-oriented public examples under `visualization/`, `kinematics/`, `pick_place/`, and `packaging/`, with strict runtime overlays beside their entry points. The local `examples/rl/` tree is intentionally gitignored and is not part of the public checkout.
+- Task-oriented public examples under `visualization/`, `kinematics/`, `pick_place/`, and `packaging/`, with strict runtime overlays beside their entry points. Local RL training lives under gitignored `/rl/` (not under `examples/`) until the fixed-layout goal succeeds.
 - `ufactory.manipulation.packaging` as the reusable packaging geometry, planning, scene, simulation, and natural-drop diagnostics package.
 - Shared `ufactory.visualization` viewer implementations, package-level RL configuration builders in `ufactory.training`, overwrite-safe training directories, and complete checkpoint/config inventories.
 - Architecture tests that reject production imports from `examples`, public `sys.path` mutation, legacy bootstrap paths, and Pinocchio/Coal leakage into the simulation/RL extras.

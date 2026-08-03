@@ -1,0 +1,13 @@
+{
+  "action_dim": 4,
+  "checkpoint_file": "model_199.pt",
+  "checkpoint_sha256": "9381387a30efbbc102289052569c0804c868db8d5d5eb5332b88a7513f61b0f7",
+  "code_version": "v0.2.11",
+  "config_sha256": "a86fdc6450f6d8c8c8c6a75cc19a0d557ba470e2e7d03eabe437fad3f61ecdb8",
+  "dof": 4,
+  "executor_action_contract": "normalized_cartesian_delta_xyz+normalized_gripper_gap_delta",
+  "observation_dim": 44,
+  "robot_key": "xarm6_1305",
+  "schema_version": 1,
+  "task": "pick_place"
+}
