@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Checkpoint configuration and file hashes are verified before PyTorch deserialization; public entries use `weights_only=True` and do not call RSL-RL's unsafe default loader.
 - Documented the fixed action-noise result honestly: standard deviation 0.02 yields **442/512 (86.3%)** with 512/512 grasp/lift. The 99% robustness goal remains unmet, so v0.2.11 makes no random-layout or high-robustness claim.
 
+### Security
+
+- Locked `gitpython` to 3.1.57 (fixes GHSA-94p4-4cq8-9g67 on 3.1.54) so `project-check release` lock audit passes.
+
 ## [0.2.10] — 2026-07-22
 
 ### Changed
