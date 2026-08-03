@@ -122,6 +122,90 @@ def test_checkpoint_with_matching_hash_but_conflicting_runtime_body_is_rejected(
         )
 
 
+def test_checkpoint_layout_transfer_allows_only_explicit_layout_mismatch(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    saved_env = {
+        "num_obs": 44,
+        "num_actions": 4,
+        "runtime_config_sha256": "same",
+        "fixed_demo_layout": True,
+        "constraint_solver": "newton",
+    }
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env=saved_env,
+        reward={},
+        robot={},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    artifact = load_training_config(config_path)
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=artifact,
+        executor_action_contract="cartesian_delta",
+    )
+
+    expected_env = {**saved_env, "fixed_demo_layout": False}
+    validate_checkpoint_artifacts(
+        checkpoint,
+        config_path,
+        expected_runtime_config_sha256="same",
+        expected_runtime_env=expected_env,
+        allowed_runtime_env_mismatches=("fixed_demo_layout",),
+    )
+
+    expected_env["constraint_solver"] = "cg"
+    with pytest.raises(ArtifactError, match=r"runtime config body .*constraint_solver"):
+        validate_checkpoint_artifacts(
+            checkpoint,
+            config_path,
+            expected_runtime_config_sha256="same",
+            expected_runtime_env=expected_env,
+            allowed_runtime_env_mismatches=("fixed_demo_layout",),
+        )
+
+
+def test_checkpoint_layout_transfer_rejects_unknown_allowed_key(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env={"num_obs": 44, "num_actions": 4},
+        reward={},
+        robot={},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    artifact = load_training_config(config_path)
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=artifact,
+        executor_action_contract="cartesian_delta",
+    )
+
+    with pytest.raises(ArtifactError, match="unsupported allowed runtime config mismatch"):
+        validate_checkpoint_artifacts(
+            checkpoint,
+            config_path,
+            expected_runtime_env=artifact["env"],
+            allowed_runtime_env_mismatches=("typo",),
+        )
+
+    with pytest.raises(ArtifactError, match="unsupported allowed runtime config mismatch"):
+        validate_checkpoint_artifacts(
+            checkpoint,
+            config_path,
+            expected_runtime_env=artifact["env"],
+            allowed_runtime_env_mismatches=("constraint_solver",),
+        )
+
+
 def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     write_training_config(

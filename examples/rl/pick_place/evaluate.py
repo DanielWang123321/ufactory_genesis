@@ -44,7 +44,7 @@ from ufactory.config import load_runtime_config
 from ufactory.simulation.compat import require_genesis_runtime
 
 from .env import XArm6PickPlaceEnv
-from .expert import ScriptedPickPlaceExpert
+from .expert import scripted_pick_place_expert_from_env
 from .trace_utils import (
     ACTION_AXIS_NAMES,
     HARD_EVENT_FIELDS,
@@ -184,6 +184,70 @@ def _per_checkpoint_path(path: Path | None, ckpt_path: Path, multi_ckpt: bool) -
     return path.with_name(f"{path.stem}.{ckpt_path.parent.name}.{ckpt_path.stem}{path.suffix}")
 
 
+def _load_eval_scenario_bank(args: argparse.Namespace, env_cfg: dict, runtime_config) -> dict | None:
+    """Load, validate, and mount one deterministic scenario bank."""
+
+    if args.scenario_bank is None:
+        return None
+    bank = load_scenario_bank(
+        args.scenario_bank,
+        expected_runtime_config_sha256=(None if args.allow_runtime_config_mismatch else runtime_config.sha256),
+        expected_env=env_cfg,
+    )
+    env_cfg["evaluation_scenarios"] = bank["scenarios"]
+    print(
+        f"Scenario bank: {args.scenario_bank} "
+        f"({bank['count']} {bank['mode']}, "
+        f"sha256={scenario_bank_sha256(args.scenario_bank)[:12]}…)"
+    )
+    return bank
+
+
+def _resolve_episode_count(args: argparse.Namespace, scenario_bank: dict | None, *, default: int) -> None:
+    if args.episodes is None:
+        args.episodes = int(scenario_bank["count"]) if scenario_bank is not None else int(default)
+    if scenario_bank is not None and (args.episodes <= 0 or args.episodes > int(scenario_bank["count"])):
+        raise ValueError("--episodes must be between 1 and the scenario-bank count")
+
+
+def _pin_eval_curriculum_stage(env_cfg: dict, stage: int) -> int:
+    """Freeze construction and every later reset to one evaluation envelope."""
+
+    pinned_stage = int(stage)
+    if not 0 <= pinned_stage <= 4:
+        raise ValueError("evaluation curriculum stage must be in [0, 4]")
+    env_cfg["curriculum_initial_stage"] = pinned_stage
+    env_cfg["curriculum_max_stage"] = pinned_stage
+    return pinned_stage
+
+
+def _acceptance_target_results(stats: dict) -> dict[str, bool]:
+    """Resolve immutable aggregate gates from one completed evaluation."""
+
+    episode_count = int(stats["episode_count"])
+    if episode_count <= 0:
+        return {"standard": False, "robustness": False}
+    p99_error = percentile(stats["final_xy_errors_m"], 99)
+    p99_drag = percentile(stats["max_pre_lift_xy_values_m"], 99)
+    p99_drift = percentile(stats["post_release_drift_values_m"], 99)
+    clean_runtime = (
+        stats["max_action_clip"] == 0.0 and stats["max_ik_failure"] == 0.0 and stats["max_ik_jump_reject"] == 0.0
+    )
+    return {
+        "standard": (
+            stats["success_count"] == episode_count and stats["quality_count"] == episode_count and clean_runtime
+        ),
+        "robustness": (
+            stats["success_count"] / episode_count >= 0.99
+            and stats["quality_count"] / episode_count >= 0.99
+            and p99_error <= 0.010
+            and p99_drag <= 0.005
+            and p99_drift <= 0.003
+            and clean_runtime
+        ),
+    }
+
+
 def _apply_eval_env_overrides(args: argparse.Namespace, env_cfg: dict) -> None:
     """Force the evaluation-side environment contract onto a training env config."""
     env_cfg["num_envs"] = args.num_envs
@@ -235,6 +299,7 @@ _EVALUATION_COMPATIBILITY_ENV_KEYS = (
     "include_commanded_gap",
     "include_previous_action",
     "include_normalized_layout_offsets",
+    "include_scripted_action_hint",
     "include_quality_observations",
     "include_contact_observations",
     "include_ee_setpoint_residual",
@@ -243,6 +308,13 @@ _EVALUATION_COMPATIBILITY_ENV_KEYS = (
     "strict_action_bounds",
     "ctrl_dt",
     "substeps",
+    "constraint_solver",
+    "solver_iterations",
+    "noslip_iterations",
+    "friction_cone",
+    "contact_resolution",
+    "constraint_time_constant_s",
+    "use_gjk_collision",
     "action_scale",
     "action_clip",
     "action_response_exponent",
@@ -258,6 +330,7 @@ _EVALUATION_COMPATIBILITY_ENV_KEYS = (
     "obj_size",
     "obj_mass_kg",
     "fixed_demo_layout",
+    "randomize_target",
     "fixed_obj_pos",
     "fixed_target_pos",
     "workspace_lower",
@@ -309,6 +382,10 @@ def _run_expert_eval(args: argparse.Namespace) -> None:
         recipe_path=args.recipe,
         runtime_config_path=args.runtime_config,
     )
+    runtime_config = load_runtime_config("xarm6", task="pick_place", config_path=args.runtime_config)
+    scenario_bank = _load_eval_scenario_bank(args, env_cfg, runtime_config)
+    _resolve_episode_count(args, scenario_bank, default=8)
+    pinned_stage = _pin_eval_curriculum_stage(env_cfg, args.stage if args.stage is not None else 0)
     _apply_eval_env_overrides(args, env_cfg)
     performance_mode, performance_mode_source = _resolve_eval_performance_mode(args, env_cfg)
     _stamp_eval_performance_mode(performance_mode, performance_mode_source)
@@ -328,9 +405,9 @@ def _run_expert_eval(args: argparse.Namespace) -> None:
         show_viewer=not args.headless,
     )
     _stamp("Scene built (one-off kernel compilation done)")
-    env.curriculum_stage = int(args.stage if args.stage is not None else 0)
+    env.curriculum_stage = pinned_stage
 
-    expert = ScriptedPickPlaceExpert(env)
+    expert = scripted_pick_place_expert_from_env(env)
     print(
         "Scripted expert: "
         f"pre_grasp_gap={1000 * expert.pre_grasp_gap_m:.1f} mm, "
@@ -343,12 +420,12 @@ def _run_expert_eval(args: argparse.Namespace) -> None:
         env,
         expert,
         env.get_observations(),
-        None,
+        scenario_bank,
         resolve_report_csv(args.report_csv),
         Path(args.trace_csv) if args.trace_csv else None,
         args.event_frames_dir,
     )
-    _print_summary(args, None, stats)
+    _print_summary(args, scenario_bank, stats)
     print(f"  Expert phase distribution: {expert.phase_counts()}")
     if args.summary_json is not None:
         _write_summary_json(
@@ -356,12 +433,14 @@ def _run_expert_eval(args: argparse.Namespace) -> None:
             args,
             {"seed": int(args.seed) if args.seed is not None else 1},
             None,
-            None,
-            None,
+            runtime_config,
+            scenario_bank,
             stats,
             Path("scripted-expert"),
             None,
         )
+    if args.require_target is not None and not _acceptance_target_results(stats)[args.require_target]:
+        raise SystemExit(2)
 
 
 def _build_policy(args: argparse.Namespace, runner: OnPolicyRunner):
@@ -376,7 +455,9 @@ def _build_policy(args: argparse.Namespace, runner: OnPolicyRunner):
 
         def beta_mode_policy(observations):
             latent = actor.get_latent(observations)
-            raw_alpha, raw_beta = torch.unbind(actor.mlp(latent), dim=-2)
+            base_raw_output = getattr(actor, "base_raw_output", None)
+            raw_output = base_raw_output(latent) if callable(base_raw_output) else actor.mlp(latent)
+            raw_alpha, raw_beta = torch.unbind(raw_output, dim=-2)
             alpha_excess = torch.nn.functional.softplus(raw_alpha)
             beta_excess = torch.nn.functional.softplus(raw_beta)
             concentration_excess = alpha_excess + beta_excess
@@ -385,7 +466,11 @@ def _build_policy(args: argparse.Namespace, runner: OnPolicyRunner):
                 alpha_excess / concentration_excess.clamp_min(1e-8),
                 torch.full_like(concentration_excess, 0.5),
             )
-            return (unit_mode * (action_high - action_low) + action_low).clamp(action_low, action_high)
+            base_action = (unit_mode * (action_high - action_low) + action_low).clamp(action_low, action_high)
+            select_guided_action = getattr(actor, "select_guided_action", None)
+            if callable(select_guided_action):
+                return select_guided_action(latent, base_action)
+            return base_action
 
         policy = beta_mode_policy
     return policy
@@ -855,25 +940,11 @@ def _print_summary(args, scenario_bank, stats: dict) -> None:
             f"bank={stats['action_noise_bank_source']}, "
             f"sha256={stats['action_noise_bank_sha256'][:12]}…"
         )
-        robust_pass = (
-            success_count / episode_count >= 0.99
-            and p99_error <= 0.010
-            and p99_drag <= 0.005
-            and p99_drift <= 0.003
-            and stats["max_action_clip"] == 0.0
-            and stats["max_ik_failure"] == 0.0
-            and stats["max_ik_jump_reject"] == 0.0
-        )
-        print(f"  Robustness target:{'PASS' if robust_pass else 'FAIL'}")
-    else:
-        standard_pass = (
-            success_count == episode_count
-            and quality_count == episode_count
-            and stats["max_action_clip"] == 0.0
-            and stats["max_ik_failure"] == 0.0
-            and stats["max_ik_jump_reject"] == 0.0
-        )
-        print(f"  Standard target:  {'PASS' if standard_pass else 'FAIL'}")
+    targets = _acceptance_target_results(stats)
+    print(f"  Standard target:  {'PASS' if targets['standard'] else 'FAIL'}")
+    print(f"  Robustness target:{'PASS' if targets['robustness'] else 'FAIL'}")
+    if args.require_target is not None:
+        print(f"  Required target:  {args.require_target} {'PASS' if targets[args.require_target] else 'FAIL'}")
     print(f"  Max near-bound action: {stats['max_action_near_bound']:.6f}")
     print(f"  Max action clip:  {stats['max_action_clip']:.6f}")
     print(f"  Max IK failure:   {stats['max_ik_failure']:.6f}")
@@ -918,8 +989,9 @@ def _write_summary_json(
     p99_error = percentile(stats["final_xy_errors_m"], 99)
     p99_drag = percentile(stats["max_pre_lift_xy_values_m"], 99)
     p99_drift = percentile(stats["post_release_drift_values_m"], 99)
+    target_results = _acceptance_target_results(stats)
     summary = {
-        "schema_version": 3,
+        "schema_version": 4,
         "checkpoint": str(ckpt_path),
         "checkpoint_sha256": None if manifest is None else manifest.checkpoint_sha256,
         "training_config_sha256": None if artifact is None else artifact["config_sha256"],
@@ -940,6 +1012,8 @@ def _write_summary_json(
         "episodes": episode_count,
         "strict_success": args.acceptance_profile is not None,
         "acceptance_profile": args.acceptance_profile,
+        "required_target": args.require_target,
+        "required_target_pass": (None if args.require_target is None else target_results[args.require_target]),
         "resolved_acceptance_profile": getattr(
             args,
             "resolved_acceptance_profile",
@@ -991,22 +1065,8 @@ def _write_summary_json(
                 stats["landing_down_speed_values_m_s"],
                 99,
             ),
-            "standard_target_pass": (
-                success_count == episode_count
-                and quality_count == episode_count
-                and stats["max_action_clip"] == 0.0
-                and stats["max_ik_failure"] == 0.0
-                and stats["max_ik_jump_reject"] == 0.0
-            ),
-            "robustness_target_pass": (
-                success_count / episode_count >= 0.99
-                and p99_error <= 0.010
-                and p99_drag <= 0.005
-                and p99_drift <= 0.003
-                and stats["max_action_clip"] == 0.0
-                and stats["max_ik_failure"] == 0.0
-                and stats["max_ik_jump_reject"] == 0.0
-            ),
+            "standard_target_pass": target_results["standard"],
+            "robustness_target_pass": target_results["robustness"],
         },
         "diagnostics": {
             "max_action_near_bound_fraction": stats["max_action_near_bound"],
@@ -1039,7 +1099,7 @@ def _evaluate_checkpoint(
     pinned_stage: int,
     is_first: bool,
     multi_ckpt: bool,
-) -> None:
+) -> bool:
     """Load one checkpoint into the shared runner and evaluate it without rebuilding the scene."""
     load_runner_checkpoint(runner, checkpoint, load_optimizer=False)
     _stamp(f"Checkpoint loaded: {ckpt_path}")
@@ -1087,6 +1147,8 @@ def _evaluate_checkpoint(
             ckpt_path,
             manifest,
         )
+    targets = _acceptance_target_results(stats)
+    return args.require_target is None or targets[args.require_target]
 
 
 def main():
@@ -1142,6 +1204,14 @@ def main():
         help=(
             "Apply an immutable evaluation profile instead of taking quality limits "
             "from the candidate's training recipe"
+        ),
+    )
+    parser.add_argument(
+        "--require-target",
+        choices=("standard", "robustness"),
+        help=(
+            "Exit non-zero unless the selected aggregate gate passes. This also "
+            "enables the immutable contact_v1 profile when none is specified."
         ),
     )
     parser.add_argument(
@@ -1310,6 +1380,8 @@ def main():
         if args.acceptance_profile not in (None, "contact_v1"):
             parser.error("--strict-success conflicts with the selected acceptance profile")
         args.acceptance_profile = "contact_v1"
+    if args.require_target is not None and args.acceptance_profile is None:
+        args.acceptance_profile = "contact_v1"
     if args.action_noise_std < 0.0:
         raise ValueError("--action-noise-std must be non-negative")
     if not 0.0 <= args.place_phase_table_reset_frac <= 1.0:
@@ -1324,8 +1396,6 @@ def main():
         return
 
     if args.expert:
-        if args.episodes is None:
-            args.episodes = 8
         _run_expert_eval(args)
         return
 
@@ -1413,22 +1483,8 @@ def main():
         runtime_config.robot.urdf,
     )
 
-    scenario_bank = None
-    if args.scenario_bank is not None:
-        scenario_bank = load_scenario_bank(
-            args.scenario_bank,
-            expected_runtime_config_sha256=None if args.allow_runtime_config_mismatch else runtime_config.sha256,
-        )
-        env_cfg["evaluation_scenarios"] = scenario_bank["scenarios"]
-        print(
-            f"Scenario bank: {args.scenario_bank} "
-            f"({scenario_bank['count']} {scenario_bank['mode']}, "
-            f"sha256={scenario_bank_sha256(args.scenario_bank)[:12]}…)"
-        )
-    if args.episodes is None:
-        args.episodes = int(scenario_bank["count"]) if scenario_bank is not None else 10
-    if scenario_bank is not None and (args.episodes <= 0 or args.episodes > int(scenario_bank["count"])):
-        raise ValueError("--episodes must be between 1 and the scenario-bank count")
+    scenario_bank = _load_eval_scenario_bank(args, env_cfg, runtime_config)
+    _resolve_episode_count(args, scenario_bank, default=10)
     if args.action_noise_std > 0.0 and args.episodes <= 0:
         raise ValueError("action-noise bank evaluation requires a finite --episodes count")
 
@@ -1439,6 +1495,13 @@ def main():
     train_cfg["runner"]["resume"] = False
     if args.seed is not None:
         train_cfg["seed"] = int(args.seed)
+
+    if args.stage is not None:
+        pinned_stage = int(args.stage)
+        stage_source = "CLI argument"
+    else:
+        pinned_stage, stage_source = infer_eval_stage(metrics_path)
+    pinned_stage = _pin_eval_curriculum_stage(env_cfg, pinned_stage)
 
     # Init Genesis with viewer. Viewer mode uses info logging so the long one-off
     # kernel compilation ("Compiling simulation kernels...") is visible instead of a
@@ -1461,12 +1524,8 @@ def main():
     )
     _stamp("Scene built (one-off kernel compilation done)")
 
-    # Set curriculum stage for evaluation
-    if args.stage is not None:
-        env.curriculum_stage = args.stage
-        stage_source = "CLI argument"
-    else:
-        env.curriculum_stage, stage_source = infer_eval_stage(metrics_path)
+    # Keep later resets pinned to the same stage used by the constructor's first reset.
+    env.curriculum_stage = pinned_stage
     print(f"Curriculum stage: {env.curriculum_stage} ({stage_source})")
 
     latest_metrics = read_latest_metrics(metrics_path)
@@ -1491,27 +1550,31 @@ def main():
     mode = "headless" if args.headless else "viewer"
     print(f"Running evaluation ({mode} mode)...")
 
-    pinned_stage = env.curriculum_stage
+    required_results: list[bool] = []
     for ckpt_index, current_ckpt in enumerate(ckpt_paths):
         if multi_ckpt:
             print(f"\n{'#' * 60}")
             print(f"# Checkpoint {ckpt_index + 1}/{len(ckpt_paths)}: {current_ckpt}")
             print(f"{'#' * 60}")
-        _evaluate_checkpoint(
-            args,
-            env=env,
-            runner=runner,
-            train_cfg=train_cfg,
-            artifact=artifacts[current_ckpt],
-            runtime_config=runtime_config,
-            scenario_bank=scenario_bank,
-            ckpt_path=current_ckpt,
-            checkpoint=loaded_checkpoints[current_ckpt],
-            manifest=manifests[current_ckpt],
-            pinned_stage=pinned_stage,
-            is_first=(ckpt_index == 0),
-            multi_ckpt=multi_ckpt,
+        required_results.append(
+            _evaluate_checkpoint(
+                args,
+                env=env,
+                runner=runner,
+                train_cfg=train_cfg,
+                artifact=artifacts[current_ckpt],
+                runtime_config=runtime_config,
+                scenario_bank=scenario_bank,
+                ckpt_path=current_ckpt,
+                checkpoint=loaded_checkpoints[current_ckpt],
+                manifest=manifests[current_ckpt],
+                pinned_stage=pinned_stage,
+                is_first=(ckpt_index == 0),
+                multi_ckpt=multi_ckpt,
+            )
         )
+    if args.require_target is not None and not all(required_results):
+        raise SystemExit(2)
 
 
 def _run_hold_preview(args: argparse.Namespace) -> None:
@@ -1527,6 +1590,7 @@ def _run_hold_preview(args: argparse.Namespace) -> None:
     )
     env_cfg["num_envs"] = int(args.num_envs)
     env_cfg["fixed_demo_layout"] = True
+    pinned_stage = _pin_eval_curriculum_stage(env_cfg, args.stage if args.stage is not None else 0)
     performance_mode, performance_mode_source = _resolve_eval_performance_mode(args, env_cfg)
     _stamp_eval_performance_mode(performance_mode, performance_mode_source)
 
@@ -1545,7 +1609,7 @@ def _run_hold_preview(args: argparse.Namespace) -> None:
         robot_cfg=robot_cfg,
         show_viewer=True,
     )
-    env.curriculum_stage = int(args.stage if args.stage is not None else 0)
+    env.curriculum_stage = pinned_stage
     _obs, _extras = env.reset()
     base = [float(v) for v in robot_cfg["base_pos"]]
     obj_base = [float(v) for v in env.obj_pos_base()[0].detach().cpu().tolist()]

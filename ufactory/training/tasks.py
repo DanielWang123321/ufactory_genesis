@@ -36,7 +36,7 @@ def build_pick_place_task_configs(
     """Resolve the retained xArm6 + Gripper G2 pick-place RL task."""
 
     if robot not in PICK_PLACE_RL_ROBOTS:
-        raise ValueError("the v0.2.11 pick-place RL environment supports only xArm6 + Gripper G2")
+        raise ValueError("the v0.2.12 pick-place RL environment supports only xArm6 + Gripper G2")
     config = load_runtime_config(robot, task="pick_place", config_path=runtime_config_path)
     if config.gripper is None or config.gripper.adapter != "g2":
         raise ValueError("the pick-place RL environment requires Gripper G2")
@@ -60,6 +60,13 @@ def build_pick_place_task_configs(
             "place_success_dist_m": float(env_cfg.get("place_success_dist_m", params["place_success_distance_m"])),
             "success_hold_steps": int(env_cfg.get("success_hold_steps", params["success_hold_steps"])),
             "substeps": int(params["substeps"]),
+            "constraint_solver": config.simulation.constraint_solver,
+            "solver_iterations": config.simulation.solver_iterations,
+            "noslip_iterations": config.simulation.noslip_iterations,
+            "friction_cone": config.simulation.friction_cone,
+            "contact_resolution": config.simulation.contact_resolution,
+            "constraint_time_constant_s": config.simulation.constraint_time_constant_s,
+            "use_gjk_collision": config.simulation.use_gjk_collision,
             "gripper_open_mm": config.gripper.open_gap_m * 1000.0,
             # Grasp preload target (~22 mm), not the hardware dead-closed gap (0 mm).
             "gripper_close_mm": float(params["grasp_gap_m"]) * 1000.0,
@@ -73,6 +80,8 @@ def build_pick_place_task_configs(
             "target_spawn_upper": list(params["target_spawn_upper_m"]),
             # Recipe may set fixed_demo_layout; default true matches trajectory demo poses.
             "fixed_demo_layout": bool(env_cfg.get("fixed_demo_layout", True)),
+            # When the layout is not fixed, older recipes randomize both endpoints.
+            "randomize_target": bool(env_cfg.get("randomize_target", True)),
             "place_phase_reset_frac": float(env_cfg.get("place_phase_reset_frac", 0.25)),
             "place_phase_hover_z_m": float(env_cfg.get("place_phase_hover_z_m", 0.07)),
         }

@@ -287,6 +287,110 @@ def test_normalized_layout_offsets_append_six_order_one_features() -> None:
     assert torch.allclose(obs[:, 35:], offsets)
 
 
+def test_scripted_action_hint_appends_after_complete_legacy_and_layout_prefix() -> None:
+    n = 2
+    layout = torch.tensor([[0.25] * 6, [-0.5] * 6])
+    guide = torch.tensor([[0.1, -0.2, 0.3, -0.4], [-1.0, 0.5, 0.0, 1.0]])
+    prefix = pick_place_observation(
+        torch.zeros(n, 6),
+        torch.zeros(n, 6),
+        torch.zeros(n, 3),
+        torch.zeros(n),
+        torch.zeros(n, 3),
+        torch.ones(n, 3),
+        torch.zeros(n, dtype=torch.bool),
+        torch.zeros(n, dtype=torch.bool),
+        torch.zeros(n),
+        torch.zeros(n, 4),
+        normalized_layout_offsets=layout,
+        quality_features=torch.zeros(n, 6),
+        contact_features=torch.zeros(n, 3),
+    )
+    obs = pick_place_observation(
+        torch.zeros(n, 6),
+        torch.zeros(n, 6),
+        torch.zeros(n, 3),
+        torch.zeros(n),
+        torch.zeros(n, 3),
+        torch.ones(n, 3),
+        torch.zeros(n, dtype=torch.bool),
+        torch.zeros(n, dtype=torch.bool),
+        torch.zeros(n),
+        torch.zeros(n, 4),
+        normalized_layout_offsets=layout,
+        quality_features=torch.zeros(n, 6),
+        contact_features=torch.zeros(n, 3),
+        scripted_action_hint=guide,
+    )
+
+    assert prefix.shape == (n, 50)
+    assert obs.shape == (n, 54)
+    assert torch.equal(obs[:, :50], prefix)
+    assert torch.equal(obs[:, 50:], guide)
+
+
+def test_fixed_episode_layout_offsets_stay_zero_after_object_motion() -> None:
+    fixed_obj = torch.tensor([0.300, 0.000, 0.015])
+    fixed_target = torch.tensor([0.300, 0.300, 0.015])
+    offsets = normalized_pick_place_layout_offsets(
+        fixed_obj.unsqueeze(0),
+        fixed_target.unsqueeze(0),
+        fixed_obj,
+        fixed_target,
+        torch.tensor([0.280, -0.050, 0.015]),
+        torch.tensor([0.340, 0.050, 0.015]),
+        torch.tensor([0.280, 0.250, 0.015]),
+        torch.tensor([0.340, 0.350, 0.015]),
+    )
+    live_object_after_transport = fixed_target.unsqueeze(0)
+    assert not torch.equal(live_object_after_transport, fixed_obj.unsqueeze(0))
+    assert torch.equal(offsets, torch.zeros_like(offsets))
+
+
+def test_episode_layout_offsets_remain_available_in_target_neighbourhood() -> None:
+    fixed_obj = torch.tensor([0.300, 0.000, 0.015])
+    fixed_target = torch.tensor([0.300, 0.300, 0.015])
+    object_starts = torch.tensor([[0.330, 0.025, 0.015], [0.330, 0.025, 0.015]])
+    targets = fixed_target.unsqueeze(0).expand(2, 3)
+    offsets = normalized_pick_place_layout_offsets(
+        object_starts,
+        targets,
+        fixed_obj,
+        fixed_target,
+        torch.tensor([0.280, -0.050, 0.015]),
+        torch.tensor([0.340, 0.050, 0.015]),
+        torch.tensor([0.280, 0.250, 0.015]),
+        torch.tensor([0.340, 0.350, 0.015]),
+    )
+    assert torch.count_nonzero(offsets[0]).item() == 4
+    assert torch.equal(offsets[1], offsets[0])
+
+
+def test_layout_offsets_follow_the_complete_existing_observation_prefix() -> None:
+    n = 2
+    common = dict(
+        joint_pos=torch.zeros(n, 6),
+        joint_vel=torch.zeros(n, 6),
+        ee_base=torch.zeros(n, 3),
+        gripper_gap=torch.zeros(n),
+        obj_base=torch.zeros(n, 3),
+        target_base=torch.ones(n, 3),
+        grasped=torch.zeros(n, dtype=torch.bool),
+        ever_grasped=torch.zeros(n, dtype=torch.bool),
+        commanded_gap=torch.zeros(n),
+        previous_action=torch.zeros(n, 4),
+        quality_features=torch.randn(n, 6),
+        contact_features=torch.randn(n, 3),
+    )
+    base = pick_place_observation(**common)
+    offsets = torch.randn(n, 6)
+    expanded = pick_place_observation(**common, normalized_layout_offsets=offsets)
+    assert base.shape == (n, 44)
+    assert expanded.shape == (n, 50)
+    assert torch.equal(expanded[:, :44], base)
+    assert torch.equal(expanded[:, 44:], offsets)
+
+
 def test_gap_drive_roundtrip_endpoints() -> None:
     open_t = torch.tensor([OPEN])
     closed_t = torch.tensor([0.0])
@@ -1409,6 +1513,28 @@ def test_curriculum_edge_fraction_samples_stage_boundary_corners() -> None:
             target_spawn_upper=torch.tensor([0.34, 0.35, 0.015]),
             edge_fraction=1.1,
         )
+
+
+@pytest.mark.parametrize("stage", [1, 2, 3, 4])
+def test_random_curriculum_can_keep_target_fixed(stage: int) -> None:
+    fixed_obj = torch.tensor([0.30, 0.00, 0.015])
+    fixed_target = torch.tensor([0.30, 0.30, 0.015])
+    obj, target = sample_object_and_target(
+        stage,
+        512,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+        fixed_obj=fixed_obj,
+        fixed_target=fixed_target,
+        obj_spawn_lower=torch.tensor([0.28, -0.05, 0.015]),
+        obj_spawn_upper=torch.tensor([0.34, 0.05, 0.015]),
+        target_spawn_lower=torch.tensor([0.28, 0.25, 0.015]),
+        target_spawn_upper=torch.tensor([0.34, 0.35, 0.015]),
+        edge_fraction=0.25,
+        randomize_target=False,
+    )
+    assert torch.allclose(target, fixed_target.unsqueeze(0).expand_as(target))
+    assert not torch.allclose(obj, fixed_obj.unsqueeze(0).expand_as(obj))
 
 
 def test_observation_golden_values() -> None:

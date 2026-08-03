@@ -60,6 +60,33 @@ def test_dump_config_contains_sources_and_hash_without_importing_genesis():
     assert "sha256:" in text
 
 
+def test_default_rigid_contact_profile_is_explicit_genesis_131() -> None:
+    simulation = load_runtime_config("xarm6").simulation
+    assert simulation.constraint_solver == "newton"
+    assert simulation.friction_cone == "elliptic"
+    assert simulation.contact_resolution == "signorini"
+    assert simulation.solver_iterations == 100
+    assert simulation.noslip_iterations == 0
+    assert simulation.constraint_time_constant_s == pytest.approx(0.005)
+
+
+@pytest.mark.parametrize(
+    "body,match",
+    [
+        ("friction_cone: future", "friction cone"),
+        ("contact_resolution: future", "contact resolution"),
+        ("constraint_solver: cg", "constraint solver"),
+        ("noslip_iterations: 5", "elliptic friction"),
+        ("friction_cone: pyramidal", "signorini contact"),
+    ],
+)
+def test_invalid_rigid_contact_configuration_is_rejected(tmp_path: Path, body: str, match: str) -> None:
+    path = tmp_path / "bad_physics.yaml"
+    path.write_text(f"schema_version: 1\nsimulation:\n  {body}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=match):
+        load_runtime_config("xarm6", config_path=path)
+
+
 @pytest.mark.parametrize("robot", ROBOTS)
 def test_all_robots_share_the_30mm_17g_table_object(robot: str):
     config = load_runtime_config(robot)

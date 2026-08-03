@@ -8,7 +8,11 @@ import numpy as np
 import pytest
 import torch
 
-from examples.rl.pick_place.evaluate import _resolve_eval_performance_mode
+from examples.rl.pick_place.evaluate import (
+    _acceptance_target_results,
+    _pin_eval_curriculum_stage,
+    _resolve_eval_performance_mode,
+)
 from examples.rl.pick_place.env import XArm6PickPlaceEnv
 from examples.rl.pick_place.expert import (
     PHASE_APPROACH,
@@ -115,6 +119,39 @@ def test_evaluation_resolves_genesis_performance_mode_without_mutating_artifact(
 
     assert resolved == (expected_mode, expected_source)
     assert env_cfg == {"genesis_performance_mode": saved_mode}
+
+
+@pytest.mark.parametrize("stage", range(5))
+def test_evaluation_pins_initial_and_maximum_curriculum_stage(stage: int) -> None:
+    env_cfg = {"curriculum_initial_stage": 0, "curriculum_max_stage": 4}
+    assert _pin_eval_curriculum_stage(env_cfg, stage) == stage
+    assert env_cfg["curriculum_initial_stage"] == stage
+    assert env_cfg["curriculum_max_stage"] == stage
+
+
+def test_evaluation_rejects_invalid_inferred_curriculum_stage() -> None:
+    with pytest.raises(ValueError, match="curriculum stage"):
+        _pin_eval_curriculum_stage({}, 5)
+
+
+def test_random_start_aggregate_gate_uses_99_percent_point_estimate_and_quality() -> None:
+    stats = {
+        "episode_count": 512,
+        "success_count": 507,
+        "quality_count": 507,
+        "final_xy_errors_m": [0.001] * 512,
+        "max_pre_lift_xy_values_m": [0.001] * 512,
+        "post_release_drift_values_m": [0.001] * 512,
+        "max_action_clip": 0.0,
+        "max_ik_failure": 0.0,
+        "max_ik_jump_reject": 0.0,
+    }
+    assert _acceptance_target_results(stats) == {"standard": False, "robustness": True}
+    stats["success_count"] = 506
+    assert not _acceptance_target_results(stats)["robustness"]
+    stats["success_count"] = 507
+    stats["quality_count"] = 506
+    assert not _acceptance_target_results(stats)["robustness"]
 
 
 def test_terminal_trace_uses_pre_reset_snapshot_and_actual_reward_terms() -> None:
@@ -359,6 +396,7 @@ def test_environment_training_state_restores_noise_progress() -> None:
     source = XArm6PickPlaceEnv.__new__(XArm6PickPlaceEnv)
     source.total_env_steps = 1234
     source.curriculum_stage = 0
+    source.curriculum_stage_enter_step = 1000
     source.curriculum_max_stage = 0
     source.train_action_noise_std = 0.02
     source.train_action_noise_std_end = 0.02
@@ -369,6 +407,7 @@ def test_environment_training_state_restores_noise_progress() -> None:
     restored = XArm6PickPlaceEnv.__new__(XArm6PickPlaceEnv)
     restored.total_env_steps = 0
     restored.curriculum_stage = 0
+    restored.curriculum_stage_enter_step = 0
     restored.curriculum_max_stage = 0
     restored.train_action_noise_std = 0.02
     restored.train_action_noise_std_end = 0.02
@@ -376,10 +415,104 @@ def test_environment_training_state_restores_noise_progress() -> None:
     restored.train_action_noise_clean_episode_frac = 0.5
     restored.load_training_state_dict(state)
     assert restored.total_env_steps == 1234
+    assert restored.curriculum_stage_enter_step == 1000
 
     restored.train_action_noise_clean_episode_frac = 0.25
     with pytest.raises(ValueError, match="schedule differs"):
         restored.load_training_state_dict(state)
+
+
+def test_curriculum_stage_dwell_resets_histories_and_blocks_same_step_skip() -> None:
+    env = XArm6PickPlaceEnv.__new__(XArm6PickPlaceEnv)
+    env.fixed_demo_layout = False
+    env.curriculum_stage = 0
+    env.curriculum_max_stage = 4
+    env.curriculum_stage_enter_step = 0
+    env.curriculum_min_stage_steps = 128
+    env.curriculum_min_count = 4
+    env.curriculum_stage0_grasp_rate = 0.95
+    env.curriculum_stage1_grasp_rate = 0.90
+    env.curriculum_stage2_place_rate = 0.90
+    env.curriculum_stage3_place_rate = 0.85
+    env.total_env_steps = 127
+    for name in (
+        "learned_grasp_success_history",
+        "learned_lift_success_history",
+        "learned_place_success_history",
+        "learned_success_history",
+    ):
+        setattr(env, name, torch.ones(4))
+    env.learned_grasp_history_idx = 3
+    env.learned_grasp_history_count = 4
+    env.learned_lift_history_idx = 3
+    env.learned_lift_history_count = 4
+    env.learned_place_history_idx = 3
+    env.learned_place_history_count = 4
+    env.learned_success_history_idx = 3
+    env.learned_success_history_count = 4
+    env._metric_cohorts = ("learned_clean",)
+    env.cohort_grasp_histories = {"learned_clean": torch.ones(4)}
+    env.cohort_success_histories = {"learned_clean": torch.ones(4)}
+    env.cohort_history_indices = {"learned_clean": 3}
+    env.cohort_history_counts = {"learned_clean": 4}
+
+    env._maybe_update_curriculum()
+    assert env.curriculum_stage == 0
+
+    env.total_env_steps = 128
+    env._maybe_update_curriculum()
+    assert env.curriculum_stage == 1
+    assert env.curriculum_stage_enter_step == 128
+    assert env.learned_grasp_history_count == 0
+    assert env.learned_grasp_history_idx == 0
+    assert not bool(env.learned_grasp_success_history.any())
+    assert env.cohort_history_counts["learned_clean"] == 0
+
+    env.learned_grasp_success_history.fill_(1.0)
+    env.learned_grasp_history_count = 4
+    env._maybe_update_curriculum()
+    assert env.curriculum_stage == 1
+
+    env.total_env_steps = 256
+    env._maybe_update_curriculum()
+    assert env.curriculum_stage == 2
+
+
+def test_late_previous_stage_episode_does_not_repopulate_current_gate() -> None:
+    env = XArm6PickPlaceEnv.__new__(XArm6PickPlaceEnv)
+    for prefix in ("grasp", "lift", "place", "success"):
+        setattr(env, f"{prefix}_success_history" if prefix != "success" else "success_history", torch.zeros(8))
+        setattr(env, f"{prefix}_history_idx", 0)
+        setattr(env, f"{prefix}_history_count", 0)
+        setattr(
+            env,
+            f"learned_{prefix}_success_history" if prefix != "success" else "learned_success_history",
+            torch.zeros(8),
+        )
+        setattr(env, f"learned_{prefix}_history_idx", 0)
+        setattr(env, f"learned_{prefix}_history_count", 0)
+    env.curriculum_stage = 1
+    env.episode_curriculum_stage = torch.tensor([0, 1])
+    env.ever_grasped = torch.tensor([False, True])
+    env.ever_lifted = torch.tensor([False, True])
+    env.episode_place_success = torch.tensor([False, True])
+    env.episode_success = torch.tensor([False, True])
+    env.is_bootstrap_episode = torch.tensor([False, False])
+    env.episode_action_noise_enabled = torch.tensor([False, False])
+    env._metric_cohorts = ("learned_clean", "learned_noisy", "bootstrap_clean", "bootstrap_noisy")
+    env.cohort_grasp_histories = {label: torch.zeros(8) for label in env._metric_cohorts}
+    env.cohort_success_histories = {label: torch.zeros(8) for label in env._metric_cohorts}
+    env.cohort_history_indices = {label: 0 for label in env._metric_cohorts}
+    env.cohort_history_counts = {label: 0 for label in env._metric_cohorts}
+
+    env._record_episode_outcomes(torch.tensor([0, 1]))
+
+    assert env.grasp_history_count == 2
+    assert env.learned_grasp_history_count == 1
+    assert env.learned_grasp_success_history[0].item() == 1.0
+    assert env.learned_success_history_count == 1
+    assert env.learned_success_history[0].item() == 1.0
+    assert env.cohort_history_counts["learned_clean"] == 1
 
 
 def test_unique_layout_count_deduplicates_fixed_pose_copies() -> None:
@@ -430,3 +563,16 @@ def test_expert_quality_phase_weights_match_disturbed_bc_recipe() -> None:
     assert expert_phase_sample_weights(phases).tolist() == pytest.approx([1.0, 4.0, 4.0, 2.0, 2.0])
     with pytest.raises(ValueError, match="positive"):
         expert_phase_sample_weights(phases, near_table_weight=0.0)
+
+
+def test_expert_phase_weights_can_remove_duration_bias() -> None:
+    phases = torch.tensor(
+        [PHASE_APPROACH, PHASE_APPROACH, PHASE_SETDOWN, PHASE_RELEASE],
+        dtype=torch.long,
+    )
+    weights = expert_phase_sample_weights(phases, balance_phases=True)
+
+    totals = {phase: float(weights[phases == phase].sum()) for phase in (PHASE_APPROACH, PHASE_SETDOWN, PHASE_RELEASE)}
+    assert weights.mean().item() == pytest.approx(1.0)
+    assert totals[PHASE_SETDOWN] / totals[PHASE_APPROACH] == pytest.approx(4.0)
+    assert totals[PHASE_RELEASE] / totals[PHASE_APPROACH] == pytest.approx(2.0)

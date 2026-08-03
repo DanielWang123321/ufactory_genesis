@@ -28,6 +28,7 @@ from ufactory.dynamics.report import (
     _effort_limits,
 )
 from ufactory.dynamics.poses import _XARM6_RUNTIME
+from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import require_genesis_runtime
 
 if TYPE_CHECKING:
@@ -83,6 +84,7 @@ def build_genesis_scene(
             refresh_rate=60,
         ),
         sim_options=gs.options.SimOptions(dt=sim_dt, substeps=sim_substeps),
+        rigid_options=make_rigid_options(gs),
         show_viewer=show_viewer,
     )
     # Infinite ground plane primitive; avoids a cwd-relative plane.urdf file

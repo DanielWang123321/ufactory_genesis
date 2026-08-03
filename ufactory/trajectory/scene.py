@@ -22,7 +22,16 @@ from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
-from ufactory.simulation import GenesisRuntimeManager
+from ufactory.simulation import (
+    DEFAULT_CONSTRAINT_SOLVER,
+    DEFAULT_CONSTRAINT_TIMECONST,
+    DEFAULT_CONTACT_RESOLUTION,
+    DEFAULT_FRICTION_CONE,
+    DEFAULT_NOSLIP_ITERATIONS,
+    DEFAULT_SOLVER_ITERATIONS,
+    GenesisRuntimeManager,
+    make_rigid_options,
+)
 from ufactory.robots.paths import robot_visual_glb_urdf, robot_urdf
 from ufactory.robots.registry import joint_names
 from ufactory.robots.runtime import GripperControlParams, RobotRuntimeProfile, get_robot_runtime_profile
@@ -78,9 +87,9 @@ LITE6_PLACE_RELEASE_STANDOFF_M = 0.0
 FINGER_Z_OFFSET_G2 = 0.1011
 FINGER_Z_OFFSET_LITE6 = 0.0543
 
-RIGID_SOLVER_ITERATIONS = 100
-RIGID_NOSLIP_ITERATIONS = 5
-RIGID_CONSTRAINT_TIMECONST = 0.005
+RIGID_SOLVER_ITERATIONS = DEFAULT_SOLVER_ITERATIONS
+RIGID_NOSLIP_ITERATIONS = DEFAULT_NOSLIP_ITERATIONS
+RIGID_CONSTRAINT_TIMECONST = DEFAULT_CONSTRAINT_TIMECONST
 MIMIC_CONSTRAINT_SOL_PARAMS = (0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0)
 
 # Painted wood block and silicone fingertip pads. Size and mass come from the
@@ -277,8 +286,11 @@ def build_scene(
     rate: float = 50.0,
     show_viewer: bool = False,
     substeps: int = 8,
+    constraint_solver: str = DEFAULT_CONSTRAINT_SOLVER,
     solver_iterations: int = RIGID_SOLVER_ITERATIONS,
     noslip_iterations: int = RIGID_NOSLIP_ITERATIONS,
+    friction_cone: str = DEFAULT_FRICTION_CONE,
+    contact_resolution: str = DEFAULT_CONTACT_RESOLUTION,
     constraint_timeconst: float = RIGID_CONSTRAINT_TIMECONST,
     use_gjk_collision: bool | None = None,
     stiffen_gripper_mimic: bool = True,
@@ -363,9 +375,12 @@ def build_scene(
     camera_pos = (camera_lookat[0] + 0.90, camera_lookat[1] - 1.35, camera_lookat[2] + 0.60)
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=dt, substeps=substeps),
-        rigid_options=gs.options.RigidOptions(
+        rigid_options=make_rigid_options(
+            gs,
             dt=dt,
-            constraint_solver=gs.constraint_solver.Newton,
+            constraint_solver=constraint_solver,
+            friction_cone=friction_cone,
+            contact_resolution=contact_resolution,
             enable_collision=True,
             enable_joint_limit=True,
             iterations=int(solver_iterations),

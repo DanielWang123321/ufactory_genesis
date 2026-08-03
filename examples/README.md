@@ -2,7 +2,7 @@
 
 [中文](README_cn.md)
 
-v0.2.11 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
+v0.2.12 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ pip install -e ".[sim]"
 # Optional:
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
 #   pip install -e ".[showcase]"  # packaging box textures (scipy)
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA fixed-layout RL example
+#   pip install -e ".[sim,rl]"    # Linux/NVIDIA RL pick-place workflows
 ```
 
 3. Set a writable Numba cache directory before Genesis-backed runs:
@@ -40,9 +40,10 @@ Public directories in this release:
 | `kinematics/` | FK/IK / robot verification wrappers |
 | `pick_place/` | Multi-robot pick-place entry + optional overlay |
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
-| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 fixed-layout RL example |
+| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 RL pick-place workflows |
 
-See [rl/README.md](rl/README.md) for scope, and [rl/pick_place/README.md](rl/pick_place/README.md) for install, evaluation commands, training, and known limits.
+See the [RL index](rl/README.md) for scope and links to the fixed-layout and
+random-object-start install, evaluation, training, and limitations guides.
 
 ## Visualization
 
@@ -209,4 +210,4 @@ Real mode never loops. xArm5, xArm7, and UF850 `--mode real` fail before control
 | Per-robot pick-place wrappers | `examples/pick_place/run.py --robot <key>` |
 | Root/xArm6 packaging wrappers | `examples/packaging/run.py --robot <key>` |
 
-Old paths, bootstrap files, and underscore-prefixed example internals were removed without compatibility wrappers. The v0.2.11 RL entry is module-only under `examples.rl.pick_place`.
+Old paths, bootstrap files, and underscore-prefixed example internals were removed without compatibility wrappers. The v0.2.12 RL entries remain module-only under `examples.rl.pick_place`.

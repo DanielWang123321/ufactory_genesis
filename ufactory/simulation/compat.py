@@ -1,6 +1,6 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.3.0 is both the minimum and the reference pinned physics baseline for
+Genesis 1.3.1 is both the minimum and the reference pinned physics baseline for
 the contact-v1 pick-place campaign (local and training server aligned).
 """
 
@@ -17,8 +17,8 @@ import warnings
 from packaging.version import InvalidVersion, Version
 
 
-MIN_GENESIS_VERSION = Version("1.3.0")
-VALIDATED_GENESIS_VERSION = Version("1.3.0")  # reference / pinned baseline alias
+MIN_GENESIS_VERSION = Version("1.3.1")
+VALIDATED_GENESIS_VERSION = Version("1.3.1")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -102,6 +102,15 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
     for name in ("options", "morphs", "surfaces"):
         if getattr(gs_module, name, None) is None:
             raise GenesisCompatibilityError(f"Genesis runtime requires module attribute {name!r}.")
+    for name in ("constraint_solver", "friction_cone", "contact_resolution"):
+        if getattr(gs_module, name, None) is None:
+            raise GenesisCompatibilityError(f"Genesis runtime requires module attribute {name!r}.")
+    rigid_options = _require_callable(gs_module.options, "RigidOptions", "rigid options")
+    _require_parameters(
+        rigid_options,
+        {"constraint_solver", "friction_cone", "contact_resolution", "noslip_iterations"},
+        "RigidOptions",
+    )
 
     try:
         from genesis.engine.entities.rigid_entity.rigid_entity import RigidEntity

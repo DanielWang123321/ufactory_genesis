@@ -3,20 +3,31 @@
     "checkpoint": "model_199.pt",
     "checkpoint_iteration": 199,
     "original_checkpoint_sha256": "9381387a30efbbc102289052569c0804c868db8d5d5eb5332b88a7513f61b0f7",
-    "published_config_sha256": "a86fdc6450f6d8c8c8c6a75cc19a0d557ba470e2e7d03eabe437fad3f61ecdb8",
+    "published_config_sha256": "cc8590c6cb029b27969efc01f315e6ad9de66d3475d5dc72f67832052406508a",
     "source_experiment": "pp-contact-release-brake-seed1",
     "training_project_version": "0.2.11",
+    "evaluation_project_version": "0.2.12",
     "original_manifest_code_version": "unknown",
     "training_seed": 1
   },
   "dependency_contract": {
-    "genesis_world": "1.3.0",
+    "genesis_world": "1.3.1",
     "rsl_rl_lib": "5.4.2"
+  },
+  "physics_contract": {
+    "constraint_solver": "newton",
+    "friction_cone": "elliptic",
+    "contact_resolution": "signorini",
+    "solver_iterations": 100,
+    "noslip_iterations": 0,
+    "constraint_time_constant_s": 0.005
   },
   "evaluation": {
     "deterministic_gate": {
       "fixed_64": "64/64",
+      "fixed_64_quality": "64/64",
       "seed_batch_matrix": "9/9",
+      "seed_batch_matrix_episodes": "219/219",
       "seeds": [
         1,
         7,
@@ -26,21 +37,31 @@
         1,
         8,
         64
-      ]
+      ],
+      "p99_final_xy_error_mm": 2.85,
+      "p99_post_release_drift_mm": 0.35,
+      "p99_pre_lift_drag_mm": 0.86,
+      "zero_action_or_ik_faults": true
     },
     "fixed_action_noise_bank": {
       "action_noise_seed": 20260731,
       "action_noise_std": 0.02,
+      "action_noise_bank_sha256": "0e683e2328fc49b5370da3337bd145be64a87211ff8aa01ccffcae602fb804eb",
+      "scenario_bank_sha256": "eb4f8514539fd94e53181b2f69996b74a0bc7049389dadb1410cb32e57af92bd",
       "grasp_success": "512/512",
       "lift_success": "512/512",
-      "post_release_recontact_count": 116,
-      "success": "442/512",
-      "success_rate": 0.86328125,
-      "p99_final_xy_error_mm": 8.52,
+      "place_success": "512/512",
+      "quality_success": "512/512",
+      "post_release_recontact_count": 120,
+      "success": "512/512",
+      "success_rate": 1.0,
+      "p99_final_xy_error_mm": 8.35,
       "p99_post_release_drift_mm": 0.73,
-      "p99_pre_lift_drag_mm": 1.07,
+      "p99_pre_lift_drag_mm": 1.05,
       "robustness_target": 0.99,
-      "robustness_target_pass": false
+      "robustness_target_pass": true,
+      "zero_action_or_ik_faults": true,
+      "post_release_recontact_is_gate": false
     }
   },
   "scope": {
@@ -49,10 +70,10 @@
     "supported_platform": "Linux with NVIDIA GPU",
     "unsupported_claims": [
       "random-layout generalization",
-      "99% action-noise robustness",
+      "zero post-release recontact under action noise",
       "CPU or Windows training",
       "real-robot policy execution"
     ]
   },
-  "schema_version": 1
+  "schema_version": 2
 }

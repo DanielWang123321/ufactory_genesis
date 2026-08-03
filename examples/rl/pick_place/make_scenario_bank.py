@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from ufactory.training import (
+    PICK_PLACE_SCENARIO_MODES,
     build_pick_place_task_configs,
     generate_pick_place_scenario_bank,
     scenario_bank_sha256,
@@ -19,9 +20,9 @@ def main() -> None:
     parser.add_argument("--runtime-config", type=Path)
     parser.add_argument(
         "--mode",
-        choices=("fixed",),
+        choices=PICK_PLACE_SCENARIO_MODES,
         default="fixed",
-        help="Only fixed-layout banks are supported for the current training goal.",
+        help="Layout distribution; object_* modes keep the target fixed.",
     )
     parser.add_argument("--count", type=int, required=True)
     parser.add_argument("--seed", type=int, required=True)

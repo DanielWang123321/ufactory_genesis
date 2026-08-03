@@ -38,6 +38,14 @@ from ufactory.training import (
     write_training_config,
     validate_and_load_rsl_checkpoint,
 )
+from ufactory.training.transfer import (
+    constrain_actor_to_appended_observation_columns,
+    constrain_actor_to_layout_residual,
+    freeze_actor,
+    initialize_guided_pick_place_actor,
+    initialize_layout_residual_actor,
+    project_actor_observation_expansion,
+)
 
 try:
     from ufactory.training.policy import enable_actor_output_tanh
@@ -48,6 +56,12 @@ from .env import XArm6PickPlaceEnv
 
 DEFAULT_RECIPE = Path(__file__).with_name("recipe.yaml")
 EXECUTOR_ACTION_CONTRACT = "normalized_cartesian_delta_xyz+normalized_gripper_gap_delta"
+LAYOUT_RESIDUAL_PROJECTION_TYPES = {
+    "layout_residual_actor_v1",
+    "layout_phase_residual_actor_v2",
+    "layout_phase_residual_actor_v3",
+}
+GUIDED_PROJECTION_TYPE = "scripted_action_hint_actor_v1"
 
 
 class ArtifactOnPolicyRunner(OnPolicyRunner):
@@ -75,6 +89,53 @@ def _prepare_log_dir(path: Path, *, overwrite: bool) -> None:
             raise FileExistsError(f"training directory already exists: {path}; pass --overwrite to replace it")
         shutil.rmtree(path)
     path.mkdir(parents=True)
+
+
+def _build_observation_projection(
+    env_cfg: dict,
+    train_cfg: dict,
+    *,
+    source_observation_dim: int,
+    target_observation_dim: int,
+) -> dict:
+    """Resolve a versioned observation transfer recorded in run artifacts."""
+
+    projection_type = str(
+        train_cfg["runner"].get(
+            "observation_projection_initializer",
+            "zero_append_normalized_layout_offsets",
+        )
+    )
+    projection = {
+        "type": projection_type,
+        "source_policy_observation_dim": int(source_observation_dim),
+        "target_policy_observation_dim": int(target_observation_dim),
+        "appended_observation_dim": int(target_observation_dim - source_observation_dim),
+    }
+    if projection_type == "zero_append_normalized_layout_offsets":
+        return projection
+    if projection_type in LAYOUT_RESIDUAL_PROJECTION_TYPES:
+        return projection
+    if projection_type == GUIDED_PROJECTION_TYPE:
+        return projection
+    if projection_type != "canonical_pick_place_layout_offsets_v1":
+        raise ValueError(f"unsupported observation projection initializer: {projection_type!r}")
+
+    def half_span(lower_key: str, upper_key: str) -> list[float]:
+        lower = env_cfg.get(lower_key)
+        upper = env_cfg.get(upper_key)
+        if not isinstance(lower, (list, tuple)) or not isinstance(upper, (list, tuple)):
+            raise ValueError(f"canonical layout projection requires {lower_key} and {upper_key}")
+        if len(lower) < 2 or len(upper) < 2:
+            raise ValueError(f"canonical layout projection requires xy bounds in {lower_key} and {upper_key}")
+        result = [abs(float(upper[index]) - float(lower[index])) * 0.5 for index in range(2)]
+        if any(value <= 0.0 or not math.isfinite(value) for value in result):
+            raise ValueError(f"canonical layout projection requires positive finite xy spans for {lower_key}")
+        return result
+
+    projection["object_half_span_xy_m"] = half_span("obj_spawn_lower", "obj_spawn_upper")
+    projection["target_half_span_xy_m"] = half_span("target_spawn_lower", "target_spawn_upper")
+    return projection
 
 
 def _install_fixed_learning_rate_guard(runner: OnPolicyRunner, train_cfg: dict) -> None:
@@ -106,6 +167,57 @@ def _install_fixed_learning_rate_guard(runner: OnPolicyRunner, train_cfg: dict) 
     assert_rate("at runner initialization")
     runner.alg.update = guarded_update
     print(f"Fixed learning-rate guard active: {expected:g}")
+
+
+def _install_observation_projection_training_guard(
+    runner: OnPolicyRunner,
+    train_cfg: dict,
+    transfer_projection: dict | None,
+    *,
+    projection_was_applied: bool,
+) -> None:
+    """Protect inherited policy parameters under a declared transfer scope."""
+
+    scope = str(train_cfg["runner"].get("observation_projection_train_scope", "full_actor"))
+    if scope == "full_actor":
+        return
+    if scope not in {"appended_columns_only", "layout_residual_only", "frozen_guided_actor"}:
+        raise ValueError(f"unsupported observation projection train scope: {scope!r}")
+    if transfer_projection is None:
+        raise ValueError(f"{scope} requires an actor observation projection")
+    if scope == "layout_residual_only" and transfer_projection.get("type") not in LAYOUT_RESIDUAL_PROJECTION_TYPES:
+        raise ValueError("layout_residual_only requires a supported layout-residual projection")
+    if scope == "appended_columns_only" and transfer_projection.get("type") in LAYOUT_RESIDUAL_PROJECTION_TYPES:
+        raise ValueError("layout residual projection requires layout_residual_only training scope")
+    if scope == "frozen_guided_actor" and transfer_projection.get("type") != GUIDED_PROJECTION_TYPE:
+        raise ValueError("frozen_guided_actor requires the scripted-action-hint projection")
+    if scope != "frozen_guided_actor" and transfer_projection.get("type") == GUIDED_PROJECTION_TYPE:
+        raise ValueError("scripted-action-hint projection requires frozen_guided_actor training scope")
+    if scope == "frozen_guided_actor":
+        guard = freeze_actor(runner.alg.actor)
+        scope_label = "guided-actor"
+    elif transfer_projection.get("type") in LAYOUT_RESIDUAL_PROJECTION_TYPES:
+        guard = constrain_actor_to_layout_residual(runner.alg.actor)
+        scope_label = "layout-residual"
+    else:
+        guard = constrain_actor_to_appended_observation_columns(
+            runner.alg.actor,
+            source_observation_dim=int(transfer_projection["source_policy_observation_dim"]),
+            require_zero_appended=(
+                projection_was_applied and transfer_projection.get("type") == "zero_append_normalized_layout_offsets"
+            ),
+        )
+        scope_label = "appended-column"
+    original_update = runner.alg.update
+
+    def guarded_update(*args, **kwargs):
+        guard.assert_preserved()
+        result = original_update(*args, **kwargs)
+        guard.assert_preserved()
+        return result
+
+    runner.alg.update = guarded_update
+    print(f"Inherited actor guard active: only {guard.trainable_parameter_count} {scope_label} parameters may change")
 
 
 def main() -> None:
@@ -279,6 +391,16 @@ def main() -> None:
     )
     transfer_path = args.resume or args.warm_start or args.actor_critic_warm_start
     transfer_state = None
+    transfer_projection = None
+    projection_was_applied = False
+    projection_train_scope = str(train_cfg["runner"].get("observation_projection_train_scope", "full_actor"))
+    if projection_train_scope not in {
+        "full_actor",
+        "appended_columns_only",
+        "layout_residual_only",
+        "frozen_guided_actor",
+    }:
+        raise ValueError(f"unsupported observation projection train scope: {projection_train_scope!r}")
     if transfer_path is None:
         train_cfg["runner"]["transfer_mode"] = "fresh"
     else:
@@ -300,7 +422,7 @@ def main() -> None:
                 "transfer_checkpoint_sha256": transfer_sha256,
             }
         )
-        transfer_state, _transfer_config, _transfer_manifest = validate_and_load_rsl_checkpoint(
+        transfer_state, transfer_config, transfer_manifest = validate_and_load_rsl_checkpoint(
             transfer_path,
             transfer_path.parent / "config.yaml",
             map_location="cpu",
@@ -308,7 +430,54 @@ def main() -> None:
             expected_robot_key=runtime_config.robot.key,
             expected_runtime_config_sha256=runtime_config.sha256,
             expected_runtime_env=env_cfg,
+            allowed_runtime_env_mismatches=(() if args.resume is not None else ("fixed_demo_layout",)),
         )
+        source_obs = int(transfer_manifest.observation_dim)
+        target_obs = int(env_cfg["num_obs"])
+        if source_obs != target_obs:
+            if args.warm_start is None:
+                raise ValueError("observation expansion supports actor-only --warm-start")
+            projection_initializer = str(
+                train_cfg["runner"].get(
+                    "observation_projection_initializer",
+                    "zero_append_normalized_layout_offsets",
+                )
+            )
+            guided_projection = projection_initializer == GUIDED_PROJECTION_TYPE
+            expected_append = 10 if guided_projection else 6
+            if (
+                not bool(env_cfg.get("include_normalized_layout_offsets", False))
+                or target_obs - source_obs != expected_append
+            ):
+                suffix = "six layout plus four guide-action values" if guided_projection else "six layout values"
+                raise ValueError(f"actor observation expansion requires exactly {suffix}")
+            if guided_projection and not bool(env_cfg.get("include_scripted_action_hint", False)):
+                raise ValueError("scripted-action-hint projection requires include_scripted_action_hint")
+            if bool(train_cfg["actor"].get("obs_normalization", False)):
+                raise ValueError("actor observation expansion requires actor observation normalization disabled")
+            transfer_projection = _build_observation_projection(
+                env_cfg,
+                train_cfg,
+                source_observation_dim=source_obs,
+                target_observation_dim=target_obs,
+            )
+            train_cfg["runner"]["observation_projection"] = transfer_projection
+            projection_was_applied = True
+        elif projection_train_scope != "full_actor":
+            saved_projection = transfer_config.get("train", {}).get("runner", {}).get("observation_projection")
+            source_width = 10 if projection_train_scope == "frozen_guided_actor" else 6
+            expected_projection = _build_observation_projection(
+                env_cfg,
+                train_cfg,
+                source_observation_dim=target_obs - source_width,
+                target_observation_dim=target_obs,
+            )
+            if saved_projection != expected_projection:
+                raise ValueError("guarded same-dimension transfer requires its saved observation projection")
+            transfer_projection = dict(expected_projection)
+            train_cfg["runner"]["observation_projection"] = transfer_projection
+    if projection_train_scope != "full_actor" and transfer_projection is None:
+        raise ValueError(f"{projection_train_scope} requires an expanded actor warm start")
     log_dir = args.log_dir or Path("outputs") / "rl" / "pick_place" / args.exp_name
     _prepare_log_dir(log_dir, overwrite=args.overwrite)
 
@@ -326,12 +495,15 @@ def main() -> None:
     provenance_sources = [
         Path(__file__),
         Path(__file__).with_name("env.py"),
+        Path(__file__).with_name("expert.py"),
         Path(__file__).with_name("trace_utils.py"),
         args.recipe,
         repo_root / "ufactory/training/logic/__init__.py",
         repo_root / "ufactory/training/logic/pick_place.py",
         repo_root / "ufactory/training/tasks.py",
         repo_root / "ufactory/training/artifacts.py",
+        repo_root / "ufactory/training/models.py",
+        repo_root / "ufactory/training/transfer.py",
     ]
     provenance_sources.extend(repo_root / source for source in runtime_config.sources)
     write_run_provenance(
@@ -386,20 +558,56 @@ def main() -> None:
                 f"noise_std={env._current_action_noise_std():g}"
             )
         else:
-            load_cfg = {
-                "actor": True,
-                "critic": args.actor_critic_warm_start is not None,
-                "optimizer": False,
-                "iteration": False,
-                "rnd": False,
-            }
-            runner.alg.load(transfer_state, load_cfg, strict=True)
+            if projection_was_applied:
+                if transfer_projection["type"] == GUIDED_PROJECTION_TYPE:
+                    resolved_projection = initialize_guided_pick_place_actor(
+                        runner.alg.actor,
+                        transfer_state,
+                        device=gs.device,
+                    )
+                elif transfer_projection["type"] in LAYOUT_RESIDUAL_PROJECTION_TYPES:
+                    resolved_projection = initialize_layout_residual_actor(
+                        runner.alg.actor,
+                        transfer_state,
+                        device=gs.device,
+                    )
+                else:
+                    resolved_projection = project_actor_observation_expansion(
+                        runner.alg.actor,
+                        transfer_state,
+                        device=gs.device,
+                        appended_initializer=transfer_projection,
+                    )
+                expected_projection = {key: transfer_projection[key] for key in resolved_projection}
+                if resolved_projection != expected_projection:
+                    raise RuntimeError("resolved actor observation projection differs from training config")
+                projection_label = transfer_projection["type"]
+                print(
+                    f"Initialized appended actor observation columns ({projection_label}): "
+                    f"{resolved_projection['source_policy_observation_dim']} -> "
+                    f"{resolved_projection['target_policy_observation_dim']}"
+                )
+            else:
+                load_cfg = {
+                    "actor": True,
+                    "critic": args.actor_critic_warm_start is not None,
+                    "optimizer": False,
+                    "iteration": False,
+                    "rnd": False,
+                }
+                runner.alg.load(transfer_state, load_cfg, strict=True)
             source_iter = int(transfer_state.get("iter", -1))
             scope = "actor and critic" if args.actor_critic_warm_start is not None else "actor only"
             print(
                 f"Warm-started {scope} from {transfer_path} "
                 f"(source iteration {source_iter}); optimizer and iteration reset"
             )
+    _install_observation_projection_training_guard(
+        runner,
+        train_cfg,
+        transfer_projection,
+        projection_was_applied=projection_was_applied,
+    )
     _install_fixed_learning_rate_guard(runner, train_cfg)
     runner.learn(
         num_learning_iterations=max_iterations,

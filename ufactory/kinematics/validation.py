@@ -21,6 +21,7 @@ from ufactory.kinematics.calibration import (
 from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, pose_tcp_to_flange, read_tcp_offset
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile, robot_runtime_cli_choices
+from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
 
 PASS_POS_MM = 1.0
@@ -76,7 +77,7 @@ def build_genesis_robot(urdf_path: str, *, backend: str = "cpu", show_viewer: bo
     gs = require_genesis_runtime()
 
     gs.init(backend=gs.cpu if backend == "cpu" else gs.gpu)
-    scene = gs.Scene(show_viewer=show_viewer)
+    scene = gs.Scene(show_viewer=show_viewer, rigid_options=make_rigid_options(gs))
     robot = scene.add_entity(gs.morphs.URDF(file=urdf_path, fixed=True, requires_jac_and_IK=True))
     scene.build()
     return scene, robot

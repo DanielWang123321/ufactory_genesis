@@ -43,6 +43,7 @@ from ufactory.trajectory.scene import (
     RIGID_NOSLIP_ITERATIONS,
     RIGID_SOLVER_ITERATIONS,
 )
+from ufactory.simulation import make_rigid_options
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_pbr_surfaces, glb_view_surface
 from .trace_utils import action_noise_episode_mask, scheduled_action_noise_std
 from ufactory.training.logic import (
@@ -162,6 +163,7 @@ class XArm6PickPlaceEnv:
         self.include_commanded_gap = bool(env_cfg.get("include_commanded_gap", False))
         self.include_previous_action = bool(env_cfg.get("include_previous_action", False))
         self.include_normalized_layout_offsets = bool(env_cfg.get("include_normalized_layout_offsets", False))
+        self.include_scripted_action_hint = bool(env_cfg.get("include_scripted_action_hint", False))
         self.include_quality_observations = bool(env_cfg.get("include_quality_observations", False))
         self.include_ee_setpoint_residual = bool(env_cfg.get("include_ee_setpoint_residual", False))
         self.quality_pre_release_shaping_only = bool(env_cfg.get("quality_pre_release_shaping_only", False))
@@ -362,8 +364,18 @@ class XArm6PickPlaceEnv:
         # Match trajectory build_scene: same substeps / Newton rigid solver settings.
         self.substeps = int(env_cfg.get("substeps", 8))
         substep_dt = self.ctrl_dt / float(self.substeps)
-        constraint_timeconst = max(float(RIGID_CONSTRAINT_TIMECONST), 2.0 * substep_dt)
+        self.constraint_solver = str(env_cfg.get("constraint_solver", "newton"))
+        self.solver_iterations = int(env_cfg.get("solver_iterations", RIGID_SOLVER_ITERATIONS))
+        self.noslip_iterations = int(env_cfg.get("noslip_iterations", RIGID_NOSLIP_ITERATIONS))
+        self.friction_cone = str(env_cfg.get("friction_cone", "elliptic"))
+        self.contact_resolution = str(env_cfg.get("contact_resolution", "signorini"))
+        self.use_gjk_collision = env_cfg.get("use_gjk_collision")
+        constraint_timeconst = max(
+            float(env_cfg.get("constraint_time_constant_s", RIGID_CONSTRAINT_TIMECONST)),
+            2.0 * substep_dt,
+        )
         self.fixed_demo_layout = bool(env_cfg.get("fixed_demo_layout", True))
+        self.randomize_target = bool(env_cfg.get("randomize_target", True))
         self.place_phase_reset_frac = float(env_cfg.get("place_phase_reset_frac", 0.25))
         self.place_phase_hover_z_m = float(env_cfg.get("place_phase_hover_z_m", 0.07))
         self.place_phase_table_reset_frac = float(env_cfg.get("place_phase_table_reset_frac", 0.0))
@@ -385,6 +397,7 @@ class XArm6PickPlaceEnv:
         self.grasp_phase_reset_frac_final = float(env_cfg.get("grasp_phase_reset_frac_final", 0.0))
         self.grasp_phase_anneal_steps = int(env_cfg.get("grasp_phase_anneal_steps", 0))
         self.curriculum_min_count = int(env_cfg.get("curriculum_min_count", 1024))
+        self.curriculum_min_stage_steps = int(env_cfg.get("curriculum_min_stage_steps", 0))
         self.curriculum_stage0_grasp_rate = float(env_cfg.get("curriculum_stage0_grasp_rate", 0.95))
         self.curriculum_stage1_grasp_rate = float(env_cfg.get("curriculum_stage1_grasp_rate", 0.90))
         self.curriculum_stage2_place_rate = float(env_cfg.get("curriculum_stage2_place_rate", 0.90))
@@ -394,20 +407,26 @@ class XArm6PickPlaceEnv:
         self.curriculum_edge_fraction = float(env_cfg.get("curriculum_edge_fraction", 0.0))
         if not 0 <= self.curriculum_initial_stage <= self.curriculum_max_stage <= 4:
             raise ValueError("curriculum stages must satisfy 0 <= initial <= max <= 4")
+        if self.curriculum_min_stage_steps < 0:
+            raise ValueError("curriculum_min_stage_steps must be non-negative")
         if not 0.0 <= self.curriculum_edge_fraction <= 1.0:
             raise ValueError("curriculum_edge_fraction must be in [0, 1]")
         self.total_env_steps = 0
 
         self.scene = gs.Scene(
             sim_options=gs.options.SimOptions(dt=self.ctrl_dt, substeps=self.substeps),
-            rigid_options=gs.options.RigidOptions(
+            rigid_options=make_rigid_options(
+                gs,
                 dt=self.ctrl_dt,
-                constraint_solver=gs.constraint_solver.Newton,
+                constraint_solver=self.constraint_solver,
+                friction_cone=self.friction_cone,
+                contact_resolution=self.contact_resolution,
                 enable_collision=True,
                 enable_joint_limit=True,
-                iterations=int(RIGID_SOLVER_ITERATIONS),
-                noslip_iterations=int(RIGID_NOSLIP_ITERATIONS),
+                iterations=self.solver_iterations,
+                noslip_iterations=self.noslip_iterations,
                 constraint_timeconst=float(constraint_timeconst),
+                use_gjk_collision=self.use_gjk_collision,
             ),
             vis_options=gs.options.VisOptions(rendered_envs_idx=list(range(min(10, self.num_envs)))),
             viewer_options=gs.options.ViewerOptions(
@@ -539,7 +558,20 @@ class XArm6PickPlaceEnv:
         self._csv_writer = None
 
         self._init_buffers()
+        self._scripted_action_guide = None
+        self._scripted_action_hint = torch.zeros(
+            self.num_envs,
+            self.num_actions,
+            device=self.device,
+            dtype=gs.tc_float,
+        )
+        self._scripted_action_hint_step = -1
+        if self.include_scripted_action_hint:
+            from .expert import scripted_pick_place_expert_from_env
+
+            self._scripted_action_guide = scripted_pick_place_expert_from_env(self)
         self.curriculum_stage = self.curriculum_initial_stage
+        self.curriculum_stage_enter_step = self.total_env_steps
         self._initial_reset_done = False
 
         hist_len = int(env_cfg.get("success_history_len", 2000))
@@ -663,9 +695,26 @@ class XArm6PickPlaceEnv:
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.target_pos = torch.zeros(self.num_envs, 3, device=self.device, dtype=gs.tc_float)
         self.initial_obj_pos = torch.zeros(self.num_envs, 3, device=self.device, dtype=gs.tc_float)
+        # Immutable task-layout context. Unlike initial_obj_pos, this stays at the
+        # sampled pickup pose even when a bootstrap reset teleports the cube elsewhere.
+        self.episode_layout_obj_pos = torch.zeros(
+            self.num_envs,
+            3,
+            device=self.device,
+            dtype=gs.tc_float,
+        )
+        self.episode_layout_target_pos = torch.zeros_like(self.episode_layout_obj_pos)
         self.scenario_id = torch.full(
             (self.num_envs,),
             -1,
+            device=self.device,
+            dtype=torch.int64,
+        )
+        # Stage at episode start. After a curriculum transition, late completions
+        # from the previous envelope must not repopulate the freshly cleared gate.
+        self.episode_curriculum_stage = torch.full(
+            (self.num_envs,),
+            self.curriculum_initial_stage,
             device=self.device,
             dtype=torch.int64,
         )
@@ -788,6 +837,7 @@ class XArm6PickPlaceEnv:
     def reset_idx(self, envs_idx: torch.Tensor) -> None:
         if len(envs_idx) == 0:
             return
+        self._scripted_action_hint_step = -1
 
         has_episode_steps = bool(torch.any(self.episode_length_buf[envs_idx] > 0).item())
         if self._initial_reset_done and has_episode_steps:
@@ -795,6 +845,7 @@ class XArm6PickPlaceEnv:
             self._maybe_update_curriculum()
 
         self._write_episode_extras(envs_idx)
+        self.episode_curriculum_stage[envs_idx] = self.curriculum_stage
 
         self.episode_length_buf[envs_idx] = 0
         self.holding[envs_idx] = False
@@ -869,6 +920,8 @@ class XArm6PickPlaceEnv:
 
         obj_base, target_base, scenario_ids = self._sample_object_and_target_base(n)
         obj_base = obj_base.clone()
+        layout_obj_base = obj_base.clone()
+        layout_target_base = target_base.clone()
         u = torch.rand(n, device=self.device)
         place_mask, carry_mask, grasp_mask = sample_reset_phase_masks(
             u,
@@ -985,6 +1038,8 @@ class XArm6PickPlaceEnv:
         self.obj.set_quat(obj_quat, envs_idx=envs_idx, zero_velocity=True)
         self.initial_obj_pos[envs_idx] = obj_base
         self.target_pos[envs_idx] = target_base
+        self.episode_layout_obj_pos[envs_idx] = layout_obj_base
+        self.episode_layout_target_pos[envs_idx] = layout_target_base
         self.scenario_id[envs_idx] = scenario_ids
         self.target_marker.set_pos(target_world, envs_idx=envs_idx)
         self.prev_obj_z[envs_idx] = obj_base[:, 2]
@@ -1049,6 +1104,7 @@ class XArm6PickPlaceEnv:
             target_spawn_lower=self.target_spawn_lower,
             target_spawn_upper=self.target_spawn_upper,
             edge_fraction=self.curriculum_edge_fraction,
+            randomize_target=self.randomize_target,
         )
         scenario_ids = torch.full((n,), -1, device=self.device, dtype=torch.int64)
         return obj, target, scenario_ids
@@ -1069,7 +1125,8 @@ class XArm6PickPlaceEnv:
 
         # Keep honest metrics on the device: selecting the from-home rows in one tensor
         # operation avoids a GPU synchronization for every completed environment.
-        learned_mask = ~self.is_bootstrap_episode[envs_idx]
+        current_stage_mask = self.episode_curriculum_stage[envs_idx] == self.curriculum_stage
+        learned_mask = (~self.is_bootstrap_episode[envs_idx]) & current_stage_mask
         self.learned_grasp_history_idx, self.learned_grasp_history_count = self._append_history(
             self.learned_grasp_success_history,
             self.learned_grasp_history_idx,
@@ -1109,10 +1166,10 @@ class XArm6PickPlaceEnv:
         bootstrap = self.is_bootstrap_episode[envs_idx]
         noisy = self.episode_action_noise_enabled[envs_idx]
         cohort_masks = {
-            "learned_clean": (~bootstrap) & (~noisy),
-            "learned_noisy": (~bootstrap) & noisy,
-            "bootstrap_clean": bootstrap & (~noisy),
-            "bootstrap_noisy": bootstrap & noisy,
+            "learned_clean": (~bootstrap) & (~noisy) & current_stage_mask,
+            "learned_noisy": (~bootstrap) & noisy & current_stage_mask,
+            "bootstrap_clean": bootstrap & (~noisy) & current_stage_mask,
+            "bootstrap_noisy": bootstrap & noisy & current_stage_mask,
         }
         for label, mask in cohort_masks.items():
             index = self.cohort_history_indices[label]
@@ -1159,6 +1216,12 @@ class XArm6PickPlaceEnv:
     def _maybe_update_curriculum(self) -> None:
         if self.fixed_demo_layout:
             return
+        stage_steps = self.total_env_steps - self.curriculum_stage_enter_step
+        # A stage cannot consume the previous stage's success window and advance again
+        # during another reset group in the same control step. Recipes may require a
+        # longer dwell so PPO has time to adapt before the envelope expands again.
+        if stage_steps <= 0 or stage_steps < self.curriculum_min_stage_steps:
+            return
         grasp_rate = self._history_rate(
             self.learned_grasp_success_history,
             self.learned_grasp_history_count,
@@ -1183,18 +1246,40 @@ class XArm6PickPlaceEnv:
         if new_stage == self.curriculum_stage:
             return
         if self.curriculum_stage == 0 and new_stage == 1:
-            self.learned_grasp_history_count = 0
-            print(f"[Curriculum] Stage 0 -> 1 (grasp_rate={grasp_rate:.2f}): narrow random spawn")
+            print(f"[Curriculum] Stage 0 -> 1 (grasp_rate={grasp_rate:.2f}): narrow random object spawn")
         elif self.curriculum_stage == 1 and new_stage == 2:
-            self.learned_grasp_history_count = 0
-            self.learned_success_history_count = 0
-            print(f"[Curriculum] Stage 1 -> 2 (grasp_rate={grasp_rate:.2f}): close target placement")
+            print(f"[Curriculum] Stage 1 -> 2 (grasp_rate={grasp_rate:.2f}): quarter object envelope")
         elif self.curriculum_stage == 2 and new_stage == 3:
-            self.learned_success_history_count = 0
-            print(f"[Curriculum] Stage 2 -> 3 (place_rate={place_rate:.2f}): medium target distance")
+            print(f"[Curriculum] Stage 2 -> 3 (place_rate={place_rate:.2f}): half object envelope")
         elif self.curriculum_stage == 3 and new_stage == 4:
-            print(f"[Curriculum] Stage 3 -> 4 (place_rate={place_rate:.2f}): full range target")
+            print(f"[Curriculum] Stage 3 -> 4 (place_rate={place_rate:.2f}): full object envelope")
         self.curriculum_stage = new_stage
+        self.curriculum_stage_enter_step = self.total_env_steps
+        self._reset_learned_histories()
+
+    def _reset_learned_histories(self) -> None:
+        """Start each curriculum stage with an empty, correctly indexed window."""
+
+        for history in (
+            self.learned_grasp_success_history,
+            self.learned_lift_success_history,
+            self.learned_place_success_history,
+            self.learned_success_history,
+        ):
+            history.zero_()
+        self.learned_grasp_history_idx = 0
+        self.learned_grasp_history_count = 0
+        self.learned_lift_history_idx = 0
+        self.learned_lift_history_count = 0
+        self.learned_place_history_idx = 0
+        self.learned_place_history_count = 0
+        self.learned_success_history_idx = 0
+        self.learned_success_history_count = 0
+        for label in self._metric_cohorts:
+            self.cohort_grasp_histories[label].zero_()
+            self.cohort_success_histories[label].zero_()
+            self.cohort_history_indices[label] = 0
+            self.cohort_history_counts[label] = 0
 
     def _history_rate(self, history: torch.Tensor, count: int) -> float:
         if count <= 0:
@@ -1368,6 +1453,7 @@ class XArm6PickPlaceEnv:
             "schema_version": 1,
             "total_env_steps": int(self.total_env_steps),
             "curriculum_stage": int(self.curriculum_stage),
+            "curriculum_stage_enter_step": int(getattr(self, "curriculum_stage_enter_step", 0)),
             "action_noise_schedule": {
                 "start_std": float(self.train_action_noise_std),
                 "end_std": float(self.train_action_noise_std_end),
@@ -1389,12 +1475,16 @@ class XArm6PickPlaceEnv:
             )
         total_env_steps = int(state.get("total_env_steps", -1))
         curriculum_stage = int(state.get("curriculum_stage", -1))
+        curriculum_stage_enter_step = int(state.get("curriculum_stage_enter_step", total_env_steps))
         if total_env_steps < 0:
             raise ValueError("checkpoint total_env_steps must be non-negative")
         if not 0 <= curriculum_stage <= self.curriculum_max_stage:
             raise ValueError("checkpoint curriculum_stage is outside the configured range")
+        if not 0 <= curriculum_stage_enter_step <= total_env_steps:
+            raise ValueError("checkpoint curriculum stage entry step is invalid")
         self.total_env_steps = total_env_steps
         self.curriculum_stage = curriculum_stage
+        self.curriculum_stage_enter_step = curriculum_stage_enter_step
 
     def hold_home_step(self) -> None:
         """Pin the arm at default_ee_pos (gripper open) for scene preview — absolute, not Δ=0."""
@@ -1893,8 +1983,8 @@ class XArm6PickPlaceEnv:
         layout_offsets = None
         if self.include_normalized_layout_offsets:
             layout_offsets = normalized_pick_place_layout_offsets(
-                obj_base,
-                self.target_pos,
+                self.episode_layout_obj_pos,
+                self.episode_layout_target_pos,
                 self.fixed_obj_pos,
                 self.fixed_target_pos,
                 self.obj_spawn_lower,
@@ -1902,6 +1992,15 @@ class XArm6PickPlaceEnv:
                 self.target_spawn_lower,
                 self.target_spawn_upper,
             )
+        scripted_action_hint = None
+        if self.include_scripted_action_hint:
+            if self._scripted_action_guide is None:
+                raise RuntimeError("scripted action hint is enabled without a guide")
+            if self._scripted_action_hint_step != self.total_env_steps:
+                with torch.no_grad():
+                    self._scripted_action_hint.copy_(self._scripted_action_guide())
+                self._scripted_action_hint_step = self.total_env_steps
+            scripted_action_hint = self._scripted_action_hint
         quality_features = None
         if self.include_quality_observations:
             quality_features = normalized_pick_place_quality_features(
@@ -1944,6 +2043,7 @@ class XArm6PickPlaceEnv:
             quality_features=quality_features,
             contact_features=contact_features,
             normalized_setpoint_residual=setpoint_residual,
+            scripted_action_hint=scripted_action_hint,
         )
         if obs.shape[-1] != self.num_obs:
             raise RuntimeError(f"Observation shape {obs.shape[-1]} does not match num_obs={self.num_obs}")

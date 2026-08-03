@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12] — 2026-08-03
+
+### Added
+
+- Added a separate xArm6 + Gripper G2 random-object-start, fixed-target pick-place workflow under `examples/rl/pick_place/random_start`, including a canonical recipe, deterministic uniform/boundary scenario banks, a validated checkpoint bundle, and bilingual train/evaluate guidance.
+- Added object-only scenario generation and validation. Boundary banks cycle all four object corners, all published positions are unique and runtime-bounded, and target coordinates remain fixed.
+- Added explicit `standard` and `robustness` aggregate evaluation gates. The robustness gate requires at least 99% full and quality success, P99 final error ≤10 mm, pre-lift drag ≤5 mm, post-release drift ≤3 mm, and zero action/IK faults.
+- Added a central rigid-physics builder and runtime configuration for solver, friction cone, and contact-resolution selection.
+- Added a fail-closed 44→54 guided-policy contract: the original 44-value actor is preserved bit-for-bit on the canonical layout, while six immutable layout offsets select four explicitly recorded scripted-guide actions on randomized object starts. The bundled random-start artifact is documented as a hierarchical simulator policy, not as learned PPO generalization, and every inherited actor tensor is frozen and mutation-guarded.
+- Added protected 44→50 appended-column and layout-residual transfer paths for continued BC, DAgger, PPO, and curriculum research. These learned variants did not meet the v0.2.12 release gates and are not the bundled random-start solution.
+- Added optional phase-balanced behavior-cloning weights and phase-count diagnostics so slow set-down demonstrations cannot silently dominate the supervised dataset.
+
+### Changed
+
+- Raised the minimum, reference, and locked Genesis World baseline to **1.3.1**. Project scenes now default to Newton constraints with the elliptic friction cone and Signorini contact resolution, 100 solver iterations, no no-slip post-pass, and a 5 ms constraint time constant.
+- Checkpoint runtime contracts now include every physics field plus layout/target-randomization semantics. Full resume remains exact; actor or actor/critic transfer may explicitly change only `fixed_demo_layout`.
+- The fixed-layout release checkpoint keeps its original weights while its published configuration, manifest, scenario binding, and evaluation evidence are rebaselined against Genesis 1.3.1 physics.
+- The unchanged fixed-layout checkpoint passes all nine deterministic combinations (219/219 episodes), the independent fixed 64-episode gate, and 512/512 full/quality episodes with action-noise standard deviation 0.02. The noise diagnostic still records 120/512 post-release recontacts; that event is disclosed separately and is not a robustness-gate predicate.
+
+### Fixed
+
+- Curriculum advancement now enforces a per-stage dwell, blocks multiple transitions in one control step, clears circular histories and indices on entry, and excludes late episodes that began in the previous stage, preventing stale successes from skipping or contaminating envelopes.
+- Scripted-expert evaluation now mounts and validates the requested scenario bank instead of reporting repeated implicit resets, derives the default episode count from that bank, and pins curriculum state before the constructor's first reset.
+- Robustness summaries now require the quality-pass rate as well as full success, and `--require-target` returns a failing process status when the selected immutable gate is missed.
+- The scripted expert compensates the repeatable G2 coupled-finger lateral bias, releases stored squeeze energy gradually, and adds near-table measured-velocity braking. The selected policy passed 512/512 final uniform and 256/256 final boundary full/quality episodes with zero action or IK faults and zero post-release recontacts.
+
 ## [0.2.11] — 2026-08-03
 
 ### Added

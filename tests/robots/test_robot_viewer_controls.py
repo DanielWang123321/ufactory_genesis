@@ -99,7 +99,14 @@ class _FakeVisualizer:
 class _FakeGenesis:
     cpu = "fake-cpu"
     gpu = "fake-gpu"
-    options = types.SimpleNamespace(ViewerOptions=_FakeOptions, SimOptions=_FakeOptions)
+    constraint_solver = types.SimpleNamespace(Newton="newton")
+    friction_cone = types.SimpleNamespace(pyramidal="pyramidal", elliptic="elliptic")
+    contact_resolution = types.SimpleNamespace(convex="convex", signorini="signorini")
+    options = types.SimpleNamespace(
+        ViewerOptions=_FakeOptions,
+        SimOptions=_FakeOptions,
+        RigidOptions=_FakeOptions,
+    )
     morphs = types.SimpleNamespace(URDF=_FakeURDF)
 
     def __init__(self, scene: _FakeScene):

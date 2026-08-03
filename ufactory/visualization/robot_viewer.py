@@ -13,6 +13,7 @@ from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.robots.registry import RobotModelSpec, joint_names
+from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
 
 from ufactory.visualization.bio_gripper_g2_viewer import (
@@ -154,7 +155,11 @@ def run_glb_diagnose(
     link_names = tuple(["link_base"] + [f"link{i}" for i in range(1, profile.dof + 1)])
 
     def load_robot(urdf_path: str, use_glb: bool = False):
-        scene = gs.Scene(show_viewer=False, sim_options=gs.options.SimOptions(dt=0.01))
+        scene = gs.Scene(
+            show_viewer=False,
+            sim_options=gs.options.SimOptions(dt=0.01),
+            rigid_options=make_rigid_options(gs),
+        )
         morph = gs.morphs.URDF(file=urdf_path, pos=(0.0, 0.0, 0.0), fixed=True, requires_jac_and_IK=True)
         robot = scene.add_entity(morph, surface=glb_view_surface()) if use_glb else scene.add_entity(morph)
         scene.build()
@@ -345,6 +350,7 @@ def run_glb_viewer(
             refresh_rate=60,
         ),
         sim_options=gs.options.SimOptions(dt=0.01),
+        rigid_options=make_rigid_options(gs),
         show_viewer=False,
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))

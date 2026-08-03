@@ -335,8 +335,11 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         precision=str(simulation_data["precision"]),
         seed=int(simulation_data["seed"]),
         substeps=int(simulation_data["substeps"]),
+        constraint_solver=str(simulation_data["constraint_solver"]),
         solver_iterations=int(simulation_data["solver_iterations"]),
         noslip_iterations=int(simulation_data["noslip_iterations"]),
+        friction_cone=str(simulation_data["friction_cone"]),
+        contact_resolution=str(simulation_data["contact_resolution"]),
         constraint_time_constant_s=_positive(
             simulation_data["constraint_time_constant_s"],
             field="simulation.constraint_time_constant_s",

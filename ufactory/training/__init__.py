@@ -19,6 +19,7 @@ from ufactory.training.acceptance import (
 )
 from ufactory.training.recipe import load_training_recipe
 from ufactory.training.scenarios import (
+    PICK_PLACE_SCENARIO_MODES,
     generate_pick_place_scenario_bank,
     load_scenario_bank,
     scenario_bank_sha256,
@@ -34,6 +35,7 @@ __all__ = [
     "ArtifactError",
     "CheckpointManifest",
     "PICK_PLACE_ACCEPTANCE_PROFILES",
+    "PICK_PLACE_SCENARIO_MODES",
     "apply_pick_place_acceptance_profile",
     "load_checkpoint_manifest",
     "load_training_config",

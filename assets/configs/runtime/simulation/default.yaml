@@ -4,8 +4,11 @@ simulation:
   precision: "32"
   seed: 1
   substeps: 8
+  constraint_solver: newton
   solver_iterations: 100
-  noslip_iterations: 5
+  noslip_iterations: 0
+  friction_cone: elliptic
+  contact_resolution: signorini
   constraint_time_constant_s: 0.005
   use_gjk_collision: null
   show_viewer: false

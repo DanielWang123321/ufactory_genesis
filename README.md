@@ -3,12 +3,12 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.11-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.3.0-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.12-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.3.1-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
-UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, trajectory examples, and a fixed-layout RL pick-place example.
+UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB visualization, kinematic calibration, trajectory examples, and simulation-only RL pick-place workflows.
 
 [中文](README.zh.md) | [Contributing](CONTRIBUTING.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
@@ -27,7 +27,7 @@ UFACTORY robot models and Genesis simulation utilities — high-fidelity GLB vis
 | **Local sim** (`project-check sim`) | In-process GPU / Genesis regression | Maintainer machines with `[sim]` |
 | **Maintainer hardware** (`sdk-sim` / `hardware`) | Cabinet SDK sim and listed real robots | Maintainer lab; optional sanitized summary on GitHub Releases |
 
-The **reference (pinned) baseline** is Python 3.13, Genesis World 1.3.0, PyTorch 2.10.0+cu128, and RSL-RL 5.4.2 for RL. Newer Genesis releases may run when compatibility hooks still match; they are **not** treated as a maintainer-verified physics or hardware baseline until the local sim and hardware checks pass. Public CI does **not** replace those checks.
+The **reference (pinned) baseline** is Python 3.13, Genesis World 1.3.1, PyTorch 2.10.0+cu128, and RSL-RL 5.4.2 for RL. Newer Genesis releases may run when compatibility hooks still match; they are **not** treated as a maintainer-verified physics or hardware baseline until the local sim and hardware checks pass. Public CI does **not** replace those checks.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ The **reference (pinned) baseline** is Python 3.13, Genesis World 1.3.0, PyTorch
 - [Supported Robots](#supported-robots)
 - [GLB Visual Preview](#glb-visual-preview)
 - [Trajectory Pick-Place](#trajectory-pick-place)
-- [Fixed-layout RL example](#fixed-layout-rl-example)
+- [RL pick-place examples](#rl-pick-place-examples)
 - [Showcase](#showcase-yaml-driven-packaging)
 - [API Quick Reference](#api-quick-reference)
 - [Real-Robot Kinematic Calibration](#real-robot-kinematic-calibration-sn-rules)
@@ -50,7 +50,7 @@ The **reference (pinned) baseline** is Python 3.13, Genesis World 1.3.0, PyTorch
 
 ## Quick Start
 
-v0.2.11 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.3.0 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
+v0.2.12 is source-only: clone this repository and use an editable install. Wheels, sdists, remote asset downloads, and installation outside a Git checkout are unsupported. Missing repository assets fail with an actionable `AssetLayoutError`. Genesis World 1.3.1 or newer is required. Visual GLB meshes are Draco-compressed (typical `assets/` checkout on the order of tens of MB).
 
 ```bash
 # From a cloned repository
@@ -58,7 +58,7 @@ pip install -e ".[sim]"
 
 # Optional extras:
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal safety backends
-#   pip install -e ".[sim,rl]"    # fixed-layout RL example + ufactory.training
+#   pip install -e ".[sim,rl]"    # RL pick-place examples + ufactory.training
 #   pip install -e ".[showcase]"  # packaging showcase scipy dependency
 
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -76,7 +76,7 @@ Since 2024, new xArm shipments use the **XI1305** hardware revision. Short names
 
 Pick-place and packaging `--mode sim` (plus GLB preview) can run on Windows and on machines without a Genesis-supported GPU. Reinforcement learning is out of scope for this path.
 
-**Install CPU PyTorch first**, then this package (Genesis World ≥ 1.3.0):
+**Install CPU PyTorch first**, then this package (Genesis World ≥ 1.3.1):
 
 ```bash
 # Linux / Windows — CPU torch (see https://pytorch.org for the current CPU index)
@@ -159,7 +159,7 @@ Standalone movable gripper viewers are available beside the robot viewer as `vie
 
 ## Trajectory Pick-Place
 
-The configuration-driven v0.2.11 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
+The configuration-driven v0.2.12 entry point supports all five robot families. `dry-run` performs calibrated FK, whole-program timing and Pinocchio/Coal collision checks without connecting to a controller.
 
 | Robot | Command | Notes |
 |-------|---------|-------|
@@ -190,18 +190,18 @@ XARM_IP=192.168.1.xx ufactory-pick-place --robot xarm6 --mode real \
 
 `--visual`: with `--mode sim`, force the Genesis viewer; with `--mode real`, open the kinematic mirror (no contact physics). The generic pick-place mirror uses capped non-blocking updates; the packaging command runs its full-rate Genesis/GLB viewer in a separate process, consuming all 50 Hz mirror states with the normal 60 Hz repaint rate without sharing the servo sender's Python scheduler. The window remains open until it is closed or Ctrl+C is pressed. Not supported for `dry-run` / `sdk-sim`.
 
-v0.2.7 removed online real-policy deployment, random-action execution, policy sessions, and SDK policy-action adapters from the public package (see [SECURITY.md](SECURITY.md)). The v0.2.11 RL example is simulation-only and adds no real-policy execution interface.
+v0.2.7 removed online real-policy deployment, random-action execution, policy sessions, and SDK policy-action adapters from the public package (see [SECURITY.md](SECURITY.md)). The v0.2.12 RL examples remain simulation-only and add no real-policy execution interface.
 
-## Fixed-layout RL example
+## RL pick-place examples
 
-v0.2.11 publishes an initial xArm6 + Gripper G2 fixed `+Y` layout example with a canonical recipe, a fixed 512-episode scenario bank, and the 2.7 MB `model_199.pt` checkpoint. The bundled policy passed the nine no-disturbance seed/batch combinations (9/9) and fixed 64 episodes (64/64). With action-noise standard deviation 0.02 it achieved **442/512 (86.3%)**; the original 99% robustness goal remains unmet. No random-layout or high-robustness claim is made.
+The original xArm6 + Gripper G2 fixed `+Y` workflow remains available with its canonical recipe, fixed 512-episode scenario bank, and 2.7 MB `model_199.pt` checkpoint. v0.2.12 also adds an object-randomized, fixed-target workflow under `random_start/`, with separate recipes, scenario banks, evaluation gates, and documentation. Its bundled checkpoint is explicitly hierarchical: it preserves the fixed RL actor and uses a simulator-state scripted guide on non-canonical layouts; it is not presented as learned random-layout PPO generalization. Both workflows are simulation-only.
 
 ```bash
 pip install -e ".[sim,rl]"
 python -m examples.rl.pick_place.evaluate --episodes 1
 ```
 
-The example supports Linux with an NVIDIA GPU only. See the [English RL guide](examples/rl/pick_place/README.md) or [Chinese RL guide](examples/rl/pick_place/README_cn.md) for headless/formal evaluation, training, fine-tuning, metrics, output paths, and limitations.
+The examples support Linux with an NVIDIA GPU only. Start with the [English RL index](examples/rl/README.md) or [Chinese RL index](examples/rl/README_cn.md) for fixed-layout and random-start guides, formal evaluation, training, metrics, and limitations.
 
 ## Showcase (YAML-Driven Packaging)
 
@@ -240,7 +240,7 @@ python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j
 ```
 
-`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the reference Python 3.13 / Genesis 1.3.0 baseline. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
+`servo_j` startup first builds the Genesis IK scene, then preflights the complete trajectory. `[ik-compile]` and `[preflight]` messages show the active phase, sample count, and timing; hardware motion remains unauthorized until `preflight=PASS`. Genesis's neutral self-collision filtering message and Quadrants' `ast.keyword(..., ctx=...)` Python 3.15 deprecation message are upstream diagnostics, not failures in the reference Python 3.13 / Genesis 1.3.1 baseline. Collision preflight still checks every trajectory sample and geometry pair, but uses the configured 5 mm security margin to select candidates and computes exact distances only for those candidates; unsupported backends automatically retain the full-distance fallback.
 
 | Flag | Description |
 |------|-------------|
@@ -340,7 +340,7 @@ Default dynamics validation poses for UF850 / Lite6 / xArm5 / xArm7 come from
 
 ## xArm 6
 
-xArm 6 remains the reference robot, but v0.2.11 does not publish per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
+xArm 6 remains the reference robot, but v0.2.12 does not publish per-robot wrapper directories. Select it through the task-oriented entries, for example `examples/visualization/view_robot.py --robot xarm6` or `examples/packaging/run.py --robot xarm6 ...`. See [examples/README.md](examples/README.md) for the complete v0.2.6 path migration table.
 
 ## Project Layout
 

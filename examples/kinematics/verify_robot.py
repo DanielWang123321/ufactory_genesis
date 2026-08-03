@@ -12,6 +12,7 @@ import genesis as gs
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.registry import get_robot_profile, joint_names, robot_cli_choices
+from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
 
 
@@ -47,7 +48,11 @@ def run_tests(profile_key: str, urdf_path: str, vis: bool, *, backend: str = "gp
 
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, backend))
-    scene = gs.Scene(show_viewer=vis, sim_options=gs.options.SimOptions(dt=0.01))
+    scene = gs.Scene(
+        show_viewer=vis,
+        sim_options=gs.options.SimOptions(dt=0.01),
+        rigid_options=make_rigid_options(gs),
+    )
     robot = scene.add_entity(
         gs.morphs.URDF(file=urdf_path, fixed=True, requires_jac_and_IK=True),
     )

@@ -272,6 +272,7 @@ def pick_place_observation(
     quality_features: torch.Tensor | None = None,
     contact_features: torch.Tensor | None = None,
     normalized_setpoint_residual: torch.Tensor | None = None,
+    scripted_action_hint: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Build the policy observation.
 
@@ -297,14 +298,16 @@ def pick_place_observation(
         parts.append(commanded_gap.unsqueeze(-1))
     if previous_action is not None:
         parts.append(previous_action)
-    if normalized_layout_offsets is not None:
-        parts.append(normalized_layout_offsets)
     if quality_features is not None:
         parts.append(quality_features)
     if contact_features is not None:
         parts.append(contact_features)
     if normalized_setpoint_residual is not None:
         parts.append(normalized_setpoint_residual)
+    if normalized_layout_offsets is not None:
+        parts.append(normalized_layout_offsets)
+    if scripted_action_hint is not None:
+        parts.append(scripted_action_hint)
     return torch.cat(parts, dim=-1)
 
 
@@ -340,8 +343,8 @@ def normalized_pick_place_quality_features(
 
 
 def normalized_pick_place_layout_offsets(
-    obj_base: torch.Tensor,
-    target_base: torch.Tensor,
+    episode_obj_start_base: torch.Tensor,
+    episode_target_base: torch.Tensor,
     fixed_obj: torch.Tensor,
     fixed_target: torch.Tensor,
     obj_spawn_lower: torch.Tensor,
@@ -349,14 +352,24 @@ def normalized_pick_place_layout_offsets(
     target_spawn_lower: torch.Tensor,
     target_spawn_upper: torch.Tensor,
 ) -> torch.Tensor:
-    """Return six order-one XY offsets without changing the legacy observation prefix."""
+    """Return pickup-layout offsets without changing the legacy prefix.
+
+    These inputs are the sampled task endpoints, not the object's live pose. Otherwise
+    a fixed-layout episode would acquire a changing "layout" signal while transporting
+    the cube, defeating zero-effect transfer and entangling phase with spawn position.
+    The immutable offsets remain available through set-down and release. A random
+    pickup changes the arm/object state that reaches the target even when the target
+    itself is fixed, so switching the signal off at that boundary creates an abrupt
+    observation alias and prevents a protected residual from correcting the arrival.
+    Fixed-layout episodes still produce six exact zeros for their entire lifetime.
+    """
 
     obj_half_span = (obj_spawn_upper[:2] - obj_spawn_lower[:2]).abs().mul(0.5).clamp_min(1e-6)
     target_half_span = (target_spawn_upper[:2] - target_spawn_lower[:2]).abs().mul(0.5).clamp_min(1e-6)
-    obj_offset = (obj_base[:, :2] - fixed_obj[:2]) / obj_half_span
-    target_offset = (target_base[:, :2] - fixed_target[:2]) / target_half_span
+    obj_offset = (episode_obj_start_base[:, :2] - fixed_obj[:2]) / obj_half_span
+    target_offset = (episode_target_base[:, :2] - fixed_target[:2]) / target_half_span
     canonical_transport = fixed_target[:2] - fixed_obj[:2]
-    transport_offset = ((target_base[:, :2] - obj_base[:, :2]) - canonical_transport) / (
+    transport_offset = ((episode_target_base[:, :2] - episode_obj_start_base[:, :2]) - canonical_transport) / (
         obj_half_span + target_half_span
     )
     return torch.cat([obj_offset, target_offset, transport_offset], dim=-1)
@@ -1611,6 +1624,7 @@ def sample_object_and_target(
     target_spawn_lower: torch.Tensor,
     target_spawn_upper: torch.Tensor,
     edge_fraction: float = 0.0,
+    randomize_target: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if not 0.0 <= edge_fraction <= 1.0:
         raise ValueError("edge_fraction must be in [0, 1]")
@@ -1684,6 +1698,8 @@ def sample_object_and_target(
         )
         obj[edge_mask, :2] = obj_edges[edge_mask]
         target[edge_mask, :2] = target_edges[edge_mask]
+    if not randomize_target:
+        target = fixed_target.unsqueeze(0).expand(n, 3).clone()
     return obj, target
 
 

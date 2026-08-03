@@ -2,17 +2,26 @@ schema_version: 1
 task: pick_place
 robot_key: xarm6_1305
 env:
-  num_envs: 20480
+  num_envs: 256
   genesis_performance_mode: true
   randomize_initial_episode_length: true
   actor_output_tanh: false
-  num_obs: 44
+  num_obs: 54
   num_actions: 4
   include_commanded_gap: true
   include_previous_action: true
   include_quality_observations: true
   include_contact_observations: true
-  include_normalized_layout_offsets: false
+  include_normalized_layout_offsets: true
+  include_scripted_action_hint: true
+  scripted_action_hint_controller: scripted_pick_place_expert_v2
+  scripted_action_hint_config:
+    close_gap_m: 0.018
+    landing_brake_speed_m_s: 0.025
+    landing_brake_max_step_m: 0.0005
+    release_hover_m: 2.0e-05
+    settle_dwell_steps: 2
+    release_open_step_m: 0.0005
   use_contact_holding: true
   privileged_critic_obs: true
   strict_action_bounds: true
@@ -29,23 +38,24 @@ env:
   contact_force_threshold_n: 0.05
   success_history_len: 4096
   stiffen_gripper_mimic: true
-  fixed_demo_layout: true
+  fixed_demo_layout: false
+  randomize_target: false
   curriculum_initial_stage: 0
   curriculum_max_stage: 0
+  curriculum_edge_fraction: 0.2
   curriculum_min_count: 1024
-  curriculum_stage0_grasp_rate: 0.95
+  curriculum_min_stage_steps: 1280
+  curriculum_stage0_grasp_rate: 0.92
   curriculum_stage1_grasp_rate: 0.9
-  curriculum_stage2_place_rate: 0.9
-  curriculum_stage3_place_rate: 0.85
-  place_phase_reset_frac: 0.3
-  place_phase_hover_z_m: 0.05
-  place_phase_table_reset_frac: 0.35
-  place_phase_table_hover_z_m: 0.0
-  carry_phase_reset_frac: 0.15
+  curriculum_stage2_place_rate: 0.65
+  curriculum_stage3_place_rate: 0.6
+  place_phase_reset_frac: 0.05
+  place_phase_hover_z_m: 0.07
+  carry_phase_reset_frac: 0.1
   carry_phase_hover_z_m: 0.1
-  grasp_phase_reset_frac: 0.1
+  grasp_phase_reset_frac: 0.15
   grasp_phase_reset_frac_final: 0.0
-  grasp_phase_anneal_steps: 0
+  grasp_phase_anneal_steps: 12800
   held_gripper_initial_drive: 0.6
   carry_near_dist_m: 0.04
   place_shaping_dist_m: 0.04
@@ -63,7 +73,6 @@ env:
   landing_max_xy_speed_m_s: 0.03
   landing_max_down_speed_m_s: 0.05
   near_table_xy_action_height_m: 0.025
-  near_target_speed_height_m: 0.1
   release_action_threshold: 0.05
   release_command_margin_m: 0.0005
   quality_velocity_obs_scale_m_s: 0.25
@@ -88,6 +97,13 @@ env:
   grasp_center_offset_z: 0.065
   lift_height_m: 0.08
   substeps: 8
+  constraint_solver: newton
+  solver_iterations: 100
+  noslip_iterations: 0
+  friction_cone: elliptic
+  contact_resolution: signorini
+  constraint_time_constant_s: 0.005
+  use_gjk_collision: null
   gripper_open_mm: 84.0
   gripper_close_mm: 22.0
   obj_size:
@@ -119,14 +135,7 @@ env:
   - 0.34
   - 0.35
   - 0.015
-  constraint_solver: newton
-  solver_iterations: 100
-  noslip_iterations: 0
-  friction_cone: elliptic
-  contact_resolution: signorini
-  constraint_time_constant_s: 0.005
-  use_gjk_collision: null
-  randomize_target: false
+  training_steps_per_iteration: 128
 reward:
   approach_potential: 25.0
   grasp_settle_action: 30.0
@@ -136,19 +145,13 @@ reward:
   grasp_centering: 60.0
   grasp_lift_progress: 60.0
   transport_progress: 40.0
-  descent_progress: 40.0
-  precision_progress: 180.0
-  near_table_xy_action: 800.0
-  near_target_speed: 120.0
-  landing_quality: 250.0
-  hard_landing: 700.0
-  release_readiness_progress: 160.0
-  ready_opening: 200.0
-  premature_opening: 20.0
+  descent_progress: 60.0
+  near_table_xy_action: 100.0
+  hard_landing: 100.0
+  release_readiness_progress: 60.0
   valid_release: 200.0
-  invalid_release: 40.0
+  invalid_release: 200.0
   success: 100.0
-  release_clearance_opening: 80.0
   action_penalty: 0.0005
   table_collision: 2.0
   workspace_violation: 2.0
@@ -228,10 +231,10 @@ train:
     class_name: PPO
     clip_param: 0.2
     desired_kl: 0.01
-    entropy_coef: 0.012
+    entropy_coef: 0.005
     gamma: 0.99
     lam: 0.95
-    learning_rate: 1.0e-06
+    learning_rate: 0.0003
     max_grad_norm: 1.0
     num_learning_epochs: 5
     num_mini_batches: 8
@@ -241,11 +244,14 @@ train:
     rnd_cfg: null
     symmetry_cfg: null
   actor:
-    class_name: MLPModel
+    class_name: ufactory.training.models:GuidedPickPlaceMLPModel
     hidden_dims:
     - 256
     - 256
     - 128
+    source_observation_dim: 44
+    layout_offset_start: 44
+    guide_action_start: 50
     activation: elu
     obs_normalization: false
     distribution_cfg:
@@ -269,24 +275,27 @@ train:
     - privileged
   runner:
     checkpoint: -1
-    experiment_name: pp-contact-release-brake-seed1
+    experiment_name: xarm6-pick-place-cart-xyz-g2
     load_run: -1
     log_interval: 1
-    max_iterations: 200
+    max_iterations: 1
     record_interval: -1
     resume: false
     resume_path: null
     run_name: ''
+    observation_projection_initializer: scripted_action_hint_actor_v1
+    observation_projection_train_scope: frozen_guided_actor
     transfer_mode: actor_only
-    transfer_checkpoint: null
-    transfer_checkpoint_sha256: 56a50ec74245c7ffc0088da152c37deedfbd618211e81a6f0318d80082680699
-    warm_start_output_scale: 1.0
-    warm_start_gripper_head_scale: 1.0
-    warm_start_z_head_scale: 1.0
-    warm_start_xy_head_scale: 1.0
+    transfer_checkpoint: examples/rl/pick_place/pretrained/model_199.pt
+    transfer_checkpoint_sha256: 9381387a30efbbc102289052569c0804c868db8d5d5eb5332b88a7513f61b0f7
+    observation_projection:
+      type: scripted_action_hint_actor_v1
+      source_policy_observation_dim: 44
+      target_policy_observation_dim: 54
+      appended_observation_dim: 10
   num_steps_per_env: 128
   save_interval: 10
   seed: 1
   run_name: ''
   logger: tensorboard
-config_sha256: cc8590c6cb029b27969efc01f315e6ad9de66d3475d5dc72f67832052406508a
+config_sha256: dd4be840e15a3c2e30d2d6d65249b825f1edbcb76e2f81ae3616f3ccfc70ef76

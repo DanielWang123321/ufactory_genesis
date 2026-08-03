@@ -12,6 +12,7 @@ from ufactory.config import load_runtime_config
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_visual_glb_urdf
 from ufactory.manipulation.packaging.core import PackagingLayout as CorePackagingLayout, packaging_layout
+from ufactory.simulation import make_rigid_options
 from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -340,9 +341,12 @@ def build_packaging_scene(
         scene_kwargs["renderer"] = renderer
     scene = gs.Scene(
         sim_options=gs.options.SimOptions(dt=sim_dt, substeps=core_layout.simulation_substeps),
-        rigid_options=gs.options.RigidOptions(
+        rigid_options=make_rigid_options(
+            gs,
             dt=sim_dt,
-            constraint_solver=gs.constraint_solver.Newton,
+            constraint_solver=config.simulation.constraint_solver,
+            friction_cone=config.simulation.friction_cone,
+            contact_resolution=config.simulation.contact_resolution,
             enable_collision=True,
             enable_joint_limit=True,
             iterations=int(config.simulation.solver_iterations),

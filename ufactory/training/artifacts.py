@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -34,17 +35,27 @@ _RUNTIME_ENV_CONTRACT_KEYS = (
     "place_success_dist_m",
     "success_hold_steps",
     "substeps",
+    "constraint_solver",
+    "solver_iterations",
+    "noslip_iterations",
+    "friction_cone",
+    "contact_resolution",
+    "constraint_time_constant_s",
+    "use_gjk_collision",
     "gripper_open_mm",
     "gripper_close_mm",
     "obj_size",
     "obj_mass_kg",
     "fixed_obj_pos",
     "fixed_target_pos",
+    "fixed_demo_layout",
+    "randomize_target",
     "obj_spawn_lower",
     "obj_spawn_upper",
     "target_spawn_lower",
     "target_spawn_upper",
 )
+_TRANSFERABLE_RUNTIME_ENV_KEYS = frozenset({"fixed_demo_layout"})
 
 
 def _plain(value: Any) -> Any:
@@ -339,6 +350,7 @@ def validate_checkpoint_artifacts(
     expected_robot_key: str | None = None,
     expected_runtime_config_sha256: str | None = None,
     expected_runtime_env: Mapping[str, Any] | None = None,
+    allowed_runtime_env_mismatches: Collection[str] = (),
 ) -> tuple[dict[str, Any], CheckpointManifest]:
     checkpoint = Path(checkpoint_path)
     config = load_training_config(config_path)
@@ -360,11 +372,19 @@ def validate_checkpoint_artifacts(
         expected_runtime_config_sha256
     ):
         failures.append("runtime config hash")
+    allowed_mismatches = frozenset(str(key) for key in allowed_runtime_env_mismatches)
+    unsupported_allowed = sorted(allowed_mismatches - _TRANSFERABLE_RUNTIME_ENV_KEYS)
+    if unsupported_allowed:
+        raise ArtifactError("unsupported allowed runtime config mismatch keys: " + ", ".join(unsupported_allowed))
+    if allowed_mismatches and expected_runtime_env is None:
+        raise ArtifactError("allowed runtime config mismatches require expected_runtime_env")
     if expected_runtime_env is not None:
         saved_contract = runtime_env_contract(env)
         expected_contract = runtime_env_contract(expected_runtime_env)
         mismatched_keys = [
-            key for key in _RUNTIME_ENV_CONTRACT_KEYS if saved_contract.get(key) != expected_contract.get(key)
+            key
+            for key in _RUNTIME_ENV_CONTRACT_KEYS
+            if key not in allowed_mismatches and saved_contract.get(key) != expected_contract.get(key)
         ]
         if mismatched_keys:
             failures.append(f"runtime config body ({', '.join(mismatched_keys)})")
@@ -385,6 +405,7 @@ def validate_and_load_rsl_checkpoint(
     expected_robot_key: str | None = None,
     expected_runtime_config_sha256: str | None = None,
     expected_runtime_env: Mapping[str, Any] | None = None,
+    allowed_runtime_env_mismatches: Collection[str] = (),
 ) -> tuple[dict[str, Any], dict[str, Any], CheckpointManifest]:
     """Validate a complete artifact bundle before safely loading RSL-RL weights.
 
@@ -401,6 +422,7 @@ def validate_and_load_rsl_checkpoint(
         expected_robot_key=expected_robot_key,
         expected_runtime_config_sha256=expected_runtime_config_sha256,
         expected_runtime_env=expected_runtime_env,
+        allowed_runtime_env_mismatches=allowed_runtime_env_mismatches,
     )
 
     # Keep torch optional for configuration-only users and lightweight CI

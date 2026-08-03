@@ -211,8 +211,11 @@ class SimulationConfig:
     precision: str
     seed: int
     substeps: int
+    constraint_solver: str
     solver_iterations: int
     noslip_iterations: int
+    friction_cone: str
+    contact_resolution: str
     constraint_time_constant_s: float
     use_gjk_collision: bool | None
     show_viewer: bool
@@ -226,6 +229,16 @@ class SimulationConfig:
             raise ValueError("simulation iteration counts are invalid")
         if self.constraint_time_constant_s <= 0.0:
             raise ValueError("simulation constraint time constant must be positive")
+        if self.constraint_solver != "newton":
+            raise ValueError("simulation constraint solver must be newton")
+        if self.friction_cone not in {"pyramidal", "elliptic"}:
+            raise ValueError("simulation friction cone must be pyramidal or elliptic")
+        if self.contact_resolution not in {"convex", "signorini"}:
+            raise ValueError("simulation contact resolution must be convex or signorini")
+        if self.friction_cone == "elliptic" and self.noslip_iterations:
+            raise ValueError("elliptic friction is incompatible with the noslip solver")
+        if self.contact_resolution == "signorini" and (self.friction_cone != "elliptic" or self.noslip_iterations != 0):
+            raise ValueError("signorini contact requires Newton, elliptic friction, and noslip_iterations=0")
 
 
 @dataclass(frozen=True)

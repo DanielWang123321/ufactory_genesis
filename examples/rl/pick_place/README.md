@@ -10,7 +10,7 @@ policy deployment.
 ## Install and hardware boundary
 
 Use Linux, an NVIDIA GPU supported by Genesis, Python 3.12 or 3.13, Genesis World
-1.3.0, RSL-RL 5.4.2, and PyTorch 2.10. The lock file is the reference environment:
+1.3.1, RSL-RL 5.4.2, and PyTorch 2.10. The lock file is the reference environment:
 
 ```bash
 uv sync --extra sim --extra rl
@@ -77,14 +77,17 @@ bundle is required; a bare `.pt` file is intentionally rejected.
 
 ## Results and metric meaning
 
-The bundled checkpoint passed the nine no-disturbance combinations of seeds
-`1/7/17` and batch sizes `1/8/64` (9/9). Its fixed 64-episode run was 64/64.
+Under the v0.2.12 Genesis 1.3.1 physics baseline, the unchanged checkpoint passed
+the nine no-disturbance combinations of seeds `1/7/17` and batch sizes `1/8/64`
+(9/9, 219/219 episodes). Its independent fixed-bank 64-episode run was 64/64.
 
 With Gaussian action disturbance standard deviation `0.02` and the fixed seed
-`20260731`, it achieved **442/512 (86.3%)**. Grasp and lift were 512/512; P99 final
-XY error, pre-lift drag, and post-release drift were 8.52, 1.07, and 0.73 mm. The
-99% robustness target remains unmet and is not a v0.2.11 release gate. The exact
-artifact metadata is in `pretrained/evaluation_summary.json`.
+`20260731`, the Genesis 1.3.1 rebaseline achieved **512/512** full and quality
+success. P99 final XY error, pre-lift drag, and post-release drift were 8.35, 1.05,
+and 0.73 mm, with zero action clipping or IK faults. The diagnostic still recorded
+post-release finger contact in 120/512 episodes. Recontact is not one of the aggregate
+robustness-gate predicates, so this result does not claim contact-free disturbance
+handling or real-world robustness. Exact metadata is in `pretrained/evaluation_summary.json`.
 
 `Full success` means grasp, lift, valid set-down/release, final pose, velocity,
 hold time, and all selected acceptance-profile quality limits passed. It is stricter

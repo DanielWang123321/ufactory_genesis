@@ -8,6 +8,7 @@ from itertools import count
 
 import genesis as gs
 
+from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 
@@ -41,6 +42,7 @@ def run_standalone_gripper_viewer(
     scene = gs.Scene(
         show_viewer=not args.headless,
         sim_options=gs.options.SimOptions(dt=0.01),
+        rigid_options=make_rigid_options(gs),
         viewer_options=gs.options.ViewerOptions(
             camera_pos=CAMERA_POS, camera_lookat=CAMERA_LOOKAT, camera_fov=CAMERA_FOV
         ),

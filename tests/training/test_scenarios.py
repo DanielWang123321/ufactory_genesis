@@ -28,6 +28,17 @@ def _generate(*, count: int = 32, seed: int = 17, mode: str = "fixed") -> dict:
     )
 
 
+def _env() -> dict:
+    return {
+        "fixed_obj_pos": [0.30, 0.00, 0.015],
+        "fixed_target_pos": [0.30, 0.30, 0.015],
+        "obj_spawn_lower": [0.28, -0.05, 0.015],
+        "obj_spawn_upper": [0.34, 0.05, 0.015],
+        "target_spawn_lower": [0.28, 0.25, 0.015],
+        "target_spawn_upper": [0.34, 0.35, 0.015],
+    }
+
+
 def test_scenario_bank_is_deterministic_and_roundtrips(tmp_path) -> None:
     first = _generate()
     second = _generate()
@@ -45,6 +56,32 @@ def test_fixed_scenario_bank_repeats_demo_layout() -> None:
         assert scenario["id"] == index
         assert scenario["object_position_m"] == [0.30, 0.00, 0.015]
         assert scenario["target_position_m"] == [0.30, 0.30, 0.015]
+
+
+@pytest.mark.parametrize("mode", ["object_uniform", "object_edge"])
+def test_object_only_banks_are_unique_bounded_and_keep_target_fixed(tmp_path, mode: str) -> None:
+    bank = _generate(count=64, mode=mode)
+    path = write_scenario_bank(tmp_path / f"{mode}.json", bank)
+    loaded = load_scenario_bank(path, expected_env=_env())
+    positions = [tuple(scenario["object_position_m"]) for scenario in loaded["scenarios"]]
+    assert len(set(positions)) == 64
+    assert all(scenario["target_position_m"] == [0.30, 0.30, 0.015] for scenario in loaded["scenarios"])
+    if mode == "object_edge":
+        assert set(positions[:4]) == {
+            (0.28, -0.05, 0.015),
+            (0.28, 0.05, 0.015),
+            (0.34, -0.05, 0.015),
+            (0.34, 0.05, 0.015),
+        }
+
+
+def test_object_only_bank_rejects_random_target(tmp_path) -> None:
+    bank = _generate(mode="object_uniform")
+    bank["scenarios"][0]["target_position_m"][0] = 0.31
+    path = tmp_path / "bad_target.json"
+    path.write_text(json.dumps(bank), encoding="utf-8")
+    with pytest.raises(ArtifactError, match="randomizes the target"):
+        load_scenario_bank(path, expected_env=_env())
 
 
 def test_scenario_bank_rejects_runtime_mismatch(tmp_path) -> None:
