@@ -2,7 +2,7 @@
 
 [中文](README_cn.md)
 
-v0.2.12 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
+v0.2.13 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 4. Supported `--robot` keys: `xarm5`, `xarm6`, `xarm7`, `uf850`, `lite6`.
 
-5. **Windows / no supported GPU:** install the CPU PyTorch wheel first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). See the root README section *Windows and CPU-only simulation*.
+5. **Windows / no supported GPU:** install the CPU PyTorch wheel first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). See the CPU PyTorch note under *Install* in the root README.
 
 Public directories in this release:
 
@@ -42,8 +42,8 @@ Public directories in this release:
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
 | `rl/` | Linux/NVIDIA xArm6 + Gripper G2 RL pick-place workflows |
 
-See the [RL index](rl/README.md) for scope and links to the fixed-layout and
-random-object-start install, evaluation, training, and limitations guides.
+See the [RL index](rl/README.md) for the fixed-layout installation, evaluation,
+training, release evidence, and limitations guide.
 
 ## Visualization
 
@@ -112,7 +112,7 @@ dynamics-sim-collision-check --robot xarm6 --ip <ip>
 | `--config` | Optional strict partial overlay YAML |
 | `--print-config` | Print resolved runtime YAML and exit |
 | `--ip` | Controller IP (or set `XARM_IP`) for `sdk-sim` / `real` |
-| `--calibration` | Exact per-unit kinematics YAML (required for real) |
+| `--calibration` | Exact per-unit kinematics YAML (required for sdk-sim / real) |
 | `--confirm-real` | Explicit confirmation requirement for `--mode real` |
 | `--visual` | `sim`: force Genesis viewer; `real`: kinematic mirror (not for dry-run/sdk-sim) |
 | `--report` | Optional report output path |
@@ -200,14 +200,3 @@ python examples/packaging/run.py \
 ```
 
 Real mode never loops. xArm5, xArm7, and UF850 `--mode real` fail before controller connection until a real gripper path is enabled.
-
-## Migration from v0.2.6
-
-| Old category | v0.2.8 path |
-|---|---|
-| `examples/view_robot_glb.py`, per-robot viewers | `examples/visualization/view_robot.py --robot <key>` |
-| Root/per-robot FK and IK wrappers | `examples/kinematics/verify_{robot,fk,ik}.py` |
-| Per-robot pick-place wrappers | `examples/pick_place/run.py --robot <key>` |
-| Root/xArm6 packaging wrappers | `examples/packaging/run.py --robot <key>` |
-
-Old paths, bootstrap files, and underscore-prefixed example internals were removed without compatibility wrappers. The v0.2.12 RL entries remain module-only under `examples.rl.pick_place`.

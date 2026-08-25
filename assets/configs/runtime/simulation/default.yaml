@@ -3,12 +3,15 @@ simulation:
   backend: gpu
   precision: "32"
   seed: 1
-  substeps: 8
+  # Conservative g2_stable_v1_3_3 production margin at the 50 Hz control rate.
+  # The corrected compliant mimic profile is the primary numerical-stability fix.
+  substeps: 32
   constraint_solver: newton
   solver_iterations: 100
   noslip_iterations: 0
-  friction_cone: elliptic
-  contact_resolution: signorini
+  friction_cone: pyramidal
+  contact_resolution: convex
   constraint_time_constant_s: 0.005
-  use_gjk_collision: null
+  # Genesis documents GJK as the slower but more stable collision path.
+  use_gjk_collision: true
   show_viewer: false

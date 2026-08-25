@@ -8,6 +8,8 @@ import numpy as np
 import pytest
 import torch
 
+from ufactory.training.logic.pick_place import pick_place_observation
+
 from examples.rl.pick_place.evaluate import (
     _acceptance_target_results,
     _pin_eval_curriculum_stage,
@@ -16,10 +18,15 @@ from examples.rl.pick_place.evaluate import (
 from examples.rl.pick_place.env import XArm6PickPlaceEnv
 from examples.rl.pick_place.expert import (
     PHASE_APPROACH,
+    PHASE_CLOSE,
+    PHASE_DESCEND,
+    PHASE_LIFT,
     PHASE_RELEASE,
     PHASE_RETREAT,
     PHASE_SETDOWN,
     PHASE_SETTLE,
+    PHASE_TRANSPORT,
+    ScriptedPickPlaceExpert,
     expert_phase_sample_weights,
 )
 from examples.rl.pick_place.trace_utils import (
@@ -134,7 +141,7 @@ def test_evaluation_rejects_invalid_inferred_curriculum_stage() -> None:
         _pin_eval_curriculum_stage({}, 5)
 
 
-def test_random_start_aggregate_gate_uses_99_percent_point_estimate_and_quality() -> None:
+def test_robustness_aggregate_gate_uses_99_percent_point_estimate_and_quality() -> None:
     stats = {
         "episode_count": 512,
         "success_count": 507,
@@ -563,6 +570,73 @@ def test_expert_quality_phase_weights_match_disturbed_bc_recipe() -> None:
     assert expert_phase_sample_weights(phases).tolist() == pytest.approx([1.0, 4.0, 4.0, 2.0, 2.0])
     with pytest.raises(ValueError, match="positive"):
         expert_phase_sample_weights(phases, near_table_weight=0.0)
+    with pytest.raises(ValueError, match="positive"):
+        expert_phase_sample_weights(phases, transport_weight=0.0)
+
+
+def test_expert_phase_weights_can_boost_transport_without_near_table() -> None:
+    phases = torch.tensor(
+        [PHASE_APPROACH, PHASE_TRANSPORT, PHASE_SETDOWN, PHASE_RELEASE],
+        dtype=torch.long,
+    )
+    weights = expert_phase_sample_weights(
+        phases,
+        near_table_weight=1.0,
+        release_retreat_weight=1.0,
+        transport_weight=4.0,
+    )
+    assert weights.tolist() == pytest.approx([1.0, 4.0, 1.0, 1.0])
+
+    balanced_phases = torch.tensor(
+        [PHASE_APPROACH, PHASE_TRANSPORT, PHASE_TRANSPORT, PHASE_SETDOWN],
+        dtype=torch.long,
+    )
+    balanced = expert_phase_sample_weights(
+        balanced_phases,
+        near_table_weight=1.0,
+        release_retreat_weight=1.0,
+        transport_weight=4.0,
+        balance_phases=True,
+    )
+    totals = {
+        phase: float(balanced[balanced_phases == phase].sum())
+        for phase in (PHASE_APPROACH, PHASE_TRANSPORT, PHASE_SETDOWN)
+    }
+    assert balanced.mean().item() == pytest.approx(1.0)
+    assert totals[PHASE_TRANSPORT] / totals[PHASE_APPROACH] == pytest.approx(4.0)
+    assert totals[PHASE_SETDOWN] / totals[PHASE_APPROACH] == pytest.approx(1.0)
+
+
+def test_expert_phase_weights_can_invert_release_versus_close() -> None:
+    phases = torch.tensor(
+        [PHASE_CLOSE, PHASE_LIFT, PHASE_TRANSPORT, PHASE_RELEASE],
+        dtype=torch.long,
+    )
+    weights = expert_phase_sample_weights(
+        phases,
+        near_table_weight=1.0,
+        release_retreat_weight=0.25,
+        transport_weight=4.0,
+        close_lift_weight=4.0,
+    )
+    assert weights.tolist() == pytest.approx([4.0, 4.0, 4.0, 0.25])
+
+
+def test_policy_prefix_puts_obj_to_target_before_grasped() -> None:
+    obs = pick_place_observation(
+        joint_pos=torch.zeros(1, 6),
+        joint_vel=torch.zeros(1, 6),
+        ee_base=torch.tensor([[0.30, 0.00, 0.10]]),
+        gripper_gap=torch.tensor([0.022]),
+        obj_base=torch.tensor([[0.30, 0.00, 0.02]]),
+        target_base=torch.tensor([[0.30, 0.30, 0.02]]),
+        grasped=torch.tensor([True]),
+        ever_grasped=torch.tensor([True]),
+    )
+    assert obs.shape[-1] == 30
+    assert float(obs[0, 25]) == pytest.approx(0.0)
+    assert float(obs[0, 26]) == pytest.approx(0.30)
+    assert float(obs[0, 28]) == pytest.approx(1.0)
 
 
 def test_expert_phase_weights_can_remove_duration_bias() -> None:
@@ -576,3 +650,108 @@ def test_expert_phase_weights_can_remove_duration_bias() -> None:
     assert weights.mean().item() == pytest.approx(1.0)
     assert totals[PHASE_SETDOWN] / totals[PHASE_APPROACH] == pytest.approx(4.0)
     assert totals[PHASE_RELEASE] / totals[PHASE_APPROACH] == pytest.approx(2.0)
+
+
+def _cpu_scripted_expert(**overrides) -> ScriptedPickPlaceExpert:
+    env = SimpleNamespace(
+        device=torch.device("cpu"),
+        num_envs=1,
+        obj_size=[0.03, 0.03, 0.03],
+        grasp_center_offset_z=0.065,
+        obj_rest_z_base=0.015,
+        gripper_close_gap_m=0.022,
+        gripper_min_command_gap_m=0.012,
+        gripper_open_gap_m=0.084,
+        action_scale=0.005,
+        max_cartesian_delta_m=0.005,
+        ee_command_integration="commanded",
+        gripper_delta_m=0.004,
+        commanded_gap=torch.tensor([0.022]),
+        ctrl_dt=0.02,
+        holding=torch.tensor([False]),
+        ever_carried_near=torch.tensor([False]),
+    )
+    return ScriptedPickPlaceExpert(env, **overrides)
+
+
+def test_latched_layout_setpoints_ignore_live_cube_jitter() -> None:
+    expert = _cpu_scripted_expert(latch_layout_setpoints=True, close_gap_m=0.022)
+    expert.phase[:] = PHASE_APPROACH
+    expert._latched_obj_xy[:] = torch.tensor([[0.30, 0.00]])
+    expert._obj_xy_valid[:] = True
+    finger = torch.tensor([[0.30, 0.00, 0.14]])
+    obj = torch.tensor([[0.305, 0.004, 0.015]])
+    target = torch.tensor([[0.30, 0.30, 0.015]])
+    vel = torch.zeros(1, 3)
+    height = obj[:, 2] - 0.015
+    gap = torch.tensor([0.05])
+    desired, *_ = expert._phase_setpoints(finger, obj, target, vel, height, gap)
+    assert desired[0, 0].item() == pytest.approx(0.30)
+    assert desired[0, 1].item() == pytest.approx(-0.001)
+
+    expert.phase[:] = PHASE_TRANSPORT
+    expert._latched_place_xy[:] = torch.tensor([[0.30, 0.29]])
+    expert._place_xy_valid[:] = True
+    desired, *_ = expert._phase_setpoints(finger, obj, target, vel, height, gap)
+    assert desired[0, 0].item() == pytest.approx(0.30)
+    assert desired[0, 1].item() == pytest.approx(0.29)
+
+
+@pytest.mark.parametrize(("object_y", "expected_bias"), [(-0.05, 0.003), (0.0, 0.0), (0.05, -0.003)])
+def test_layout_centering_bias_is_bounded_and_shared_by_phase_gate(
+    object_y: float,
+    expected_bias: float,
+) -> None:
+    expert = _cpu_scripted_expert(
+        latch_layout_setpoints=True,
+        grasp_y_compensation_m=0.0,
+        grasp_y_centering_gain=0.06,
+        grasp_y_compensation_limit_m=0.003,
+    )
+    expert._latched_obj_xy[:] = torch.tensor([[0.30, object_y]])
+    expert._obj_xy_valid[:] = True
+    approach_xy = expert._latched_obj_xy.clone()
+    assert expert._grasp_y_compensation(approach_xy).item() == pytest.approx(expected_bias)
+
+    expert.phase[:] = PHASE_DESCEND
+    finger = torch.tensor([[0.30, object_y + expected_bias, 0.080]])
+    obj = torch.tensor([[0.30, object_y, 0.015]])
+    expert._advance_phases(
+        finger,
+        obj,
+        torch.tensor([[0.30, 0.30, 0.015]]),
+        torch.tensor([0.050]),
+        torch.tensor([0.0]),
+        torch.tensor([0.0]),
+    )
+    assert expert.phase.item() == PHASE_CLOSE
+
+
+def test_brake_only_near_table_keeps_coarse_steps_until_the_landing_band() -> None:
+    expert = _cpu_scripted_expert(
+        latch_layout_setpoints=True,
+        brake_only_near_table=True,
+        close_gap_m=0.022,
+        near_table_margin_m=0.020,
+        near_table_xy_step_m=0.0006,
+        near_table_z_step_m=0.001,
+        coarse_step_m=0.005,
+    )
+    expert.phase[:] = PHASE_SETDOWN
+    expert._latched_place_xy[:] = torch.tensor([[0.30, 0.30]])
+    expert._place_xy_valid[:] = True
+    finger = torch.tensor([[0.30, 0.30, 0.10]])
+    obj = torch.tensor([[0.30, 0.30, 0.095]])
+    target = torch.tensor([[0.30, 0.30, 0.015]])
+    vel = torch.zeros(1, 3)
+    height = obj[:, 2] - 0.015
+    gap = torch.tensor([0.022])
+    _, max_xy, max_z, _ = expert._phase_setpoints(finger, obj, target, vel, height, gap)
+    assert max_xy[0, 0].item() == pytest.approx(0.005)
+    assert max_z[0, 0].item() == pytest.approx(0.003)
+
+    obj = torch.tensor([[0.30, 0.30, 0.025]])
+    height = obj[:, 2] - 0.015
+    _, max_xy, max_z, _ = expert._phase_setpoints(finger, obj, target, vel, height, gap)
+    assert max_xy[0, 0].item() == pytest.approx(0.0006)
+    assert max_z[0, 0].item() <= 0.001 + 1e-12

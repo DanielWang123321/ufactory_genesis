@@ -17,6 +17,7 @@ expressed directly in finger-centre coordinates.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import math
 
 import torch
 
@@ -76,6 +77,8 @@ def expert_phase_sample_weights(
     *,
     near_table_weight: float = 4.0,
     release_retreat_weight: float = 2.0,
+    transport_weight: float = 1.0,
+    close_lift_weight: float = 1.0,
     balance_phases: bool = False,
 ) -> torch.Tensor:
     """Return BC weights for expert phases and optionally remove duration bias.
@@ -84,16 +87,25 @@ def expert_phase_sample_weights(
     every time step carries equal mass, that long phase can dominate the supervised
     loss and leave too little capacity for approach, grasp and transport. Phase
     balancing gives every observed phase equal base mass while retaining the explicit
-    near-table and release priorities.
+    near-table, release, transport, and close/lift priorities.
+
+    After the expert started covering the 300 mm carry in a short coarse burst,
+    transport needs its own multiplier: the old 4× near-table weights otherwise
+    teach "hold XY / open" and the clone never leaves the pickup. Boosting close/lift
+    while lowering release stops a from-home clone from opening at the pickup.
     """
 
-    if near_table_weight <= 0.0 or release_retreat_weight <= 0.0:
+    if near_table_weight <= 0.0 or release_retreat_weight <= 0.0 or transport_weight <= 0.0 or close_lift_weight <= 0.0:
         raise ValueError("phase weights must be positive")
     weights = torch.ones_like(phases, dtype=torch.float32)
     near_table = (phases == PHASE_SETDOWN) | (phases == PHASE_SETTLE)
     release_retreat = (phases == PHASE_RELEASE) | (phases == PHASE_RETREAT)
+    transport = phases == PHASE_TRANSPORT
+    close_lift = (phases == PHASE_CLOSE) | (phases == PHASE_LIFT)
     weights[near_table] = float(near_table_weight)
     weights[release_retreat] = float(release_retreat_weight)
+    weights[transport] = float(transport_weight)
+    weights[close_lift] = float(close_lift_weight)
     if balance_phases and phases.numel() > 0:
         for phase in PHASE_NAMES:
             mask = phases == phase
@@ -116,6 +128,8 @@ class ScriptedPickPlaceExpert:
         pre_grasp_gap_m: float | None = None,
         close_gap_m: float | None = None,
         grasp_y_compensation_m: float = -0.001,
+        grasp_y_centering_gain: float = 0.0,
+        grasp_y_compensation_limit_m: float = 0.02,
         align_tolerance_m: float = 0.002,
         descend_tolerance_m: float = 0.0015,
         close_dwell_steps: int = 12,
@@ -138,6 +152,8 @@ class ScriptedPickPlaceExpert:
         release_open_step_m: float = 0.0005,
         retreat_step_m: float = 0.001,
         recover_phase_from_state: bool = False,
+        latch_layout_setpoints: bool = False,
+        brake_only_near_table: bool = False,
     ) -> None:
         self.env = env
         self.device = env.device
@@ -148,10 +164,18 @@ class ScriptedPickPlaceExpert:
         self.retreat_height_m = float(retreat_height_m)
         # Wide enough that a 30 mm cube passes between the pads untouched on the way down.
         self.pre_grasp_gap_m = float(pre_grasp_gap_m if pre_grasp_gap_m is not None else env.obj_size[1] + 0.020)
-        # Gripper G2's coupled mimic chain closes with a small repeatable +Y bias.
-        # Approaching 1 mm toward -Y keeps the cube inside the 5 mm pre-lift drag
-        # contract at the far +Y edge without changing the learned observation API.
+        # Legacy recipes use a fixed offset.  The stable G2 profile can instead
+        # add a bounded term toward the workspace centre; this compensates the
+        # layout-dependent arm tracking error without a discontinuous edge case.
         self.grasp_y_compensation_m = float(grasp_y_compensation_m)
+        self.grasp_y_centering_gain = float(grasp_y_centering_gain)
+        self.grasp_y_compensation_limit_m = float(grasp_y_compensation_limit_m)
+        if not math.isfinite(self.grasp_y_compensation_m):
+            raise ValueError("grasp_y_compensation_m must be finite")
+        if not math.isfinite(self.grasp_y_centering_gain) or self.grasp_y_centering_gain < 0.0:
+            raise ValueError("grasp_y_centering_gain must be finite and non-negative")
+        if not math.isfinite(self.grasp_y_compensation_limit_m) or self.grasp_y_compensation_limit_m <= 0.0:
+            raise ValueError("grasp_y_compensation_limit_m must be finite and positive")
         self.align_tolerance_m = float(align_tolerance_m)
         self.descend_tolerance_m = float(descend_tolerance_m)
         self.close_dwell_steps = int(close_dwell_steps)
@@ -184,6 +208,13 @@ class ScriptedPickPlaceExpert:
         self.release_open_step_m = float(release_open_step_m)
         self.retreat_step_m = float(retreat_step_m)
         self.recover_phase_from_state = bool(recover_phase_from_state)
+        # Open-loop layout waypoints: latch object XY at episode start and the
+        # placement wrist XY on first transport, then stop chasing measured cube
+        # vibration. Off by default so legacy recipes keep the closed-loop expert.
+        self.latch_layout_setpoints = bool(latch_layout_setpoints)
+        # When set, coarse set-down stays at coarse_step_m until the cube enters
+        # near_table_margin_m; only that band uses the millimetre-scale landing cap.
+        self.brake_only_near_table = bool(brake_only_near_table)
 
         self.grasp_offset_z = float(env.grasp_center_offset_z)
         self.obj_rest_z = float(env.obj_rest_z_base)
@@ -205,6 +236,10 @@ class ScriptedPickPlaceExpert:
         self.prev_finger = torch.zeros(self.num_envs, 3, device=self.device)
         self.prev_command = torch.zeros(self.num_envs, 3, device=self.device)
         self.bias_valid = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._latched_obj_xy = torch.zeros(self.num_envs, 2, device=self.device)
+        self._latched_place_xy = torch.zeros(self.num_envs, 2, device=self.device)
+        self._obj_xy_valid = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._place_xy_valid = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.max_command_m = min(float(env.action_scale), float(env.max_cartesian_delta_m))
 
     def reset_idx(self, envs_mask: torch.Tensor) -> None:
@@ -220,9 +255,59 @@ class ScriptedPickPlaceExpert:
         self.hold_bias[envs_mask] = 0.0
         self.prev_command[envs_mask] = 0.0
         self.bias_valid[envs_mask] = False
+        self._obj_xy_valid[envs_mask] = False
+        self._place_xy_valid[envs_mask] = False
 
     def phase_counts(self) -> dict[str, int]:
         return {name: int((self.phase == index).sum().item()) for index, name in PHASE_NAMES.items()}
+
+    def _release_hover_band_m(self) -> float:
+        return max(4e-5, 0.25 * abs(self.release_hover_m))
+
+    def _approach_xy(self, obj: torch.Tensor) -> torch.Tensor:
+        """XY used to reach the cube: latched waypoint or the live object pose."""
+        if not self.latch_layout_setpoints:
+            return obj[:, :2]
+        xy = obj[:, :2].clone()
+        valid = self._obj_xy_valid
+        xy[valid] = self._latched_obj_xy[valid]
+        return xy
+
+    def _grasp_y_compensation(self, approach_xy: torch.Tensor) -> torch.Tensor:
+        """Continuous, bounded Y bias evaluated from the latched object layout."""
+
+        compensation = self.grasp_y_compensation_m - self.grasp_y_centering_gain * approach_xy[:, 1]
+        return torch.clamp(
+            compensation,
+            -self.grasp_y_compensation_limit_m,
+            self.grasp_y_compensation_limit_m,
+        )
+
+    def _place_wrist_xy(self, finger: torch.Tensor, obj: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Wrist XY that puts the grasped cube on the place target.
+
+        The live cube-to-target correction is applied once when the waypoint is
+        latched; afterwards the wrist tracks that fixed point instead of cube jitter.
+        """
+        live = finger[:, :2] + (target[:, :2] - obj[:, :2])
+        if not self.latch_layout_setpoints:
+            return live
+        xy = live.clone()
+        valid = self._place_xy_valid
+        xy[valid] = self._latched_place_xy[valid]
+        return xy
+
+    def _update_layout_latches(self, finger: torch.Tensor, obj: torch.Tensor, target: torch.Tensor) -> None:
+        if not self.latch_layout_setpoints:
+            return
+        need_obj = ~self._obj_xy_valid
+        if bool(need_obj.any()):
+            self._latched_obj_xy[need_obj] = obj[need_obj, :2]
+            self._obj_xy_valid[need_obj] = True
+        need_place = (self.phase >= PHASE_TRANSPORT) & ~self._place_xy_valid
+        if bool(need_place.any()):
+            self._latched_place_xy[need_place] = finger[need_place, :2] + (target[need_place, :2] - obj[need_place, :2])
+            self._place_xy_valid[need_place] = True
 
     def __call__(self, observations=None, *, recover_phase_from_state: bool | None = None) -> torch.Tensor:
         del observations  # The expert reads simulator state directly.
@@ -238,10 +323,12 @@ class ScriptedPickPlaceExpert:
         height_error = obj[:, 2] - self.obj_rest_z
 
         self._update_hold_bias(finger)
+        self._update_layout_latches(finger, obj, target)
         recover = self.recover_phase_from_state if recover_phase_from_state is None else bool(recover_phase_from_state)
         if recover:
             self._recover_phases(finger, obj, gap, obj_speed, height_error)
         self._advance_phases(finger, obj, target, gap, obj_speed, height_error)
+        self._update_layout_latches(finger, obj, target)
 
         desired, max_xy_step, max_z_step, gap_target = self._phase_setpoints(
             finger,
@@ -292,6 +379,10 @@ class ScriptedPickPlaceExpert:
         previous = self.phase
         recovered = torch.full_like(previous, PHASE_APPROACH)
         xy_to_obj = torch.norm(finger[:, :2] - obj[:, :2], dim=-1)
+        if self.latch_layout_setpoints:
+            approach_xy = self._approach_xy(obj).clone()
+            approach_xy[:, 1] = approach_xy[:, 1] + self._grasp_y_compensation(approach_xy)
+            xy_to_obj = torch.norm(finger[:, :2] - approach_xy, dim=-1)
         grasp_z = self.obj_rest_z + self.grasp_offset_z
         approach_z = grasp_z + self.hover_m
         aligned = xy_to_obj < self.align_tolerance_m
@@ -309,7 +400,12 @@ class ScriptedPickPlaceExpert:
 
         carried_near = env.ever_carried_near.bool()
         recovered[carried_near] = PHASE_SETDOWN
-        table_ready = carried_near & (height_error.abs() < 0.001) & (obj_speed < self.settle_speed_m_s)
+        hover_band = self._release_hover_band_m()
+        table_ready = (
+            carried_near
+            & (height_error.abs() <= max(0.001, self.release_hover_m + hover_band))
+            & (obj_speed < self.settle_speed_m_s)
+        )
         recovered[table_ready] = PHASE_SETTLE
 
         released = env.release_started.bool()
@@ -356,6 +452,10 @@ class ScriptedPickPlaceExpert:
         env = self.env
         phase = self.phase
         xy_to_obj = torch.norm(finger[:, :2] - obj[:, :2], dim=-1)
+        if self.latch_layout_setpoints:
+            approach_xy = self._approach_xy(obj).clone()
+            approach_xy[:, 1] = approach_xy[:, 1] + self._grasp_y_compensation(approach_xy)
+            xy_to_obj = torch.norm(finger[:, :2] - approach_xy, dim=-1)
         xy_to_target = torch.norm(obj[:, :2] - target[:, :2], dim=-1)
         grasp_z = self.obj_rest_z + self.grasp_offset_z
         approach_z = grasp_z + self.hover_m
@@ -378,17 +478,19 @@ class ScriptedPickPlaceExpert:
         advance |= (phase == PHASE_TRANSPORT) & (xy_to_target < 0.003)
 
         # Release just above the table instead of holding the cube against it. A long
-        # dwell under contact turns tiny action perturbations into horizontal impulses;
-        # a 20 um drop has only about 0.02 m/s of ideal free-fall speed and stays below
-        # the landing limit with useful margin.
-        at_release_hover = ((height_error - self.release_hover_m).abs() < 0.00004) & (obj_speed < self.settle_speed_m_s)
+        # dwell under contact turns tiny action perturbations into horizontal impulses.
+        # The band scales with release_hover_m so a 1 mm hover is reachable; a 20 um
+        # drop still has only about 0.02 m/s of ideal free-fall speed.
+        hover_band = self._release_hover_band_m()
+        at_release_hover = (height_error <= self.release_hover_m + hover_band) & (obj_speed < self.settle_speed_m_s)
         advance |= (phase == PHASE_SETDOWN) & at_release_hover
 
         # Everything the strict release gate checks must already hold before the pads
         # start opening: the first opening step is the one that gets graded.
+        table_height_ok = height_error.abs() <= max(0.001, self.release_hover_m + hover_band)
         release_ready = (
             (xy_to_target < 0.008)
-            & (height_error.abs() < 0.001)
+            & table_height_ok
             & (obj_speed < self.settle_speed_m_s)
             & env.ever_carried_near
             & (self.dwell >= self.settle_dwell_steps)
@@ -418,9 +520,13 @@ class ScriptedPickPlaceExpert:
         max_z_step = torch.full((self.num_envs, 1), self.coarse_step_m, device=self.device)
         gap_target = torch.full((self.num_envs,), self.close_gap_m, device=self.device)
 
+        approach_xy = self._approach_xy(obj)
+        place_xy = self._place_wrist_xy(finger, obj, target)
+
         approach = phase == PHASE_APPROACH
-        desired[approach, 0] = obj[approach, 0]
-        desired[approach, 1] = obj[approach, 1] + self.grasp_y_compensation_m
+        desired[approach, 0] = approach_xy[approach, 0]
+        grasp_y_compensation = self._grasp_y_compensation(approach_xy)
+        desired[approach, 1] = approach_xy[approach, 1] + grasp_y_compensation[approach]
         desired[approach, 2] = grasp_z + self.hover_m
         gap_target[approach] = self.pre_grasp_gap_m
 
@@ -428,8 +534,8 @@ class ScriptedPickPlaceExpert:
         # step change cannot be tracked: the wrist keeps coasting for several control
         # steps, which is what pushed the cube's entry speed over the landing limit.
         descend = phase == PHASE_DESCEND
-        desired[descend, 0] = obj[descend, 0]
-        desired[descend, 1] = obj[descend, 1] + self.grasp_y_compensation_m
+        desired[descend, 0] = approach_xy[descend, 0]
+        desired[descend, 1] = approach_xy[descend, 1] + grasp_y_compensation[descend]
         desired[descend, 2] = grasp_z
         gap_target[descend] = self.pre_grasp_gap_m
         grasp_remaining = (finger[:, 2] - grasp_z).abs().unsqueeze(-1)
@@ -464,28 +570,40 @@ class ScriptedPickPlaceExpert:
         max_z_step[lift] = self.lift_step_m
 
         # Steering by the cube's own error rather than the wrist's keeps an off-centre
-        # grasp from turning into an equal placement offset.
-        cube_to_target = target[:, :2] - obj[:, :2]
+        # grasp from turning into an equal placement offset. When layout setpoints are
+        # latched, that correction is applied once at transport entry.
         transport = phase == PHASE_TRANSPORT
-        desired[transport, 0] = finger[transport, 0] + cube_to_target[transport, 0]
-        desired[transport, 1] = finger[transport, 1] + cube_to_target[transport, 1]
+        desired[transport, 0] = place_xy[transport, 0]
+        desired[transport, 1] = place_xy[transport, 1]
         desired[transport, 2] = carry_z
 
         setdown = phase == PHASE_SETDOWN
-        desired[setdown, 0] = finger[setdown, 0] + cube_to_target[setdown, 0]
-        desired[setdown, 1] = finger[setdown, 1] + cube_to_target[setdown, 1]
+        desired[setdown, 0] = place_xy[setdown, 0]
+        desired[setdown, 1] = place_xy[setdown, 1]
         release_descent = (height_error - self.release_hover_m).clamp(min=0.0)
         desired[setdown, 2] = finger[setdown, 2] - release_descent[setdown]
-        setdown_ramp = torch.clamp(
-            self.setdown_ramp_gain * (height_error - self.setdown_ramp_offset_m).unsqueeze(-1),
-            self.near_table_z_step_m,
-            self.descend_step_m,
-        )
-        # A firmly gripped cube inherits every bit of wrist motion, so the whole set-down
-        # keeps horizontal corrections at the landing-speed budget rather than only the
-        # last two centimetres. Transport already closes the gap to a few millimetres.
-        max_xy_step[setdown] = self.near_table_xy_step_m
-        max_z_step[setdown] = setdown_ramp[setdown]
+        if self.brake_only_near_table:
+            max_xy_step[setdown] = self.coarse_step_m
+            max_z_step[setdown] = self.descend_step_m
+            near = setdown & (height_error <= self.near_table_margin_m)
+            setdown_ramp = torch.clamp(
+                self.setdown_ramp_gain * height_error.unsqueeze(-1),
+                min(self.near_table_z_step_m, 0.0002),
+                self.near_table_z_step_m,
+            )
+            max_xy_step[near] = self.near_table_xy_step_m
+            max_z_step[near] = setdown_ramp[near]
+        else:
+            setdown_ramp = torch.clamp(
+                self.setdown_ramp_gain * (height_error - self.setdown_ramp_offset_m).unsqueeze(-1),
+                self.near_table_z_step_m,
+                self.descend_step_m,
+            )
+            # A firmly gripped cube inherits every bit of wrist motion, so the whole
+            # set-down keeps horizontal corrections at the landing-speed budget rather
+            # than only the last two centimetres.
+            max_xy_step[setdown] = self.near_table_xy_step_m
+            max_z_step[setdown] = setdown_ramp[setdown]
         # Transport already gets the cube within 3 mm of target. Stop correcting XY in
         # the last 5 mm of descent so table proximity cannot amplify a harmless
         # correction into a lateral contact impulse.

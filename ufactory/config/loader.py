@@ -244,9 +244,6 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             field="task.parameters.simulation_pre_release_relax_duration_s",
             allow_zero=True,
         )
-        simulation_substeps = int(task_parameters["simulation_substeps"])
-        if simulation_substeps < 1 or simulation_substeps != float(task_parameters["simulation_substeps"]):
-            raise ConfigError("task.parameters.simulation_substeps must be a positive integer")
         collision_margin = float(data["safety"]["min_collision_distance_m"])
         if (
             object_size[0] + 2.0 * (wall + collision_margin) >= box_size[0]
@@ -330,11 +327,17 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         gripper_duration_s=_positive(motion_data["gripper_duration_s"], field="motion.gripper_duration_s"),
     )
     simulation_data = data["simulation"]
+    raw_simulation_substeps = simulation_data["substeps"]
+    if isinstance(raw_simulation_substeps, bool) or not isinstance(raw_simulation_substeps, int):
+        raise ConfigError("simulation.substeps must be a positive integer")
+    simulation_substeps = int(raw_simulation_substeps)
+    if simulation_substeps < 1:
+        raise ConfigError("simulation.substeps must be a positive integer")
     simulation = SimulationConfig(
         backend=str(simulation_data["backend"]),
         precision=str(simulation_data["precision"]),
         seed=int(simulation_data["seed"]),
-        substeps=int(simulation_data["substeps"]),
+        substeps=simulation_substeps,
         constraint_solver=str(simulation_data["constraint_solver"]),
         solver_iterations=int(simulation_data["solver_iterations"]),
         noslip_iterations=int(simulation_data["noslip_iterations"]),

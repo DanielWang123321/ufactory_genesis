@@ -26,8 +26,6 @@ task:
     workspace_upper_m: [0.65, 0.35, 0.55]
     place_success_distance_m: 0.04
     success_hold_steps: 5
-    # Match trajectory pick-place / runtime simulation default (build_scene substeps).
-    substeps: 8
   allowed_contacts:
     start: []
     "home->pregrasp": []

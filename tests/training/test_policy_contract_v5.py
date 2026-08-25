@@ -24,7 +24,8 @@ def test_public_contact_recipe_keeps_fixed_layout_policy_contract() -> None:
     reward = recipe["reward"]
     train = recipe["train"]
 
-    assert env["num_obs"] == 44
+    assert env["num_obs"] == 48
+    assert env["include_scripted_action_hint"] is True
     assert env["num_actions"] == 4
     assert env["fixed_demo_layout"] is True
     assert env["include_normalized_layout_offsets"] is False
@@ -63,7 +64,7 @@ def test_public_beta_policy_samples_stay_inside_action_contract() -> None:
     recipe = load_training_recipe(PUBLIC_PICK_PLACE / "recipe.yaml")
     obs = TensorDict(
         {
-            "policy": torch.randn(4096, 44),
+            "policy": torch.randn(4096, 48),
             "privileged": torch.randn(4096, 6),
         },
         batch_size=[4096],

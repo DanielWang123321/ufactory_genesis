@@ -1,79 +1,136 @@
 {
   "artifact": {
-    "checkpoint": "model_199.pt",
-    "checkpoint_iteration": 199,
-    "original_checkpoint_sha256": "9381387a30efbbc102289052569c0804c868db8d5d5eb5332b88a7513f61b0f7",
-    "published_config_sha256": "cc8590c6cb029b27969efc01f315e6ad9de66d3475d5dc72f67832052406508a",
-    "source_experiment": "pp-contact-release-brake-seed1",
-    "training_project_version": "0.2.11",
-    "evaluation_project_version": "0.2.12",
-    "original_manifest_code_version": "unknown",
-    "training_seed": 1
+    "checkpoint": "model_299_g2stable.pt",
+    "checkpoint_iteration": 299,
+    "checkpoint_sha256": "f2142a639e850928310e764464b83706a08b01f111fce5dcb975e456def783f2",
+    "published_config_sha256": "a02b646e73ac3174c8f30afa476b92c3db3ffde97f0431b7d24ad19b5d149175",
+    "source_experiment": "v0213g-fixed-ppo-seed7",
+    "training_project_version": "0.2.13",
+    "training_seed": 7
   },
   "dependency_contract": {
-    "genesis_world": "1.3.1",
-    "rsl_rl_lib": "5.4.2"
-  },
-  "physics_contract": {
-    "constraint_solver": "newton",
-    "friction_cone": "elliptic",
-    "contact_resolution": "signorini",
-    "solver_iterations": 100,
-    "noslip_iterations": 0,
-    "constraint_time_constant_s": 0.005
+    "genesis_world": "1.3.3",
+    "quadrants": "1.3.0",
+    "rsl_rl_lib": "5.4.2",
+    "torch": "2.10.0"
   },
   "evaluation": {
-    "deterministic_gate": {
-      "fixed_64": "64/64",
-      "fixed_64_quality": "64/64",
-      "seed_batch_matrix": "9/9",
-      "seed_batch_matrix_episodes": "219/219",
-      "seeds": [
-        1,
-        7,
-        17
-      ],
+    "fixed_action_noise_bank": {
+      "action_noise_bank_sha256": "5fc60a01f15541719f6877a121c3931bc0705c52e37246b74d8c2b9714bab771",
+      "action_noise_seed": 20260817,
+      "action_noise_std": 0.02,
+      "grasp_success": "512/512",
+      "lift_success": "512/512",
+      "p99_final_xy_error_mm": 0.926,
+      "p99_post_release_drift_mm": 0.071,
+      "p99_pre_lift_drag_mm": 0.354,
+      "post_release_recontact_count": 0,
+      "quality_success": "512/512",
+      "report_sha256": "26b6b2d6de0e2b78d1cf74ef661aff647c90e3e2ff3fc9ea8969f481d79901ea",
+      "robustness_target": 0.99,
+      "robustness_target_pass": true,
+      "scenario_bank_sha256": "2238202c52c6c76f570ad477143a81c67d2773d532a0e44d3d7e0aa375dbeb0b",
+      "success": "512/512",
+      "zero_action_or_ik_faults": true
+    },
+    "fixed_bank": {
+      "episodes": 64,
+      "p99_final_xy_error_mm": 0.644,
+      "p99_post_release_drift_mm": 0.044,
+      "p99_pre_lift_drag_mm": 0.303,
+      "quality_success": "64/64",
+      "report_sha256": "9ec34b816992c25545ab17f939b1827017eb832df10c2110fe76d34d5074a14a",
+      "scenario_bank_sha256": "2238202c52c6c76f570ad477143a81c67d2773d532a0e44d3d7e0aa375dbeb0b",
+      "success": "64/64",
+      "zero_action_or_ik_faults": true
+    },
+    "seed_batch_matrix": {
+      "episodes_passed": "219/219",
       "parallel_environment_counts": [
         1,
         8,
         64
       ],
-      "p99_final_xy_error_mm": 2.85,
-      "p99_post_release_drift_mm": 0.35,
-      "p99_pre_lift_drag_mm": 0.86,
+      "results": [
+        {
+          "episodes": 1,
+          "num_envs": 1,
+          "report_sha256": "f8d30706fe939767778c60a43049f43d95705d7cd7e81191bd60ef651c4b7d57",
+          "seed": 1
+        },
+        {
+          "episodes": 8,
+          "num_envs": 8,
+          "report_sha256": "d0dc3e112c909d567a5f9e14f80ff3891066f6de4fe208e6555ef5841d66c6ca",
+          "seed": 1
+        },
+        {
+          "episodes": 64,
+          "num_envs": 64,
+          "report_sha256": "716ceb07bd17cf8f8508117c1f7426a09aa022a33aa52a14dfd661ee289dbe84",
+          "seed": 1
+        },
+        {
+          "episodes": 1,
+          "num_envs": 1,
+          "report_sha256": "244516dcec10c1b0e3edda5726a3a82f568c5d8968a6b4d894b224185de78369",
+          "seed": 7
+        },
+        {
+          "episodes": 8,
+          "num_envs": 8,
+          "report_sha256": "5251f04da3b9550a493301add0b483499f5f931a5fb20ff2dbf4f7512c4d9204",
+          "seed": 7
+        },
+        {
+          "episodes": 64,
+          "num_envs": 64,
+          "report_sha256": "c178eb39f5f7c7777894eb2fbd1bb2edca92b00b7dcc82a4cb10ece31c61f176",
+          "seed": 7
+        },
+        {
+          "episodes": 1,
+          "num_envs": 1,
+          "report_sha256": "899753480edb823fc306f2d6d5210fba0dc32796888c005bacaabf3ea9e93ff7",
+          "seed": 17
+        },
+        {
+          "episodes": 8,
+          "num_envs": 8,
+          "report_sha256": "1c59fc43e76a04f08a5280ad3636e9f28d159706111eaf25b1ed02adaf981292",
+          "seed": 17
+        },
+        {
+          "episodes": 64,
+          "num_envs": 64,
+          "report_sha256": "fa446e1c2dfbf05dfe8bbadaf67e6e500f4ca7b6fe09dbcf815645b8078ec903",
+          "seed": 17
+        }
+      ],
+      "runs_passed": "9/9",
+      "seeds": [
+        1,
+        7,
+        17
+      ],
       "zero_action_or_ik_faults": true
-    },
-    "fixed_action_noise_bank": {
-      "action_noise_seed": 20260731,
-      "action_noise_std": 0.02,
-      "action_noise_bank_sha256": "0e683e2328fc49b5370da3337bd145be64a87211ff8aa01ccffcae602fb804eb",
-      "scenario_bank_sha256": "eb4f8514539fd94e53181b2f69996b74a0bc7049389dadb1410cb32e57af92bd",
-      "grasp_success": "512/512",
-      "lift_success": "512/512",
-      "place_success": "512/512",
-      "quality_success": "512/512",
-      "post_release_recontact_count": 120,
-      "success": "512/512",
-      "success_rate": 1.0,
-      "p99_final_xy_error_mm": 8.35,
-      "p99_post_release_drift_mm": 0.73,
-      "p99_pre_lift_drag_mm": 1.05,
-      "robustness_target": 0.99,
-      "robustness_target_pass": true,
-      "zero_action_or_ik_faults": true,
-      "post_release_recontact_is_gate": false
     }
   },
+  "policy_contract": {
+    "action_dim": 4,
+    "observation_dim": 48,
+    "scripted_action_hint": true,
+    "scripted_action_hint_controller": "scripted_pick_place_expert_v1"
+  },
+  "schema_version": 3,
   "scope": {
     "layout": "fixed +Y",
     "robot": "xArm6 + Gripper G2",
     "supported_platform": "Linux with NVIDIA GPU",
     "unsupported_claims": [
       "random-layout generalization",
-      "zero post-release recontact under action noise",
       "CPU or Windows training",
       "real-robot policy execution"
     ]
-  },
-  "schema_version": 2
+  }
 }

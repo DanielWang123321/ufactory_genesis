@@ -18,6 +18,7 @@ from ufactory.training.logic import (
     drive_to_gap_m,
     gap_m_to_drive,
     leashed_ee_setpoint,
+    near_table_down_penalty,
     near_target_attenuate,
     next_curriculum_stage,
     normalized_pick_place_contact_features,
@@ -414,6 +415,36 @@ def test_arm_target_ee_pos_clips_cartesian_delta() -> None:
     target, unclipped = arm_target_ee_pos(current, huge, action_scale=0.05, max_cartesian_delta_m=0.02)
     assert torch.all(unclipped.abs() > 0.02)
     assert torch.all((target - current).abs() <= 0.02 + 1e-6)
+
+
+def test_near_table_down_penalty_only_hits_fast_held_descent() -> None:
+    obs = pick_place_observation(
+        joint_pos=torch.zeros(3, 6),
+        joint_vel=torch.zeros(3, 6),
+        ee_base=torch.tensor([[0.30, 0.00, 0.04], [0.30, 0.00, 0.04], [0.30, 0.00, 0.20]]),
+        gripper_gap=torch.tensor([0.022, 0.022, 0.022]),
+        obj_base=torch.tensor([[0.30, 0.30, 0.03], [0.30, 0.30, 0.03], [0.30, 0.30, 0.12]]),
+        target_base=torch.tensor([[0.30, 0.30, 0.015], [0.30, 0.30, 0.015], [0.30, 0.30, 0.015]]),
+        grasped=torch.tensor([True, True, True]),
+        ever_grasped=torch.tensor([True, True, True]),
+    )
+    predicted = torch.tensor(
+        [
+            [0.0, 0.0, -1.0, 0.0],
+            [0.0, 0.0, -0.20, 0.0],
+            [0.0, 0.0, -1.0, 0.0],
+        ]
+    )
+    penalty = near_table_down_penalty(
+        obs,
+        predicted,
+        obj_rest_z_m=0.015,
+        height_m=0.045,
+        max_down_action=0.316,
+    )
+    assert float(penalty[0]) > 0.0
+    assert float(penalty[1]) == pytest.approx(0.0)
+    assert float(penalty[2]) == pytest.approx(0.0)
 
 
 def test_reward_close_gripper_peaks_at_target_gap() -> None:

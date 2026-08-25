@@ -25,8 +25,8 @@ def test_make_rigid_options_resolves_project_defaults() -> None:
     options = make_rigid_options(_fake_genesis())
     assert options.kwargs == {
         "constraint_solver": "NEWTON",
-        "friction_cone": "ELLIPTIC",
-        "contact_resolution": "SIGNORINI",
+        "friction_cone": "PYRAMIDAL",
+        "contact_resolution": "CONVEX",
         "iterations": 100,
         "noslip_iterations": 0,
         "constraint_timeconst": 0.005,

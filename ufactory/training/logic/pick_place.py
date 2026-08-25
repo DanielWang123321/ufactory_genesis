@@ -26,6 +26,7 @@ __all__ = [
     "normalized_ee_setpoint_residual",
     "normalized_pick_place_contact_features",
     "normalized_pick_place_quality_features",
+    "near_table_down_penalty",
     "pick_place_observation",
     "reward_action_penalty",
     "reward_align",
@@ -163,6 +164,37 @@ def cartesian_delta_to_action(
     if response_exponent == 1.0:
         return normalized
     return torch.sign(normalized) * normalized.abs() ** (1.0 / response_exponent)
+
+
+POLICY_PREFIX_OBJ_Z = 18
+POLICY_PREFIX_GRASPED = 28
+
+
+def near_table_down_penalty(
+    observations: torch.Tensor,
+    predicted_actions: torch.Tensor,
+    *,
+    obj_rest_z_m: float,
+    height_m: float,
+    max_down_action: float,
+) -> torch.Tensor:
+    """Penalize faster-than-brake downward actions while holding near the table.
+
+    The 30-dimensional observation prefix puts object z at index 18 and the
+    grasped flag at 28. The clone that already carries to the target still
+    commands a coarse descent there; this term is the Z counterpart of the
+    far-open gripper penalty.
+    """
+
+    if height_m <= 0.0:
+        raise ValueError("height_m must be positive")
+    if max_down_action < 0.0:
+        raise ValueError("max_down_action must be non-negative")
+    height = observations[:, POLICY_PREFIX_OBJ_Z] - float(obj_rest_z_m)
+    grasped = observations[:, POLICY_PREFIX_GRASPED] > 0.5
+    near = grasped & (height <= float(height_m))
+    excess = torch.relu(-predicted_actions[:, 2] - float(max_down_action))
+    return near.float() * excess.square()
 
 
 def arm_target_ee_pos(

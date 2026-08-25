@@ -1,0 +1,13 @@
+{
+  "action_dim": 4,
+  "checkpoint_file": "model_299_g2stable.pt",
+  "checkpoint_sha256": "f2142a639e850928310e764464b83706a08b01f111fce5dcb975e456def783f2",
+  "code_version": "f800155cd92fd2a958527051ef3e123bca241c8f",
+  "config_sha256": "a02b646e73ac3174c8f30afa476b92c3db3ffde97f0431b7d24ad19b5d149175",
+  "dof": 4,
+  "executor_action_contract": "normalized_cartesian_delta_xyz+normalized_gripper_gap_delta",
+  "observation_dim": 48,
+  "robot_key": "xarm6_1305",
+  "schema_version": 1,
+  "task": "pick_place"
+}

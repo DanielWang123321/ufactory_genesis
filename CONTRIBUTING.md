@@ -27,7 +27,7 @@ pip install -e ".[sim,rl]"   # public fixed-layout RL example + ufactory.trainin
 pip install -e ".[showcase]"
 ```
 
-The `[sim]` extra requires `genesis-world>=1.3.1` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.3.1; `[rl]` requires RSL-RL 5.3.0+ and the lock pins 5.4.2. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
+The `[sim]` extra requires `genesis-world>=1.3.3` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.3.3 and Quadrants 1.3.0; `[rl]` requires RSL-RL 5.3.0+ and the lock pins 5.4.2. Genesis 1.3.2 and older are unsupported. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
 
 0.2.x is Alpha: public APIs may break between minor versions. The first supported freeze is planned for 0.3.x after the move to a UFACTORY organization repository — see [ROADMAP.md](ROADMAP.md).
 

@@ -16,7 +16,11 @@ environment:
   genesis_performance_mode: true
   randomize_initial_episode_length: true
   actor_output_tanh: false
-  num_obs: 44
+  # Layered guidance: the policy observes the scripted guide action (4 extra columns,
+  # 44 -> 48). Disclosed per the v0.2.12 precedent; the guide shares the hashed expert
+  # config below, so BC labels and observations can never disagree.
+  num_obs: 48
+  include_scripted_action_hint: true
   num_actions: 4
   include_commanded_gap: true
   include_previous_action: true
@@ -26,6 +30,25 @@ environment:
   use_contact_holding: true
   privileged_critic_obs: true
   strict_action_bounds: true
+  # Hashed expert parameters shared by BC labelling and the observation hint.
+  scripted_action_hint_controller: scripted_pick_place_expert_v1
+  scripted_action_hint_config:
+    latch_layout_setpoints: true
+    brake_only_near_table: true
+    grasp_y_compensation_m: 0.0
+    grasp_y_centering_gain: 0.06
+    grasp_y_compensation_limit_m: 0.003
+    close_gap_m: 0.022
+    near_table_margin_m: 0.045
+    near_table_xy_step_m: 0.0004
+    near_table_z_step_m: 0.0006
+    setdown_ramp_offset_m: 0.0
+    setdown_ramp_gain: 0.10
+    release_hover_m: 0.0001
+    coarse_step_m: 0.005
+    descend_step_m: 0.003
+    landing_brake_speed_m_s: 0.025
+    landing_brake_max_step_m: 0.0005
   # Plan: 0.01 → 0.005 so near-table 0.03 m/s (~0.6 mm/step) is reachable
   # without squeezing actions into a ±0.06 band. Squared response keeps fine
   # control near zero; commanded integration stops zero-action sink.
@@ -41,7 +64,6 @@ environment:
   contact_force_scale_n: 5.0
   contact_force_threshold_n: 0.05
   success_history_len: 4096
-  stiffen_gripper_mimic: true
   fixed_demo_layout: true
   randomize_target: false
   curriculum_initial_stage: 0
@@ -51,7 +73,7 @@ environment:
   curriculum_stage1_grasp_rate: 0.90
   curriculum_stage2_place_rate: 0.90
   curriculum_stage3_place_rate: 0.85
-  place_phase_reset_frac: 0.10
+  place_phase_reset_frac: 0.40
   place_phase_hover_z_m: 0.07
   carry_phase_reset_frac: 0.30
   carry_phase_hover_z_m: 0.10
@@ -76,7 +98,13 @@ environment:
   landing_max_down_speed_m_s: 0.050
   near_table_xy_action_height_m: 0.025
   release_action_threshold: 0.05
-  release_command_margin_m: 0.0005
+  # Release-intent hysteresis. The hold regulator parks the commanded gap at
+  # close_gap (about 22 mm); with gripper_delta_mm=4 the integrated command
+  # random-walks ~1.4 mm per episode under sigma=0.02 action noise, so the old
+  # 0.5 mm default latched phantom releases at the pickup every episode. A real
+  # release ramps the command to 45-84 mm, so an 18 mm intent margin only adds
+  # ~0.3 s of detection lag while the pads are still on the cube.
+  release_command_margin_m: 0.018
   quality_velocity_obs_scale_m_s: 0.25
   clean_lift_reward_scale_m: 0.005
   grasp_centering_reward_scale_m: 0.005
@@ -112,7 +140,7 @@ train:
     entropy_coef: 0.005
     gamma: 0.99
     lam: 0.95
-    learning_rate: 3.0e-05
+    learning_rate: 1.0e-05
     max_grad_norm: 1.0
     num_learning_epochs: 5
     num_mini_batches: 8

@@ -58,7 +58,6 @@ class PackagingLayout:
     simulation_pre_release_relax_gap_m: float
     simulation_pre_release_relax_duration_s: float
     simulation_home_settle_s: float
-    simulation_substeps: int
     lift_success_clearance_m: float
     home_success_distance_m: float
     tool_tip_offset_z_m: float
@@ -152,7 +151,6 @@ def packaging_layout(config: ResolvedRuntimeConfig) -> PackagingLayout:
         simulation_pre_release_relax_gap_m=float(p["simulation_pre_release_relax_gap_m"]),
         simulation_pre_release_relax_duration_s=float(p["simulation_pre_release_relax_duration_s"]),
         simulation_home_settle_s=float(p["simulation_home_settle_s"]),
-        simulation_substeps=int(p["simulation_substeps"]),
         lift_success_clearance_m=float(p["lift_success_clearance_m"]),
         home_success_distance_m=float(p["home_success_distance_m"]),
         tool_tip_offset_z_m=float(gripper.tool_tip_offset_z_m),

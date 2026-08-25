@@ -30,6 +30,7 @@ from ufactory.training import (
     write_training_config,
     validate_and_load_rsl_checkpoint,
 )
+from ufactory.training.logic.pick_place import cartesian_delta_to_action, near_table_down_penalty
 from ufactory.training.transfer import (
     constrain_actor_to_appended_observation_columns,
     constrain_actor_to_layout_residual,
@@ -127,6 +128,13 @@ def fit_actor(
     reference_actions: torch.Tensor | None = None,
     reference_mask: torch.Tensor | None = None,
     reference_anchor_weight: float = 0.0,
+    action_component_weights: torch.Tensor | None = None,
+    far_open_penalty: float = 0.0,
+    carry_near_dist_m: float = 0.040,
+    near_table_down_penalty_weight: float = 0.0,
+    obj_rest_z_m: float = 0.015,
+    near_table_height_m: float = 0.045,
+    max_down_action: float = 0.0,
 ) -> tuple[float, float]:
     """Fit the Beta mean to the expert action and pin how wide the distribution is.
 
@@ -137,12 +145,29 @@ def fit_actor(
     """
     optimizer = torch.optim.Adam(actor.parameters(), lr=learning_rate)
     sample_count = observations.shape[0]
+    action_dim = int(actions.shape[-1])
     if sample_weights is None:
         sample_weights = torch.ones(sample_count, dtype=torch.float32)
     if sample_weights.shape != (sample_count,):
         raise ValueError(f"sample_weights must have shape ({sample_count},), got {tuple(sample_weights.shape)}")
     if not bool(torch.all(sample_weights > 0.0)):
         raise ValueError("sample_weights must be positive")
+    if action_component_weights is None:
+        action_component_weights = torch.ones(action_dim, dtype=torch.float32)
+    if tuple(action_component_weights.shape) != (action_dim,):
+        raise ValueError(
+            f"action_component_weights must have shape ({action_dim},), got {tuple(action_component_weights.shape)}"
+        )
+    if not bool(torch.all(action_component_weights > 0.0)):
+        raise ValueError("action_component_weights must be positive")
+    if far_open_penalty < 0.0:
+        raise ValueError("far_open_penalty must be non-negative")
+    if near_table_down_penalty_weight < 0.0:
+        raise ValueError("near_table_down_penalty_weight must be non-negative")
+    if max_down_action < 0.0:
+        raise ValueError("max_down_action must be non-negative")
+    if carry_near_dist_m <= 0.0:
+        raise ValueError("carry_near_dist_m must be positive")
     if reference_anchor_weight < 0.0:
         raise ValueError("reference_anchor_weight must be non-negative")
     if reference_actions is not None:
@@ -167,7 +192,12 @@ def fit_actor(
             weight_batch = sample_weights[index].to(device, non_blocking=True)
             predicted, concentration = beta_mean_and_concentration(actor, obs_batch)
             weight_sum = weight_batch.sum().clamp_min(1e-8)
-            mse_per_sample = torch.mean(torch.square(predicted - action_batch), dim=-1)
+            component_weights = action_component_weights.to(device=device, dtype=predicted.dtype)
+            component_weights = component_weights / component_weights.mean().clamp_min(1e-8)
+            mse_per_sample = torch.mean(
+                component_weights * torch.square(predicted - action_batch),
+                dim=-1,
+            )
             mse = torch.sum(weight_batch * mse_per_sample) / weight_sum
             spread_per_sample = torch.mean(
                 torch.square(torch.log(concentration) - log_target),
@@ -175,6 +205,24 @@ def fit_actor(
             )
             spread = torch.sum(weight_batch * spread_per_sample) / weight_sum
             loss = mse + concentration_weight * spread
+            if far_open_penalty > 0.0:
+                # 30-dim prefix: obj_to_target xyz at 25:28, grasped at 28.
+                xy_to_target = torch.linalg.norm(obs_batch[:, 25:27], dim=-1)
+                grasped = obs_batch[:, 28] > 0.5
+                far_open = grasped & (xy_to_target > float(carry_near_dist_m))
+                open_action = torch.relu(predicted[:, 3])
+                extra = torch.sum(weight_batch * far_open.float() * open_action.square()) / weight_sum
+                loss = loss + float(far_open_penalty) * extra
+            if near_table_down_penalty_weight > 0.0:
+                down_pen = near_table_down_penalty(
+                    obs_batch,
+                    predicted,
+                    obj_rest_z_m=float(obj_rest_z_m),
+                    height_m=float(near_table_height_m),
+                    max_down_action=float(max_down_action),
+                )
+                extra = torch.sum(weight_batch * down_pen) / weight_sum
+                loss = loss + float(near_table_down_penalty_weight) * extra
             if reference_actions is not None and reference_anchor_weight > 0.0:
                 anchor_mask = reference_mask[index].to(device, non_blocking=True)
                 if bool(anchor_mask.any()):
@@ -213,6 +261,39 @@ def _freeze_actor_except_beta_output(actor) -> tuple[int, ...]:
     if output.bias is not None:
         output.bias.requires_grad_(True)
     return tuple(range(output.out_features))
+
+
+def _freeze_actor_except_action_dims(actor, action_dims: tuple[int, ...]) -> tuple[int, ...]:
+    """Freeze everything except Beta alpha/beta rows for selected action dimensions."""
+
+    if not action_dims:
+        raise ValueError("action_dims must not be empty")
+    linear_layers = [module for module in actor.mlp.modules() if isinstance(module, torch.nn.Linear)]
+    if not linear_layers:
+        raise ValueError("actor does not expose a linear Beta output layer")
+    output = linear_layers[-1]
+    if output.out_features % 2 != 0:
+        raise ValueError("Beta output width must be twice the action dimension")
+    action_dim = output.out_features // 2
+    if any(dim < 0 or dim >= action_dim for dim in action_dims):
+        raise ValueError(f"action dims must be in [0, {action_dim})")
+    trainable_rows = tuple(dim + offset * action_dim for offset in (0, 1) for dim in action_dims)
+    frozen_rows = tuple(index for index in range(output.out_features) if index not in set(trainable_rows))
+    for parameter in actor.parameters():
+        parameter.requires_grad_(False)
+    output.weight.requires_grad_(True)
+    if output.bias is not None:
+        output.bias.requires_grad_(True)
+
+    def _mask_rows(grad: torch.Tensor) -> torch.Tensor:
+        masked = grad.clone()
+        masked[list(frozen_rows)] = 0
+        return masked
+
+    output.weight.register_hook(_mask_rows)
+    if output.bias is not None:
+        output.bias.register_hook(_mask_rows)
+    return trainable_rows
 
 
 def _reference_actor_actions(
@@ -255,6 +336,16 @@ def main() -> None:
         help="Freeze inherited actor features and fit only all Beta alpha/beta output rows",
     )
     parser.add_argument(
+        "--fit-output-action-dims",
+        type=int,
+        nargs="+",
+        choices=(0, 1, 2, 3),
+        help=(
+            "Freeze inherited features and fit only Beta alpha/beta rows for these "
+            "action dimensions (0=x, 1=y, 2=z, 3=gripper)"
+        ),
+    )
+    parser.add_argument(
         "--fit-appended-layout-columns-only",
         action="store_true",
         help=(
@@ -281,6 +372,21 @@ def main() -> None:
         type=int,
         choices=range(5),
         help="Pin demonstration collection to one curriculum stage.",
+    )
+    parser.add_argument(
+        "--grasp-phase-reset-frac",
+        type=float,
+        help="Override grasp-phase reset fraction while collecting demonstrations",
+    )
+    parser.add_argument(
+        "--carry-phase-reset-frac",
+        type=float,
+        help="Override carry-phase reset fraction while collecting demonstrations",
+    )
+    parser.add_argument(
+        "--place-phase-reset-frac",
+        type=float,
+        help="Override place-phase reset fraction while collecting demonstrations",
     )
     parser.add_argument(
         "--rollout-steps",
@@ -331,6 +437,65 @@ def main() -> None:
         action="store_true",
         help="Remove phase-duration bias before applying optional quality priorities",
     )
+    parser.add_argument(
+        "--transport-phase-weight",
+        type=float,
+        default=1.0,
+        help="Multiply transport-phase BC samples after optional phase balancing",
+    )
+    parser.add_argument(
+        "--close-lift-phase-weight",
+        type=float,
+        default=1.0,
+        help="Multiply close and lift BC samples after optional phase balancing",
+    )
+    parser.add_argument(
+        "--release-phase-weight",
+        type=float,
+        help=("Multiply release and retreat BC samples. Default 2 with --quality-phase-weighting, otherwise 1"),
+    )
+    parser.add_argument(
+        "--near-table-phase-weight",
+        type=float,
+        help=(
+            "Multiply set-down and settle BC samples. Default 4 with "
+            "--quality-phase-weighting, otherwise 1. Prefer this over "
+            "--quality-phase-weighting when release should stay unboosted"
+        ),
+    )
+    parser.add_argument(
+        "--action-y-weight",
+        type=float,
+        default=1.0,
+        help="Relative MSE weight for the Cartesian Y action versus the other three dims",
+    )
+    parser.add_argument(
+        "--action-z-weight",
+        type=float,
+        default=1.0,
+        help="Relative MSE weight for the Cartesian Z action versus the other three dims",
+    )
+    parser.add_argument(
+        "--action-gripper-weight",
+        type=float,
+        default=1.0,
+        help="Relative MSE weight for the gripper action versus the Cartesian dims",
+    )
+    parser.add_argument(
+        "--far-open-penalty",
+        type=float,
+        default=0.0,
+        help="Penalize positive gripper actions while grasped farther than carry_near_dist from the target",
+    )
+    parser.add_argument(
+        "--near-table-down-penalty",
+        type=float,
+        default=0.0,
+        help=(
+            "Penalize downward Z actions faster than the expert landing-brake step "
+            "while grasped within near_table_margin of the table"
+        ),
+    )
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
@@ -340,6 +505,7 @@ def main() -> None:
         bool(value)
         for value in (
             args.fit_output_head_only,
+            args.fit_output_action_dims,
             args.fit_appended_layout_columns_only,
             args.fit_layout_residual_only,
         )
@@ -357,6 +523,37 @@ def main() -> None:
         parser.error("--reference-anchor-weight requires --warm-start")
     if args.warm_start is not None and not args.warm_start.is_file():
         parser.error(f"warm-start checkpoint not found: {args.warm_start}")
+    if args.transport_phase_weight <= 0.0:
+        parser.error("--transport-phase-weight must be positive")
+    if args.close_lift_phase_weight <= 0.0:
+        parser.error("--close-lift-phase-weight must be positive")
+    if args.release_phase_weight is not None and args.release_phase_weight <= 0.0:
+        parser.error("--release-phase-weight must be positive")
+    if args.near_table_phase_weight is not None and args.near_table_phase_weight <= 0.0:
+        parser.error("--near-table-phase-weight must be positive")
+    if args.action_y_weight <= 0.0:
+        parser.error("--action-y-weight must be positive")
+    if args.action_z_weight <= 0.0:
+        parser.error("--action-z-weight must be positive")
+    if args.action_gripper_weight <= 0.0:
+        parser.error("--action-gripper-weight must be positive")
+    if args.far_open_penalty < 0.0:
+        parser.error("--far-open-penalty must be non-negative")
+    if args.near_table_down_penalty < 0.0:
+        parser.error("--near-table-down-penalty must be non-negative")
+    if args.fit_output_action_dims and args.warm_start is None:
+        parser.error("--fit-output-action-dims requires --warm-start")
+
+    release_weight = (
+        float(args.release_phase_weight)
+        if args.release_phase_weight is not None
+        else (2.0 if args.quality_phase_weighting else 1.0)
+    )
+    near_table_weight = (
+        float(args.near_table_phase_weight)
+        if args.near_table_phase_weight is not None
+        else (4.0 if args.quality_phase_weighting else 1.0)
+    )
 
     env_cfg, reward_cfg, robot_cfg = build_pick_place_task_configs(
         args.robot,
@@ -370,6 +567,19 @@ def main() -> None:
             int(env_cfg.get("curriculum_max_stage", 4)),
             int(args.curriculum_stage),
         )
+    if args.grasp_phase_reset_frac is not None:
+        if not 0.0 <= args.grasp_phase_reset_frac <= 1.0:
+            parser.error("--grasp-phase-reset-frac must be in [0, 1]")
+        env_cfg["grasp_phase_reset_frac"] = float(args.grasp_phase_reset_frac)
+        env_cfg["grasp_phase_reset_frac_final"] = float(args.grasp_phase_reset_frac)
+    if args.carry_phase_reset_frac is not None:
+        if not 0.0 <= args.carry_phase_reset_frac <= 1.0:
+            parser.error("--carry-phase-reset-frac must be in [0, 1]")
+        env_cfg["carry_phase_reset_frac"] = float(args.carry_phase_reset_frac)
+    if args.place_phase_reset_frac is not None:
+        if not 0.0 <= args.place_phase_reset_frac <= 1.0:
+            parser.error("--place-phase-reset-frac must be in [0, 1]")
+        env_cfg["place_phase_reset_frac"] = float(args.place_phase_reset_frac)
     source_train_noise_std = float(env_cfg.get("train_action_noise_std", 0.0))
     if args.execution_noise_std is not None:
         env_cfg["train_action_noise_std"] = 0.0
@@ -392,6 +602,9 @@ def main() -> None:
         train_cfg["runner"]["transfer_checkpoint"] = str(args.warm_start)
         train_cfg["runner"]["transfer_checkpoint_sha256"] = source_sha256
     train_cfg["runner"]["bc_fit_output_head_only"] = bool(args.fit_output_head_only)
+    train_cfg["runner"]["bc_fit_output_action_dims"] = (
+        None if not args.fit_output_action_dims else [int(dim) for dim in args.fit_output_action_dims]
+    )
     train_cfg["runner"]["bc_fit_appended_layout_columns_only"] = bool(args.fit_appended_layout_columns_only)
     train_cfg["runner"]["bc_fit_layout_residual_only"] = bool(args.fit_layout_residual_only)
     train_cfg["runner"]["bc_reference_anchor_weight"] = float(args.reference_anchor_weight)
@@ -402,6 +615,30 @@ def main() -> None:
     train_cfg["runner"]["bc_execution_noise_seed"] = int(args.execution_noise_seed)
     train_cfg["runner"]["bc_quality_phase_weighting"] = bool(args.quality_phase_weighting)
     train_cfg["runner"]["bc_phase_balanced_weighting"] = bool(args.phase_balanced_weighting)
+    train_cfg["runner"]["bc_transport_phase_weight"] = float(args.transport_phase_weight)
+    train_cfg["runner"]["bc_close_lift_phase_weight"] = float(args.close_lift_phase_weight)
+    train_cfg["runner"]["bc_release_phase_weight"] = float(release_weight)
+    train_cfg["runner"]["bc_near_table_phase_weight"] = float(near_table_weight)
+    train_cfg["runner"]["bc_action_y_weight"] = float(args.action_y_weight)
+    train_cfg["runner"]["bc_action_z_weight"] = float(args.action_z_weight)
+    train_cfg["runner"]["bc_action_gripper_weight"] = float(args.action_gripper_weight)
+    train_cfg["runner"]["bc_far_open_penalty"] = float(args.far_open_penalty)
+    train_cfg["runner"]["bc_near_table_down_penalty"] = float(args.near_table_down_penalty)
+    hint_cfg = env_cfg.get("scripted_action_hint_config") or {}
+    brake_step_m = float(hint_cfg.get("landing_brake_max_step_m", 0.0005))
+    near_table_height_m = float(hint_cfg.get("near_table_margin_m", env_cfg.get("landing_near_table_height_m", 0.045)))
+    max_down_action = float(
+        cartesian_delta_to_action(
+            torch.tensor([brake_step_m]),
+            float(env_cfg.get("action_scale", 0.005)),
+            float(env_cfg.get("action_response_exponent", 1.0)),
+        ).item()
+    )
+    train_cfg["runner"]["bc_near_table_down_max_action"] = max_down_action
+    train_cfg["runner"]["bc_near_table_down_height_m"] = near_table_height_m
+    train_cfg["runner"]["bc_grasp_phase_reset_frac"] = env_cfg.get("grasp_phase_reset_frac")
+    train_cfg["runner"]["bc_carry_phase_reset_frac"] = env_cfg.get("carry_phase_reset_frac")
+    train_cfg["runner"]["bc_place_phase_reset_frac"] = env_cfg.get("place_phase_reset_frac")
 
     log_dir = args.log_dir or Path("outputs") / "rl" / "pick_place" / args.exp_name
     if log_dir.exists():
@@ -475,9 +712,18 @@ def main() -> None:
         Path(__file__).with_name("env.py"),
         Path(__file__).with_name("expert.py"),
         Path(__file__).with_name("trace_utils.py"),
+        Path(__file__).with_name("train.py"),
         args.recipe,
+        repo_root / "ufactory/training/logic/__init__.py",
         repo_root / "ufactory/training/logic/pick_place.py",
         repo_root / "ufactory/training/tasks.py",
+        repo_root / "ufactory/training/artifacts.py",
+        repo_root / "ufactory/training/models.py",
+        repo_root / "ufactory/training/transfer.py",
+        repo_root / "ufactory/simulation/__init__.py",
+        repo_root / "ufactory/simulation/compat.py",
+        repo_root / "ufactory/simulation/g2.py",
+        repo_root / "ufactory/simulation/physics.py",
     ]
     provenance_sources.extend(repo_root / source for source in runtime_config.sources)
     write_run_provenance(
@@ -574,6 +820,11 @@ def main() -> None:
     if args.fit_output_head_only:
         rows = _freeze_actor_except_beta_output(runner.alg.actor)
         print(f"BC fitting only Beta output rows {rows}", flush=True)
+    if args.fit_output_action_dims:
+        rows = _freeze_actor_except_action_dims(
+            runner.alg.actor, tuple(int(dim) for dim in args.fit_output_action_dims)
+        )
+        print(f"BC fitting only Beta action dims {list(args.fit_output_action_dims)} rows {rows}", flush=True)
 
     expert = scripted_pick_place_expert_from_env(env)
     observations: list[torch.Tensor] = []
@@ -609,13 +860,25 @@ def main() -> None:
         dataset_phases = torch.cat(phases)
         dataset_weights = expert_phase_sample_weights(
             dataset_phases,
-            near_table_weight=4.0 if args.quality_phase_weighting else 1.0,
-            release_retreat_weight=2.0 if args.quality_phase_weighting else 1.0,
+            near_table_weight=near_table_weight,
+            release_retreat_weight=release_weight,
+            transport_weight=float(args.transport_phase_weight),
+            close_lift_weight=float(args.close_lift_phase_weight),
             balance_phases=bool(args.phase_balanced_weighting),
         )
         phase_counts = {PHASE_NAMES[phase]: int((dataset_phases == phase).sum().item()) for phase in PHASE_NAMES}
+        phase_mass = {
+            PHASE_NAMES[phase]: float(dataset_weights[dataset_phases == phase].sum().item())
+            for phase in PHASE_NAMES
+            if bool((dataset_phases == phase).any())
+        }
         print(f"  dataset: {dataset_obs.shape[0]} samples", flush=True)
         print(f"  phase samples: {phase_counts}", flush=True)
+        print(f"  phase loss mass: {phase_mass}", flush=True)
+        action_component_weights = torch.tensor(
+            [1.0, float(args.action_y_weight), float(args.action_z_weight), float(args.action_gripper_weight)],
+            dtype=torch.float32,
+        )
         dataset_reference_actions = None
         reference_mask = None
         if reference_actor is not None and args.reference_anchor_weight > 0.0:
@@ -642,6 +905,13 @@ def main() -> None:
             reference_actions=dataset_reference_actions,
             reference_mask=reference_mask,
             reference_anchor_weight=float(args.reference_anchor_weight),
+            action_component_weights=action_component_weights,
+            far_open_penalty=float(args.far_open_penalty),
+            carry_near_dist_m=float(env_cfg.get("carry_near_dist_m", 0.040)),
+            near_table_down_penalty_weight=float(args.near_table_down_penalty),
+            obj_rest_z_m=float(env.obj_rest_z_base),
+            near_table_height_m=float(near_table_height_m),
+            max_down_action=float(max_down_action),
         )
 
     if transfer_guard is not None:

@@ -9,6 +9,7 @@ import pytest
 
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.manipulation.frames import base_to_world_pos, world_to_base_pos
+from ufactory.simulation import G2_PHYSICS_PROFILE
 from ufactory.training import build_pick_place_task_configs
 from ufactory.grippers.g2 import (
     GRIPPER_G2_OPEN_GAP_M,
@@ -55,7 +56,9 @@ def test_pick_place_task_defaults_are_runtime_bound():
     assert env_cfg["gripper_close_mm"] == pytest.approx(22.0)
     assert env_cfg["gripper_delta_mm"] == pytest.approx(4.0)
     assert env_cfg["success_hold_steps"] == 5
-    assert env_cfg["substeps"] == 8
+    assert env_cfg["substeps"] == 32
+    assert env_cfg["physics_profile"] == G2_PHYSICS_PROFILE
+    assert "substeps" not in load_runtime_config("xarm6", task="pick_place").task.parameters
     assert env_cfg["fixed_demo_layout"] is True
     assert env_cfg["place_phase_reset_frac"] == pytest.approx(0.25)
     assert env_cfg["place_phase_hover_z_m"] == pytest.approx(0.07)

@@ -43,7 +43,14 @@ from ufactory.trajectory.scene import (
     RIGID_NOSLIP_ITERATIONS,
     RIGID_SOLVER_ITERATIONS,
 )
-from ufactory.simulation import make_rigid_options
+from ufactory.simulation import (
+    G2_PHYSICS_PROFILE,
+    G2ContactHoldController,
+    configure_g2_mimic_constraints,
+    make_rigid_options,
+    object_finger_contact_forces_n,
+    validate_g2_contact_substeps,
+)
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_pbr_surfaces, glb_view_surface
 from .trace_utils import action_noise_episode_mask, scheduled_action_noise_std
 from ufactory.training.logic import (
@@ -177,6 +184,11 @@ class XArm6PickPlaceEnv:
         self.max_episode_length = math.ceil(float(env_cfg["episode_length_s"]) / self.ctrl_dt)
 
         self.env_cfg = env_cfg
+        self.physics_profile = str(env_cfg.get("physics_profile", G2_PHYSICS_PROFILE))
+        if self.physics_profile != G2_PHYSICS_PROFILE:
+            raise ValueError(
+                f"xArm6 G2 pick-place requires physics_profile={G2_PHYSICS_PROFILE!r}, got {self.physics_profile!r}"
+            )
         # rsl-rl >=5 Logger stores env.cfg alongside the train config.
         self.cfg = env_cfg
         self.reward_scales = reward_cfg.copy()
@@ -337,7 +349,7 @@ class XArm6PickPlaceEnv:
         self.contact_force_scale_n = float(env_cfg.get("contact_force_scale_n", 5.0))
         self.contact_force_threshold_n = float(env_cfg.get("contact_force_threshold_n", 0.05))
         self.include_contact_observations = bool(env_cfg.get("include_contact_observations", False))
-        self.use_contact_holding = bool(env_cfg.get("use_contact_holding", False))
+        self.use_contact_holding = True
         # A held reset must begin at the cube-contact equilibrium, not at the
         # no-load close command. Teleporting every mimic joint to the latter
         # over-penetrates the cube and the first constraint solve ejects it.
@@ -362,8 +374,8 @@ class XArm6PickPlaceEnv:
         cam_pos = (cam_lookat[0] + 0.90, cam_lookat[1] - 1.35, cam_lookat[2] + 0.60)
 
         # Match trajectory build_scene: same substeps / Newton rigid solver settings.
-        self.substeps = int(env_cfg.get("substeps", 8))
-        substep_dt = self.ctrl_dt / float(self.substeps)
+        self.substeps = int(env_cfg["substeps"])
+        substep_dt = validate_g2_contact_substeps(dt=self.ctrl_dt, substeps=self.substeps)
         self.constraint_solver = str(env_cfg.get("constraint_solver", "newton"))
         self.solver_iterations = int(env_cfg.get("solver_iterations", RIGID_SOLVER_ITERATIONS))
         self.noslip_iterations = int(env_cfg.get("noslip_iterations", RIGID_NOSLIP_ITERATIONS))
@@ -492,11 +504,6 @@ class XArm6PickPlaceEnv:
         self.collision_monitor_links = [
             self.robot.get_link(name) for name in robot_cfg.get("collision_monitor_links", [])
         ]
-        # get_links_net_contact_force returns this entity's links in order, so index by
-        # the link's offset within the robot rather than by its global solver index.
-        self._left_finger_row = self.left_finger_link.idx - self.robot.link_start
-        self._right_finger_row = self.right_finger_link.idx - self.robot.link_start
-
         self.arm_joint_names = robot_cfg["arm_joint_names"]
         self.arm_dof_idx = [self.robot.get_joint(name).dofs_idx_local[0] for name in self.arm_joint_names]
         self.gripper_joint_name = robot_cfg["gripper_joint_name"]
@@ -504,8 +511,7 @@ class XArm6PickPlaceEnv:
         self.all_dof_idx = self.arm_dof_idx + self.gripper_dof_idx
 
         self._setup_robot_control(robot_cfg)
-        if env_cfg.get("stiffen_gripper_mimic", True):
-            self._stiffen_gripper_mimic_constraints()
+        configure_g2_mimic_constraints(self.robot)
 
         self.default_gripper_drive = self.gap_m_to_drive_t(
             torch.full((self.num_envs,), self.gripper_open_gap_m, device=self.device, dtype=gs.tc_float)
@@ -660,13 +666,6 @@ class XArm6PickPlaceEnv:
             self.all_gripper_dof_idx,
         )
 
-    def _stiffen_gripper_mimic_constraints(self) -> None:
-        stiff_sol_params = np.array([0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0])
-        mimic_keywords = ("finger", "knuckle")
-        for eq in self.robot.equalities:
-            if any(keyword in eq.name for keyword in mimic_keywords):
-                eq.set_sol_params(stiff_sol_params)
-
     def _default_arm_qpos_from_ik(self, env_cfg: dict) -> torch.Tensor:
         default_ee_base = torch.tensor(
             [env_cfg.get("default_ee_pos", [0.3, 0.0, 0.3])],
@@ -812,6 +811,12 @@ class XArm6PickPlaceEnv:
         self.commanded_gap = torch.full(
             (self.num_envs,), self.gripper_open_gap_m, device=self.device, dtype=gs.tc_float
         )
+        self.gripper_contact_hold = G2ContactHoldController(
+            self.num_envs,
+            device=self.device,
+            dtype=gs.tc_float,
+            initial_gap_m=self.gripper_open_gap_m,
+        )
         self.previous_action = torch.zeros(
             self.num_envs,
             self.num_actions,
@@ -870,6 +875,7 @@ class XArm6PickPlaceEnv:
         # Reset the integrated gripper command to fully open; place bootstrap overrides to
         # closed below since it starts already holding the cube.
         self.commanded_gap[envs_idx] = self.gripper_open_gap_m
+        self.gripper_contact_hold.reset(envs_idx, gap_m=self.commanded_gap[envs_idx])
         self.previous_action[envs_idx] = 0.0
         self.episode_place_success[envs_idx] = False
         self.episode_success[envs_idx] = False
@@ -997,6 +1003,15 @@ class XArm6PickPlaceEnv:
                     default_qpos[held_mask, dof] = self.held_gripper_initial_drive
                 global_held = envs_idx[held_mask]
                 self.commanded_gap[global_held] = self.gripper_close_gap_m
+                held_gap = self.drive_to_gap_m_t(
+                    torch.full(
+                        (len(global_held),),
+                        self.held_gripper_initial_drive,
+                        device=self.device,
+                        dtype=gs.tc_float,
+                    )
+                )
+                self.gripper_contact_hold.prime(global_held, held_gap)
                 self.ever_grasped[global_held] = True
                 self.ever_lifted[global_held] = True
                 # Place bootstrap already starts held above the target: latch the
@@ -1581,13 +1596,31 @@ class XArm6PickPlaceEnv:
             self.gripper_open_gap_m,
         )
         target_gap = self.commanded_gap
-        target_drive = self.gap_m_to_drive_t(target_gap)
+        measured_gap = self.gripper_gap_m()
+        left_force, right_force = self.finger_contact_forces_n()
+        release_intent = (clipped_actions[:, 3] > self.release_action_threshold) & (
+            self.commanded_gap > self.gripper_min_command_gap_m + self.release_command_margin_m
+        )
+        closing = (self.commanded_gap < self.gripper_open_gap_m - 1e-9) & (~release_intent)
+        applied_gap = self.gripper_contact_hold.update(
+            requested_gap_m=self.commanded_gap,
+            measured_gap_m=measured_gap,
+            left_force_n=left_force,
+            right_force_n=right_force,
+            closing=closing,
+            release=release_intent,
+        )
+        target_drive = self.gap_m_to_drive_t(applied_gap)
 
         self._accumulate_action_stats(raw_actions, cart_delta_unclipped, target_gap)
         self.previous_action.copy_(clipped_actions.detach())
         self.robot.control_dofs_position(target_q, self.arm_dof_idx)
         self.robot.control_dofs_position(target_drive.unsqueeze(-1), self.gripper_dof_idx)
-        self.scene.step()
+        try:
+            self.scene.step()
+        except Exception as exc:
+            raise RuntimeError(f"{self.physics_profile} failed during batch step {self.total_env_steps}") from exc
+        self._assert_finite_simulation_state()
         current_finger_center = self.finger_center_base()
         self.ee_velocity_base = (current_finger_center - self.prev_finger_center_base) / self.ctrl_dt
         self.prev_finger_center_base = current_finger_center.detach().clone()
@@ -1712,6 +1745,8 @@ class XArm6PickPlaceEnv:
             "grasp_pos": self.desired_grasp_pos_base().detach().clone(),
             "gap_m": self.gripper_gap_m().detach().clone(),
             "commanded_gap_m": self.commanded_gap.detach().clone(),
+            "applied_gripper_gap_m": self.gripper_contact_hold.applied_gap_m.detach().clone(),
+            "gripper_force_hold_latched": self.gripper_contact_hold.latched.detach().clone(),
             "actions": actions.detach().clone(),
             "policy_actions": policy_actions.detach().clone(),
             "action_noise": action_noise.detach().clone(),
@@ -1948,16 +1983,44 @@ class XArm6PickPlaceEnv:
         )
 
     def finger_contact_forces_n(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """Net contact-force magnitude on each fingertip link."""
-        forces = self.robot.get_links_net_contact_force()
-        left = torch.norm(forces[:, self._left_finger_row, :], dim=-1)
-        right = torch.norm(forces[:, self._right_finger_row, :], dim=-1)
-        return left, right
+        """Object-only contact-force magnitude carried by each fingertip link."""
 
-    def bilateral_contact(self) -> torch.Tensor | None:
-        """True where both pads carry contact load; ``None`` when the check is disabled."""
-        if not self.use_contact_holding:
-            return None
+        contacts = self.obj.get_contacts(with_entity=self.robot, exclude_self_contact=True)
+        left, right = object_finger_contact_forces_n(
+            contacts,
+            left_link_idx=int(self.left_finger_link.idx),
+            right_link_idx=int(self.right_finger_link.idx),
+        )
+        return (
+            left.to(device=self.device, dtype=gs.tc_float),
+            right.to(device=self.device, dtype=gs.tc_float),
+        )
+
+    def _assert_finite_simulation_state(self) -> None:
+        """Stop at the first corrupted environment instead of propagating it."""
+
+        left_force, right_force = self.finger_contact_forces_n()
+        fields = {
+            "robot_qpos": self.robot.get_dofs_position(),
+            "robot_qvel": self.robot.get_dofs_velocity(),
+            "object_pos": self.obj.get_pos(),
+            "object_vel": self.obj.get_vel(),
+            "left_object_contact_force": left_force,
+            "right_object_contact_force": right_force,
+        }
+        for name, value in fields.items():
+            finite = torch.isfinite(value)
+            if bool(finite.all().item()):
+                continue
+            per_env = finite.reshape(self.num_envs, -1).all(dim=1)
+            first_bad = int(torch.nonzero(~per_env, as_tuple=False)[0, 0].item())
+            raise RuntimeError(
+                f"{self.physics_profile} produced NaN or Inf in {name} "
+                f"at batch step {self.total_env_steps}, env {first_bad}"
+            )
+
+    def bilateral_contact(self) -> torch.Tensor:
+        """True where both pads carry object-contact load."""
         left, right = self.finger_contact_forces_n()
         return torch.minimum(left, right) > self.contact_force_threshold_n
 

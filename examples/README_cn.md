@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-v0.2.12 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
+v0.2.13 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
 
 ## 前置条件
 
@@ -30,7 +30,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 4. 支持的 `--robot`：`xarm5`、`xarm6`、`xarm7`、`uf850`、`lite6`。
 
-5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。详见根目录 README「Windows 与无可用 GPU 仿真」。
+5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。CPU PyTorch 的安装说明见根目录 README「安装」一节。
 
 本版公开目录：
 
@@ -42,7 +42,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 | `packaging/` | 多机型装箱展示入口与可选覆盖配置 |
 | `rl/` | Linux/NVIDIA xArm6 + Gripper G2 RL 抓放主线 |
 
-RL 边界以及固定布局、随机方块起点两份安装/评估/训练指引的入口见
+RL 边界以及固定布局安装、评估、训练和发布证据的入口见
 [rl/README_cn.md](rl/README_cn.md)。
 
 ## 可视化
@@ -112,7 +112,7 @@ dynamics-sim-collision-check --robot xarm6 --ip <ip>
 | `--config` | 可选的严格局部覆盖 YAML |
 | `--print-config` | 打印解析后的运行时 YAML 后退出 |
 | `--ip` | 控制器 IP（或设置 `XARM_IP`），用于 `sdk-sim` / `real` |
-| `--calibration` | 逐台精确运动学 YAML（真机必需） |
+| `--calibration` | 逐台精确运动学 YAML（sdk-sim / real 必需） |
 | `--confirm-real` | `--mode real` 的显式确认门 |
 | `--visual` | `sim`：强制 Genesis viewer；`real`：运动学镜像（不支持 dry-run/sdk-sim） |
 | `--report` | 可选报告输出路径 |
@@ -200,14 +200,3 @@ python examples/packaging/run.py \
 ```
 
 真机模式始终只执行一轮。xArm5、xArm7、UF850 的 `--mode real` 会在连接控制器前拒绝，直到启用真实夹爪路径。
-
-## 从 v0.2.6 迁移
-
-| 旧类别 | v0.2.8 路径 |
-|---|---|
-| `examples/view_robot_glb.py`、各机型查看器 | `examples/visualization/view_robot.py --robot <key>` |
-| 根目录/各机型 FK、IK 包装 | `examples/kinematics/verify_{robot,fk,ik}.py` |
-| 各机型抓放包装 | `examples/pick_place/run.py --robot <key>` |
-| 根目录/xArm6 装箱包装 | `examples/packaging/run.py --robot <key>` |
-
-旧路径、bootstrap 文件和下划线前缀的示例内部模块均已直接删除，不提供兼容壳。v0.2.12 RL 入口仍仅支持 `examples.rl.pick_place` 模块方式。

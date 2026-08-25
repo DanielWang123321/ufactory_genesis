@@ -504,6 +504,10 @@ def main() -> None:
         repo_root / "ufactory/training/artifacts.py",
         repo_root / "ufactory/training/models.py",
         repo_root / "ufactory/training/transfer.py",
+        repo_root / "ufactory/simulation/__init__.py",
+        repo_root / "ufactory/simulation/compat.py",
+        repo_root / "ufactory/simulation/g2.py",
+        repo_root / "ufactory/simulation/physics.py",
     ]
     provenance_sources.extend(repo_root / source for source in runtime_config.sources)
     write_run_provenance(

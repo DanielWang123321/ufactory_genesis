@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_version": "0.2.8",
+  "manifest_version": "0.2.13",
   "required_paths": [
     "assets/configs/runtime/motion/default.yaml",
     "assets/configs/runtime/safety/default.yaml",
@@ -24,9 +24,9 @@
   "sha256": {
     "assets/configs/runtime/motion/default.yaml": "ce961bb044f0c95a803fac693bffb7c75b3e78df61ce90e4ab2644e79be73f03",
     "assets/configs/runtime/safety/default.yaml": "29fd72f5863759e2b9167b34fe25723868fc5a633cf1837e7776e12112d71c06",
-    "assets/configs/runtime/simulation/default.yaml": "0a2e0f57dc2b47e56282480bcfe02280781dcb7c6aabfdd708ead3add0a55c1f",
-    "assets/configs/runtime/tasks/pick_place.yaml": "b77ff932bd79feb08f7cfb3c6996643a8960cec64f87699f3fcecbcf54ecfd17",
-    "assets/configs/runtime/tasks/packaging_showcase.yaml": "00dba3138dc2ecbf1d3866e40d9717d79e106b6cf37d719ac5553b3caf5278d9",
+    "assets/configs/runtime/simulation/default.yaml": "a5c4620ffc3826d3038002fedfe938fd87ca25711b70c2a7e51649693a800090",
+    "assets/configs/runtime/tasks/pick_place.yaml": "3437242b0e05c770e5255a9052496fd46d1978bbae06be79c8b031af0c79882a",
+    "assets/configs/runtime/tasks/packaging_showcase.yaml": "8bc71e0ff95ccb5882993e4903bdb84c752aef4fa3f300ca9fd79b98687da2bd",
     "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "6c3b455f0a6f43186376a72caa605b65b426f993b8a5b1cebdc79f1925aff5b7",
     "assets/configs/runtime/tasks/robots/lite6_pick_place.yaml": "ba25ff726165172833aa0ae2aa58ce10bc1286069b0598de8d47e3843bdde3a1",
     "assets/configs/runtime/safety/robots/lite6.yaml": "ce0286385ed3c5b1f809e9c45243bf22f4f9e166df657005c861cdfbdc7a1ecd",

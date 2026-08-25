@@ -2,11 +2,12 @@ schema_version: 1
 task: pick_place
 robot_key: xarm6_1305
 env:
-  num_envs: 20480
+  num_envs: 256
   genesis_performance_mode: true
   randomize_initial_episode_length: true
   actor_output_tanh: false
-  num_obs: 44
+  num_obs: 48
+  include_scripted_action_hint: true
   num_actions: 4
   include_commanded_gap: true
   include_previous_action: true
@@ -16,6 +17,24 @@ env:
   use_contact_holding: true
   privileged_critic_obs: true
   strict_action_bounds: true
+  scripted_action_hint_controller: scripted_pick_place_expert_v1
+  scripted_action_hint_config:
+    latch_layout_setpoints: true
+    brake_only_near_table: true
+    grasp_y_compensation_m: 0.0
+    grasp_y_centering_gain: 0.06
+    grasp_y_compensation_limit_m: 0.003
+    close_gap_m: 0.022
+    near_table_margin_m: 0.045
+    near_table_xy_step_m: 0.0004
+    near_table_z_step_m: 0.0006
+    setdown_ramp_offset_m: 0.0
+    setdown_ramp_gain: 0.1
+    release_hover_m: 0.0001
+    coarse_step_m: 0.005
+    descend_step_m: 0.003
+    landing_brake_speed_m_s: 0.025
+    landing_brake_max_step_m: 0.0005
   action_scale: 0.005
   action_clip: 1.0
   action_response_exponent: 2.0
@@ -28,8 +47,8 @@ env:
   contact_force_scale_n: 5.0
   contact_force_threshold_n: 0.05
   success_history_len: 4096
-  stiffen_gripper_mimic: true
   fixed_demo_layout: true
+  randomize_target: false
   curriculum_initial_stage: 0
   curriculum_max_stage: 0
   curriculum_min_count: 1024
@@ -37,15 +56,13 @@ env:
   curriculum_stage1_grasp_rate: 0.9
   curriculum_stage2_place_rate: 0.9
   curriculum_stage3_place_rate: 0.85
-  place_phase_reset_frac: 0.3
-  place_phase_hover_z_m: 0.05
-  place_phase_table_reset_frac: 0.35
-  place_phase_table_hover_z_m: 0.0
-  carry_phase_reset_frac: 0.15
+  place_phase_reset_frac: 0.4
+  place_phase_hover_z_m: 0.07
+  carry_phase_reset_frac: 0.3
   carry_phase_hover_z_m: 0.1
-  grasp_phase_reset_frac: 0.1
+  grasp_phase_reset_frac: 0.15
   grasp_phase_reset_frac_final: 0.0
-  grasp_phase_anneal_steps: 0
+  grasp_phase_anneal_steps: 12800
   held_gripper_initial_drive: 0.6
   carry_near_dist_m: 0.04
   place_shaping_dist_m: 0.04
@@ -63,13 +80,13 @@ env:
   landing_max_xy_speed_m_s: 0.03
   landing_max_down_speed_m_s: 0.05
   near_table_xy_action_height_m: 0.025
-  near_target_speed_height_m: 0.1
   release_action_threshold: 0.05
-  release_command_margin_m: 0.0005
+  release_command_margin_m: 0.018
   quality_velocity_obs_scale_m_s: 0.25
   clean_lift_reward_scale_m: 0.005
   grasp_centering_reward_scale_m: 0.005
-  runtime_config_sha256: 5f924f41a54b789f2653d71fe993ebf5bffbc5ae273de8429f75dd56bac5289c
+  runtime_config_sha256: 654b538ed4062d7d82955ce617fc37a7dc974c6a53d3df0ab0e38c91dd80e7ed
+  physics_profile: g2_stable_v1_3_3
   episode_length_s: 10.0
   ctrl_dt: 0.02
   table_height: 0.4
@@ -87,7 +104,14 @@ env:
   - 0.55
   grasp_center_offset_z: 0.065
   lift_height_m: 0.08
-  substeps: 8
+  substeps: 32
+  constraint_solver: newton
+  solver_iterations: 100
+  noslip_iterations: 0
+  friction_cone: pyramidal
+  contact_resolution: convex
+  constraint_time_constant_s: 0.005
+  use_gjk_collision: true
   gripper_open_mm: 84.0
   gripper_close_mm: 22.0
   obj_size:
@@ -119,14 +143,7 @@ env:
   - 0.34
   - 0.35
   - 0.015
-  constraint_solver: newton
-  solver_iterations: 100
-  noslip_iterations: 0
-  friction_cone: elliptic
-  contact_resolution: signorini
-  constraint_time_constant_s: 0.005
-  use_gjk_collision: null
-  randomize_target: false
+  training_steps_per_iteration: 128
 reward:
   approach_potential: 25.0
   grasp_settle_action: 30.0
@@ -136,19 +153,13 @@ reward:
   grasp_centering: 60.0
   grasp_lift_progress: 60.0
   transport_progress: 40.0
-  descent_progress: 40.0
-  precision_progress: 180.0
-  near_table_xy_action: 800.0
-  near_target_speed: 120.0
-  landing_quality: 250.0
-  hard_landing: 700.0
-  release_readiness_progress: 160.0
-  ready_opening: 200.0
-  premature_opening: 20.0
+  descent_progress: 60.0
+  near_table_xy_action: 100.0
+  hard_landing: 100.0
+  release_readiness_progress: 60.0
   valid_release: 200.0
-  invalid_release: 40.0
+  invalid_release: 200.0
   success: 100.0
-  release_clearance_opening: 80.0
   action_penalty: 0.0005
   table_collision: 2.0
   workspace_violation: 2.0
@@ -228,10 +239,10 @@ train:
     class_name: PPO
     clip_param: 0.2
     desired_kl: 0.01
-    entropy_coef: 0.012
+    entropy_coef: 0.005
     gamma: 0.99
     lam: 0.95
-    learning_rate: 1.0e-06
+    learning_rate: 1.0e-05
     max_grad_norm: 1.0
     num_learning_epochs: 5
     num_mini_batches: 8
@@ -269,24 +280,20 @@ train:
     - privileged
   runner:
     checkpoint: -1
-    experiment_name: pp-contact-release-brake-seed1
+    experiment_name: v0213g-fixed-ppo-seed7
     load_run: -1
     log_interval: 1
-    max_iterations: 200
+    max_iterations: 300
     record_interval: -1
     resume: false
     resume_path: null
     run_name: ''
     transfer_mode: actor_only
     transfer_checkpoint: null
-    transfer_checkpoint_sha256: 56a50ec74245c7ffc0088da152c37deedfbd618211e81a6f0318d80082680699
-    warm_start_output_scale: 1.0
-    warm_start_gripper_head_scale: 1.0
-    warm_start_z_head_scale: 1.0
-    warm_start_xy_head_scale: 1.0
+    transfer_checkpoint_sha256: 60eb47d2256b40c2707596a28cc1a339032376ff84475fd478655eddce3405c3
   num_steps_per_env: 128
   save_interval: 10
-  seed: 1
+  seed: 7
   run_name: ''
   logger: tensorboard
-config_sha256: cc8590c6cb029b27969efc01f315e6ad9de66d3475d5dc72f67832052406508a
+config_sha256: a02b646e73ac3174c8f30afa476b92c3db3ffde97f0431b7d24ad19b5d149175

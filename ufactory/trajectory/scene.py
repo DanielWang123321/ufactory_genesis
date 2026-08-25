@@ -30,7 +30,9 @@ from ufactory.simulation import (
     DEFAULT_NOSLIP_ITERATIONS,
     DEFAULT_SOLVER_ITERATIONS,
     GenesisRuntimeManager,
+    configure_g2_mimic_constraints,
     make_rigid_options,
+    validate_g2_contact_substeps,
 )
 from ufactory.robots.paths import robot_visual_glb_urdf, robot_urdf
 from ufactory.robots.registry import joint_names
@@ -90,8 +92,6 @@ FINGER_Z_OFFSET_LITE6 = 0.0543
 RIGID_SOLVER_ITERATIONS = DEFAULT_SOLVER_ITERATIONS
 RIGID_NOSLIP_ITERATIONS = DEFAULT_NOSLIP_ITERATIONS
 RIGID_CONSTRAINT_TIMECONST = DEFAULT_CONSTRAINT_TIMECONST
-MIMIC_CONSTRAINT_SOL_PARAMS = (0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0)
-
 # Painted wood block and silicone fingertip pads. Size and mass come from the
 # shared pick-place runtime configuration; contact stiffness remains code policy.
 OBJ_FRICTION = 1.0
@@ -285,15 +285,14 @@ def build_scene(
     robot_key: str = "xarm6",
     rate: float = 50.0,
     show_viewer: bool = False,
-    substeps: int = 8,
+    substeps: int = 32,
     constraint_solver: str = DEFAULT_CONSTRAINT_SOLVER,
     solver_iterations: int = RIGID_SOLVER_ITERATIONS,
     noslip_iterations: int = RIGID_NOSLIP_ITERATIONS,
     friction_cone: str = DEFAULT_FRICTION_CONE,
     contact_resolution: str = DEFAULT_CONTACT_RESOLUTION,
     constraint_timeconst: float = RIGID_CONSTRAINT_TIMECONST,
-    use_gjk_collision: bool | None = None,
-    stiffen_gripper_mimic: bool = True,
+    use_gjk_collision: bool | None = True,
     contact_sol_params: tuple[float, float, float, float, float, float, float] | None = None,
     base_pos: tuple[float, float, float] | None = None,
     visual_model: Literal["glb", "stl"] = "glb",
@@ -323,6 +322,11 @@ def build_scene(
     if gripper is None:
         raise ValueError(f"{profile.key} has no supported gripper for the trajectory scene")
     defaults = _robot_defaults(profile.key)
+
+    dt = 1.0 / float(rate)
+    if gripper.family == "g2":
+        validate_g2_contact_substeps(dt=dt, substeps=substeps)
+    substeps = int(substeps)
 
     robot_base = tuple(float(v) for v in (base_pos if base_pos is not None else defaults["base_pos"]))
     obj_size = tuple(float(value) for value in (obj_size if obj_size is not None else defaults["obj_size"]))
@@ -368,7 +372,6 @@ def build_scene(
             robot_name=profile.robot_name,
             joint_count=profile.dof,
         )
-    dt = 1.0 / float(rate)
     substep_dt = dt / int(substeps)
     constraint_timeconst = max(float(constraint_timeconst), 2.0 * substep_dt)
     camera_lookat = _base_to_world(robot_base, (0.30, 0.15, 0.10))
@@ -452,8 +455,8 @@ def build_scene(
     left_finger = robot.get_link(gripper.finger_link_names[0])
     right_finger = robot.get_link(gripper.finger_link_names[1])
 
-    if stiffen_gripper_mimic:
-        _stiffen_gripper_mimic_constraints(robot)
+    if gripper.family == "g2":
+        configure_g2_mimic_constraints(robot)
     if contact_sol_params is not None:
         _set_contact_sol_params((obj, left_finger, right_finger), contact_sol_params)
 
@@ -600,14 +603,6 @@ def drive_for_gap_m(gap_m: float, gripper: GripperControlParams) -> float:
         return float(gripper.close_pos)
     open_fraction = max(0.0, min(1.0, (float(gap_m) - closed_gap) / span))
     return gripper.close_pos + open_fraction * (gripper.open_pos - gripper.close_pos)
-
-
-def _stiffen_gripper_mimic_constraints(robot) -> None:
-    """Tighten G2 mimic equalities so contact loads do not shear the linkage."""
-    sol_params = np.asarray(MIMIC_CONSTRAINT_SOL_PARAMS, dtype=np.float64)
-    for eq in robot.equalities:
-        if "finger" in eq.name or "knuckle" in eq.name:
-            eq.set_sol_params(sol_params)
 
 
 def _set_contact_sol_params(entities_or_links, sol_params) -> None:

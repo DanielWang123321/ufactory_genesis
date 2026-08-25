@@ -19,10 +19,12 @@ task:
     simulation_grasp_center_compensation_xy_m: [0.0025, 0.0000]
     simulation_arm_kp_scale: 1.5
     simulation_release_duration_s: 0.020
+    # Genesis 1.3.3 at 32 substeps releases cleanly with the one-tick full-open
+    # target. A gradual preload-relax phase lets gravity start the drop before
+    # the G2 fingers have opened by the required 3 mm clearance.
     simulation_pre_release_relax_gap_m: 0.029
-    simulation_pre_release_relax_duration_s: 0.200
+    simulation_pre_release_relax_duration_s: 0.000
     simulation_home_settle_s: 0.800
-    simulation_substeps: 8
 
     table_size_m: [0.800, 1.200, 0.040]
     table_center_m: [0.337, 0.000, -0.020]
@@ -40,9 +42,8 @@ task:
     grasp_settle_s: 0.500
     pre_release_settle_s: 0.500
     post_release_settle_s: 0.500
-    # Softened with simulation_substeps=8 (GPU cost tradeoff); was 0.025 at
-    # substeps=32. Measured three-cycle scatter can exceed 100 mm on UF850.
-    place_success_distance_m: 0.150
+    # The unified 32-substep Genesis baseline restores the 25 mm accuracy gate.
+    place_success_distance_m: 0.025
     lift_success_clearance_m: 0.100
     home_success_distance_m: 0.010
   allowed_contacts:

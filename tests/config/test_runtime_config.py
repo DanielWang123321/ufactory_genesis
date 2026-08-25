@@ -60,14 +60,42 @@ def test_dump_config_contains_sources_and_hash_without_importing_genesis():
     assert "sha256:" in text
 
 
-def test_default_rigid_contact_profile_is_explicit_genesis_131() -> None:
+def test_default_rigid_contact_profile_is_explicit_genesis_133() -> None:
     simulation = load_runtime_config("xarm6").simulation
+    assert simulation.substeps == 32
     assert simulation.constraint_solver == "newton"
-    assert simulation.friction_cone == "elliptic"
-    assert simulation.contact_resolution == "signorini"
+    assert simulation.friction_cone == "pyramidal"
+    assert simulation.contact_resolution == "convex"
     assert simulation.solver_iterations == 100
     assert simulation.noslip_iterations == 0
     assert simulation.constraint_time_constant_s == pytest.approx(0.005)
+    assert simulation.use_gjk_collision is True
+
+
+@pytest.mark.parametrize("value", [0, -1, 31.5, 32.0, True, "many", "32"])
+def test_simulation_substeps_must_be_a_positive_integer(tmp_path: Path, value: object) -> None:
+    path = tmp_path / "bad_substeps.yaml"
+    yaml_value = f"'{value}'" if isinstance(value, str) else str(value).lower()
+    path.write_text(
+        f"schema_version: 1\nsimulation:\n  substeps: {yaml_value}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match=r"simulation\.substeps must be a positive integer"):
+        load_runtime_config("xarm6", config_path=path)
+
+
+@pytest.mark.parametrize(
+    ("task", "legacy_field"),
+    [("pick_place", "substeps"), ("packaging_showcase", "simulation_substeps")],
+)
+def test_legacy_task_substep_fields_are_rejected(tmp_path: Path, task: str, legacy_field: str) -> None:
+    path = tmp_path / "legacy_substeps.yaml"
+    path.write_text(
+        f"schema_version: 1\ntask:\n  parameters:\n    {legacy_field}: 32\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConfigError, match=rf"unknown configuration field: task\.parameters\.{legacy_field}"):
+        load_runtime_config("xarm6", task=task, config_path=path)
 
 
 @pytest.mark.parametrize(
@@ -76,8 +104,8 @@ def test_default_rigid_contact_profile_is_explicit_genesis_131() -> None:
         ("friction_cone: future", "friction cone"),
         ("contact_resolution: future", "contact resolution"),
         ("constraint_solver: cg", "constraint solver"),
-        ("noslip_iterations: 5", "elliptic friction"),
-        ("friction_cone: pyramidal", "signorini contact"),
+        ("friction_cone: elliptic\n  noslip_iterations: 5", "elliptic friction"),
+        ("contact_resolution: signorini", "signorini contact"),
     ],
 )
 def test_invalid_rigid_contact_configuration_is_rejected(tmp_path: Path, body: str, match: str) -> None:

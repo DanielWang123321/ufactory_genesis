@@ -47,16 +47,21 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/rl/pick_place/evaluate.py",
         "examples/rl/pick_place/expert.py",
         "examples/rl/pick_place/pretrain_bc.py",
+        "examples/rl/pick_place/bc_gate.py",
+        "examples/rl/pick_place/overnight.py",
         "examples/rl/pick_place/train.py",
         "examples/rl/pick_place/trace_utils.py",
         "examples/rl/pick_place/recipe.yaml",
         "examples/rl/pick_place/scenarios/fixed_seed17000_n512.json",
-        "examples/rl/pick_place/pretrained/model_199.pt",
-        "examples/rl/pick_place/pretrained/config.yaml",
-        "examples/rl/pick_place/pretrained/model_199.checkpoint_manifest.json",
-        "examples/rl/pick_place/pretrained/evaluation_summary.json",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
+    assert sorted(path.name for path in (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").iterdir()) == [
+        "config.yaml",
+        "evaluation_summary.json",
+        "model_299_g2stable.checkpoint_manifest.json",
+        "model_299_g2stable.pt",
+    ]
+    assert not (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "random_start").exists()
     assert not (PROJECT_ROOT / "examples" / "manipulation").exists()
     assert not (PROJECT_ROOT / "examples" / "_grasp_place_traj.py").exists()
     assert not (PROJECT_ROOT / "examples" / "_pick_place_traj.py").exists()

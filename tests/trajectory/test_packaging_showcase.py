@@ -414,7 +414,7 @@ def test_packaging_cycle_preparation_clears_release_control_and_restores_block(
     assert held == {"robot": robot, "scene": scene, "ctx": ctx, "steps": showcase.SETTLE_STEPS}
 
 
-def test_packaging_sim_relaxes_preload_and_steps_release_target() -> None:
+def test_packaging_sim_skips_preload_relax_and_steps_release_target() -> None:
     from ufactory.manipulation.packaging.simulation import _with_sim_release_timing
     from ufactory.trajectory.segments import Program, Segment
 
@@ -456,14 +456,12 @@ def test_packaging_sim_relaxes_preload_and_steps_release_target() -> None:
     assert program.segments[2].duration == pytest.approx(2.0)
     assert tuned.segments[0] is grip
     assert tuned.segments[1] is pre_release
-    assert tuned.segments[2].label == "pre-release-relax"
+    assert len(tuned.segments) == 3
+    assert tuned.segments[2].label == "release"
     assert tuned.segments[2].gap_start == pytest.approx(0.022)
-    assert tuned.segments[2].gap_end == pytest.approx(0.029)
-    assert tuned.segments[2].duration == pytest.approx(0.2)
-    assert tuned.segments[2].samples_count == 10
-    assert tuned.segments[3].gap_start == pytest.approx(0.029)
-    assert tuned.segments[3].duration == pytest.approx(0.02)
-    assert tuned.segments[3].samples_count == 1
+    assert tuned.segments[2].gap_end == pytest.approx(0.084)
+    assert tuned.segments[2].duration == pytest.approx(0.02)
+    assert tuned.segments[2].samples_count == 1
 
 
 @pytest.mark.parametrize(
@@ -508,7 +506,6 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
         _with_sim_release_timing,
         init_showcase_robot,
         prepare_packaging_cycle,
-        stiffen_gripper_mimic_constraints,
     )
     from ufactory.simulation import GenesisRuntimeManager
     from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
@@ -519,7 +516,6 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
     enable_glb_pbr_surfaces()
     with GenesisRuntimeManager(config.simulation):
         scene, robot, block, display_layout = build_packaging_scene(show_viewer=False)
-        stiffen_gripper_mimic_constraints(robot)
         showcase_ctx = init_showcase_robot(robot, display_layout, scene)
         prepare_packaging_cycle(scene, robot, block, display_layout, showcase_ctx)
         traj_ctx = _trajectory_context(scene, robot, block, display_layout, showcase_ctx, config)

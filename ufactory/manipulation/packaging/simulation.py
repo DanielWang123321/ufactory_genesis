@@ -109,17 +109,6 @@ def grasp_gripper_drive(obj_size: tuple[float, float, float]) -> float:
     return gripper_drive_for_gap(target_gap)
 
 
-def stiffen_gripper_mimic_constraints(robot) -> None:
-    """Tighten mimic joint equality constraints so gripper linkages stay rigid."""
-    import numpy as np
-
-    stiff_sol_params = np.array([0.01, 0.1, 0.0001, 0.001, 0.001, 0.5, 2.0])
-    mimic_keywords = ("finger", "knuckle")
-    for eq in robot.equalities:
-        if any(kw in eq.name for kw in mimic_keywords):
-            eq.set_sol_params(stiff_sol_params)
-
-
 def collect_gripper_snapshot(robot) -> dict:
     """All gripper joint q/qd plus knuckle link poses — linkage whip diagnostics."""
     joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
@@ -751,8 +740,6 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
         show_viewer=False,
         runtime_config=runtime_config,
     )
-
-    stiffen_gripper_mimic_constraints(robot)
 
     print(f"{runtime_config.robot.key} packaging showcase — Ctrl+C to exit")
     print(f"  simulation.backend={runtime_config.simulation.backend}")

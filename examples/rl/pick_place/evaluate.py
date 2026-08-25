@@ -62,8 +62,7 @@ from .trace_utils import (
 )
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
-DEFAULT_CHECKPOINT_DIR = EXAMPLE_DIR / "pretrained"
-DEFAULT_CHECKPOINT = DEFAULT_CHECKPOINT_DIR / "model_199.pt"
+DEFAULT_CHECKPOINT = EXAMPLE_DIR / "pretrained" / "model_299_g2stable.pt"
 DEFAULT_SCENARIO_BANK = EXAMPLE_DIR / "scenarios" / "fixed_seed17000_n512.json"
 
 
@@ -265,6 +264,8 @@ def _apply_eval_env_overrides(args: argparse.Namespace, env_cfg: dict) -> None:
     env_cfg["grasp_phase_reset_frac"] = float(args.grasp_phase_reset_frac)
     env_cfg["grasp_phase_reset_frac_final"] = float(args.grasp_phase_reset_frac)
     env_cfg["carry_phase_reset_frac"] = float(args.carry_phase_reset_frac)
+    if args.release_command_margin_m is not None:
+        env_cfg["release_command_margin_m"] = float(args.release_command_margin_m)
     args.resolved_acceptance_profile = None
     if args.acceptance_profile is not None:
         args.resolved_acceptance_profile = apply_pick_place_acceptance_profile(
@@ -285,6 +286,8 @@ def _apply_eval_env_overrides(args: argparse.Namespace, env_cfg: dict) -> None:
     print(f"place_phase_table_reset_frac (eval override): {env_cfg['place_phase_table_reset_frac']}")
     print(f"carry_phase_reset_frac (eval override): {env_cfg['carry_phase_reset_frac']}")
     print(f"grasp_phase_reset_frac (eval override): {env_cfg['grasp_phase_reset_frac']}")
+    if args.release_command_margin_m is not None:
+        print(f"release_command_margin_m (eval override): {env_cfg['release_command_margin_m']}")
     print(
         "train_action_noise_std (eval override): "
         f"{saved_train_noise_std:g} -> {env_cfg['train_action_noise_std']:g}; "
@@ -294,6 +297,7 @@ def _apply_eval_env_overrides(args: argparse.Namespace, env_cfg: dict) -> None:
 
 _EVALUATION_COMPATIBILITY_ENV_KEYS = (
     "runtime_config_sha256",
+    "physics_profile",
     "num_obs",
     "num_actions",
     "include_commanded_gap",
@@ -360,6 +364,8 @@ def _evaluation_compatibility_signature(args: argparse.Namespace, artifact: dict
     env_cfg["grasp_phase_reset_frac"] = float(args.grasp_phase_reset_frac)
     env_cfg["grasp_phase_reset_frac_final"] = float(args.grasp_phase_reset_frac)
     env_cfg["carry_phase_reset_frac"] = float(args.carry_phase_reset_frac)
+    if args.release_command_margin_m is not None:
+        env_cfg["release_command_margin_m"] = float(args.release_command_margin_m)
     if args.acceptance_profile is not None:
         apply_pick_place_acceptance_profile(env_cfg, args.acceptance_profile)
     return {
@@ -1159,9 +1165,10 @@ def main():
         action="append",
         default=None,
         help=(
-            "Path to model checkpoint (.pt). Default: the bundled model_199.pt. "
-            "Repeat the flag to evaluate several checkpoints in one process: the scene is "
-            "built (and kernels compiled) only once, later checkpoints swap in ~0.1 s"
+            "Path to a complete model checkpoint bundle (.pt + config + manifest). "
+            f"Default: the bundled {DEFAULT_CHECKPOINT.name}. Repeat the flag to evaluate "
+            "several checkpoints in one process: the scene is built (and kernels compiled) "
+            "only once, later checkpoints swap in ~0.1 s"
         ),
     )
     parser.add_argument("--log-dir", type=Path)
@@ -1223,7 +1230,7 @@ def main():
     parser.add_argument(
         "--action-noise-seed",
         type=int,
-        default=20260731,
+        default=20260817,
         help="Compatibility seed used when --action-noise-bank is omitted",
     )
     parser.add_argument(
@@ -1329,6 +1336,17 @@ def main():
         help=(
             "Override env place_phase_reset_frac for evaluation. "
             "Default 0.0 = fair eval from home (no place-phase bootstrap)."
+        ),
+    )
+    parser.add_argument(
+        "--release-command-margin-m",
+        type=float,
+        default=None,
+        help=(
+            "Override env release_command_margin_m for evaluation: how far above the "
+            "close gap the commanded gap must climb (together with an open-direction "
+            "gripper action) before a release is latched. Use to validate release-intent "
+            "hysteresis against checkpoints saved with a different margin."
         ),
     )
     parser.add_argument(

@@ -60,6 +60,11 @@ def test_scene_rejects_ambiguous_or_invalid_object_contract_before_genesis_init(
         build_scene(obj_mass_kg=0.0)
 
 
+def test_g2_scene_rejects_unsafe_substep_size_before_genesis_init() -> None:
+    with pytest.raises(ValueError, match=r"0\.625 ms.*substeps=31.*at least 32"):
+        build_scene(robot_key="xarm6", rate=50.0, substeps=31)
+
+
 def test_lite6_default_grasp_height_targets_flat_finger_pad():
     heights = dry_heights("lite6")
     # link6 height = table clearance + fingertip-plate length + link6->fc offset.

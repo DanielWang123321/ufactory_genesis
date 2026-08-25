@@ -1,6 +1,6 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.3.1 is both the minimum and the reference pinned physics baseline for
+Genesis 1.3.3 is both the minimum and the reference pinned physics baseline for
 the contact-v1 pick-place campaign (local and training server aligned).
 """
 
@@ -17,8 +17,8 @@ import warnings
 from packaging.version import InvalidVersion, Version
 
 
-MIN_GENESIS_VERSION = Version("1.3.1")
-VALIDATED_GENESIS_VERSION = Version("1.3.1")  # reference / pinned baseline alias
+MIN_GENESIS_VERSION = Version("1.3.3")
+VALIDATED_GENESIS_VERSION = Version("1.3.3")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -208,7 +208,7 @@ def load_deferred_viewer_api(gs_module: Any) -> DeferredViewerAPI:
 
 
 def ensure_ik_scratch(robot: Any, *, gs_module: Any | None = None, qd_module: Any | None = None) -> None:
-    """Allocate the private FK scratch field used by Genesis 1.2.x when needed."""
+    """Allocate the private FK scratch field required by the validated IK hook."""
 
     require_genesis_version()
     if getattr(robot, "_IK_qpos_orig", None) is not None:

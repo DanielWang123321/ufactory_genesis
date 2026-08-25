@@ -55,7 +55,6 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
     from ufactory.manipulation.packaging.simulation import (
         _trajectory_context,
         init_showcase_robot,
-        stiffen_gripper_mimic_constraints,
     )
 
     scene, robot, block, display_layout = build_packaging_scene(
@@ -64,7 +63,6 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
         robot_urdf_path=str(urdf),
         runtime_config=config,
     )
-    stiffen_gripper_mimic_constraints(robot)
     standard_offset = (0.0, 0.0)
     showcase_ctx = init_showcase_robot(
         robot,

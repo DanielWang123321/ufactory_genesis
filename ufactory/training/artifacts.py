@@ -24,6 +24,7 @@ class ArtifactError(ValueError):
 
 _RUNTIME_ENV_CONTRACT_KEYS = (
     "runtime_config_sha256",
+    "physics_profile",
     "episode_length_s",
     "ctrl_dt",
     "table_height",
@@ -144,7 +145,15 @@ def write_run_provenance(
         resolved_sources.append({"path": str(source), "sha256": _file_sha256(source)})
 
     package_versions: dict[str, str | None] = {}
-    for name in ("genesis-world", "rsl-rl-lib", "torch", "tensordict", "numpy", "pyyaml"):
+    for name in (
+        "genesis-world",
+        "quadrants",
+        "rsl-rl-lib",
+        "torch",
+        "tensordict",
+        "numpy",
+        "pyyaml",
+    ):
         try:
             package_versions[name] = metadata.version(name)
         except metadata.PackageNotFoundError:

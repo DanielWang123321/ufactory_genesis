@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from ufactory.training import (
     validate_checkpoint_artifacts,
     write_artifact_inventory,
     write_checkpoint_manifest,
+    write_run_provenance,
     write_training_config,
 )
 
@@ -114,6 +116,48 @@ def test_checkpoint_with_matching_hash_but_conflicting_runtime_body_is_rejected(
     expected_env = dict(saved_env)
     expected_env["fixed_target_pos"] = [0.30, 0.30, 0.015]
     with pytest.raises(ArtifactError, match=r"runtime config body .*fixed_target_pos"):
+        validate_checkpoint_artifacts(
+            checkpoint,
+            config_path,
+            expected_runtime_config_sha256="same",
+            expected_runtime_env=expected_env,
+        )
+
+
+@pytest.mark.parametrize("saved_profile", [None, "legacy_g2_contact"])
+def test_checkpoint_without_current_physics_profile_is_rejected(
+    tmp_path: Path,
+    saved_profile: str | None,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    saved_env = {
+        "num_obs": 48,
+        "num_actions": 4,
+        "runtime_config_sha256": "same",
+        "substeps": 32,
+    }
+    if saved_profile is not None:
+        saved_env["physics_profile"] = saved_profile
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env=saved_env,
+        reward={},
+        robot={},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}}, checkpoint)
+    artifact = load_training_config(config_path)
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=artifact,
+        executor_action_contract="cartesian_delta",
+    )
+
+    expected_env = {**saved_env, "physics_profile": "g2_stable_v1_3_3"}
+    with pytest.raises(ArtifactError, match=r"runtime config body .*physics_profile"):
         validate_checkpoint_artifacts(
             checkpoint,
             config_path,
@@ -233,6 +277,19 @@ def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_pat
     assert inventory["selected_checkpoint"] == "model_0.pt"
     assert inventory["checkpoints"][0]["file"] == "model_0.pt"
     assert len(inventory["checkpoints"][0]["sha256"]) == 64
+
+
+def test_run_provenance_records_quadrants_runtime_version(tmp_path: Path) -> None:
+    source = tmp_path / "source.py"
+    source.write_text("# provenance input\n", encoding="utf-8")
+    output = write_run_provenance(
+        tmp_path / "run_provenance.json",
+        training_config={"config_sha256": "config", "env": {"substeps": 32}},
+        source_paths=[source],
+    )
+
+    provenance = json.loads(output.read_text(encoding="utf-8"))
+    assert "quadrants" in provenance["packages"]
 
 
 def test_validated_rsl_loader_uses_weights_only_mode(tmp_path: Path, monkeypatch) -> None:

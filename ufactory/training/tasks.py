@@ -8,6 +8,7 @@ from typing import Any
 
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.robots.paths import robot_urdf
+from ufactory.simulation import G2_PHYSICS_PROFILE
 from ufactory.training.recipe import load_training_recipe
 
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
@@ -36,7 +37,7 @@ def build_pick_place_task_configs(
     """Resolve the retained xArm6 + Gripper G2 pick-place RL task."""
 
     if robot not in PICK_PLACE_RL_ROBOTS:
-        raise ValueError("the v0.2.12 pick-place RL environment supports only xArm6 + Gripper G2")
+        raise ValueError("the v0.2.13 pick-place RL environment supports only xArm6 + Gripper G2")
     config = load_runtime_config(robot, task="pick_place", config_path=runtime_config_path)
     if config.gripper is None or config.gripper.adapter != "g2":
         raise ValueError("the pick-place RL environment requires Gripper G2")
@@ -47,6 +48,7 @@ def build_pick_place_task_configs(
     env_cfg.update(
         {
             "runtime_config_sha256": config.sha256,
+            "physics_profile": G2_PHYSICS_PROFILE,
             "episode_length_s": float(params["episode_length_s"]),
             "ctrl_dt": float(params["control_dt_s"]),
             "table_height": float(params["table_height_m"]),
@@ -59,7 +61,7 @@ def build_pick_place_task_configs(
             # training terminal condition matches the deployment acceptance test.
             "place_success_dist_m": float(env_cfg.get("place_success_dist_m", params["place_success_distance_m"])),
             "success_hold_steps": int(env_cfg.get("success_hold_steps", params["success_hold_steps"])),
-            "substeps": int(params["substeps"]),
+            "substeps": int(config.simulation.substeps),
             "constraint_solver": config.simulation.constraint_solver,
             "solver_iterations": config.simulation.solver_iterations,
             "noslip_iterations": config.simulation.noslip_iterations,

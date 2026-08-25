@@ -11,8 +11,12 @@ import genesis as gs
 from ufactory.config import load_runtime_config
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_visual_glb_urdf
-from ufactory.manipulation.packaging.core import PackagingLayout as CorePackagingLayout, packaging_layout
-from ufactory.simulation import make_rigid_options
+from ufactory.manipulation.packaging.core import packaging_layout
+from ufactory.simulation import (
+    configure_g2_mimic_constraints,
+    make_rigid_options,
+    validate_g2_contact_substeps,
+)
 from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -333,14 +337,16 @@ def build_packaging_scene(
     runtime_config=None,
 ):
     config = runtime_config or PACKAGING_CONFIG
-    core_layout: CorePackagingLayout = packaging_layout(config)
     layout = make_layout(table_top_z, config)
+    substeps = int(config.simulation.substeps)
+    if config.gripper.adapter == "g2":
+        validate_g2_contact_substeps(dt=sim_dt, substeps=substeps)
     cam_pos, cam_lookat = packaging_camera(layout)
     scene_kwargs: dict = {}
     if renderer is not None:
         scene_kwargs["renderer"] = renderer
     scene = gs.Scene(
-        sim_options=gs.options.SimOptions(dt=sim_dt, substeps=core_layout.simulation_substeps),
+        sim_options=gs.options.SimOptions(dt=sim_dt, substeps=substeps),
         rigid_options=make_rigid_options(
             gs,
             dt=sim_dt,
@@ -396,6 +402,8 @@ def build_packaging_scene(
 
     if build_scene:
         scene.build(n_envs=1)
+        if config.gripper.adapter == "g2":
+            configure_g2_mimic_constraints(robot)
         finalize_packaging_block(block, layout)
     return scene, robot, block, layout
 

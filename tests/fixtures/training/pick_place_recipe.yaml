@@ -9,7 +9,6 @@ environment:
   max_ik_jump_rad: 0.5
   gripper_delta_mm: 4.0
   success_history_len: 2000
-  stiffen_gripper_mimic: true
   # Lock object/target to trajectory pick-place fixed poses (curriculum off).
   fixed_demo_layout: true
   place_phase_reset_frac: 0.25

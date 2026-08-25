@@ -5,13 +5,41 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.13] — 2026-08-25
+
+### Added
+
+- Bundled the fixed-layout seed-7 `model_299_g2stable.pt` (SHA-256 `f2142a63…f783f2`), trained end to end under the `g2_stable_v1_3_3` profile, with a sanitized Genesis 1.3.3 configuration, regenerated SHA-256 manifest, and machine-readable release summary. Public evaluation uses this read-only bundle by default.
+- Added fixed-layout behavior-cloning gate and unattended campaign helpers. Release evaluation now applies all nine seed/batch combinations to one selected checkpoint before running the fixed-bank and action-noise gates.
+
+### Changed
+
+- Raised the minimum, reference, and locked Genesis World baseline to **1.3.3** and locked its Quadrants runtime to **1.3.0**. Genesis 1.3.2 and older now fail closed; later versions still run the private-hook capability checks and emit the existing unvalidated-version warning.
+- Added the `g2_stable_v1_3_3` physical-contact profile: Newton/100, pyramidal friction, convex contact resolution, GJK collision, and 32 rigid substeps. The 32-substep setting is a conservative project safety margin, not a universal Genesis 1.3.3 requirement; the primary NaN fix is the compliant five-equality G2 mimic tuple `(0.02, 1.0, 0.9, 0.95, 0.001, 0.5, 2.0)`, which also passed the 128-environment perturbed-contact check at 8 substeps.
+- Extended RL checkpoint compatibility with the named physics profile. Checkpoints saved under earlier contact physics are rejected by the current evaluator and must be retrained.
+- Raised the pick-place release-intent hysteresis `release_command_margin_m` from **0.5 mm to 18 mm** in the RL recipe. Under the integrated gripper command (`gripper_delta_mm: 4`) and sigma-0.02 evaluation noise, the old margin latched phantom releases at the pickup in effectively every noisy episode; a genuine release ramps the commanded gap to 45-84 mm, so detection now only lags about 0.3 s while the pads are still on the cube. Evaluation accepts `--release-command-margin-m` to score checkpoints saved with the previous margin.
+- Made `simulation.substeps` the only rigid-step-count setting and raised its default to **32**. Removed the pick-place task's `substeps` and packaging task's `simulation_substeps`; strict configuration loading rejects both legacy fields instead of migrating them.
+- Restored the packaging placement acceptance distance to **25 mm** for the 32-substep physics baseline.
+- Reset the RL provenance chain to new Genesis 1.3.3 expert demonstrations, behavior cloning, and independent 300-iteration PPO runs for seeds 1, 7, and 17. Older-physics policies are forbidden, and the selected nonzero checkpoint must pass every fixed-layout and action-noise gate.
+- Extended new RL run provenance with the Quadrants version and hashes for the shared simulation, artifact, model, transfer, and imported training-entry sources.
 
 ### Fixed
 
+- Replaced open-loop G2 over-closing with object-only bilateral pad-force confirmation and a bounded, anti-windup physical hold controller targeting `10 +/- 2 N`; release keeps priority and every physics tick now fails closed on NaN or Inf.
+- The scripted expert passed 128/128 uniform-random and 128/128 edge-start episodes with zero numerical, action, IK, or post-release-recontact faults. The xArm6 trajectory example placed within 3.734 mm and the one-cycle packaging example within 2.2 mm.
+- Centralized the Gripper G2 mimic-equality solver parameters across trajectory, packaging, and RL scenes. G2 contact scenes now reject rigid substeps longer than **0.625 ms** before scene construction, preventing the Genesis 1.3.3 constraint-force NaN failure mode.
+- Removed the gradual G2 packaging preload-relax phase at the 32-substep baseline. The one-tick full-open target now establishes finger clearance before gravity starts the drop while preserving the restored 25 mm placement gate.
 - Pinned the development Ruff formatter to the lock-validated 0.15.21 release so the Torch/Genesis-free CPU CI cannot silently resolve a new formatter contract (0.16.1 began reformatting fenced Python in previously unchanged Markdown files).
 - Excluded the new Torch/RSL-RL transfer test module from collection in the dev-only CPU CI environment, matching the existing handling for other simulation-stack training tests.
-- Excluded its Torch/RSL-RL-only model and transfer modules from the dev-only coverage denominator; their dedicated tests continue to run in the maintainer's simulation/RL environment.
+- Excluded Torch/RSL-RL-only model, transfer, and ignored legacy-migration modules from the dev-only coverage denominator; their dedicated tests continue to run in the maintainer's simulation/RL environment.
+
+### Removed
+
+- Retired the Genesis 1.3.1 fixed and hierarchical random-start checkpoint bundles, their configs, and their machine-readable summaries. The fixed bundle is replaced by the accepted 1.3.3 artifact; the public random-start example, recipe, documentation, and release contract are removed from v0.2.13 and deferred to a later version.
+
+### Security
+
+- Locked `gitpython` to 3.1.59 (fixes GHSA-9rj7-rf2p-w77r / GHSA-4gmw-gg2m-w46p / GHSA-wvpp-8hx9-p66j / GHSA-jm78-9fvv-mhgr / CVE-2026-76217 on 3.1.57) and `pip` to 26.2.1 (fixes PYSEC-2026-3721 on 26.1.2) so `project-check release` lock audit passes.
 
 ## [0.2.12] — 2026-08-03
 

@@ -29,7 +29,9 @@ def test_packaging_profiles_are_available_for_all_supported_robots(robot: str) -
     assert config.gripper is not None
     assert layout.object_size_m == pytest.approx((0.030, 0.030, 0.030))
     assert layout.object_mass_kg == pytest.approx(0.017)
-    assert layout.simulation_substeps == 8
+    assert layout.place_success_distance_m == pytest.approx(0.025)
+    assert config.simulation.substeps == 32
+    assert "simulation_substeps" not in config.task.parameters
 
 
 @pytest.mark.parametrize("robot", G2_ROBOTS)
@@ -40,6 +42,18 @@ def test_g2_packaging_profiles_preserve_reference_geometry(robot: str) -> None:
     assert layout.target_position_m == pytest.approx((0.300, 0.300, 0.018))
     assert layout.grasp_link6_z_m == pytest.approx(0.1871)
     assert layout.release_link6_z_m == pytest.approx(0.3901)
+
+
+def test_g2_packaging_scene_rejects_unsafe_global_substeps_before_build() -> None:
+    from ufactory.manipulation.packaging.scene import build_packaging_scene
+
+    config = load_runtime_config(
+        "xarm6",
+        task="packaging_showcase",
+        overrides={"simulation.substeps": 31},
+    )
+    with pytest.raises(ValueError, match=r"0\.625 ms.*substeps=31.*at least 32"):
+        build_packaging_scene(show_viewer=False, runtime_config=config)
 
 
 def test_lite6_packaging_profile_uses_lite6_gripper_geometry_and_safe_box_center() -> None:
@@ -278,7 +292,6 @@ def _run_packaging_physics_cycles(robot: str, executor: str, cycles: int) -> Non
         init_showcase_robot,
         prepare_packaging_cycle,
         run_pick_place_cycle,
-        stiffen_gripper_mimic_constraints,
     )
     from ufactory.simulation import GenesisRuntimeManager
 
@@ -289,7 +302,6 @@ def _run_packaging_physics_cycles(robot: str, executor: str, cycles: int) -> Non
             show_viewer=False,
             runtime_config=config,
         )
-        stiffen_gripper_mimic_constraints(robot_entity)
         context = init_showcase_robot(
             robot_entity,
             display_layout,
@@ -314,9 +326,7 @@ def _run_packaging_physics_cycles(robot: str, executor: str, cycles: int) -> Non
             )
             phases = {phase.label: phase for phase in report.phases}
             assert phases["lift"].obj_pos_mm[2] > (display_layout.table_top_z + 0.100) * 1000.0
-            # simulation_substeps=8 trades GPU cost for placement scatter; keep a
-            # soft physics threshold rather than the prior 25 mm substeps=32 bar.
-            assert report.place_error_mm < 150.0
+            assert report.place_error_mm < 25.0
             assert report.home_drift_mm < 10.0
 
 

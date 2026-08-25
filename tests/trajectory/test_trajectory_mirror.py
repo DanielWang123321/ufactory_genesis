@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -130,7 +131,7 @@ _PRISTINE_OBJ_STATE: dict[str, torch.Tensor] = {}
 def shared_ctx():
     config = load_runtime_config("xarm6")
     with GenesisRuntimeManager(config.simulation):
-        ctx = build_scene(rate=50.0, show_viewer=False, substeps=2)
+        ctx = build_scene(rate=50.0, show_viewer=False)
         _PRISTINE_OBJ_STATE["pos"] = ctx.obj.get_pos().clone()
         _PRISTINE_OBJ_STATE["quat"] = ctx.obj.get_quat().clone()
         yield ctx
@@ -480,7 +481,8 @@ def test_visual_sim_subprocess():
     script = PROJECT_ROOT / "examples" / "pick_place" / "run.py"
     env = os.environ.copy()
     env.setdefault("NUMBA_CACHE_DIR", os.path.expanduser("~/.cache/numba"))
-    proc = subprocess.run(
+    env["PYTHONUNBUFFERED"] = "1"
+    proc = subprocess.Popen(
         [
             sys.executable,
             str(script),
@@ -494,14 +496,59 @@ def test_visual_sim_subprocess():
         ],
         cwd=PROJECT_ROOT,
         env=env,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=600,
-        check=False,
+        start_new_session=True,
     )
-    assert proc.returncode == 0, (
-        f"visual simulation failed (exit {proc.returncode})\n"
-        f"stdout:\n{proc.stdout[-4000:]}\n"
-        f"stderr:\n{proc.stderr[-4000:]}"
+    assert proc.stdout is not None
+    assert proc.stderr is not None
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+    viewer_ready = threading.Event()
+
+    def collect(stream, lines: list[str]) -> None:
+        for line in iter(stream.readline, ""):
+            lines.append(line)
+            if "Viewer open. Press Ctrl+C to exit..." in line:
+                viewer_ready.set()
+
+    readers = (
+        threading.Thread(target=collect, args=(proc.stdout, stdout_lines), daemon=True),
+        threading.Thread(target=collect, args=(proc.stderr, stderr_lines), daemon=True),
     )
-    assert "preflight=PASS" in proc.stdout
+    for reader in readers:
+        reader.start()
+
+    try:
+        deadline = time.monotonic() + 1200.0
+        while not viewer_ready.wait(timeout=1.0):
+            if proc.poll() is not None or time.monotonic() >= deadline:
+                break
+        stdout = "".join(stdout_lines)
+        stderr = "".join(stderr_lines)
+        assert viewer_ready.is_set(), (
+            f"visual simulation did not reach the viewer hold (exit {proc.poll()})\n"
+            f"stdout:\n{stdout[-4000:]}\n"
+            f"stderr:\n{stderr[-4000:]}"
+        )
+
+        # --visual intentionally holds until the operator closes the window or
+        # presses Ctrl+C. Exercise that documented exit path after the viewer is live.
+        time.sleep(1.0)
+        os.killpg(proc.pid, signal.SIGINT)
+        returncode = proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(timeout=30)
+        for reader in readers:
+            reader.join(timeout=5)
+
+    stdout = "".join(stdout_lines)
+    stderr = "".join(stderr_lines)
+    assert returncode == 0, (
+        f"visual simulation failed (exit {returncode})\nstdout:\n{stdout[-4000:]}\nstderr:\n{stderr[-4000:]}"
+    )
+    assert "preflight=PASS" in stdout
+    assert "place_error_mm=" in stdout

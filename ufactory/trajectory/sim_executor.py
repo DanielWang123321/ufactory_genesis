@@ -17,7 +17,8 @@ import torch
 
 import genesis as gs
 
-from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive
+from ufactory.simulation import G2ContactHoldController, object_finger_contact_forces_n
+from ufactory.trajectory.mirror_executor import gap_m_from_drive, resolve_tick_arm_q, resolve_tick_grip_drive
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
 
@@ -118,6 +119,16 @@ def replay_sim(
 
     gripper = ctx.gripper
     current_grip_drive = drive_for_gap_m(gripper.open_gap_m, gripper)
+    g2_contact_hold = (
+        G2ContactHoldController(
+            1,
+            device=gs.device,
+            dtype=gs.tc_float,
+            initial_gap_m=float(gripper.open_gap_m),
+        )
+        if getattr(gripper, "family", "") == "g2"
+        else None
+    )
     last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy() if len(ctx.home_qpos) else None
     grasp_welded = False
     buffers = _TensorBuffers(
@@ -220,6 +231,22 @@ def replay_sim(
                     grip_targets=grip_targets,
                     buffers=buffers,
                 )
+                _assert_finite_replay_state(ctx, phase=status.label, tick=t)
+                if g2_contact_hold is not None:
+                    requested_gap_m = float(samples[t, 0])
+                    current_grip_drive = _advance_g2_contact_hold(
+                        g2_contact_hold,
+                        ctx,
+                        requested_gap_m=requested_gap_m,
+                        closing=(
+                            gripper_holds_after_grasp
+                            and not is_opening
+                            and requested_gap_m < float(gripper.open_gap_m) - 1e-9
+                        ),
+                        release=is_opening,
+                    )
+                    if bool(g2_contact_hold.latched[0].item()):
+                        contact_hold_drive = current_grip_drive
                 if on_tick is not None:
                     on_tick(seg, t)
                 if (
@@ -275,6 +302,16 @@ def replay_sim(
                     grip_drive=current_grip_drive,
                     buffers=buffers,
                 )
+                _assert_finite_replay_state(ctx, phase=status.label, tick=t)
+                if g2_contact_hold is not None:
+                    requested_gap_m = gap_m_from_drive(current_grip_drive, gripper)
+                    current_grip_drive = _advance_g2_contact_hold(
+                        g2_contact_hold,
+                        ctx,
+                        requested_gap_m=requested_gap_m,
+                        closing=requested_gap_m < float(gripper.open_gap_m) - 1e-9,
+                        release=False,
+                    )
                 if on_tick is not None:
                     on_tick(seg, t)
 
@@ -298,8 +335,9 @@ def replay_sim(
     # Observe after the final already-issued target has had a brief chance to
     # settle.  Bare steps retain Genesis' latched arm/gripper control targets.
     report.metric_settle_ticks = int(np.ceil(float(final_metric_settle_s) * rate))
-    for _ in range(report.metric_settle_ticks):
+    for settle_tick in range(report.metric_settle_ticks):
         scene.step()
+        _assert_finite_replay_state(ctx, phase="final-settle", tick=settle_tick)
 
     # Final metrics: place error + home drift, both against the complete
     # three-dimensional positions consumed when the scene was constructed.
@@ -331,6 +369,69 @@ class _TensorBuffers:
     gripper_cpu: torch.Tensor
     arm_numpy: np.ndarray | None = None
     gripper_numpy: np.ndarray | None = None
+
+
+def _advance_g2_contact_hold(
+    controller: G2ContactHoldController,
+    ctx: TrajSceneContext,
+    *,
+    requested_gap_m: float,
+    closing: bool,
+    release: bool,
+) -> float:
+    """Observe the completed physics tick and resolve the next G2 drive target."""
+
+    left_force, right_force = _object_finger_contact_forces_n(ctx)
+    measured_drive = _current_drive(ctx.robot, ctx.gripper_dof_idx)
+    measured_gap = gap_m_from_drive(measured_drive, ctx.gripper)
+    next_gap = controller.update(
+        requested_gap_m=torch.tensor([requested_gap_m], device=gs.device, dtype=gs.tc_float),
+        measured_gap_m=torch.tensor([measured_gap], device=gs.device, dtype=gs.tc_float),
+        left_force_n=left_force,
+        right_force_n=right_force,
+        closing=torch.tensor([closing], device=gs.device, dtype=torch.bool),
+        release=torch.tensor([release], device=gs.device, dtype=torch.bool),
+    )
+    return drive_for_gap_m(float(next_gap[0].item()), ctx.gripper)
+
+
+def _object_finger_contact_forces_n(ctx: TrajSceneContext) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return object-only contact loads for the two physical finger links."""
+
+    if ctx.left_finger is None or ctx.right_finger is None or not callable(getattr(ctx.obj, "get_contacts", None)):
+        zero = torch.zeros(1, device=gs.device, dtype=gs.tc_float)
+        return zero, zero.clone()
+    contacts = ctx.obj.get_contacts(with_entity=ctx.robot, exclude_self_contact=True)
+    left, right = object_finger_contact_forces_n(
+        contacts,
+        left_link_idx=int(ctx.left_finger.idx),
+        right_link_idx=int(ctx.right_finger.idx),
+    )
+    return (
+        left.to(device=gs.device, dtype=gs.tc_float),
+        right.to(device=gs.device, dtype=gs.tc_float),
+    )
+
+
+def _assert_finite_replay_state(ctx: TrajSceneContext, *, phase: str, tick: int) -> None:
+    """Fail at the first corrupted trajectory state with phase-local context."""
+
+    all_gripper_dof_idx = list(getattr(ctx, "all_gripper_dof_idx", ctx.gripper_dof_idx))
+    dof_idx = list(dict.fromkeys([*ctx.arm_dof_idx, *all_gripper_dof_idx]))
+    fields: dict[str, object] = {
+        "robot_qpos": ctx.robot.get_dofs_position(dof_idx),
+        "object_pos": ctx.obj.get_pos(),
+    }
+    get_velocity = getattr(ctx.robot, "get_dofs_velocity", None)
+    if callable(get_velocity):
+        fields["robot_qvel"] = get_velocity(dof_idx)
+    get_obj_velocity = getattr(ctx.obj, "get_vel", None)
+    if callable(get_obj_velocity):
+        fields["object_vel"] = get_obj_velocity()
+    for name, value in fields.items():
+        tensor = torch.as_tensor(value)
+        if not bool(torch.isfinite(tensor).all().item()):
+            raise RuntimeError(f"G2 physical replay produced NaN or Inf in {name} at {phase} tick {tick}")
 
 
 def _step(
