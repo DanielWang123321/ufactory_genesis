@@ -1,6 +1,6 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.3.3 is both the minimum and the reference pinned physics baseline for
+Genesis 1.4.1 is both the minimum and the reference pinned physics baseline for
 the contact-v1 pick-place campaign (local and training server aligned).
 """
 
@@ -17,8 +17,8 @@ import warnings
 from packaging.version import InvalidVersion, Version
 
 
-MIN_GENESIS_VERSION = Version("1.3.3")
-VALIDATED_GENESIS_VERSION = Version("1.3.3")  # reference / pinned baseline alias
+MIN_GENESIS_VERSION = Version("1.4.1")
+VALIDATED_GENESIS_VERSION = Version("1.4.1")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -114,11 +114,12 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
 
     try:
         from genesis.engine.entities.rigid_entity.rigid_entity import RigidEntity
+        from genesis.engine.solvers.rigid.rigid_solver import RigidSolver
     except ImportError as exc:
         raise GenesisCompatibilityError("Genesis rigid-entity kinematics API is unavailable.") from exc
-    forward = _require_callable(RigidEntity, "forward_kinematics", "forward kinematics")
+    forward = _require_callable(RigidSolver, "forward_kinematics_query", "forward kinematics")
     inverse = _require_callable(RigidEntity, "inverse_kinematics", "inverse kinematics")
-    _require_parameters(forward, {"qpos"}, "RigidEntity.forward_kinematics")
+    _require_parameters(forward, {"entity", "qpos"}, "RigidSolver.forward_kinematics_query")
     _require_parameters(
         inverse,
         {"link", "pos", "quat", "init_qpos", "dofs_idx_local", "damping"},
@@ -207,38 +208,21 @@ def load_deferred_viewer_api(gs_module: Any) -> DeferredViewerAPI:
     return DeferredViewerAPI(Viewer, aspect_ratio, height_ratio)
 
 
-def ensure_ik_scratch(robot: Any, *, gs_module: Any | None = None, qd_module: Any | None = None) -> None:
-    """Allocate the private FK scratch field required by the validated IK hook."""
+def forward_kinematics(
+    robot: Any,
+    qpos: Any,
+    envs_idx: Any | None = None,
+) -> tuple[Any, Any]:
+    """Evaluate link positions and orientations for an entity at the specified configuration.
 
-    require_genesis_version()
-    if getattr(robot, "_IK_qpos_orig", None) is not None:
-        return
-    n_qs = getattr(robot, "n_qs", None)
-    if not isinstance(n_qs, int) or n_qs < 0:
-        raise GenesisCompatibilityError("Genesis kinematics entity has no valid n_qs value.")
-    if n_qs == 0:
-        return
-    solver = getattr(robot, "_solver", None)
-    batch_size = getattr(solver, "_B", None)
-    if not isinstance(batch_size, int) or batch_size < 1:
-        raise GenesisCompatibilityError("Genesis kinematics scratch allocation requires robot._solver._B.")
-    if gs_module is None:
-        try:
-            import genesis as gs_module
-        except ImportError as exc:
-            raise GenesisCompatibilityError("The genesis package cannot be imported for kinematics.") from exc
-    if qd_module is None:
-        try:
-            import quadrants as qd_module
-        except ImportError as exc:
-            raise GenesisCompatibilityError(
-                "Quadrants is unavailable for Genesis kinematics scratch allocation."
-            ) from exc
-    qd_float = getattr(gs_module, "qd_float", None)
-    field = getattr(qd_module, "field", None)
-    if qd_float is None or not callable(field):
-        raise GenesisCompatibilityError("Genesis/Quadrants kinematics scratch hooks are unavailable.")
-    try:
-        robot._IK_qpos_orig = field(dtype=qd_float, shape=(n_qs, batch_size))
-    except Exception as exc:
-        raise GenesisCompatibilityError("Failed to allocate Genesis kinematics scratch storage.") from exc
+    Wraps Genesis solver forward_kinematics_query. Returns (links_pos, links_quat).
+    """
+    solver = getattr(robot, "solver", None)
+    if solver is None:
+        solver = getattr(robot, "_solver", None)
+    if solver is not None and hasattr(solver, "forward_kinematics_query"):
+        return solver.forward_kinematics_query(robot, qpos, envs_idx=envs_idx)
+    if hasattr(robot, "forward_kinematics"):
+        return robot.forward_kinematics(qpos=qpos)
+    raise GenesisCompatibilityError("Robot has no solver with forward_kinematics_query; build the scene first.")
+

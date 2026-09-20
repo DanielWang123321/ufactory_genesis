@@ -8,7 +8,7 @@ deployment.
 
 ## Reference environment and artifact status
 
-Use Linux, an NVIDIA GPU, Python 3.12 or 3.13, Genesis World 1.3.3, Quadrants 1.3.0,
+Use Linux, an NVIDIA GPU, Python 3.12 or 3.13, Genesis World 1.4.1, Quadrants 1.3.0,
 PyTorch 2.10, and RSL-RL 5.4.2. The repository lock file is the reference:
 
 ```bash
@@ -18,7 +18,7 @@ export NUMBA_CACHE_DIR="$HOME/.cache/numba"
 
 The environment always resolves 32 rigid substeps from `simulation.substeps`; the
 removed task-local fields are invalid. This 0.625 ms rigid-step limit is the
-project's conservative production margin, not a claim that Genesis 1.3.3 always
+project's conservative production margin, not a claim that Genesis 1.4.1 always
 needs 32 substeps. The primary numerical fix is the compliant solver tuple applied
 to all five G2 mimic equalities; it also passed the 128-environment perturbed-contact
 check at 8 substeps.

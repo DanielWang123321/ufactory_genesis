@@ -7,7 +7,7 @@ RL 真机部署。
 
 ## 参考环境与工件状态
 
-参考环境为 Linux、NVIDIA GPU、Python 3.12/3.13、Genesis World 1.3.3、
+参考环境为 Linux、NVIDIA GPU、Python 3.12/3.13、Genesis World 1.4.1、
 Quadrants 1.3.0、PyTorch 2.10 和 RSL-RL 5.4.2；仓库锁文件是唯一参考：
 
 ```bash
@@ -16,7 +16,7 @@ export NUMBA_CACHE_DIR="$HOME/.cache/numba"
 ```
 
 环境只从 `simulation.substeps` 解析 32 个刚体子步，已删除的任务级字段属于非法配置。
-0.625 ms 刚体步长是本项目为正式运行保留的保守裕量，并不表示 Genesis 1.3.3 必须
+0.625 ms 刚体步长是本项目为正式运行保留的保守裕量，并不表示 Genesis 1.4.1 必须
 使用 32 子步。主要的非数值修复是给 G2 的 5 个联动等式统一使用柔顺求解参数；同一
 参数在 8 子步下也通过了 128 个扰动接触环境的检查。
 

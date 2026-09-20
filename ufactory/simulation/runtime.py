@@ -95,6 +95,13 @@ class GenesisRuntimeManager(AbstractContextManager["GenesisRuntimeManager"]):
                 destroy = getattr(gs, "destroy", None)
                 if callable(destroy):
                     destroy()
+                try:
+                    import torch
+
+                    if hasattr(torch, "set_default_device"):
+                        torch.set_default_device(None)
+                except Exception:
+                    pass
                 self.initialized = False
             if self.__class__._active is self:
                 self.__class__._active = None

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -70,3 +72,37 @@ def test_legacy_calibration_error_explains_safe_regeneration(tmp_path: Path):
             robot_key="xarm6",
             serial_number="XI130506XXXXXX",
         )
+
+
+def test_malformed_robot_ip_is_rejected_before_sdk_connection():
+    repo_root = Path(__file__).resolve().parents[2]
+    script = repo_root / "scripts" / "gen_kinematics_params.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "192168.1.65"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "invalid IPv4 address '192168.1.65'" in result.stderr
+    assert "192.168.1.65" in result.stderr
+    assert "connect serial failed" not in result.stderr
+
+
+def test_ipv6_robot_address_is_rejected_before_sdk_connection():
+    repo_root = Path(__file__).resolve().parents[2]
+    script = repo_root / "scripts" / "gen_kinematics_params.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "::1"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "IPv6 is not supported" in result.stderr
+    assert "connect serial failed" not in result.stderr
+

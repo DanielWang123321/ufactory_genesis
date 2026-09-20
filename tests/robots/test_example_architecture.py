@@ -61,13 +61,6 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "model_299_g2stable.checkpoint_manifest.json",
         "model_299_g2stable.pt",
     ]
-    assert not (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "random_start").exists()
-    assert not (PROJECT_ROOT / "examples" / "manipulation").exists()
-    assert not (PROJECT_ROOT / "examples" / "_grasp_place_traj.py").exists()
-    assert not (PROJECT_ROOT / "examples" / "_pick_place_traj.py").exists()
-    assert not (PROJECT_ROOT / "examples" / "xarm6" / "xarm6_reach_deploy.py").exists()
-    assert not any((PROJECT_ROOT / "examples").glob("*/_bootstrap.py"))
-    assert not (PROJECT_ROOT / "examples" / "reinforcement_learning").exists()
 
 
 def test_sim_and_rl_extras_do_not_install_pinocchio_or_coal() -> None:

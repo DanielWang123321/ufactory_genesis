@@ -12,7 +12,6 @@ dist/
 build/
 .claude/
 .cursor/
-.kilo
 logs/
 # Root compatibility symlink to the private RL log archive.
 /logs
@@ -30,9 +29,8 @@ assets/urdf/lite6_gripper/meshes/collision/gripper_lite.stl
 *.patch
 .DS_Store
 Thumbs.db
-agent.md
+AGENTS.md
 .codex
-.agents
 .cache
 .venv
 worklog.md

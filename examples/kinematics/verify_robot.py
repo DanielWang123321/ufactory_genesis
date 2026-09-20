@@ -12,8 +12,8 @@ import genesis as gs
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.registry import get_robot_profile, joint_names, robot_cli_choices
-from ufactory.simulation import make_rigid_options
-from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
+from ufactory.simulation import forward_kinematics, make_rigid_options
+from ufactory.simulation.compat import require_genesis_runtime
 
 
 def quat_to_rpy(quat):
@@ -69,8 +69,7 @@ def run_tests(profile_key: str, urdf_path: str, vis: bool, *, backend: str = "gp
     ee_link_name = resolve_entity_name(robot, ee, "link")
     ee_link = next(l for l in robot.links if resolve_entity_name(robot, l.name, "link") == ee_link_name)
     q_t = torch.tensor(q, dtype=torch.float32, device=gs.device)
-    ensure_ik_scratch(robot, gs_module=gs)
-    links_pos, _ = robot.forward_kinematics(qpos=q_t)
+    links_pos, _ = forward_kinematics(robot, q_t)
     idx = int(ee_link.idx_local)
     fk_pos = links_pos[idx].cpu().numpy() if links_pos.ndim == 2 else links_pos[0, idx].cpu().numpy()
     ee_pos = ee_link.get_pos()

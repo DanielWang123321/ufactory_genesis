@@ -21,8 +21,8 @@ from ufactory.kinematics.calibration import (
 from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, pose_tcp_to_flange, read_tcp_offset
 from ufactory.robots.paths import robot_urdf
 from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile, robot_runtime_cli_choices
-from ufactory.simulation import make_rigid_options
-from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
+from ufactory.simulation import forward_kinematics, make_rigid_options
+from ufactory.simulation.compat import require_genesis_runtime
 
 PASS_POS_MM = 1.0
 PASS_RPY_DEG = 0.5
@@ -86,9 +86,8 @@ def build_genesis_robot(urdf_path: str, *, backend: str = "cpu", show_viewer: bo
 def genesis_fk(robot, q: np.ndarray, ee_link_idx: int) -> tuple[np.ndarray, np.ndarray]:
     import genesis as gs
 
-    ensure_ik_scratch(robot, gs_module=gs)
     q_t = torch.tensor(q, dtype=torch.float32, device=gs.device)
-    links_pos, links_quat = robot.forward_kinematics(qpos=q_t)
+    links_pos, links_quat = forward_kinematics(robot, q_t)
     if links_pos.ndim == 2:
         return links_pos[ee_link_idx].cpu().numpy(), links_quat[ee_link_idx].cpu().numpy()
     return links_pos[0, ee_link_idx].cpu().numpy(), links_quat[0, ee_link_idx].cpu().numpy()

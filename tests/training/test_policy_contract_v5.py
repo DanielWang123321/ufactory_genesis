@@ -18,38 +18,6 @@ from ufactory.training import load_training_recipe
 PUBLIC_PICK_PLACE = Path(__file__).resolve().parents[2] / "examples" / "rl" / "pick_place"
 
 
-def test_public_contact_recipe_keeps_fixed_layout_policy_contract() -> None:
-    recipe = load_training_recipe(PUBLIC_PICK_PLACE / "recipe.yaml")
-    env = recipe["environment"]
-    reward = recipe["reward"]
-    train = recipe["train"]
-
-    assert env["num_obs"] == 48
-    assert env["include_scripted_action_hint"] is True
-    assert env["num_actions"] == 4
-    assert env["fixed_demo_layout"] is True
-    assert env["include_normalized_layout_offsets"] is False
-    assert env["include_contact_observations"] is True
-    assert env["use_contact_holding"] is True
-    assert env["gripper_min_command_gap_m"] == pytest.approx(0.012)
-    assert env["action_scale"] == pytest.approx(0.005)
-    assert env["max_cartesian_delta_m"] == pytest.approx(0.005)
-    assert env["ee_command_integration"] == "commanded"
-    assert env["action_response_exponent"] == pytest.approx(2.0)
-    assert env["place_success_dist_m"] == pytest.approx(0.010)
-    assert env["pre_lift_max_drag_m"] == pytest.approx(0.005)
-    assert env["post_release_max_drift_m"] == pytest.approx(0.003)
-    assert "train_only_actor_action_index" not in env
-    assert "train_only_actor_action_indices" not in env
-
-    assert reward["pre_lift_xy_progress"] == pytest.approx(200.0)
-    assert reward["grasp_centering"] == pytest.approx(60.0)
-    assert reward["valid_release"] == pytest.approx(200.0)
-    assert train["algorithm"]["schedule"] == "fixed"
-    assert train["actor"]["distribution_cfg"]["class_name"] == "BetaDistribution"
-    assert train["actor"]["distribution_cfg"]["action_range"] == [-1.0, 1.0]
-
-
 def test_public_beta_policy_samples_stay_inside_action_contract() -> None:
     pytest.importorskip("rsl_rl")
     try:

@@ -349,7 +349,6 @@ def build_packaging_scene(
         sim_options=gs.options.SimOptions(dt=sim_dt, substeps=substeps),
         rigid_options=make_rigid_options(
             gs,
-            dt=sim_dt,
             constraint_solver=config.simulation.constraint_solver,
             friction_cone=config.simulation.friction_cone,
             contact_resolution=config.simulation.contact_resolution,
@@ -411,6 +410,7 @@ def build_packaging_scene(
 def finalize_packaging_block(block, layout: PackagingLayout) -> None:
     """Apply post-build contact and inertial values for deferred scene builds."""
     block.set_friction(float(OBJ_FRICTION_MU))
-    block.set_links_inertial_mass(
-        torch.tensor([layout.obj_mass_kg], device=gs.device, dtype=gs.tc_float),
-    )
+    if hasattr(block, "set_links_mass"):
+        block.set_links_mass(torch.tensor([layout.obj_mass_kg], device=gs.device, dtype=gs.tc_float))
+    else:
+        block.set_links_inertial_mass(torch.tensor([layout.obj_mass_kg], device=gs.device, dtype=gs.tc_float))

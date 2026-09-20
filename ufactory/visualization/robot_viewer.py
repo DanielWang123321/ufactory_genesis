@@ -13,8 +13,8 @@ from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.robots.registry import RobotModelSpec, joint_names
-from ufactory.simulation import make_rigid_options
-from ufactory.simulation.compat import ensure_ik_scratch, require_genesis_runtime
+from ufactory.simulation import forward_kinematics, make_rigid_options
+from ufactory.simulation.compat import require_genesis_runtime
 
 from ufactory.visualization.bio_gripper_g2_viewer import (
     BIO_GRIPPER_G2_OPEN,
@@ -129,9 +129,8 @@ def _link_world_positions(robot, link_names: tuple[str, ...]) -> dict[str, list[
 
 
 def _fk_link_pos(robot, ee_link, qpos_np: np.ndarray) -> np.ndarray:
-    ensure_ik_scratch(robot, gs_module=gs)
     qpos_t = torch.tensor(qpos_np, dtype=torch.float32, device=gs.device)
-    links_pos, _ = robot.forward_kinematics(qpos=qpos_t)
+    links_pos, _ = forward_kinematics(robot, qpos_t)
     idx = int(ee_link.idx_local)
     if links_pos.ndim == 2:
         return links_pos[idx].cpu().numpy()

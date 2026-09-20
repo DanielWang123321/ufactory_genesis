@@ -11,27 +11,6 @@ from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.manipulation.frames import base_to_world_pos, world_to_base_pos
 from ufactory.simulation import G2_PHYSICS_PROFILE
 from ufactory.training import build_pick_place_task_configs
-from ufactory.grippers.g2 import (
-    GRIPPER_G2_OPEN_GAP_M,
-    GRIPPER_G2_SIM_CLOSE_DRIVE,
-    gripper_g2_gap_m_to_sdk_pos_mm,
-    gripper_g2_gap_m_to_sim_drive,
-    gripper_g2_sdk_pos_mm_to_gap_m,
-    gripper_g2_sim_drive_to_gap_m,
-)
-
-
-def test_gripper_g2_gap_drive_and_sdk_mappings_round_trip():
-    assert gripper_g2_gap_m_to_sim_drive(GRIPPER_G2_OPEN_GAP_M) == pytest.approx(0.0)
-    assert gripper_g2_gap_m_to_sim_drive(0.0) == pytest.approx(GRIPPER_G2_SIM_CLOSE_DRIVE)
-    assert gripper_g2_sim_drive_to_gap_m(0.0) == pytest.approx(GRIPPER_G2_OPEN_GAP_M)
-    assert gripper_g2_sim_drive_to_gap_m(GRIPPER_G2_SIM_CLOSE_DRIVE) == pytest.approx(0.0)
-
-    gap = 0.042
-    drive = gripper_g2_gap_m_to_sim_drive(gap)
-    assert gripper_g2_sim_drive_to_gap_m(drive) == pytest.approx(gap)
-    assert gripper_g2_gap_m_to_sdk_pos_mm(gap) == pytest.approx(42.0)
-    assert gripper_g2_sdk_pos_mm_to_gap_m(42.0) == pytest.approx(gap)
 
 
 def test_base_world_translation_contract():

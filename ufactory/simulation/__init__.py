@@ -22,6 +22,9 @@ from ufactory.simulation.physics import (
     make_rigid_options,
     validate_rigid_physics,
 )
+from ufactory.simulation.compat import (
+    forward_kinematics,
+)
 from ufactory.simulation.runtime import (
     BACKEND_INIT_HINT,
     GenesisRuntimeError,
@@ -48,6 +51,7 @@ __all__ = [
     "GenesisRuntimeError",
     "GenesisRuntimeManager",
     "configure_g2_mimic_constraints",
+    "forward_kinematics",
     "genesis_backend_constant",
     "make_rigid_options",
     "object_finger_contact_forces_n",

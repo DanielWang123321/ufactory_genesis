@@ -380,7 +380,6 @@ def build_scene(
         sim_options=gs.options.SimOptions(dt=dt, substeps=substeps),
         rigid_options=make_rigid_options(
             gs,
-            dt=dt,
             constraint_solver=constraint_solver,
             friction_cone=friction_cone,
             contact_resolution=contact_resolution,
@@ -465,9 +464,10 @@ def build_scene(
     obj.set_friction(float(OBJ_FRICTION))
     left_finger.set_friction(float(FINGER_FRICTION))
     right_finger.set_friction(float(FINGER_FRICTION))
-    obj.set_links_inertial_mass(
-        torch.tensor([obj_mass_kg], device=gs.device, dtype=gs.tc_float),
-    )
+    if hasattr(obj, "set_links_mass"):
+        obj.set_links_mass(torch.tensor([obj_mass_kg], device=gs.device, dtype=gs.tc_float))
+    else:
+        obj.set_links_inertial_mass(torch.tensor([obj_mass_kg], device=gs.device, dtype=gs.tc_float))
 
     jnames = joint_names(profile)
     arm_dof_idx = [robot.get_joint(n).dofs_idx_local[0] for n in jnames]

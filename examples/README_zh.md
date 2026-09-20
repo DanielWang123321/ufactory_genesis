@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-v0.2.13 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
+v0.2.14 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
 
 ## 前置条件
 
@@ -80,42 +80,32 @@ python examples/visualization/view_lite6_gripper.py
 | `--headless` | 不打开查看器窗口 |
 | `--backend` | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
 
-## 运动学
+## 运动学与动力学仿真
 
 ```bash
 # 离线机型/资产自检（不连控制器）
 python examples/kinematics/verify_robot.py --robot xarm6
 
-# Genesis URDF 与 xArm SDK 的 FK/IK 对比（需要网络与 IP）
-python examples/kinematics/verify_fk.py --robot xarm6 --ip <ip>
-python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
-```
-
-动力学验证继续使用控制台命令：
-
-```bash
+# 动力学仿真自检
 dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
-dynamics-sim-collision-check --robot xarm6 --ip <ip>
 ```
 
-## 抓放
+> 如需与真实控制器的 FK/IK 对比或硬件动力学检查，请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
+
+## 抓放仿真
 
 `examples/pick_place/run.py` 委托给稳定的 `ufactory-pick-place` 控制台命令，两者接受相同参数。
 
 | 参数 | 取值 / 说明 |
 |------|-------------|
 | `--robot` | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
-| `--mode` | 必选：`sim`（Genesis）、`dry-run`（离线预检，不连控制器）、`sdk-sim`（控制器仿真）、`real` |
+| `--mode` | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检） |
 | `--executor` | 必选：`servo_j` 或 `servo_cartesian` |
 | `--backend` | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
-| `--config` | 可选的严格局部覆盖 YAML |
-| `--print-config` | 打印解析后的运行时 YAML 后退出 |
-| `--ip` | 控制器 IP（或设置 `XARM_IP`），用于 `sdk-sim` / `real` |
-| `--calibration` | 逐台精确运动学 YAML（sdk-sim / real 必需） |
-| `--confirm-real` | `--mode real` 的显式确认门 |
-| `--visual` | `sim`：强制 Genesis viewer；`real`：运动学镜像（不支持 dry-run/sdk-sim） |
-| `--report` | 可选报告输出路径 |
+| `--visual` | 可选：`sim` 模式下强制打开 Genesis 查看器视窗 |
+| `--config` | 可选：严格的局部覆盖 YAML 路径 |
+| `--print-config` | 可选：打印解析后的运行时 YAML 后退出 |
+| `--report` | 可选：报告输出路径 |
 
 ```bash
 # 仅解析配置
@@ -134,20 +124,17 @@ python examples/pick_place/run.py \
 python examples/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --backend cpu
 
-# 可选覆盖（仅写出的字段覆盖 assets/configs/runtime）
+# 可选局部覆盖（仅写出的字段覆盖 assets/configs/runtime）
 python examples/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j \
   --config examples/pick_place/runtime.example.yaml
-
-# 真机运动（必须精确标定 + 显式确认）
-XARM_IP=<ip> python examples/pick_place/run.py \
-  --robot xarm6 --mode real --executor servo_j \
-  --calibration path/to/exact.yaml --confirm-real
 ```
 
 `runtime.example.yaml` 是严格的局部覆盖文件；未写出的机器人、几何、运动、安全和仿真值仍由 `assets/configs/runtime` 解析。
 
-## 装箱
+> 真实机械臂抓放部署请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
+
+## 装箱展示仿真
 
 首次装箱前先生成纸箱贴图（需要 `.[showcase]`）：
 
@@ -159,14 +146,15 @@ python scripts/generate_showcase_textures.py
 
 | 参数 | 取值 / 说明 |
 |------|-------------|
-| `--robot` | 默认 `xarm6`；五机型均支持 sim / dry-run / sdk-sim |
-| `--mode` | 默认 `sim`；与抓放相同的四种模式 |
-| `--executor` | 默认 `servo_j`；也可 `servo_cartesian` |
+| `--robot` | 默认 `xarm6`；五机型均支持 sim / dry-run |
+| `--mode` | 仿真必选：`sim`（默认）、`dry-run`（离线预检） |
+| `--executor` | 默认 `servo_j`；也可选 `servo_cartesian` |
 | `--backend` | 可选：`cpu` / `gpu`；含义与抓放相同 |
 | `--cycles N` | 精确仿真轮数（默认 1） |
 | `--speed` | 仿真播放倍率（`>1` 更快） |
 | `--table-height` | 仅覆盖仿真展示高度，不改变基座系几何 |
-| `--config` / `--print-config` / `--ip` / `--calibration` / `--confirm-real` / `--visual` / `--report` | 含义与抓放相同 |
+| `--visual` | 可选：保持最终查看器画面 |
+| `--config` / `--print-config` / `--report` | 含义与抓放相同 |
 
 ```bash
 # 一轮仿真结束后退出（加 --visual 可保持最终画面）
@@ -181,22 +169,66 @@ python examples/packaging/run.py \
 python examples/packaging/run.py \
   --robot lite6 --mode sim --executor servo_j --cycles 3
 
-# 离线预检 / 控制器仿真
+# 离线预检
 python examples/packaging/run.py \
   --robot xarm7 --mode dry-run --executor servo_j
-python examples/packaging/run.py \
-  --robot lite6 --mode sdk-sim --executor servo_cartesian \
-  --ip <ip> --calibration path/to/exact.yaml
 
-# 真机装箱仅启用 xArm6 + G2、Lite6 + Lite6 夹爪
-XARM_IP=<ip> python examples/packaging/run.py \
-  --robot lite6 --mode real --executor servo_j \
-  --calibration path/to/exact.yaml --confirm-real
-
-# 可选覆盖
+# 可选局部覆盖
 python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j \
   --config examples/packaging/runtime.example.yaml
 ```
 
-真机模式始终只执行一轮。xArm5、xArm7、UF850 的 `--mode real` 会在连接控制器前拒绝，直到启用真实夹爪路径。
+> 真实机械臂装箱操作请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
+
+## 强化学习
+
+Linux/NVIDIA xArm6 + Gripper G2 的 RL 抓放主线为纯仿真流程（不宣称真实机械臂策略部署）。安装、评估、从零训练及证据入口详见：
+[rl/README_cn.md](rl/README_cn.md)。
+
+## 真机操作与硬件校验
+
+> [!CAUTION]
+> **真机安全规范**：
+> 1. 执行前需安装真机扩展依赖：`pip install -e ".[real]"`（包含 xArm SDK 与 Pinocchio/Coal 碰撞检测）。
+> 2. 真实机械臂物理运动具有碰撞与损坏风险。驱动真机运动必须提供实机逐台标定文件（`--calibration`）并显式传入安全确认门（`--confirm-real`）。缺少任一项均会在连接前直接拒绝执行。
+> 3. 真机模式单次运行强制限制为 **1 轮（cycle）**。
+
+### 1. 硬件只读与状态对比指令（不驱动运动）
+
+通过网络读取控制器数据或进行计算对比，真实关节不会产生位移：
+
+```bash
+# Genesis URDF 与 xArm SDK 的 FK/IK 对比（需要网络与 IP）
+python examples/kinematics/verify_fk.py --robot xarm6 --ip <ip>
+python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
+
+# 动力学碰撞检测自检（不驱动机械臂）
+dynamics-sim-collision-check --robot xarm6 --ip <ip>
+
+# 控制器虚拟仿真（sdk-sim：连接真实控制器但仅在控制器内部仿真，关节不动作）
+python examples/packaging/run.py \
+  --robot lite6 --mode sdk-sim --executor servo_cartesian \
+  --ip <ip> --calibration path/to/exact.yaml
+```
+
+### 2. 真机物理运动指令（实际驱动机械臂与夹爪）
+
+实际下发目标位姿与轨迹控制指令至真实机械臂：
+
+```bash
+# 动力学硬件实测检查（需要显式确认开关）
+dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
+
+# 抓放真机运动（必须精确标定 + 显式确认门）
+XARM_IP=<ip> python examples/pick_place/run.py \
+  --robot xarm6 --mode real --executor servo_j \
+  --calibration path/to/exact.yaml --confirm-real
+
+# 装箱真机运动（当前仅支持 xArm6 + G2、Lite6 + 夹爪；必须精确标定 + 显式确认门）
+XARM_IP=<ip> python examples/packaging/run.py \
+  --robot lite6 --mode real --executor servo_j \
+  --calibration path/to/exact.yaml --confirm-real
+```
+
+> 注：xArm5、xArm7、UF850 的装箱 `--mode real` 会在连接控制器前自动拦截退出，直到对应机型启用真机夹爪支持。

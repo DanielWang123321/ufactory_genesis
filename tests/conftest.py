@@ -46,3 +46,15 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:
         except ImportError:
             return True
     return False
+
+
+@pytest.fixture(autouse=True)
+def reset_torch_default_device():
+    yield
+    try:
+        import torch
+
+        if hasattr(torch, "set_default_device"):
+            torch.set_default_device(None)
+    except Exception:
+        pass

@@ -429,7 +429,6 @@ class XArm6PickPlaceEnv:
             sim_options=gs.options.SimOptions(dt=self.ctrl_dt, substeps=self.substeps),
             rigid_options=make_rigid_options(
                 gs,
-                dt=self.ctrl_dt,
                 constraint_solver=self.constraint_solver,
                 friction_cone=self.friction_cone,
                 contact_resolution=self.contact_resolution,
@@ -498,9 +497,10 @@ class XArm6PickPlaceEnv:
         self.obj.set_friction(float(OBJ_FRICTION))
         self.left_finger_link.set_friction(float(FINGER_FRICTION))
         self.right_finger_link.set_friction(float(FINGER_FRICTION))
-        self.obj.set_links_inertial_mass(
-            torch.tensor([self.obj_mass_kg], device=self.device, dtype=gs.tc_float),
-        )
+        if hasattr(self.obj, "set_links_mass"):
+            self.obj.set_links_mass(torch.tensor([self.obj_mass_kg], device=self.device, dtype=gs.tc_float))
+        else:
+            self.obj.set_links_inertial_mass(torch.tensor([self.obj_mass_kg], device=self.device, dtype=gs.tc_float))
         self.collision_monitor_links = [
             self.robot.get_link(name) for name in robot_cfg.get("collision_monitor_links", [])
         ]

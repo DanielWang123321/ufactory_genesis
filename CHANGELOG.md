@@ -5,6 +5,24 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.14] — 2026-09-20
+
+### Added
+
+- Added `ufactory.simulation.forward_kinematics(robot, qpos, envs_idx=None)` helper function wrapping `solver.forward_kinematics_query` to provide unified forward kinematics evaluation across all robot models.
+
+### Changed
+
+- Raised the minimum and reference Genesis World baseline to **1.4.1** (`genesis-world>=1.4.1`). Genesis versions below 1.4.1 now fail closed with `GenesisCompatibilityError`.
+- Migrated forward kinematics call sites across verification, visualization, and validation modules to the unified `forward_kinematics` helper, adapting to Genesis 1.4.1's deprecation of `RigidEntity.forward_kinematics`.
+- Derived rigid solver substeps dynamically via `SimOptions` instead of passing `dt` to `RigidOptions`, preventing substep count conflicts under Genesis 1.4.1 solver validation.
+- Updated rigid link mass modification to use `set_links_mass` with backward-compatible fallback across packaging and RL environments.
+- Ensured PyTorch default device resets cleanly upon Genesis runtime exit and after test fixtures.
+
+### Removed
+
+- Removed obsolete `ensure_ik_scratch` helper and associated private scratch memory allocation hooks, as kinematics scratch storage is now managed natively inside Genesis solvers.
+
 ## [0.2.13] — 2026-08-25
 
 ### Added

@@ -3,20 +3,20 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.13-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.3.3-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.14-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.4.1-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 UFACTORY 机械臂的 Genesis 模型与仿真工具，覆盖可视化、运动学、轨迹执行、装箱和仅用于仿真的强化学习。
 
-[English](README.md) | [示例](examples/README_cn.md) | [变更记录](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全说明](SECURITY.md)
+[English](README.md) | [示例](examples/README_zh.md) | [变更记录](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全说明](SECURITY.md)
 
-> v0.2.13 是个人 GitHub 账号上的 Alpha（预览）源码版本，不是 UFACTORY 官方产品或支持渠道。公开接口在计划迁入官方组织的 0.3.x 版本前仍可能变化。
+> v0.2.14 是个人 GitHub 账号上的 Alpha（预览）源码版本，不是 UFACTORY 官方产品或支持渠道。公开接口在计划迁入官方组织的 0.3.x 版本前仍可能变化。
 
 ## 支持范围
 
-- Python 3.12/3.13；Genesis World 最低且已验证的基线为 1.3.3。
+- Python 3.12/3.13；Genesis World 最低且已验证的基线为 1.4.1。
 - 仅支持克隆源码后的可编辑安装；不支持 wheel、sdist 和远程资产下载。
 - 支持可视化、校准后的正向/逆向运动学（FK/IK）、接触仿真、离线预检、控制器仿真和经过安全检查的真机执行。
 - 真机装箱只启用 xArm6 + Gripper G2 和 Lite6 + Lite6 Gripper。
@@ -47,7 +47,7 @@ python examples/visualization/view_robot.py --robot xarm6
 | 装箱贴图生成 | `pip install -e ".[sim,showcase]"` |
 | 动力学参考检查 | `pip install -e ".[sim,dynamics]"` |
 
-Windows 或无可用显卡时，应先安装 CPU 版 PyTorch，并传入 `--backend cpu`。强化学习仍只支持 Linux/NVIDIA；详见[示例指南](examples/README_cn.md)。
+Windows 或无可用显卡时，应先安装 CPU 版 PyTorch，并传入 `--backend cpu`。强化学习仍只支持 Linux/NVIDIA；详见[示例指南](examples/README_zh.md)。
 
 ## 主要工作流
 
@@ -64,9 +64,9 @@ python scripts/generate_showcase_textures.py
 ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian --visual
 ```
 
-完整的可视化、运动学、CPU/Windows、配置和真机示例见[示例指南](examples/README_cn.md)。
+完整的可视化、运动学、CPU/Windows、配置和真机示例见[示例指南](examples/README_zh.md)。
 
-## v0.2.13 固定位置强化学习
+## v0.2.14 固定位置强化学习
 
 公开的 xArm6 + Gripper G2 任务仅使用固定 `+Y` 布局：方块位于 `[0.300, 0, 0.015]` 米，目标位于 `[0.300, 0.300, 0.015]` 米。本版本不包含随机起点。
 
@@ -85,7 +85,7 @@ python -m examples.rl.pick_place.evaluate --headless -B 8 --episodes 8
 
 ## 文档
 
-- [按任务组织的示例](examples/README_cn.md)
+- [按任务组织的示例](examples/README_zh.md)
 - [贡献与项目检查](CONTRIBUTING.md)
 - [版本变更记录](CHANGELOG.md)
 - [项目路线图](ROADMAP.md)

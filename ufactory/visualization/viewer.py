@@ -34,7 +34,11 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
             "or call `del scene`."
         )
 
-    viewer_options = scene.viewer_options
+    viewer_options = getattr(scene, "viewer_options", None)
+    if viewer_options is None and hasattr(scene, "options"):
+        viewer_options = getattr(scene.options, "viewer", None)
+    if viewer_options is None:
+        gs.raise_exception("Scene has no viewer options configured.")
     if kinematic_mirror:
         viewer_options.realtime_factor = None
         # An in-process mirror uploads poses at up to 15 Hz. Repainting the unchanged frame at

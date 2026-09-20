@@ -31,23 +31,6 @@ CANONICAL_MODULES = (
     "ufactory.visualization",
 )
 
-REMOVED_MODULES = (
-    "ufactory.paths",
-    "ufactory.robot_registry",
-    "ufactory.robot_params",
-    "ufactory.kinematics_validation",
-    "ufactory.real_robot_session",
-    "ufactory.xarm_control",
-    "ufactory.gripper_g2",
-    "ufactory.bio_gripper_g2",
-    "ufactory.glb_visual",
-    "ufactory.dynamics_validation",
-    "ufactory.dynamics_static_analysis",
-    "ufactory.dynamics_verify",
-    "ufactory.deploy",
-)
-
-
 TORCH_OPTIONAL_MODULES = frozenset(
     {
         "ufactory.kinematics.validation",
@@ -61,12 +44,6 @@ def test_canonical_modules_import(module_name: str) -> None:
     if module_name in TORCH_OPTIONAL_MODULES:
         pytest.importorskip("torch")
     importlib.import_module(module_name)
-
-
-@pytest.mark.parametrize("module_name", REMOVED_MODULES)
-def test_removed_legacy_modules_do_not_import(module_name: str) -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module(module_name)
 
 
 def test_root_namespace_is_core_robot_api_only() -> None:

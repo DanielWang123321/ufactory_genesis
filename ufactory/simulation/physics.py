@@ -60,6 +60,7 @@ def make_rigid_options(
 ) -> Any:
     """Create ``gs.options.RigidOptions`` from the project's named policy."""
 
+    options.pop("dt", None)
     constraint_solver = str(constraint_solver).lower()
     friction_cone = str(friction_cone).lower()
     contact_resolution = str(contact_resolution).lower()
