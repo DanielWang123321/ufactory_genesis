@@ -49,6 +49,8 @@ python examples/visualization/view_robot.py --robot xarm6
 
 For Windows or CPU-only simulation, install CPU PyTorch first and pass `--backend cpu`. RL remains Linux/NVIDIA-only; see the [examples guide](examples/README.md).
 
+If the `view_robot.py` viewer returns to the prompt with no window after `Building visualizer...`, set `MKL_THREADING_LAYER=SEQUENTIAL` and rerun (`$env:MKL_THREADING_LAYER = "SEQUENTIAL"` in PowerShell); `--headless` is unaffected.
+
 ## Main workflows
 
 ```bash

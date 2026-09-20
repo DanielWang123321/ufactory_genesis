@@ -32,6 +32,15 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。CPU PyTorch 的安装说明见根目录 README「安装」一节。
 
+6. **Windows 下查看器无报错退出：** 若 `view_robot.py` 在 `Building visualizer...` 之后无窗口直接回到提示符：
+
+```powershell
+$env:MKL_THREADING_LAYER = "SEQUENTIAL"
+python examples/visualization/view_robot.py --robot xarm6
+```
+
+长期生效：`conda env config vars set MKL_THREADING_LAYER=SEQUENTIAL -n <env>`。`--headless` 不受影响。
+
 本版公开目录：
 
 | 目录 | 用途 |

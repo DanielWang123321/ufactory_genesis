@@ -49,6 +49,8 @@ python examples/visualization/view_robot.py --robot xarm6
 
 Windows 或无可用显卡时，应先安装 CPU 版 PyTorch，并传入 `--backend cpu`。强化学习仍只支持 Linux/NVIDIA；详见[示例指南](examples/README_zh.md)。
 
+若 `view_robot.py` 查看器在 `Building visualizer...` 之后无窗口直接回到提示符，请设置 `MKL_THREADING_LAYER=SEQUENTIAL` 后重跑（PowerShell：`$env:MKL_THREADING_LAYER = "SEQUENTIAL"`）；`--headless` 不受影响。
+
 ## 主要工作流
 
 ```bash

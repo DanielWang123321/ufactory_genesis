@@ -32,6 +32,15 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 5. **Windows / no supported GPU:** install the CPU PyTorch wheel first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). See the CPU PyTorch note under *Install* in the root README.
 
+6. **Windows, viewer exits with no error:** if `view_robot.py` returns to the prompt with no window after `Building visualizer...`:
+
+```powershell
+$env:MKL_THREADING_LAYER = "SEQUENTIAL"
+python examples/visualization/view_robot.py --robot xarm6
+```
+
+Permanent: `conda env config vars set MKL_THREADING_LAYER=SEQUENTIAL -n <env>`. `--headless` is unaffected.
+
 Public directories in this release:
 
 | Directory | Purpose |
