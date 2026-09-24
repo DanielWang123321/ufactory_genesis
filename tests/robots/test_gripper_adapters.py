@@ -111,4 +111,3 @@ def test_lite6_collision_demo_labels_snap_at_hold_boundary():
     assert lite6_gripper_demo_label(LITE6_GRIPPER_DEMO_HOLD_STEPS - 1) == "open"
     assert lite6_gripper_demo_label(LITE6_GRIPPER_DEMO_HOLD_STEPS) == "closed"
     assert lite6_gripper_demo_label(2 * LITE6_GRIPPER_DEMO_HOLD_STEPS - 1) == "closed"
-

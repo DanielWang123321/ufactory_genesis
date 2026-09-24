@@ -779,4 +779,3 @@ def test_acceptance_profile_rejects_unknown_name_and_invalid_period() -> None:
         apply_pick_place_acceptance_profile({"ctrl_dt": 0.02}, "future")
     with pytest.raises(ValueError, match="ctrl_dt"):
         apply_pick_place_acceptance_profile({"ctrl_dt": 0.0}, "contact_v1")
-

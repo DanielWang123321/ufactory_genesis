@@ -12,6 +12,7 @@ dist/
 build/
 .claude/
 .cursor/
+.kilo
 logs/
 # Root compatibility symlink to the private RL log archive.
 /logs

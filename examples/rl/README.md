@@ -1,8 +1,8 @@
 # Reinforcement-learning examples
 
-The v0.2.14 public RL surface contains one bounded xArm6 + Gripper G2 workflow:
+The v0.2.15 public RL surface contains one bounded xArm6 + Gripper G2 workflow:
 [fixed-layout training and evaluation](pick_place/README.md). It targets Linux,
-an NVIDIA GPU, Genesis World 1.4.1, Quadrants 1.3.0, PyTorch 2.10, and RSL-RL
+an NVIDIA GPU, Genesis World 1.4.2, Quadrants 1.3.0, PyTorch 2.10, and RSL-RL
 5.4.2.
 
 The bundled seed-7 `model_299_g2stable.pt` was retrained under the
@@ -13,6 +13,6 @@ limitations are in the task guide.
 
 Run every entry as a module from the repository root. The example is
 simulation-only and provides no real-robot policy executor. Random object starts
-are outside the v0.2.14 public scope and are deferred to a later version.
+are outside the v0.2.15 public scope and are deferred to a later version.
 
 [中文说明](README_cn.md)

@@ -1,6 +1,6 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.4.1 is both the minimum and the reference pinned physics baseline for
+Genesis 1.4.2 is both the minimum and the reference pinned physics baseline for
 the contact-v1 pick-place campaign (local and training server aligned).
 """
 
@@ -17,8 +17,8 @@ import warnings
 from packaging.version import InvalidVersion, Version
 
 
-MIN_GENESIS_VERSION = Version("1.4.1")
-VALIDATED_GENESIS_VERSION = Version("1.4.1")  # reference / pinned baseline alias
+MIN_GENESIS_VERSION = Version("1.4.2")
+VALIDATED_GENESIS_VERSION = Version("1.4.2")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -150,6 +150,7 @@ def require_genesis_capabilities(
         require_pbr_hooks(gs_module, gltf_utils, mesh_utils)
     if deferred_viewer:
         load_deferred_viewer_api(gs_module)
+        require_present_hold_hooks()
     return gs_module
 
 
@@ -184,6 +185,24 @@ def require_pbr_hooks(gs_module: Any, gltf_utils: Any, mesh_utils: Any) -> None:
         "Mesh.from_trimesh",
     )
     _require_parameters(surface_to_visual, {"surface", "uvs", "n_verts"}, "surface_uvs_to_trimesh_visual")
+
+
+def require_present_hold_hooks() -> None:
+    """Validate every Genesis hook patched by the present-hold viewer integration."""
+
+    require_genesis_version()
+    try:
+        from genesis.ext.pyrender.renderer import Renderer
+        from genesis.ext.pyrender.viewer import Viewer
+    except ImportError as exc:
+        raise GenesisCompatibilityError("Genesis pyrender viewer/renderer modules are unavailable.") from exc
+    _require_callable(Viewer, "_render", "present-hold")
+    _require_callable(Viewer, "flip", "present-hold")
+    _require_callable(Viewer, "on_resize", "present-hold")
+    _require_callable(Viewer, "set_visible", "present-hold")
+    _require_callable(Viewer, "activate", "present-hold")
+    render = _require_callable(Renderer, "render", "present-hold")
+    _require_parameters(render, {"scene", "flags", "is_first_pass"}, "Renderer.render")
 
 
 def load_deferred_viewer_api(gs_module: Any) -> DeferredViewerAPI:
@@ -225,4 +244,3 @@ def forward_kinematics(
     if hasattr(robot, "forward_kinematics"):
         return robot.forward_kinematics(qpos=qpos)
     raise GenesisCompatibilityError("Robot has no solver with forward_kinematics_query; build the scene first.")
-

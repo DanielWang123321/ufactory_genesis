@@ -3,8 +3,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.14-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.4.1-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/version-0.2.15-orange" alt="Version">
+  <img src="https://img.shields.io/badge/genesis-1.4.2-lightgrey" alt="Genesis">
   <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -12,11 +12,11 @@ UFACTORY robot models and Genesis simulation utilities for visualization, kinema
 
 [中文](README.zh.md) | [Examples](examples/README.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
-> v0.2.14 is an Alpha source release on a personal GitHub account, not an official UFACTORY product or support channel. Public APIs may change before the planned 0.3.x organization release.
+> v0.2.15 is an Alpha source release on a personal GitHub account, not an official UFACTORY product or support channel. Public APIs may change before the planned 0.3.x organization release.
 
 ## Supported scope
 
-- Python 3.12/3.13; minimum and validated Genesis World baseline: 1.4.1.
+- Python 3.12/3.13; minimum and validated Genesis World baseline: 1.4.2.
 - Source checkout with editable install only; wheels, sdists, and remote asset downloads are unsupported.
 - Visualization, calibrated FK/IK, contact simulation, dry-run, controller simulation, and guarded real execution.
 - Real packaging is enabled only for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper.
@@ -68,7 +68,7 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 
 Full visualization, kinematics, CPU/Windows, configuration, and real-robot examples are in [examples/README.md](examples/README.md).
 
-## Fixed-layout RL in v0.2.14
+## Fixed-layout RL in v0.2.15
 
 The public xArm6 + Gripper G2 task uses one fixed `+Y` layout: cube `[0.300, 0, 0.015]` m and target `[0.300, 0.300, 0.015]` m. Random starts are not included in this release.
 

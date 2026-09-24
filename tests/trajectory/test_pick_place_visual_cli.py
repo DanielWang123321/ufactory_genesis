@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -168,6 +169,130 @@ def test_kinematic_mirror_disables_existing_viewer_scene_pacer():
     start_deferred_viewer(scene, kinematic_mirror=True)
 
     assert viewer.realtime_factor is None
+
+
+def test_open_sim_viewer_warms_then_start_deferred_viewer(monkeypatch):
+    calls: list[str] = []
+    scene = SimpleNamespace(step=lambda: calls.append("step"))
+
+    monkeypatch.setattr(
+        "ufactory.visualization.start_deferred_viewer",
+        lambda target, **kwargs: calls.append(f"start_deferred_viewer:{target is scene}:{kwargs}"),
+    )
+
+    pick_place._open_sim_viewer(SimpleNamespace(scene=scene), warmup_steps=3)
+
+    assert calls[:3] == ["step", "step", "step"]
+    assert calls[3].startswith("start_deferred_viewer:True:")
+
+
+def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
+    calls: list[str] = []
+    scene = SimpleNamespace(step=lambda: calls.append("step"))
+    ctx = SimpleNamespace(scene=scene)
+
+    monkeypatch.setattr(pick_place, "require_genesis_capabilities", lambda **_kwargs: calls.append("capabilities"))
+    monkeypatch.setattr(
+        pick_place,
+        "load_runtime_config",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            robot=SimpleNamespace(key="lite6"),
+            motion=SimpleNamespace(rate_hz=50.0),
+            simulation=SimpleNamespace(show_viewer=False, backend="gpu", precision="32", seed=1),
+            task=SimpleNamespace(parameters={}, allowed_contacts={}),
+        ),
+    )
+    monkeypatch.setattr(
+        pick_place,
+        "_print_summary",
+        lambda _config: None,
+    )
+    monkeypatch.setattr(pick_place, "_model_and_hashes", lambda *_args, **_kwargs: (Path("/tmp/urdf"), "u", "c"))
+    monkeypatch.setattr(pick_place, "_backends", lambda *_args, **_kwargs: (object(), object()))
+    monkeypatch.setattr(pick_place, "_build_program", lambda *_args, **_kwargs: SimpleNamespace(segments=()))
+    monkeypatch.setattr(pick_place, "_json_sha256", lambda _value: "scene")
+    monkeypatch.setattr(
+        pick_place,
+        "create_safety_gate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            preflight=lambda _program, executor: SimpleNamespace(
+                passed=True,
+                violations=(),
+                program_sha256="p",
+                to_dict=lambda: {},
+            ),
+            approve_simulation=lambda program, preflight: program,
+        ),
+    )
+
+    class _Runtime:
+        def __init__(self, _config):
+            pass
+
+        def __enter__(self):
+            calls.append("genesis_enter")
+            return self
+
+        def __exit__(self, *_exc):
+            calls.append("genesis_exit")
+            return False
+
+    monkeypatch.setattr(pick_place, "GenesisRuntimeManager", _Runtime)
+
+    def _build_ik_scene(_config, *, calibration=None, show_viewer=False):
+        calls.append(f"build_scene:show_viewer={show_viewer}")
+        return ctx
+
+    monkeypatch.setattr(pick_place, "_build_ik_scene", _build_ik_scene)
+    monkeypatch.setattr(
+        pick_place,
+        "_open_sim_viewer",
+        lambda target, **_kwargs: calls.append(f"open_sim_viewer:{target is ctx}"),
+    )
+    monkeypatch.setattr(
+        pick_place,
+        "execute_sim",
+        lambda _approved, runner: (
+            calls.append("execute_sim") or SimpleNamespace(place_error_mm=1.0, home_drift_mm=1.0, metric_settle_ticks=1)
+        ),
+    )
+    monkeypatch.setattr(
+        pick_place,
+        "_hold_viewer",
+        lambda target, **_kwargs: calls.append(f"hold_viewer:{target is ctx}"),
+    )
+    monkeypatch.setattr(
+        "ufactory.trajectory.sim_executor.replay_sim",
+        lambda *_args, **_kwargs: calls.append("replay_sim"),
+    )
+    monkeypatch.setattr(pick_place, "_write_json", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        pick_place,
+        "_print_preflight_start",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        pick_place,
+        "_print_preflight_complete",
+        lambda *_args, **_kwargs: None,
+    )
+
+    rc = pick_place.main(
+        [
+            "--robot",
+            "lite6",
+            "--mode",
+            "sim",
+            "--executor",
+            "servo_cartesian",
+            "--visual",
+        ]
+    )
+
+    assert rc == 0
+    assert "build_scene:show_viewer=False" in calls
+    assert calls.index("open_sim_viewer:True") < calls.index("execute_sim")
+    assert calls.index("execute_sim") < calls.index("hold_viewer:True")
 
 
 def test_hold_viewer_runs_until_window_closes_and_paces_mirror(monkeypatch, capsys):

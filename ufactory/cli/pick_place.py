@@ -275,6 +275,17 @@ def _build_ik_scene(config: Any, *, calibration: Path | None, show_viewer: bool 
     )
 
 
+def _open_sim_viewer(ctx: Any, *, warmup_steps: int = 3) -> None:
+    """Settle the scene, then open the interactive viewer at the home pose."""
+
+    from ufactory.visualization import start_deferred_viewer
+
+    scene = ctx.scene
+    for _ in range(max(0, int(warmup_steps))):
+        scene.step()
+    start_deferred_viewer(scene)
+
+
 def _compile_servo_j_program(
     config: Any,
     *,
@@ -717,13 +728,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     flush=True,
                 )
                 ik_started = time.perf_counter()
-                show_viewer_for_ik = args.mode == "sim" and (bool(args.visual) or bool(config.simulation.show_viewer))
                 genesis_for_ik = GenesisRuntimeManager(config.simulation)
                 genesis_for_ik.__enter__()
                 program, ik_ctx, q_home = _compile_servo_j_program(
                     config,
                     calibration=args.calibration,
-                    show_viewer=show_viewer_for_ik,
+                    show_viewer=False,
                 )
                 _print_ik_compile_complete(program, elapsed_s=time.perf_counter() - ik_started)
             else:
@@ -756,12 +766,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 show_viewer = bool(args.visual) or bool(config.simulation.show_viewer)
                 if ik_ctx is not None:
+                    if show_viewer:
+                        _open_sim_viewer(ik_ctx)
                     sim_report = execute_sim(approved, lambda checked: replay_sim(checked, ik_ctx))
                     if show_viewer:
                         _hold_viewer(ik_ctx)
                 else:
                     with GenesisRuntimeManager(config.simulation):
-                        ctx = _build_ik_scene(config, calibration=None, show_viewer=show_viewer)
+                        ctx = _build_ik_scene(config, calibration=None, show_viewer=False)
+                        if show_viewer:
+                            _open_sim_viewer(ctx)
                         sim_report = execute_sim(approved, lambda checked: replay_sim(checked, ctx))
                         if show_viewer:
                             _hold_viewer(ctx)

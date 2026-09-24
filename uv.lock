@@ -967,7 +967,7 @@ wheels = [
 
 [[package]]
 name = "genesis-ufactory"
-version = "0.2.13"
+version = "0.2.15"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1014,7 +1014,7 @@ trajectory = [
 requires-dist = [
     { name = "coal", marker = "extra == 'dynamics'", specifier = "==3.0.3" },
     { name = "coal", marker = "extra == 'real'", specifier = "==3.0.3" },
-    { name = "genesis-world", marker = "extra == 'sim'", specifier = ">=1.3.3" },
+    { name = "genesis-world", marker = "extra == 'sim'", specifier = ">=1.4.2" },
     { name = "huggingface-hub", marker = "extra == 'rl'", specifier = ">=0.24" },
     { name = "matplotlib", marker = "extra == 'dynamics'", specifier = ">=3.8" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.16" },
@@ -1039,7 +1039,7 @@ provides-extras = ["dev", "dynamics", "real", "sim", "rl", "showcase", "trajecto
 
 [[package]]
 name = "genesis-world"
-version = "1.3.3"
+version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "av" },
@@ -1077,7 +1077,7 @@ dependencies = [
     { name = "z3-solver" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/11/63/e4c6e7af1083fda1adecacfff22ebf5533283e6c2730f426210aab05c1a3/genesis_world-1.3.3-py3-none-any.whl", hash = "sha256:74fcece3f080d2de86a25da9c26c979c192ed4a115d556133e8103169f74b3bf", size = 83453245, upload-time = "2026-08-13T13:54:46.247Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/36/575458ac2c92e8e694c3de4be798cdd2c82398c6d9582aac907d951f7ac1/genesis_world-1.4.2-py3-none-any.whl", hash = "sha256:860617fc3098b8dc71c2139ca72ef0f36575d466fdbe36b3df7832bb9f3520a0", size = 83534653, upload-time = "2026-09-23T19:30:51.66Z" },
 ]
 
 [[package]]

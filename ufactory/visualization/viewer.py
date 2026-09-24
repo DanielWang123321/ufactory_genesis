@@ -3,8 +3,29 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 from ufactory.simulation.compat import load_deferred_viewer_api
+from ufactory.visualization.render_patch import install_present_hold
+
+
+def prime_visual_states(scene: Any) -> None:
+    """Upload current physics poses into the rasterizer before any window exists.
+
+    ``Visualizer.update`` is a no-op without a viewer, so ``set_qpos`` and
+    settle steps do not reach the render graph. Priming here makes the first
+    visible frame show the home pose instead of the URDF default.
+    """
+
+    visualizer = getattr(scene, "visualizer", None)
+    if visualizer is None:
+        return
+    context = getattr(visualizer, "_context", None)
+    if context is None:
+        return
+    update = getattr(context, "update", None)
+    if callable(update):
+        update(force_render=True)
 
 
 def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
@@ -62,6 +83,8 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
     if sys.platform == "darwin" and viewer_options.run_in_thread:
         gs.raise_exception("Running viewer in background thread is not supported on MacOS.")
 
+    install_present_hold()
+    prime_visual_states(scene)
     viewer = viewer_api.viewer_type(viewer_options, visualizer._context)
     visualizer._viewer = viewer
     if getattr(visualizer, "_rasterizer", None) is not None:
@@ -69,4 +92,5 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
         visualizer._rasterizer._offscreen = False
     viewer.build(scene)
     visualizer.viewer_lock = viewer.lock
-    visualizer.reset()
+    # reset() 已由 viewer.build() → visualizer.build() 内部完成（visualizer.py L210），
+    # 延迟启动场景无需再次重置，避免窗口可见后渲染状态被清空导致黑帧闪烁。

@@ -105,4 +105,3 @@ def test_ipv6_robot_address_is_rejected_before_sdk_connection():
     assert result.returncode == 2
     assert "IPv6 is not supported" in result.stderr
     assert "connect serial failed" not in result.stderr
-

@@ -5,6 +5,12 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] — 2026-09-24
+
+### Changed
+
+- Raised the minimum and reference Genesis World baseline to **1.4.2** (`genesis-world>=1.4.2`). Genesis 1.4.1 and older now fail closed with `GenesisCompatibilityError`. Private hook signatures used by forward kinematics, inverse kinematics, GLB PBR, and the deferred viewer are unchanged on 1.4.2. `RigidOptions.use_hibernation` stays off by default, and scenes still pass `iterations=100`, so the Gripper G2 contact profile is unchanged.
+
 ## [0.2.14] — 2026-09-20
 
 ### Added
