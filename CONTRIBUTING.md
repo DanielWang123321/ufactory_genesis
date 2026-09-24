@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide explains how to set up your
 
 ```bash
 # Clone the repository
-git clone https://github.com/DanielWang123321/ufactory_genesis.git
+git clone https://github.com/xArm-Developer/ufactory_genesis.git
 cd ufactory_genesis
 
 # Create a virtual environment (Python >= 3.12 required)
@@ -29,7 +29,7 @@ pip install -e ".[showcase]"
 
 The `[sim]` extra requires `genesis-world>=1.4.2` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.4.2 and Quadrants 1.3.0; `[rl]` requires RSL-RL 5.3.0+ and the lock pins 5.4.2. Genesis 1.4.1 and older are unsupported. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
 
-0.2.x is Alpha: public APIs may break between minor versions. The first supported freeze is planned for 0.3.x after the move to a UFACTORY organization repository — see [ROADMAP.md](ROADMAP.md).
+The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). v0.3.0 completes that move. Public APIs may still change in later 0.3.x versions; the API freeze has not started — see [ROADMAP.md](ROADMAP.md).
 
 The `tests/` suite is for **contributors and maintainers**, not end-user onboarding. Library users should start from `examples/` and the dynamics CLI entry points.
 

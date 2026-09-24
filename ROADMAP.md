@@ -1,20 +1,21 @@
 # Roadmap
 
-## 0.2.x (current — personal GitHub, Alpha)
+## 0.2.x (ended — personal GitHub preview)
 
-- Preview / Alpha surface hosted at `DanielWang123321/ufactory_genesis`.
-- Public APIs may break between minor versions; pin a git tag for secondary work.
+- Preview surface was hosted at `DanielWang123321/ufactory_genesis` and moved to the organization repository in v0.3.0.
+- Public APIs could break between minor versions; pin a git tag for secondary work on that line.
 - No compatibility shims for historical renames (for example `grasp_place` → `pick_place`).
 - Public CI covers the **fast** CPU check only. Simulation and hardware evidence stay on maintainer machines; optional sanitized summaries may attach to GitHub Releases.
-- Goals before 0.3: honest docs, NOTICE attribution, Draco-slimmed assets, and a transferable CI workflow.
 
-## 0.3.x (planned — UFACTORY organization, first supported surface)
+## 0.3.x (current — xArm-Developer/ufactory_genesis)
+
+The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). Public APIs may still change in later 0.3.x versions. The API freeze below has not started.
 
 ### Official repository migration
 
-1. Confirm the target GitHub organization and repository name with UFACTORY.
-2. Choose one cutover method: **transfer repository ownership**, or **new official repo + archive the personal repo** with a top-of-README pointer.
-3. Update `pyproject.toml` URLs, README badges, Citation, CONTRIBUTING clone URL, and LICENSE / authors to match company process.
+1. Done: target organization is `xArm-Developer`, repository name `ufactory_genesis`.
+2. Done: repository ownership was transferred. The previous personal URL redirects to the organization repository.
+3. Update `pyproject.toml` URLs, README badges, Citation, and the CONTRIBUTING clone URL. LICENSE / authors stay with the current maintainer until a company process says otherwise.
 4. Align any PyPI project homepage with the official repository.
 5. Stop feature development on the personal 0.2 line after cutover.
 

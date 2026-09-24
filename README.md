@@ -3,16 +3,16 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/version-0.2.15-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.3.0-orange" alt="Version">
   <img src="https://img.shields.io/badge/genesis-1.4.2-lightgrey" alt="Genesis">
-  <a href="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/DanielWang123321/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 UFACTORY robot models and Genesis simulation utilities for visualization, kinematics, trajectory execution, packaging, and simulation-only reinforcement learning (RL).
 
 [中文](README.zh.md) | [Examples](examples/README.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
-> v0.2.15 is an Alpha source release on a personal GitHub account, not an official UFACTORY product or support channel. Public APIs may change before the planned 0.3.x organization release.
+> v0.3.0 is the official repository under [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis). This release completes the repository move. Public APIs may still change in later 0.3.x versions; the API freeze has not started.
 
 ## Supported scope
 
@@ -32,7 +32,7 @@ UFACTORY robot models and Genesis simulation utilities for visualization, kinema
 ## Install
 
 ```bash
-git clone https://github.com/DanielWang123321/ufactory_genesis.git
+git clone https://github.com/xArm-Developer/ufactory_genesis.git
 cd ufactory_genesis
 pip install -e ".[sim]"
 export NUMBA_CACHE_DIR=~/.cache/numba
@@ -68,7 +68,7 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 
 Full visualization, kinematics, CPU/Windows, configuration, and real-robot examples are in [examples/README.md](examples/README.md).
 
-## Fixed-layout RL in v0.2.15
+## Fixed-layout RL in v0.3.0
 
 The public xArm6 + Gripper G2 task uses one fixed `+Y` layout: cube `[0.300, 0, 0.015]` m and target `[0.300, 0.300, 0.015]` m. Random starts are not included in this release.
 
@@ -97,4 +97,4 @@ Real motion requires exact per-unit calibration, complete predictive preflight, 
 
 Code is MIT licensed; robot URDF and mesh assets include upstream material with separate attribution in [NOTICE](NOTICE). xArm, UF850, and UFACTORY are trademarks of their respective owners.
 
-For research use, cite “genesis-ufactory: UFACTORY Robot Models for Genesis Simulation,” Daniel Wang, 2026, `https://github.com/DanielWang123321/ufactory_genesis`.
+For research use, cite “genesis-ufactory: UFACTORY Robot Models for Genesis Simulation,” Daniel Wang, 2026, `https://github.com/xArm-Developer/ufactory_genesis`.

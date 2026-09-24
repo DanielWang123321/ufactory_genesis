@@ -2,7 +2,7 @@
 
 [中文](README_zh.md)
 
-v0.2.15 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
+v0.3.0 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
 
 ## Prerequisites
 

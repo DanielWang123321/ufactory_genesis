@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.2.15"
+version = "0.3.0"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -31,9 +31,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/DanielWang123321/ufactory_genesis"
-Repository = "https://github.com/DanielWang123321/ufactory_genesis"
-Issues = "https://github.com/DanielWang123321/ufactory_genesis/issues"
+Homepage = "https://github.com/xArm-Developer/ufactory_genesis"
+Repository = "https://github.com/xArm-Developer/ufactory_genesis"
+Issues = "https://github.com/xArm-Developer/ufactory_genesis/issues"
 
 [project.optional-dependencies]
 dev = [
