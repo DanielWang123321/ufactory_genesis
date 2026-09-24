@@ -9,7 +9,7 @@
 
 ## 0.3.x (current — xArm-Developer/ufactory_genesis)
 
-The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). Public APIs may still change in later 0.3.x versions. The API freeze below has not started.
+The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x. Entry points may be renamed or removed before 1.0.0. Genesis World is validated at 1.4.2 only; a newer release must pass the hook checks or it fails closed. This repository does not promise that today's interfaces keep working on later Genesis versions.
 
 ### Official repository migration
 
@@ -19,21 +19,9 @@ The official repository is [xArm-Developer/ufactory_genesis](https://github.com/
 4. Align any PyPI project homepage with the official repository.
 5. Stop feature development on the personal 0.2 line after cutover.
 
-### Public API freeze (first promise)
+### Current entry points
 
-After 0.3 ships, the default-stable surface is:
-
-- Documented CLI entry points (`ufactory-pick-place`, packaging CLI, dynamics CLIs listed in README).
-- Task-oriented `examples/` layouts and their beside-entry overlays.
-- Symbols exported from `ufactory` root and the README **API Quick Reference** list.
-
-Still evolving without freeze promises:
-
-- `ufactory.training` and other library APIs not listed as stable in 0.3 docs.
-- Internal `ufactory.quality` and undocumented private modules.
-
-**0.2 → 0.3** may include one cleanup Breaking change set with a one-page migration note (no runtime shims required).
-**After 0.3**, Breaking changes require at least one minor-version deprecation window except for urgent safety fixes.
+README lists the commands, example directories, and `ufactory` root exports that work in v0.3.0. That list is not a compatibility promise. `ufactory.training`, `ufactory.quality`, and modules left off the list can change without a deprecation window.
 
 ### User promotion checklist
 

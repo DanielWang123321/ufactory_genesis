@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from itertools import islice
 from types import SimpleNamespace
 
 import numpy as np
@@ -217,19 +216,16 @@ def test_packaging_real_requires_confirmation_before_connection() -> None:
 
 
 @pytest.mark.parametrize(
-    ("repeat_args", "expected_cycles", "expected_loop"),
+    ("repeat_args", "expected_cycles"),
     [
-        ([], None, None),
-        (["--cycles", "3"], 3, None),
-        (["--loop"], None, True),
-        (["--no-loop"], None, False),
+        ([], None),
+        (["--cycles", "3"], 3),
     ],
 )
 def test_packaging_cli_parses_simulation_repetition(
     monkeypatch: pytest.MonkeyPatch,
     repeat_args: list[str],
     expected_cycles: int | None,
-    expected_loop: bool | None,
 ) -> None:
     from ufactory.cli import packaging
 
@@ -237,13 +233,12 @@ def test_packaging_cli_parses_simulation_repetition(
 
     def _fake_run_sim(args) -> int:
         captured["cycles"] = args.cycles
-        captured["loop"] = args.loop
         return 0
 
     monkeypatch.setattr(packaging, "_run_sim", _fake_run_sim)
 
     assert packaging.main(["--mode", "sim", *repeat_args]) == 0
-    assert captured == {"cycles": expected_cycles, "loop": expected_loop}
+    assert captured == {"cycles": expected_cycles}
 
 
 @pytest.mark.parametrize("value", ["0", "-1"])
@@ -254,14 +249,6 @@ def test_packaging_cli_rejects_non_positive_cycles(value: str) -> None:
         main(["--mode", "sim", "--cycles", value])
 
 
-@pytest.mark.parametrize("flag", ["--loop", "--no-loop"])
-def test_packaging_cli_rejects_conflicting_cycle_flags(flag: str) -> None:
-    from ufactory.cli.packaging import main
-
-    with pytest.raises(SystemExit):
-        main(["--mode", "sim", "--cycles", "2", flag])
-
-
 def test_packaging_cli_rejects_cycles_outside_simulation() -> None:
     from ufactory.cli.packaging import main
 
@@ -269,35 +256,23 @@ def test_packaging_cli_rejects_cycles_outside_simulation() -> None:
         main(["--mode", "dry-run", "--cycles", "2"])
 
 
-def test_packaging_cli_rejects_infinite_loop_outside_simulation() -> None:
+def test_packaging_cli_rejects_unknown_loop_flag() -> None:
     from ufactory.cli.packaging import main
 
     with pytest.raises(SystemExit):
-        main(["--mode", "dry-run", "--loop"])
-
-
-def test_packaging_cli_accepts_compatibility_no_loop_outside_simulation(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    from ufactory.cli.packaging import main
-
-    assert main(["--mode", "dry-run", "--no-loop", "--print-config"]) == 0
-    assert "name: packaging_showcase" in capsys.readouterr().out
+        main(["--mode", "sim", "--loop"])
 
 
 @pytest.mark.parametrize(
-    ("cycles", "loop", "expected_tail"),
+    ("cycles", "expected_tail"),
     [
-        (None, None, []),
-        (3, None, ["--cycles", "3"]),
-        (None, True, ["--loop"]),
-        (None, False, ["--no-loop"]),
+        (None, []),
+        (3, ["--cycles", "3"]),
     ],
 )
 def test_packaging_cli_forwards_repetition_to_showcase(
     monkeypatch: pytest.MonkeyPatch,
     cycles: int | None,
-    loop: bool | None,
     expected_tail: list[str],
 ) -> None:
     from ufactory.cli import packaging
@@ -314,7 +289,6 @@ def test_packaging_cli_forwards_repetition_to_showcase(
         robot="xarm6",
         executor="servo_j",
         cycles=cycles,
-        loop=loop,
         table_height=None,
         config=None,
         backend=None,
@@ -326,15 +300,12 @@ def test_packaging_cli_forwards_repetition_to_showcase(
 
 
 def test_packaging_showcase_resolves_default_and_explicit_repetition() -> None:
-    from ufactory.manipulation.packaging.simulation import _cycle_indices, _resolve_repetition
+    from ufactory.manipulation.packaging.simulation import _cycle_indices, _cycle_limit
 
-    assert _resolve_repetition(None, None) == (False, 1)
-    assert _resolve_repetition(3, None) == (False, 3)
-    assert _resolve_repetition(None, False) == (False, 1)
-    assert _resolve_repetition(None, True) == (True, 1)
-    assert list(_cycle_indices(infinite=False, cycle_limit=1)) == [1]
-    assert list(_cycle_indices(infinite=False, cycle_limit=3)) == [1, 2, 3]
-    assert list(islice(_cycle_indices(infinite=True, cycle_limit=1), 4)) == [1, 2, 3, 4]
+    assert _cycle_limit(None) == 1
+    assert _cycle_limit(3) == 3
+    assert list(_cycle_indices(1)) == [1]
+    assert list(_cycle_indices(3)) == [1, 2, 3]
 
 
 def test_packaging_cycle_reset_restores_position_orientation_and_velocity(monkeypatch: pytest.MonkeyPatch) -> None:

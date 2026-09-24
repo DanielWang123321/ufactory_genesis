@@ -1,4 +1,4 @@
-"""Stable v0.2.5 dynamics reporting and validation API.
+"""Dynamics reporting and validation types for the current 0.x line.
 
 Simulation probes, hardware sampling, plotting and CLI functions are internal
 implementation modules and are intentionally not bulk re-exported.

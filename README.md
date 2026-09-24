@@ -12,22 +12,22 @@ UFACTORY robot models and Genesis simulation utilities for visualization, kinema
 
 [中文](README.zh.md) | [Examples](examples/README.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
-> v0.3.0 is the official repository under [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis). This release completes the repository move. Public APIs may still change in later 0.3.x versions; the API freeze has not started.
+> v0.3.0 is the official repository under [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x: entry points may be renamed or removed before 1.0.0. Genesis World is validated at 1.4.2 only.
 
 ## Supported scope
 
-- Python 3.12/3.13; minimum and validated Genesis World baseline: 1.4.2.
+- Python 3.12/3.13. Genesis World 1.4.2 is the validated baseline. Newer Genesis releases are not guaranteed; hook checks fail closed when they do not match.
 - Source checkout with editable install only; wheels, sdists, and remote asset downloads are unsupported.
 - Visualization, calibrated FK/IK, contact simulation, dry-run, controller simulation, and guarded real execution.
 - Real packaging is enabled only for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper.
 
-| Profile | Robot | Available end effectors |
-|---------|-------|-------------------------|
-| `xarm5` / `xarm5_1305` | xArm 5 | Gripper G2, Bio Gripper G2 |
-| `xarm6` / `xarm6_1305` | xArm 6 | Gripper G2, Bio Gripper G2 |
-| `xarm7` / `xarm7_1305` | xArm 7 | Gripper G2, Bio Gripper G2 |
-| `uf850` | UF850 | Gripper G2, Bio Gripper G2 |
-| `lite6` | Lite6 | Lite6 Gripper, Lite6 Vacuum Gripper |
+| Robot | Available end effectors |
+|--------|-------------------------|
+| `xarm5` | Gripper G2, Bio Gripper G2 |
+| `xarm6` | Gripper G2, Bio Gripper G2 |
+| `xarm7` | Gripper G2, Bio Gripper G2 |
+| `uf850` | Gripper G2, Bio Gripper G2 |
+| `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper |
 
 ## Install
 
@@ -67,6 +67,16 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 ```
 
 Full visualization, kinematics, CPU/Windows, configuration, and real-robot examples are in [examples/README.md](examples/README.md).
+
+## Current entry points
+
+These are what v0.3.0 runs against Genesis World 1.4.2. They are not a promise that later 0.x releases or later Genesis versions will keep them.
+
+Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`. `project-check` and `observe-hold-current` are maintainer tools.
+
+Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries.
+
+Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
 
 ## Fixed-layout RL in v0.3.0
 

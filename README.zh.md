@@ -12,22 +12,22 @@ UFACTORY 机械臂的 Genesis 模型与仿真工具，覆盖可视化、运动�
 
 [English](README.md) | [示例](examples/README_zh.md) | [变更记录](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全说明](SECURITY.md)
 
-> v0.3.0 是 [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis) 上的官方仓库。本版本完成仓库迁移。公开接口在后续 0.3.x 小版本中仍可能调整，接口冻结尚未开始。
+> v0.3.0 是 [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis) 上的官方仓库。项目仍是 0.x：1.0.0 之前可以改名或删除入口。Genesis World 只验证 1.4.2。
 
 ## 支持范围
 
-- Python 3.12/3.13；Genesis World 最低且已验证的基线为 1.4.2。
+- Python 3.12/3.13。Genesis World 1.4.2 是已验证基线。不保证更高版本可用；钩子检查对不上时直接失败。
 - 仅支持克隆源码后的可编辑安装；不支持 wheel、sdist 和远程资产下载。
 - 支持可视化、校准后的正向/逆向运动学（FK/IK）、接触仿真、离线预检、控制器仿真和经过安全检查的真机执行。
 - 真机装箱只启用 xArm6 + Gripper G2 和 Lite6 + Lite6 Gripper。
 
-| 配置名 | 机械臂 | 可用末端 |
-|--------|--------|----------|
-| `xarm5` / `xarm5_1305` | xArm 5 | Gripper G2、Bio Gripper G2 |
-| `xarm6` / `xarm6_1305` | xArm 6 | Gripper G2、Bio Gripper G2 |
-| `xarm7` / `xarm7_1305` | xArm 7 | Gripper G2、Bio Gripper G2 |
-| `uf850` | UF850 | Gripper G2、Bio Gripper G2 |
-| `lite6` | Lite6 | Lite6 Gripper、Lite6 Vacuum Gripper |
+| 机械臂 | 可用末端 |
+|--------|----------|
+| `xarm5` | Gripper G2、Bio Gripper G2 |
+| `xarm6` | Gripper G2、Bio Gripper G2 |
+| `xarm7` | Gripper G2、Bio Gripper G2 |
+| `uf850` | Gripper G2、Bio Gripper G2 |
+| `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper |
 
 ## 安装
 
@@ -67,6 +67,16 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 ```
 
 完整的可视化、运动学、CPU/Windows、配置和真机示例见[示例指南](examples/README_zh.md)。
+
+## 当前入口
+
+下面是 v0.3.0 在 Genesis World 1.4.2 上可用的入口，不表示后续 0.x 或更高 Genesis 版本会继续保留。
+
+命令：`ufactory-pick-place`、`ufactory-packaging-showcase`、`dynamics-sim-check`、`dynamics-sim-collision-check`、`dynamics-hardware-check`。`project-check` 和 `observe-hold-current` 是维护者工具。
+
+示例：`examples/visualization`、`examples/kinematics`、`examples/pick_place`、`examples/packaging`、`examples/rl/pick_place`，以及抓放和装箱入口旁的 `runtime.example.yaml`。
+
+`ufactory` 根导出：`get_robot_profile`、`robot_urdf`、`robot_visual_glb_urdf`、`robot_assets`、`RepositoryAssetStore`。
 
 ## v0.3.0 固定位置强化学习
 

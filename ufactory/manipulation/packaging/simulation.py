@@ -650,16 +650,14 @@ def _positive_cycles(value: str) -> int:
     return cycles
 
 
-def _resolve_repetition(cycles: int | None, loop: bool | None) -> tuple[bool, int]:
-    """Return ``(infinite, finite_limit)`` for the CLI repetition flags."""
-    return loop is True, cycles if cycles is not None else 1
+def _cycle_limit(cycles: int | None) -> int:
+    """Return the finite cycle count. The default is one cycle."""
+
+    return 1 if cycles is None else cycles
 
 
-def _cycle_indices(*, infinite: bool, cycle_limit: int) -> Iterator[int]:
-    cycle = 1
-    while infinite or cycle <= cycle_limit:
-        yield cycle
-        cycle += 1
+def _cycle_indices(cycle_limit: int) -> Iterator[int]:
+    yield from range(1, cycle_limit + 1)
 
 
 def _capture_keyframes_interactive(scene, robot, block, layout, speed: float, ctx: ShowcaseRobotCtx) -> None:
@@ -701,18 +699,8 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Override simulation.backend (use cpu without a Genesis-supported GPU)",
     )
-    repetition = parser.add_mutually_exclusive_group()
-    repetition.add_argument(
-        "--cycles",
-        type=_positive_cycles,
-        default=None,
-        help="Number of pick-place cycles (default: 1)",
-    )
-    repetition.add_argument(
-        "--loop",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Loop forever; --no-loop is a compatibility alias for one cycle",
+    parser.add_argument(
+        "--cycles", type=_positive_cycles, default=None, help="Number of pick-place cycles (default: 1)"
     )
     parser.add_argument(
         "--capture-keyframes",
@@ -743,10 +731,9 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
 
     print(f"{runtime_config.robot.key} packaging showcase — Ctrl+C to exit")
     print(f"  simulation.backend={runtime_config.simulation.backend}")
-    infinite, cycle_limit = _resolve_repetition(args.cycles, args.loop)
+    cycle_limit = _cycle_limit(args.cycles)
     task_layout = packaging_layout(runtime_config)
-    cycle_text = "infinite" if infinite else str(cycle_limit)
-    print(f"  table_top_z={layout.table_top_z:.2f}m  speed={args.speed}  cycles={cycle_text}")
+    print(f"  table_top_z={layout.table_top_z:.2f}m  speed={args.speed}  cycles={cycle_limit}")
 
     ctx = init_showcase_robot(robot, layout, scene, runtime_config=runtime_config)
     hold_robot_home(robot, scene, ctx, steps=_scale_steps(SETTLE_STEPS, args.speed))
@@ -762,8 +749,8 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
     failed = False
     cycle = 0
     try:
-        for cycle in _cycle_indices(infinite=infinite, cycle_limit=cycle_limit):
-            total = "∞" if infinite else str(cycle_limit)
+        for cycle in _cycle_indices(cycle_limit):
+            total = str(cycle_limit)
             print(f"\n=== Cycle {cycle}/{total} ===")
             prepare_packaging_cycle(scene, robot, block, layout, ctx, speed=args.speed)
             report = run_pick_place_cycle(
@@ -785,7 +772,7 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
                 break
             print(f"Cycle {cycle}/{total} complete.")
 
-        if args.visual and (failed or not infinite):
+        if args.visual:
             if failed:
                 print("No further cycles will run. Viewer stays open for inspection.")
             else:
@@ -793,7 +780,7 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
             _hold_final_view(scene)
         elif failed:
             print("No further cycles will run.")
-        elif not infinite:
+        else:
             print(f"\nCompleted {cycle_limit} cycle(s).")
     except KeyboardInterrupt:
         return 1 if failed else 0

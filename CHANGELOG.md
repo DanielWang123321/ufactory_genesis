@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Moved the official repository to [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). README, contributing guide, roadmap, security policy, and package URLs now point there. The personal-account preview wording is retired. The public API freeze has not started.
+- Moved the official repository to [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). README, contributing guide, roadmap, security policy, and package URLs now point there. The personal-account preview wording is retired.
+- Documented the v0.3.0 entry points without a compatibility promise. 0.x may rename or remove them before 1.0.0. Genesis World stays validated at 1.4.2 only.
+- Packaging repetition is `--cycles` only. `--loop` and `--no-loop` are removed.
 
 ## [0.2.15] — 2026-09-24
 

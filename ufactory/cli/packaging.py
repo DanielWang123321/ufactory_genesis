@@ -129,8 +129,6 @@ def _run_sim(args: argparse.Namespace) -> int:
     ]
     if args.cycles is not None:
         sim_args.extend(("--cycles", str(args.cycles)))
-    elif args.loop is not None:
-        sim_args.append("--loop" if args.loop else "--no-loop")
     if args.table_height is not None:
         sim_args.extend(("--table-height", str(args.table_height)))
     if args.config is not None:
@@ -176,14 +174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--visual", action="store_true")
     parser.add_argument("--speed", type=float, default=1.0, help="Simulation-only playback multiplier")
-    repetition = parser.add_mutually_exclusive_group()
-    repetition.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
-    repetition.add_argument(
-        "--loop",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Simulation-only infinite loop; --no-loop is one cycle",
-    )
+    parser.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
     parser.add_argument("--table-height", type=float, default=None)
     parser.add_argument("--capture-keyframes", action="store_true")
     args = parser.parse_args(argv)
@@ -191,19 +182,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.speed <= 0.0:
         parser.error("--speed must be positive")
     if args.mode != "sim" and (
-        args.speed != 1.0
-        or args.cycles is not None
-        or args.loop is True
-        or args.table_height is not None
-        or args.capture_keyframes
+        args.speed != 1.0 or args.cycles is not None or args.table_height is not None or args.capture_keyframes
     ):
-        parser.error("--speed/--cycles/--loop/--table-height/--capture-keyframes are simulation-only")
+        parser.error("--speed/--cycles/--table-height/--capture-keyframes are simulation-only")
     if args.mode == "real" and not args.confirm_real:
         parser.error("real packaging motion requires --confirm-real")
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
-    if args.mode == "real":
-        args.loop = False
     config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config)
     if args.backend is not None:
         config = override_simulation_backend(config, args.backend)

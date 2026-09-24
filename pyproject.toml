@@ -153,9 +153,8 @@ no_implicit_optional = true
 check_untyped_defs = true
 
 # Source delivery policy: only a cloned repository plus ``pip install -e .``
-# is supported. Wheels/sdists and remote asset downloads are intentionally not
-# part of v0.2.x; discover_asset_store fails closed outside a source checkout.
-# PackageAssetStore is the 0.3.x extension point and is not populated yet.
+# is supported. Wheels, sdists, and remote asset downloads are not supported.
+# discover_asset_store fails closed outside a source checkout.
 
 [tool.setuptools.packages.find]
 where = ["."]
