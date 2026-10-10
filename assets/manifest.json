@@ -30,15 +30,15 @@
     "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "6c3b455f0a6f43186376a72caa605b65b426f993b8a5b1cebdc79f1925aff5b7",
     "assets/configs/runtime/tasks/robots/lite6_pick_place.yaml": "ba25ff726165172833aa0ae2aa58ce10bc1286069b0598de8d47e3843bdde3a1",
     "assets/configs/runtime/safety/robots/lite6.yaml": "ce0286385ed3c5b1f809e9c45243bf22f4f9e166df657005c861cdfbdc7a1ecd",
-    "assets/configs/runtime/robots/xarm5_1305.yaml": "7898771ef766ef175b367a6092f45933897337fea100997f8a2c4cd9fa6f2377",
-    "assets/configs/runtime/robots/xarm6_1305.yaml": "b2c51b92237e1d5d9ee5d749a09fa29a39ff609220625be244c553167ce734e7",
-    "assets/configs/runtime/robots/xarm7_1305.yaml": "f9fe4255a9ef5c4ea1d19ba354069dc5cd556b92e531473c5e0e5e1c5f0f9f05",
-    "assets/configs/runtime/robots/uf850.yaml": "38460bc3927cf94aadbc69a721569ee0c18dd2adeb2b971ef9656db17d4e86f2",
-    "assets/configs/runtime/robots/lite6.yaml": "347ae3f456de9cf7844f82258b920cf596c34084f33ed46ccbe1646e243690b7",
-    "assets/urdf/xarm5/xarm5_1305_g2_movable_visual.urdf": "25605c3f972db7e6f5572b5bc6e88cf645c652063025201d780a7a89233a0379",
-    "assets/urdf/xarm6/xarm6_1305_g2_movable_visual.urdf": "00f673bdb342095b9fc2816f3567a26047f5c04324759015678c519680736982",
-    "assets/urdf/xarm7/xarm7_1305_g2_movable_visual.urdf": "b38ce4e5e4ebb0aaa571c7b1a8ecc09d61ec3ecda227932bcb53377c10ced123",
-    "assets/urdf/uf850/uf850_g2_movable_visual.urdf": "1d46cc8ff2e20eb3a0952a2eb59a9102a6fb7c770eabc9a99075ebaf31175656",
-    "assets/urdf/lite6/lite6_with_gripper.urdf": "51cca3c710bb1f09a4dd27bb2a1be180a2a6cfc5f77b65f7d9a79d8d77873e9d"
+    "assets/configs/runtime/robots/xarm5_1305.yaml": "64c584bee59e0aa08eb9b5b14d19d3b2c8220b210dd449e9789a2af7c7ef9240",
+    "assets/configs/runtime/robots/xarm6_1305.yaml": "7853b634834354547aa9525ebf3e90475685256a2a6be15d5787edbdcfa82672",
+    "assets/configs/runtime/robots/xarm7_1305.yaml": "fe99dfa5b13f5eacfdc1c9d2e90a89a40826b8dd014a08f088b32d581442a99e",
+    "assets/configs/runtime/robots/uf850.yaml": "8146a7465aae6fcc9fe238132da64bc96aa5e743b5a9196d212cbded9cfdc3b5",
+    "assets/configs/runtime/robots/lite6.yaml": "344110828418bf5ac02c2fea009dd92d466c8394294bf56d992111ebb38fd850",
+    "assets/urdf/xarm5/xarm5_1305_g2_movable_visual.urdf": "e1affb8153036a26e872146be165c99363415ca953af9129b39ed0e765f5f63b",
+    "assets/urdf/xarm6/xarm6_1305_g2_movable_visual.urdf": "9edf8cb9d1769c3853457edc1520eafa438bbd5fe5799acbb095ae8aff38a2f6",
+    "assets/urdf/xarm7/xarm7_1305_g2_movable_visual.urdf": "c8d51d99bc981b9eff24a365a066cb575265bb81fd46d5d0e563d2581bdbe604",
+    "assets/urdf/uf850/uf850_g2_movable_visual.urdf": "5e40cf196a7c89c48e11d88dd21b2b3c514075d86b94d409554df9ab88867ddb",
+    "assets/urdf/lite6/lite6_with_gripper.urdf": "5fdb3e636164c55537b18d2a04e46aafcafc169bcbbfca39aca160b30f13e38d"
   }
 }

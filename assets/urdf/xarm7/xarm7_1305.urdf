@@ -69,7 +69,7 @@
     <parent link="link_base"/>
     <child link="link1"/>
     <axis xyz="0 0 1"/>
-    <limit effort="50" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
+    <limit effort="179.4445" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
     <dynamics damping="10" friction="1"/>
   </joint>
   <link name="link2">
@@ -97,7 +97,7 @@
     <parent link="link1"/>
     <child link="link2"/>
     <axis xyz="0 0 1"/>
-    <limit effort="50" lower="-2.059" upper="2.0944" velocity="3.14"/>
+    <limit effort="179.4445" lower="-2.059" upper="2.0944" velocity="3.14"/>
     <dynamics damping="10" friction="1"/>
   </joint>
   <link name="link3">
@@ -125,7 +125,7 @@
     <parent link="link2"/>
     <child link="link3"/>
     <axis xyz="0 0 1"/>
-    <limit effort="30" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
+    <limit effort="92.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
     <dynamics damping="5" friction="1"/>
   </joint>
   <link name="link4">
@@ -153,7 +153,7 @@
     <parent link="link3"/>
     <child link="link4"/>
     <axis xyz="0 0 1"/>
-    <limit effort="30" lower="-0.19198" upper="3.927" velocity="3.14"/>
+    <limit effort="92.0" lower="-0.19198" upper="3.927" velocity="3.14"/>
     <dynamics damping="5" friction="1"/>
   </joint>
   <link name="link5">
@@ -181,7 +181,7 @@
     <parent link="link4"/>
     <child link="link5"/>
     <axis xyz="0 0 1"/>
-    <limit effort="30" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
+    <limit effort="81.558" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
     <dynamics damping="5" friction="1"/>
   </joint>
   <link name="link6">
@@ -209,7 +209,7 @@
     <parent link="link5"/>
     <child link="link6"/>
     <axis xyz="0 0 1"/>
-    <limit effort="20" lower="-1.69297" upper="3.141592653589793" velocity="3.14"/>
+    <limit effort="30.6" lower="-1.69297" upper="3.141592653589793" velocity="3.14"/>
     <dynamics damping="2" friction="1"/>
   </joint>
   <link name="link7">
@@ -237,7 +237,7 @@
     <parent link="link6"/>
     <child link="link7"/>
     <axis xyz="0 0 1"/>
-    <limit effort="20" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
+    <limit effort="30.6" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14"/>
     <dynamics damping="2" friction="1"/>
   </joint>
   <!-- <link name="${prefix}link_eef" />
