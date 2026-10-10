@@ -126,7 +126,7 @@ def test_xarm5_default_pose_set_is_balanced_hardware_profile():
 
 def test_torque_classification_distinguishes_bias_like_single_joint_failure():
     abs_err = np.array([0.1, 0.2, 0.1, 0.1, 0.1, ABS_ERR_LIMITS[5] + 0.05])
-    rel_err = abs_err / np.array([50.0, 50.0, 32.0, 32.0, 32.0, 20.0])
+    rel_err = abs_err / (ABS_ERR_LIMITS / 0.10)
     status = classify_torque_result(
         settled=True,
         saturated=False,
@@ -270,7 +270,7 @@ def test_failure_detail_prints_theory_sdk_and_thresholds(capsys):
         pose,
         genesis,
         runtime_profile=runtime,
-        tau_real=np.array([0.0, 34.159194, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        tau_real=np.array([0.0, 40.824854, 0.0, 0.0, 0.0, 0.0, 0.0]),
         tau_real_std=np.array([0.0, 0.298257, 0.0, 0.0, 0.0, 0.0, 0.0]),
         n_real_samples=31,
     )
@@ -282,7 +282,7 @@ def test_failure_detail_prints_theory_sdk_and_thresholds(capsys):
     assert "sdk_tau_mean_nm" in out
     assert "abs_limit_nm" in out
     assert "20.824854" in out
-    assert "34.159194" in out
+    assert "40.824854" in out
 
 
 def test_torque_plot_layouts_and_generation(tmp_path: Path):

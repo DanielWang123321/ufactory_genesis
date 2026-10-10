@@ -109,7 +109,11 @@ class RobotRuntimeProfile:
 
 XARM6_KP: FloatTuple = (3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0)
 XARM6_KV: FloatTuple = (300.0, 300.0, 200.0, 200.0, 100.0, 100.0)
-XARM6_EFFORT: FloatTuple = (50.0, 50.0, 32.0, 32.0, 32.0, 20.0)
+# Wrist output is about 1.4 N·m. Shared xArm gains saturate J4/J6 inside the settle window.
+LITE6_KP: FloatTuple = (3000.0, 3000.0, 2000.0, 40.0, 80.0, 40.0)
+LITE6_KV: FloatTuple = (300.0, 300.0, 200.0, 8.0, 16.0, 8.0)
+# xArm 6 1305 official max torque. Used only when a URDF joint effort cannot be read.
+_EFFORT_PARSE_FALLBACK: FloatTuple = (179.4445, 179.4445, 92.0, 81.558, 30.6, 30.6)
 ABS_ERR_FRACTION = 0.10
 
 _HARDWARE_DYNAMICS_KEYS = frozenset({"xarm5_1305", "xarm6_1305", "uf850", "lite6", "xarm7_1305"})
@@ -173,9 +177,6 @@ def _l2_err_limit_from_abs(abs_limits: FloatTuple) -> float:
     return max(2.0, sum(v * v for v in abs_limits) ** 0.5)
 
 
-XARM6_ABS_ERR_LIMITS = abs_err_limits_from_efforts(XARM6_EFFORT)
-
-
 def _fit(values: tuple[float, ...], n: int, *, fill: float = 0.0) -> FloatTuple:
     if len(values) >= n:
         return _tuple(values[:n])
@@ -184,7 +185,7 @@ def _fit(values: tuple[float, ...], n: int, *, fill: float = 0.0) -> FloatTuple:
 
 def _parse_effort_limits(profile: RobotModelSpec) -> FloatTuple:
     urdf = profile.assets_dir / profile.default_urdf
-    fallback = _fit(XARM6_EFFORT, profile.dof, fill=XARM6_EFFORT[-1])
+    fallback = _fit(_EFFORT_PARSE_FALLBACK, profile.dof, fill=_EFFORT_PARSE_FALLBACK[-1])
     try:
         root = ET.parse(str(urdf)).getroot()
     except Exception:
@@ -229,11 +230,12 @@ def _arm_params(profile: RobotModelSpec) -> ArmControlParams:
     if profile.key == "xarm6_1305":
         kp = XARM6_KP
         kv = XARM6_KV
-        force_upper = XARM6_EFFORT
+    elif profile.key == "lite6":
+        kp = LITE6_KP
+        kv = LITE6_KV
     else:
         kp = _fit((3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0, 800.0), profile.dof, fill=800.0)
         kv = _fit((300.0, 300.0, 200.0, 200.0, 100.0, 100.0, 80.0), profile.dof, fill=80.0)
-        force_upper = efforts
     return ArmControlParams(
         joint_names=joint_names(profile),
         ee_link=profile.ee_link,
@@ -241,8 +243,8 @@ def _arm_params(profile: RobotModelSpec) -> ArmControlParams:
         default_qpos=_default_qpos(profile),
         kp=_fit(kp, profile.dof),
         kv=_fit(kv, profile.dof),
-        force_lower=tuple(-abs(v) for v in force_upper[: profile.dof]),
-        force_upper=_fit(force_upper, profile.dof),
+        force_lower=tuple(-abs(v) for v in efforts),
+        force_upper=efforts,
         effort_limits=efforts,
     )
 

@@ -54,7 +54,7 @@
     <child link="link1" />
     <origin xyz="0 0 0.267" rpy="0 0 0" />
     <axis xyz="0 0 1" />
-    <limit lower="-6.2832" upper="6.2832" effort="50.0" velocity="3.14" />
+    <limit lower="-6.2832" upper="6.2832" effort="179.4445" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link2">
@@ -80,7 +80,7 @@
     <child link="link2" />
     <origin xyz="0 0 0" rpy="-1.5708 0 0" />
     <axis xyz="0 0 1" />
-    <limit lower="-2.059" upper="2.0944" effort="50.0" velocity="3.14" />
+    <limit lower="-2.059" upper="2.0944" effort="179.4445" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link3">
@@ -106,7 +106,7 @@
     <child link="link3" />
     <origin xyz="0.0535 -0.2845 0" rpy="0 0 0" />
     <axis xyz="0 0 1" />
-    <limit lower="-3.927" upper="0.19198" effort="32.0" velocity="3.14" />
+    <limit lower="-3.927" upper="0.19198" effort="92.0" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link4">
@@ -132,7 +132,7 @@
     <child link="link4" />
     <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0" />
     <axis xyz="0 0 1" />
-    <limit lower="-6.2832" upper="6.2832" effort="32.0" velocity="3.14" />
+    <limit lower="-6.2832" upper="6.2832" effort="81.558" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link5">
@@ -158,7 +158,7 @@
     <child link="link5" />
     <origin xyz="0 0 0" rpy="1.5708 0 0" />
     <axis xyz="0 0 1" />
-    <limit lower="-1.69297" upper="3.14159" effort="32.0" velocity="3.14" />
+    <limit lower="-1.69297" upper="3.14159" effort="30.6" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link6">
@@ -184,7 +184,7 @@
     <child link="link6" />
     <origin xyz="0.076 0.097 0" rpy="-1.5708 0 0" />
     <axis xyz="0 0 1" />
-    <limit lower="-6.2832" upper="6.2832" effort="20.0" velocity="3.14" />
+    <limit lower="-6.2832" upper="6.2832" effort="30.6" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link_eef" />

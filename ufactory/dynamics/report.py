@@ -43,8 +43,8 @@ POS_ERR_TOL = 0.05  # rad
 VEL_TOL = 0.01  # rad/s
 SATURATION_MARGIN = 0.995
 
-# Per-joint absolute error limits (Nm); xArm6 fallback when no runtime profile.
-ABS_ERR_LIMITS = np.array((5.0, 5.0, 3.2, 3.2, 3.2, 2.0), dtype=np.float64)
+# Per-joint absolute error limits (Nm); xArm 6 1305 fallback (10% of official max torque).
+ABS_ERR_LIMITS = np.array((17.94445, 17.94445, 9.2, 8.1558, 3.06, 3.06), dtype=np.float64)
 L2_ERR_LIMIT = float(np.linalg.norm(ABS_ERR_LIMITS))
 REL_ERR_LIMIT = 0.15  # fraction of effort limit
 REPORT_SCHEMA_VERSION = "4"
@@ -312,7 +312,7 @@ def _runtime_abs_limits(runtime_profile: RobotRuntimeProfile | None, n: int) -> 
 def _runtime_effort_limits(runtime_profile: RobotRuntimeProfile | None, n: int) -> np.ndarray:
     if runtime_profile is not None:
         return _fit_float_tuple(runtime_profile.arm.effort_limits, n, fill=np.nan)
-    fallback = np.asarray((50.0, 50.0, 32.0, 32.0, 32.0, 20.0, 20.0), dtype=np.float64)
+    fallback = np.asarray((179.4445, 179.4445, 92.0, 81.558, 30.6, 30.6), dtype=np.float64)
     return _fit_float_tuple(fallback, n, fill=float(fallback[-1]))
 
 

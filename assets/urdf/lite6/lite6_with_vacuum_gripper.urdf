@@ -63,7 +63,7 @@
     <parent link="link_base" />
     <child link="link1" />
     <axis xyz="0 0 1" />
-    <limit effort="50.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <limit effort="81.6" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link2">
@@ -91,7 +91,7 @@
     <parent link="link1" />
     <child link="link2" />
     <axis xyz="0 0 1" />
-    <limit effort="50.0" lower="-2.61799" upper="2.61799" velocity="3.14" />
+    <limit effort="81.6" lower="-2.61799" upper="2.61799" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link3">
@@ -119,7 +119,7 @@
     <parent link="link2" />
     <child link="link3" />
     <axis xyz="0 0 1" />
-    <limit effort="32.0" lower="-0.061087" upper="5.235988" velocity="3.14" />
+    <limit effort="30.6" lower="-0.061087" upper="5.235988" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
   <link name="link4">
@@ -147,8 +147,8 @@
     <parent link="link3" />
     <child link="link4" />
     <axis xyz="0 0 1" />
-    <limit effort="32.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
-    <dynamics damping="1.0" friction="1.0" />
+    <limit effort="1.364505" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="0" friction="0" />
   </joint>
   <link name="link5">
     <inertial>
@@ -175,8 +175,8 @@
     <parent link="link4" />
     <child link="link5" />
     <axis xyz="0 0 1" />
-    <limit effort="32.0" lower="-2.1642" upper="2.1642" velocity="3.14" />
-    <dynamics damping="1.0" friction="1.0" />
+    <limit effort="3.274812" lower="-2.1642" upper="2.1642" velocity="3.14" />
+    <dynamics damping="0.1" friction="0.1" />
   </joint>
   <link name="link6">
     <inertial>
@@ -203,8 +203,8 @@
     <parent link="link5" />
     <child link="link6" />
     <axis xyz="0 0 1" />
-    <limit effort="20.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
-    <dynamics damping="1.0" friction="1.0" />
+    <limit effort="1.364505" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="0" friction="0" />
   </joint>
   <joint name="vacuum_gripper_fix" type="fixed">
     <parent link="link6" />

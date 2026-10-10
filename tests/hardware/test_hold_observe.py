@@ -66,11 +66,16 @@ def test_collect_hold_timeseries_sample_count(monkeypatch):
 
 
 def test_analyze_hold_timeseries_detects_decay():
+    j2_limit = float(get_robot_runtime_profile("lite6").dynamics.abs_err_limits[1])
+    pin_g_j = -11.586
+    # Segment A mean is about 2.5 Nm above the t=0 torque. Start far enough
+    # below pin_G that the mean still exceeds the absolute error limit.
+    tau_start = pin_g_j - (j2_limit + 4.0) - 2.5
     samples = []
     for i in range(601):
         t_s = i * 0.1
         decay = math.exp(-0.4 * t_s)
-        tau_j2 = -20.0 + 6.0 * (1.0 - decay)
+        tau_j2 = tau_start + 6.0 * (1.0 - decay)
         current_j2 = 2.0 * decay + 0.2
         tau = np.full(6, tau_j2, dtype=np.float64)
         current = np.full(6, current_j2, dtype=np.float64)
@@ -84,7 +89,6 @@ def test_analyze_hold_timeseries_detects_decay():
             )
         )
 
-    j2_limit = float(get_robot_runtime_profile("lite6").dynamics.abs_err_limits[1])
     summary = analyze_hold_timeseries(
         samples,
         joint=2,
@@ -92,7 +96,7 @@ def test_analyze_hold_timeseries_detects_decay():
         pose="0",
         duration_s=60.0,
         poll_s=0.1,
-        pin_g_j=-11.586,
+        pin_g_j=pin_g_j,
         abs_err_limit_j=j2_limit,
     )
 

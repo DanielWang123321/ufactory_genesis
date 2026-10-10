@@ -15,7 +15,6 @@ import numpy as np
 from ufactory.dynamics.report import SafePose
 from ufactory.dynamics.poses_config import dynamics_pose_tuples
 from ufactory.robots.runtime import (
-    XARM6_EFFORT,
     XARM6_KP,
     XARM6_KV,
     get_robot_runtime_profile,
@@ -25,11 +24,11 @@ _XARM6_RUNTIME = get_robot_runtime_profile("xarm6")
 JOINT_NAMES = _XARM6_RUNTIME.arm.joint_names
 EE_LINK_NAME = _XARM6_RUNTIME.arm.ee_link
 
-URDF_JOINT_EFFORT = np.array(XARM6_EFFORT, dtype=np.float64)
+URDF_JOINT_EFFORT = np.array(_XARM6_RUNTIME.arm.effort_limits, dtype=np.float64)
 PD_KP = np.array(XARM6_KP, dtype=np.float32)
 PD_KV = np.array(XARM6_KV, dtype=np.float32)
-FORCE_LOWER = -np.array(XARM6_EFFORT, dtype=np.float32)
-FORCE_UPPER = np.array(XARM6_EFFORT, dtype=np.float32)
+FORCE_LOWER = np.array(_XARM6_RUNTIME.arm.force_lower, dtype=np.float32)
+FORCE_UPPER = np.array(_XARM6_RUNTIME.arm.force_upper, dtype=np.float32)
 
 # Legacy extra poses for ad-hoc sim checks (not in assets/configs/dynamics_validation_pose.yaml).
 DYNAMICS_EXTRA_CONFIGS: list[tuple[str, np.ndarray]] = [

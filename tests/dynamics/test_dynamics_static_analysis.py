@@ -128,23 +128,26 @@ def test_build_static_pose_analysis_with_mock_reference():
 
 def test_l1_pass_unchanged_when_l3_warns_by_default():
     pose = SafePose("0", np.zeros(6), 108.0)
+    runtime = _runtime()
+    # pd_hold is ones(6). Put J1 gravity far enough above it that the residual
+    # exceeds the absolute error limit (10% of the official max torque).
+    gravity = np.zeros(6, dtype=np.float64)
+    gravity[0] = 1.0 + float(runtime.dynamics.abs_err_limits[0]) + 5.0
     reference = MagicMock()
-    reference.gravity.return_value = np.array([10.0, 0, 0, 0, 0, 0])
-    reference.rnea.return_value = np.array([10.0, 0, 0, 0, 0, 0])
+    reference.gravity.return_value = gravity
+    reference.rnea.return_value = gravity
     reference.mass_matrix.return_value = np.eye(6) * 2.0
     sample = build_dynamics_sample(
         pose,
         _genesis_sample(),
-        runtime_profile=_runtime(),
+        runtime_profile=runtime,
         tau_real=np.ones(6),
         reference=reference,
     )
     assert sample.status == ValidationStatus.PASS
     assert any(layer.severity != "pass" for layer in sample.static_layers) or sample.static_warnings
-    # New L2b oracle (pd_hold_tau vs pin_G(q_actual)): pd_hold=ones(6) while
-    # pin_G=[10,0,0,0,0,0] => residual ~9 Nm on J1, well over the abs limit,
-    # so the L2b static layer must flag as warn/fail (the old ``gravity_est``
-    # oracle would have flagged J1 error as the full G(q) magnitude instead).
+    # L2b compares pd_hold_tau with pin_G(q_actual). The J1 residual is above
+    # the absolute error limit, so the layer must warn or fail.
     l2b = next(layer for layer in sample.static_layers if layer.layer == LAYER_L2B)
     assert l2b.severity in {"warn", "fail"}
     assert l2b.l2_err > 1.0
@@ -195,10 +198,11 @@ def test_pd_hold_check_xarm5_pose4_tracking_saturation_bypass():
     runtime = get_robot_runtime_profile("xarm5")
     target_q = np.deg2rad([90.0, -90.0, -60.0, 160.0, -90.0])
     q_actual = np.deg2rad([90.0, -90.216, -59.898, 155.574, -90.005])
+    j4_effort = float(runtime.arm.effort_limits[3])
     sample = GenesisDynamicsSample(
         q_actual=q_actual,
         qvel=np.zeros(5),
-        pd_hold_tau=np.array([0.0006, 11.318, -3.549, 20.0, 0.0824]),
+        pd_hold_tau=np.array([0.0006, 11.318, -3.549, j4_effort, 0.0824]),
         actual_dof_force=np.zeros(5),
         mass_matrix=np.eye(5),
         settled=False,
