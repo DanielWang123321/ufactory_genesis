@@ -76,11 +76,21 @@ from ufactory.training.logic.pick_place import (
     sample_reset_phase_masks,
     update_task_state,
 )
+from ufactory.training.logic.reach import (
+    effective_max_joint_delta_rad,
+    reach_action_delta_torch,
+    reach_observation,
+    reward_reach_position,
+)
 
 __all__ = [
     "PickPlaceTaskState",
     "action_penalty",
     "annealed_frac",
+    "effective_max_joint_delta_rad",
+    "reach_action_delta_torch",
+    "reach_observation",
+    "reward_reach_position",
     "action_to_cartesian_delta",
     "arm_target_ee_pos",
     "cartesian_delta_to_action",

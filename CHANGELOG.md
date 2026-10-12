@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.1] — unreleased
 
+### Added
+
+- Added a simulation-only bare-arm xArm 6 reach example under `examples/rl/reach`: joint-position increments, random end-effector targets, PPO training, and checkpoint evaluation. No trained weights are bundled, and there is no real-robot policy executor.
+
 ### Changed
 
 - Set the Genesis World reference baseline to **1.4.4** while keeping the minimum at **1.4.2** (`genesis-world>=1.4.2`). Genesis 1.4.2 and 1.4.3 still run and emit one unvalidated-baseline warning. Genesis 1.4.1 and older fail closed. Private hook signatures used by forward kinematics, inverse kinematics, GLB PBR, and the deferred viewer are unchanged. The lock file pins Genesis 1.4.4 and Quadrants 1.3.3 (Genesis 1.4.2 still brings Quadrants 1.3.0). Contact-solver internals changed in 1.4.4, so simulation checks were re-run on 1.4.4; contact numbers are not claimed identical to 1.4.2.
 
 ### Fixed
 
+- Reach now accumulates position commands within URDF limits, maps the full action range linearly, and uses 24 observations with command tracking error. PPO uses a bounded Beta distribution and a one-time success bonus. Evaluation runs each fixed target once through success or timeout and can enforce success-rate and distance thresholds. With `--vis`, a successful reach holds for 1 second before the next target; headless evaluation does not hold. Older reach checkpoints require retraining.
 - Updated the asset manifest hash for `assets/configs/runtime/robots/lite6.yaml` so it matches the committed file.
 - Rebound the Lite6 finger-pair collision exemptions to the current `lite6_with_gripper.urdf` hash. The nominal pick-place preflight treats the closed 20 mm gap as expected again. The calibrated-URDF hash is unchanged.
 

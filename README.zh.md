@@ -12,12 +12,10 @@ UFACTORY 机械臂的 Genesis 模型与仿真工具，覆盖可视化、运动�
 
 [English](README.md) | [示例](examples/README_zh.md) | [变更记录](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全说明](SECURITY.md)
 
-> v0.3.0 是 [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis) 上的官方仓库。项目仍是 0.x，1.0.0 之前可以改名或删除入口。
-
 ## 支持范围
 
-- Python 3.12/3.13。Genesis World 最低版本是 1.4.2。1.4.4 是已验证基线；1.4.2 和 1.4.3 仍可运行并警告一次。不保证更高版本可用；钩子检查对不上时直接失败。
-- 仅支持克隆源码后的可编辑安装；不支持 wheel、sdist 和远程资产下载。
+- Python 3.12/3.13。Genesis World 最低 1.4.2，已在 1.4.4 上验证。1.4.2 和 1.4.3 会警告一次；更高版本未验证，检查失败即停止。
+- 克隆本仓库后，用 `pip install -e` 安装。
 - 支持可视化、校准后的正向/逆向运动学（FK/IK）、接触仿真、离线预检、控制器仿真和经过安全检查的真机执行。
 - 真机装箱只启用 xArm6 + Gripper G2 和 Lite6 + Lite6 Gripper。
 
@@ -42,7 +40,7 @@ python examples/visualization/view_robot.py --robot xarm6
 | 目标 | 可编辑安装命令 |
 |------|----------------|
 | 仿真与可视化 | `pip install -e ".[sim]"` |
-| 固定位置强化学习 | `pip install -e ".[sim,rl]"` |
+| 仿真强化学习（抓放与到达） | `pip install -e ".[sim,rl]"` |
 | 真机安全后端 | `pip install -e ".[sim,real]"` |
 | 装箱贴图生成 | `pip install -e ".[sim,showcase]"` |
 | 动力学参考检查 | `pip install -e ".[sim,dynamics]"` |
@@ -74,7 +72,7 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 
 命令：`ufactory-pick-place`、`ufactory-packaging-showcase`、`dynamics-sim-check`、`dynamics-sim-collision-check`、`dynamics-hardware-check`。`project-check` 和 `observe-hold-current` 是维护者工具。
 
-示例：`examples/visualization`、`examples/kinematics`、`examples/pick_place`、`examples/packaging`、`examples/rl/pick_place`，以及抓放和装箱入口旁的 `runtime.example.yaml`。
+示例：`examples/visualization`、`examples/kinematics`、`examples/pick_place`、`examples/packaging`、`examples/rl/pick_place`、`examples/rl/reach`，以及抓放和装箱入口旁的 `runtime.example.yaml`。
 
 `ufactory` 根导出：`get_robot_profile`、`robot_urdf`、`robot_visual_glb_urdf`、`robot_assets`、`RepositoryAssetStore`。
 
@@ -90,6 +88,14 @@ python -m examples.rl.pick_place.evaluate --headless -B 8 --episodes 8
 ```
 
 训练方式、发布结果、模型校验和限制见[强化学习指南](examples/rl/pick_place/README_cn.md)。
+
+## xArm 6 到达
+
+不装夹爪的仿真示例，仓库不带训练好的模型。说明见 [examples/rl/reach/README_cn.md](examples/rl/reach/README_cn.md)。
+
+```bash
+python -m examples.rl.reach.train -e reach
+```
 
 ## 真机安全
 

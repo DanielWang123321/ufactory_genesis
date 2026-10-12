@@ -8,10 +8,11 @@ from typing import Any
 
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.robots.paths import robot_urdf
-from ufactory.simulation import G2_PHYSICS_PROFILE
+from ufactory.training.reach_config import REACH_ENV_VERSION, effective_max_joint_delta_rad
 from ufactory.training.recipe import load_training_recipe
 
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
+REACH_RL_ROBOTS = ("xarm6", "xarm6_1305")
 
 
 def build_train_config(
@@ -35,6 +36,8 @@ def build_pick_place_task_configs(
     runtime_config_path: str | Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Resolve the retained xArm6 + Gripper G2 pick-place RL task."""
+
+    from ufactory.simulation import G2_PHYSICS_PROFILE
 
     if robot not in PICK_PLACE_RL_ROBOTS:
         raise ValueError("the v0.2.13 pick-place RL environment supports only xArm6 + Gripper G2")
@@ -111,5 +114,75 @@ def build_pick_place_task_configs(
         "gripper_damping": gripper.damping,
         "gripper_frictionloss": gripper.frictionloss,
         "collision_monitor_links": ["link3", "link4", "link5"],
+    }
+    return env_cfg, deepcopy(recipe["reward"]), robot_cfg
+
+
+def build_reach_task_configs(
+    robot: str,
+    *,
+    recipe_path: str | Path,
+    runtime_config_path: str | Path | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Resolve the bare-arm xArm6 reach task."""
+
+    if robot not in REACH_RL_ROBOTS:
+        raise ValueError("the reach RL environment supports only xArm6")
+    config = load_runtime_config(robot, task="reach", config_path=runtime_config_path)
+    params = config.task.parameters
+    recipe = load_training_recipe(recipe_path)
+    env_cfg = deepcopy(recipe["environment"])
+    ctrl_dt = float(params["control_dt_s"])
+    action_scale = float(params["action_scale_rad"])
+    action_clip = float(params["action_clip"])
+    servo_speed = float(params["servo_speed_rad_s"])
+    max_joint_delta = effective_max_joint_delta_rad(
+        action_scale=action_scale,
+        action_clip=action_clip,
+        ctrl_dt=ctrl_dt,
+        servo_speed_rad_s=servo_speed,
+    )
+    num_obs = int(config.robot.dof) * 3 + 6
+    num_actions = int(config.robot.dof)
+    if "num_obs" in env_cfg and int(env_cfg["num_obs"]) != num_obs:
+        raise ValueError(f"reach recipe num_obs must be {num_obs}, got {env_cfg['num_obs']}")
+    if "num_actions" in env_cfg and int(env_cfg["num_actions"]) != num_actions:
+        raise ValueError(f"reach recipe num_actions must be {num_actions}, got {env_cfg['num_actions']}")
+    env_cfg.update(
+        {
+            "task_name": "reach",
+            "env_version": REACH_ENV_VERSION,
+            "num_obs": num_obs,
+            "num_actions": num_actions,
+            "runtime_config_sha256": config.sha256,
+            "episode_length_s": float(params["episode_length_s"]),
+            "ctrl_dt": ctrl_dt,
+            "success_distance_m": float(params["success_distance_m"]),
+            "action_scale": action_scale,
+            "action_clip": action_clip,
+            "servo_speed_rad_s": servo_speed,
+            "max_joint_delta_rad": max_joint_delta,
+            "target_pos_lower": list(params["target_position_lower_m"]),
+            "target_pos_upper": list(params["target_position_upper_m"]),
+            "substeps": int(config.simulation.substeps),
+            "constraint_solver": config.simulation.constraint_solver,
+            "solver_iterations": config.simulation.solver_iterations,
+            "noslip_iterations": config.simulation.noslip_iterations,
+            "friction_cone": config.simulation.friction_cone,
+            "contact_resolution": config.simulation.contact_resolution,
+            "constraint_time_constant_s": config.simulation.constraint_time_constant_s,
+            "use_gjk_collision": config.simulation.use_gjk_collision,
+        }
+    )
+    robot_cfg = {
+        "urdf_path": robot_urdf(config.robot.key, config.robot.urdf),
+        "base_pos": [0.0, 0.0, 0.0],
+        "ee_link_name": config.robot.ee_link,
+        "joint_names": list(config.robot.joint_names),
+        "default_qpos": list(config.arm.default_qpos_rad),
+        "kp": list(config.arm.kp),
+        "kv": list(config.arm.kv),
+        "force_lower": list(config.arm.force_lower_nm),
+        "force_upper": list(config.arm.force_upper_nm),
     }
     return env_cfg, deepcopy(recipe["reward"]), robot_cfg

@@ -12,12 +12,10 @@ UFACTORY robot models and Genesis simulation utilities for visualization, kinema
 
 [中文](README.zh.md) | [Examples](examples/README.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
-> v0.3.0 is the official repository under [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x, and entry points may be renamed or removed before 1.0.0.
-
 ## Supported scope
 
-- Python 3.12/3.13. The minimum Genesis World release is 1.4.2. 1.4.4 is the validated baseline; 1.4.2 and 1.4.3 still run and emit one warning. Newer releases are not guaranteed; hook checks fail closed when they do not match.
-- Source checkout with editable install only; wheels, sdists, and remote asset downloads are unsupported.
+- Python 3.12/3.13. Genesis World 1.4.2 is the minimum and 1.4.4 is validated. Versions 1.4.2 and 1.4.3 warn once; newer releases are unverified and stop if the hook check fails.
+- Clone this repository and install it with `pip install -e`.
 - Visualization, calibrated FK/IK, contact simulation, dry-run, controller simulation, and guarded real execution.
 - Real packaging is enabled only for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper.
 
@@ -42,7 +40,7 @@ python examples/visualization/view_robot.py --robot xarm6
 | Goal | Editable install |
 |------|------------------|
 | Simulation and visualization | `pip install -e ".[sim]"` |
-| Fixed-layout RL | `pip install -e ".[sim,rl]"` |
+| Simulation RL (pick-place and reach) | `pip install -e ".[sim,rl]"` |
 | Real-robot safety backends | `pip install -e ".[sim,real]"` |
 | Packaging texture generation | `pip install -e ".[sim,showcase]"` |
 | Dynamics reference checks | `pip install -e ".[sim,dynamics]"` |
@@ -74,7 +72,7 @@ These are the v0.3.0 entry points. Later 0.x releases may remove them.
 
 Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`. `project-check` and `observe-hold-current` are maintainer tools.
 
-Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries.
+Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/pick_place`, `examples/rl/reach`, including the `runtime.example.yaml` files beside the pick-place and packaging entries.
 
 Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
 
@@ -90,6 +88,14 @@ python -m examples.rl.pick_place.evaluate --headless -B 8 --episodes 8
 ```
 
 See the [RL guide](examples/rl/pick_place/README.md) for training, release metrics, artifact validation, and limitations.
+
+## xArm 6 reach
+
+Bare-arm simulation example with no bundled model. See [examples/rl/reach/README.md](examples/rl/reach/README.md).
+
+```bash
+python -m examples.rl.reach.train -e reach
+```
 
 ## Real-robot safety
 

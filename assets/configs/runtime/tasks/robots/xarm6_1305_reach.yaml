@@ -1,0 +1,3 @@
+schema_version: 1
+robot:
+  urdf: xarm6_1305.urdf

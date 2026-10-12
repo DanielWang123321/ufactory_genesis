@@ -15,7 +15,7 @@ pip install -e ".[sim]"
 # Optional:
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
 #   pip install -e ".[showcase]"  # packaging box textures (scipy)
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA RL pick-place workflows
+#   pip install -e ".[sim,rl]"    # Linux/NVIDIA pick-place and reach
 ```
 
 3. Set a writable Numba cache directory before Genesis-backed runs:
@@ -49,10 +49,9 @@ Public directories in this release:
 | `kinematics/` | FK/IK / robot verification wrappers |
 | `pick_place/` | Multi-robot pick-place entry + optional overlay |
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
-| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 RL pick-place workflows |
+| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 pick-place, and bare-arm xArm 6 reach |
 
-See the [RL index](rl/README.md) for the fixed-layout installation, evaluation,
-training, release evidence, and limitations guide.
+See the [RL index](rl/README.md) for pick-place and reach installation, training, and evaluation.
 
 ## Visualization
 
@@ -89,29 +88,17 @@ python examples/visualization/view_lite6_gripper.py
 | `--headless` | No viewer window |
 | `--backend` | `cpu` / `gpu` (default `gpu`; use `cpu` without a supported GPU) |
 
-## Kinematics
 ## Kinematics & Dynamics Simulation
 
 ```bash
 # Offline robot / asset sanity (no controller)
 python examples/kinematics/verify_robot.py --robot xarm6
 
-# Compare Genesis URDF FK/IK against the xArm SDK (requires network + IP)
-python examples/kinematics/verify_fk.py --robot xarm6 --ip <ip>
-python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
 # Dynamics simulation check
 dynamics-sim-check --robot xarm6 --random-count 5
 ```
 
-Dynamics validation stays on the console commands:
 > For FK/IK comparison against a physical controller or hardware dynamics verification, see [Hardware & Real Robot](#hardware--real-robot).
-
-```bash
-dynamics-sim-check --robot xarm6 --random-count 5
-dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
-dynamics-sim-collision-check --robot xarm6 --ip <ip>
-```
-## Pick-place Simulation
 
 ## Pick-place
 
@@ -120,21 +107,13 @@ dynamics-sim-collision-check --robot xarm6 --ip <ip>
 | Flag | Values / notes |
 |------|----------------|
 | `--robot` | Required: `xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
-| `--mode` | Required: `sim` (Genesis), `dry-run` (offline preflight, no controller), `sdk-sim` (controller simulation), `real` |
-| `--mode` | Required for simulation: `sim` (Genesis physics), `dry-run` (offline trajectory & collision preflight) |
+| `--mode` | Required for simulation: `sim` (Genesis physics), `dry-run` (offline trajectory and collision preflight) |
 | `--executor` | Required: `servo_j` or `servo_cartesian` |
 | `--backend` | Optional: `cpu` / `gpu`; overrides `simulation.backend` (use `cpu` without a Genesis-supported GPU) |
+| `--visual` | Optional: open the Genesis viewer in `sim` mode |
 | `--config` | Optional strict partial overlay YAML |
 | `--print-config` | Print resolved runtime YAML and exit |
-| `--ip` | Controller IP (or set `XARM_IP`) for `sdk-sim` / `real` |
-| `--calibration` | Exact per-unit kinematics YAML (required for sdk-sim / real) |
-| `--confirm-real` | Explicit confirmation requirement for `--mode real` |
-| `--visual` | `sim`: force Genesis viewer; `real`: kinematic mirror (not for dry-run/sdk-sim) |
 | `--report` | Optional report output path |
-| `--visual` | Optional: open Genesis interactive viewer window in `sim` mode |
-| `--config` | Optional: strict partial overlay YAML path |
-| `--print-config` | Optional: print resolved runtime YAML and exit |
-| `--report` | Optional: report output path |
 
 ```bash
 # Resolve configuration only
@@ -157,17 +136,11 @@ python examples/pick_place/run.py \
 python examples/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j \
   --config examples/pick_place/runtime.example.yaml
-
-# Real motion (exact calibration + confirmation required)
-XARM_IP=<ip> python examples/pick_place/run.py \
-  --robot xarm6 --mode real --executor servo_j \
-  --calibration path/to/exact.yaml --confirm-real
 ```
 
 `runtime.example.yaml` is a strict partial overlay. Omitted robot, geometry, motion, safety, and simulation values continue to resolve from `assets/configs/runtime`.
 
-## Packaging
-> For physical robot deployment, see [Hardware & Real Robot](#hardware--real-robot).
+> For physical robot pick-place, see [Hardware & Real Robot](#hardware--real-robot).
 
 ## Packaging Showcase Simulation
 
@@ -181,17 +154,14 @@ python scripts/generate_showcase_textures.py
 
 | Flag | Values / notes |
 |------|----------------|
-| `--robot` | Default `xarm6`; all five families supported in sim/dry-run/sdk-sim |
-| `--mode` | Default `sim`; same four modes as pick-place |
-| `--robot` | Default `xarm6`; all five families supported in sim/dry-run |
+| `--robot` | Default `xarm6`; all five families supported in sim / dry-run |
 | `--mode` | Required for simulation: `sim` (default), `dry-run` (offline preflight) |
 | `--executor` | Default `servo_j`; also `servo_cartesian` |
 | `--backend` | Optional: `cpu` / `gpu`; same meaning as pick-place |
 | `--cycles N` | Exact simulation cycle count (default 1) |
 | `--speed` | Simulation playback multiplier (`>1` is faster) |
 | `--table-height` | Simulation display height only; base-frame geometry unchanged |
-| `--config` / `--print-config` / `--ip` / `--calibration` / `--confirm-real` / `--visual` / `--report` | Same roles as pick-place |
-| `--visual` | Optional: hold final viewer frame |
+| `--visual` | Optional: hold the final viewer frame |
 | `--config` / `--print-config` / `--report` | Same roles as pick-place |
 
 ```bash
@@ -207,7 +177,6 @@ python examples/packaging/run.py \
 python examples/packaging/run.py \
   --robot lite6 --mode sim --executor servo_j --cycles 3
 
-# Offline preflight / controller simulation
 # Offline preflight
 python examples/packaging/run.py \
   --robot xarm7 --mode dry-run --executor servo_j
@@ -222,7 +191,7 @@ python examples/packaging/run.py \
 
 ## Reinforcement Learning
 
-The Linux/NVIDIA xArm6 + Gripper G2 RL pick-place workflow is simulation-only (does not claim real-robot policy deployment). See [rl/README.md](rl/README.md) for installation, evaluation, training, and evidence entry points.
+The Linux/NVIDIA examples are simulation-only: xArm6 + Gripper G2 pick-place, and bare-arm xArm 6 reach. Neither deploys a policy on a real robot. See [rl/README.md](rl/README.md) for installation, evaluation, and training.
 
 ## Hardware & Real Robot
 
@@ -250,7 +219,6 @@ python examples/packaging/run.py \
   --ip <ip> --calibration path/to/exact.yaml
 ```
 
-# Real packaging is enabled only for xArm6 + G2 and Lite6 + Lite6 Gripper
 ### 2. Physical Motion Commands (Drives Robot & Gripper)
 
 Sends actual trajectory and servo setpoints to physical hardware:
@@ -268,12 +236,6 @@ XARM_IP=<ip> python examples/pick_place/run.py \
 XARM_IP=<ip> python examples/packaging/run.py \
   --robot lite6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
-
-# Optional overlay
-python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j \
-  --config examples/packaging/runtime.example.yaml
 ```
 
-Real mode never loops. xArm5, xArm7, and UF850 `--mode real` fail before controller connection until a real gripper path is enabled.
-> Note: Packaging `--mode real` on xArm5, xArm7, and UF850 will abort before connecting until real gripper support is enabled.
+> Packaging `--mode real` on xArm5, xArm7, and UF850 aborts before connecting until real gripper support is enabled. Real mode never loops.

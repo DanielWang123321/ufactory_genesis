@@ -53,6 +53,10 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/rl/pick_place/trace_utils.py",
         "examples/rl/pick_place/recipe.yaml",
         "examples/rl/pick_place/scenarios/fixed_seed17000_n512.json",
+        "examples/rl/reach/env.py",
+        "examples/rl/reach/evaluate.py",
+        "examples/rl/reach/recipe.yaml",
+        "examples/rl/reach/train.py",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
     assert sorted(path.name for path in (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").iterdir()) == [

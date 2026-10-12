@@ -214,6 +214,27 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
                 "task.parameters.grasp_gap_m must be within the configured gripper gap range "
                 f"[{gripper.closed_gap_m}, {gripper.open_gap_m}]"
             )
+    if task_name == "reach":
+        _positive(task_parameters["episode_length_s"], field="task.parameters.episode_length_s")
+        _positive(task_parameters["control_dt_s"], field="task.parameters.control_dt_s")
+        _positive(task_parameters["success_distance_m"], field="task.parameters.success_distance_m")
+        _positive(task_parameters["action_scale_rad"], field="task.parameters.action_scale_rad")
+        _positive(task_parameters["action_clip"], field="task.parameters.action_clip")
+        _positive(task_parameters["servo_speed_rad_s"], field="task.parameters.servo_speed_rad_s")
+        target_lower = _tuple_floats(
+            task_parameters["target_position_lower_m"],
+            field="task.parameters.target_position_lower_m",
+            size=3,
+        )
+        target_upper = _tuple_floats(
+            task_parameters["target_position_upper_m"],
+            field="task.parameters.target_position_upper_m",
+            size=3,
+        )
+        if any(lower >= upper for lower, upper in zip(target_lower, target_upper, strict=True)):
+            raise ConfigError(
+                "task.parameters.target_position_lower_m must be below target_position_upper_m on every axis"
+            )
     if task_name == "packaging_showcase":
         table_size = _tuple_floats(task_parameters["table_size_m"], field="task.parameters.table_size_m", size=3)
         box_size = _tuple_floats(task_parameters["box_outer_size_m"], field="task.parameters.box_outer_size_m", size=3)

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -65,6 +67,23 @@ def test_recipe_rejects_non_finite_values(tmp_path: Path) -> None:
     )
     with pytest.raises(ArtifactError, match="must be finite"):
         load_training_recipe(invalid)
+
+
+def test_reach_configuration_resolves_without_torch() -> None:
+    code = '''
+import importlib.abc, sys
+class BlockTorch(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "torch" or fullname.startswith("torch."):
+            raise ModuleNotFoundError("torch deliberately unavailable")
+sys.meta_path.insert(0, BlockTorch())
+from ufactory.training import build_reach_task_configs, build_train_config
+env, _, _ = build_reach_task_configs("xarm6", recipe_path="examples/rl/reach/recipe.yaml")
+assert env["num_obs"] == 24
+build_train_config("examples/rl/reach/recipe.yaml", experiment_name="test", max_iterations=1)
+'''
+    result = subprocess.run([sys.executable, "-c", code], cwd=PROJECT_ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 def _yaml(value: object) -> str:

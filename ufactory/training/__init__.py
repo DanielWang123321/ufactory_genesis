@@ -27,7 +27,9 @@ from ufactory.training.scenarios import (
 )
 from ufactory.training.tasks import (
     PICK_PLACE_RL_ROBOTS,
+    REACH_RL_ROBOTS,
     build_pick_place_task_configs,
+    build_reach_task_configs,
     build_train_config,
 )
 
@@ -45,7 +47,9 @@ __all__ = [
     "runtime_env_contract",
     "scenario_bank_sha256",
     "PICK_PLACE_RL_ROBOTS",
+    "REACH_RL_ROBOTS",
     "build_pick_place_task_configs",
+    "build_reach_task_configs",
     "build_train_config",
     "validate_and_load_rsl_checkpoint",
     "validate_checkpoint_artifacts",

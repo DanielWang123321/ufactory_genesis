@@ -56,7 +56,39 @@ _RUNTIME_ENV_CONTRACT_KEYS = (
     "target_spawn_lower",
     "target_spawn_upper",
 )
+_REACH_RUNTIME_ENV_CONTRACT_KEYS = (
+    "task_name",
+    "env_version",
+    "num_obs",
+    "num_actions",
+    "runtime_config_sha256",
+    "episode_length_s",
+    "ctrl_dt",
+    "success_distance_m",
+    "action_scale",
+    "action_clip",
+    "servo_speed_rad_s",
+    "max_joint_delta_rad",
+    "target_pos_lower",
+    "target_pos_upper",
+    "substeps",
+    "constraint_solver",
+    "solver_iterations",
+    "noslip_iterations",
+    "friction_cone",
+    "contact_resolution",
+    "constraint_time_constant_s",
+    "use_gjk_collision",
+)
 _TRANSFERABLE_RUNTIME_ENV_KEYS = frozenset({"fixed_demo_layout"})
+
+
+def runtime_env_contract_keys(env: Mapping[str, Any]) -> tuple[str, ...]:
+    """Pick-place keeps the historical key list unless the env is marked reach."""
+
+    if str(env.get("task_name", "")) == "reach":
+        return _REACH_RUNTIME_ENV_CONTRACT_KEYS
+    return _RUNTIME_ENV_CONTRACT_KEYS
 
 
 def _plain(value: Any) -> Any:
@@ -100,7 +132,7 @@ def _file_sha256(path: Path) -> str:
 def runtime_env_contract(env: Mapping[str, Any]) -> dict[str, Any]:
     """Return the task fields that must agree with the resolved runtime YAML."""
 
-    return {key: _plain(env.get(key)) for key in _RUNTIME_ENV_CONTRACT_KEYS}
+    return {key: _plain(env.get(key)) for key in runtime_env_contract_keys(env)}
 
 
 def _git_provenance(cwd: Path) -> dict[str, Any]:
@@ -388,15 +420,22 @@ def validate_checkpoint_artifacts(
     if allowed_mismatches and expected_runtime_env is None:
         raise ArtifactError("allowed runtime config mismatches require expected_runtime_env")
     if expected_runtime_env is not None:
-        saved_contract = runtime_env_contract(env)
-        expected_contract = runtime_env_contract(expected_runtime_env)
-        mismatched_keys = [
-            key
-            for key in _RUNTIME_ENV_CONTRACT_KEYS
-            if key not in allowed_mismatches and saved_contract.get(key) != expected_contract.get(key)
-        ]
-        if mismatched_keys:
-            failures.append(f"runtime config body ({', '.join(mismatched_keys)})")
+        if expected_task == "reach" and env.get("env_version") != expected_runtime_env.get("env_version"):
+            raise ArtifactError("reach environment version changed (24 observations, accumulated commands); retrain the policy")
+        saved_keys = runtime_env_contract_keys(env)
+        expected_keys = runtime_env_contract_keys(expected_runtime_env)
+        if saved_keys != expected_keys:
+            failures.append("runtime config body (task_name)")
+        else:
+            saved_contract = runtime_env_contract(env)
+            expected_contract = runtime_env_contract(expected_runtime_env)
+            mismatched_keys = [
+                key
+                for key in saved_keys
+                if key not in allowed_mismatches and saved_contract.get(key) != expected_contract.get(key)
+            ]
+            if mismatched_keys:
+                failures.append(f"runtime config body ({', '.join(mismatched_keys)})")
     if int(env["num_obs"]) != manifest.observation_dim or int(env["num_actions"]) != manifest.action_dim:
         failures.append("observation/action dimensions")
     if failures:

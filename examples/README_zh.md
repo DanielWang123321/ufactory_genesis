@@ -15,7 +15,7 @@ pip install -e ".[sim]"
 # 可选：
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
 #   pip install -e ".[showcase]"  # 装箱纸箱贴图（scipy）
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA RL 抓放主线
+#   pip install -e ".[sim,rl]"    # Linux/NVIDIA 抓放与到达
 ```
 
 3. 运行依赖 Genesis 的流程前，设置可写的 Numba 缓存目录：
@@ -48,10 +48,10 @@ python examples/visualization/view_robot.py --robot xarm6
 | `kinematics/`    | FK/IK / 机型校验包装                          |
 | `pick_place/`    | 多机型抓放入口与可选覆盖配置                          |
 | `packaging/`     | 多机型装箱展示入口与可选覆盖配置                        |
-| `rl/`            | Linux/NVIDIA xArm6 + Gripper G2 RL 抓放主线 |
+| `rl/`            | Linux/NVIDIA：xArm6 + Gripper G2 抓放，以及 xArm 6 裸臂到达 |
 
 
-RL 边界以及固定布局安装、评估、训练和发布证据的入口见
+抓放和到达的安装、训练、评估入口见
 [rl/README_cn.md](rl/README_cn.md)。
 
 ## 可视化
@@ -206,7 +206,7 @@ python examples/packaging/run.py \
 
 ## 强化学习
 
-Linux/NVIDIA xArm6 + Gripper G2 的 RL 抓放主线为纯仿真流程（不宣称真实机械臂策略部署）。安装、评估、从零训练及证据入口详见：
+Linux/NVIDIA 上有两条纯仿真流程：xArm6 + Gripper G2 抓放，以及不装夹爪的 xArm 6 到达。都不做真机策略部署。安装、评估和训练入口见
 [rl/README_cn.md](rl/README_cn.md)。
 
 ## 真机操作与硬件校验
