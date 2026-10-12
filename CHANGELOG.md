@@ -5,6 +5,17 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — unreleased
+
+### Changed
+
+- Set the Genesis World reference baseline to **1.4.4** while keeping the minimum at **1.4.2** (`genesis-world>=1.4.2`). Genesis 1.4.2 and 1.4.3 still run and emit one unvalidated-baseline warning. Genesis 1.4.1 and older fail closed. Private hook signatures used by forward kinematics, inverse kinematics, GLB PBR, and the deferred viewer are unchanged. The lock file pins Genesis 1.4.4 and Quadrants 1.3.3 (Genesis 1.4.2 still brings Quadrants 1.3.0). Contact-solver internals changed in 1.4.4, so simulation checks were re-run on 1.4.4; contact numbers are not claimed identical to 1.4.2.
+
+### Fixed
+
+- Updated the asset manifest hash for `assets/configs/runtime/robots/lite6.yaml` so it matches the committed file.
+- Rebound the Lite6 finger-pair collision exemptions to the current `lite6_with_gripper.urdf` hash. The nominal pick-place preflight treats the closed 20 mm gap as expected again. The calibrated-URDF hash is unchanged.
+
 ## [0.3.0] — 2026-09-24
 
 ### Changed

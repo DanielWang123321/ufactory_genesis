@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/version-0.3.0-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.4.2-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/genesis-1.4.4-lightgrey" alt="Genesis">
   <a href="https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -12,11 +12,11 @@ UFACTORY 机械臂的 Genesis 模型与仿真工具，覆盖可视化、运动�
 
 [English](README.md) | [示例](examples/README_zh.md) | [变更记录](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全说明](SECURITY.md)
 
-> v0.3.0 是 [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis) 上的官方仓库。项目仍是 0.x：1.0.0 之前可以改名或删除入口。Genesis World 只验证 1.4.2。
+> v0.3.0 是 [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis) 上的官方仓库。项目仍是 0.x，1.0.0 之前可以改名或删除入口。
 
 ## 支持范围
 
-- Python 3.12/3.13。Genesis World 1.4.2 是已验证基线。不保证更高版本可用；钩子检查对不上时直接失败。
+- Python 3.12/3.13。Genesis World 最低版本是 1.4.2。1.4.4 是已验证基线；1.4.2 和 1.4.3 仍可运行并警告一次。不保证更高版本可用；钩子检查对不上时直接失败。
 - 仅支持克隆源码后的可编辑安装；不支持 wheel、sdist 和远程资产下载。
 - 支持可视化、校准后的正向/逆向运动学（FK/IK）、接触仿真、离线预检、控制器仿真和经过安全检查的真机执行。
 - 真机装箱只启用 xArm6 + Gripper G2 和 Lite6 + Lite6 Gripper。
@@ -70,7 +70,7 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 
 ## 当前入口
 
-下面是 v0.3.0 在 Genesis World 1.4.2 上可用的入口，不表示后续 0.x 或更高 Genesis 版本会继续保留。
+下面是 v0.3.0 当前可用的入口，不表示后续 0.x 会继续保留。
 
 命令：`ufactory-pick-place`、`ufactory-packaging-showcase`、`dynamics-sim-check`、`dynamics-sim-collision-check`、`dynamics-hardware-check`。`project-check` 和 `observe-hold-current` 是维护者工具。
 
@@ -107,4 +107,4 @@ python -m examples.rl.pick_place.evaluate --headless -B 8 --episodes 8
 
 代码采用 MIT 许可；机器人 URDF 和网格资产包含上游材料，其独立归属说明见 [NOTICE](NOTICE)。xArm、UF850 和 UFACTORY 是其各自所有者的商标。
 
-研究使用时请引用：“genesis-ufactory: UFACTORY Robot Models for Genesis Simulation”，Daniel Wang，2026，`https://github.com/xArm-Developer/ufactory_genesis`。
+研究使用时请引用：“genesis-ufactory: UFACTORY Robot Models for Genesis Simulation”，UFACTORY，2026，`https://github.com/xArm-Developer/ufactory_genesis`。

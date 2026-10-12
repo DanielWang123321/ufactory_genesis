@@ -17,6 +17,7 @@ from ufactory.safety.sdk_sim import (
     load_sdk_simulation_evidence,
     validate_sdk_simulation,
 )
+from ufactory.trajectory.preflight import create_safety_gate
 from ufactory.trajectory.segments import Program, Segment
 
 
@@ -304,14 +305,10 @@ def test_allowed_task_contacts_and_optional_collision_backend():
 
 def test_lite6_contact_exemptions_match_exact_trajectory_stages():
     config = load_runtime_config("lite6")
-    urdf_hash = config.safety.exemptions[0].urdf_sha256
-    lite_gate = SafetyGate(
+    lite_gate = create_safety_gate(
         config,
-        joint_lower_rad=[-3.0] * 6,
-        joint_upper_rad=[3.0] * 6,
         kinematics=Kin(),
         collision=Collision(),
-        urdf_sha256=urdf_hash,
         calibration_sha256="c" * 64,
         scene_sha256="s" * 64,
     )

@@ -9,7 +9,7 @@
 
 ## 0.3.x (current — xArm-Developer/ufactory_genesis)
 
-The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x. Entry points may be renamed or removed before 1.0.0. Genesis World is validated at 1.4.2 only; a newer release must pass the hook checks or it fails closed. This repository does not promise that today's interfaces keep working on later Genesis versions.
+The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x. Entry points may be renamed or removed before 1.0.0. Genesis World 1.4.4 is the validated baseline. 1.4.2 is the minimum; 1.4.2 and 1.4.3 still run and emit one warning. A newer release must pass the hook checks or it fails closed. This repository does not promise that today's interfaces keep working on later Genesis versions, or that 1.4.2 contact numbers match 1.4.4.
 
 ### Official repository migration
 

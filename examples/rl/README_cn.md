@@ -2,7 +2,7 @@
 
 v0.3.0 的公开强化学习内容只有一条边界明确的 xArm6 + Gripper G2 主线：
 [固定布局训练与评估](pick_place/README_cn.md)。参考环境为 Linux、NVIDIA GPU、
-Genesis World 1.4.2、Quadrants 1.3.0、PyTorch 2.10 和 RSL-RL 5.4.2。
+Genesis World 1.4.4、Quadrants 1.3.3、PyTorch 2.10 和 RSL-RL 5.4.2。
 
 内置的 seed 7 `model_299_g2stable.pt` 已在 `g2_stable_v1_3_3` 接触物理配置下
 重新训练并通过全部发布检查：9 组评估种子/并行数量组合共 219/219 回合、独立

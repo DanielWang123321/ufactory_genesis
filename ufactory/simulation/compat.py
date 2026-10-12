@@ -1,7 +1,8 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.4.2 is both the minimum and the reference pinned physics baseline for
-the contact-v1 pick-place campaign (local and training server aligned).
+Genesis 1.4.2 remains the minimum. Genesis 1.4.4 is the reference baseline with
+maintainer simulation checks. 1.4.2 and 1.4.3 still run and emit one warning;
+their contact results are not part of that verification.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from packaging.version import InvalidVersion, Version
 
 
 MIN_GENESIS_VERSION = Version("1.4.2")
-VALIDATED_GENESIS_VERSION = Version("1.4.2")  # reference / pinned baseline alias
+VALIDATED_GENESIS_VERSION = Version("1.4.4")  # reference / pinned baseline alias
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False

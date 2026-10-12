@@ -29,9 +29,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 ```
 
 4. 支持的 `--robot`：`xarm5`、`xarm6`、`xarm7`、`uf850`、`lite6`。
-
 5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。CPU PyTorch 的安装说明见根目录 README「安装」一节。
-
 6. **Windows 下查看器无报错退出：** 若 `view_robot.py` 在 `Building visualizer...` 之后无窗口直接回到提示符：
 
 ```powershell
@@ -43,13 +41,15 @@ python examples/visualization/view_robot.py --robot xarm6
 
 本版公开目录：
 
-| 目录 | 用途 |
-|---|---|
-| `visualization/` | GLB 机型与夹爪查看器 |
-| `kinematics/` | FK/IK / 机型校验包装 |
-| `pick_place/` | 多机型抓放入口与可选覆盖配置 |
-| `packaging/` | 多机型装箱展示入口与可选覆盖配置 |
-| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 RL 抓放主线 |
+
+| 目录               | 用途                                      |
+| ---------------- | --------------------------------------- |
+| `visualization/` | GLB 机型与夹爪查看器                            |
+| `kinematics/`    | FK/IK / 机型校验包装                          |
+| `pick_place/`    | 多机型抓放入口与可选覆盖配置                          |
+| `packaging/`     | 多机型装箱展示入口与可选覆盖配置                        |
+| `rl/`            | Linux/NVIDIA xArm6 + Gripper G2 RL 抓放主线 |
+
 
 RL 边界以及固定布局安装、评估、训练和发布证据的入口见
 [rl/README_cn.md](rl/README_cn.md)。
@@ -77,17 +77,21 @@ python examples/visualization/view_bio_gripper_g2.py
 python examples/visualization/view_lite6_gripper.py
 ```
 
-| 参数 | 说明 |
-|------|------|
-| `--robot` | 必选机型 key |
-| `--gripper-g2` / `--bio-gripper-g2` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个） |
-| `--movable` | 按连杆可动夹爪网格（需配合受支持的夹爪标志） |
-| `--gripper-demo` | 循环开合（需要 `--movable`） |
-| `--pd` | 平滑关节运动演示（约 0.873 rad/s），仅视觉 |
-| `--show-tcp` | 法兰 TCP 红色标记（默认隐藏） |
-| `--diagnose` | 无窗口 STL/GLB 连杆位姿诊断 |
-| `--headless` | 不打开查看器窗口 |
-| `--backend` | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
+
+| 参数                                                                                 | 说明                                    |
+| ---------------------------------------------------------------------------------- | ------------------------------------- |
+| `--robot`                                                                          | 必选机型 key                              |
+| `--gripper-g2` / `--bio-gripper-g2` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
+| `--movable`                                                                        | 按连杆可动夹爪网格（需配合受支持的夹爪标志）                |
+| `--gripper-demo`                                                                   | 循环开合（需要 `--movable`）                  |
+| `--pd`                                                                             | 平滑关节运动演示（约 0.873 rad/s），仅视觉           |
+| `--show-tcp`                                                                       | 法兰 TCP 红色标记（默认隐藏）                     |
+| `--diagnose`                                                                       | 无窗口 STL/GLB 连杆位姿诊断                    |
+| `--headless`                                                                       | 不打开查看器窗口                              |
+| `--backend`                                                                        | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
+
+
+
 
 ## 运动学与动力学仿真
 
@@ -101,20 +105,24 @@ dynamics-sim-check --robot xarm6 --random-count 5
 
 > 如需与真实控制器的 FK/IK 对比或硬件动力学检查，请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
 
+
+
 ## 抓放仿真
 
 `examples/pick_place/run.py` 委托给稳定的 `ufactory-pick-place` 控制台命令，两者接受相同参数。
 
-| 参数 | 取值 / 说明 |
-|------|-------------|
-| `--robot` | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
-| `--mode` | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检） |
-| `--executor` | 必选：`servo_j` 或 `servo_cartesian` |
-| `--backend` | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
-| `--visual` | 可选：`sim` 模式下强制打开 Genesis 查看器视窗 |
-| `--config` | 可选：严格的局部覆盖 YAML 路径 |
-| `--print-config` | 可选：打印解析后的运行时 YAML 后退出 |
-| `--report` | 可选：报告输出路径 |
+
+| 参数               | 取值 / 说明                                                          |
+| ---------------- | ---------------------------------------------------------------- |
+| `--robot`        | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6`               |
+| `--mode`         | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检）                    |
+| `--executor`     | 必选：`servo_j` 或 `servo_cartesian`                                 |
+| `--backend`      | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
+| `--visual`       | 可选：`sim` 模式下强制打开 Genesis 查看器视窗                                   |
+| `--config`       | 可选：严格的局部覆盖 YAML 路径                                               |
+| `--print-config` | 可选：打印解析后的运行时 YAML 后退出                                            |
+| `--report`       | 可选：报告输出路径                                                        |
+
 
 ```bash
 # 仅解析配置
@@ -143,6 +151,8 @@ python examples/pick_place/run.py \
 
 > 真实机械臂抓放部署请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
 
+
+
 ## 装箱展示仿真
 
 首次装箱前先生成纸箱贴图（需要 `.[showcase]`）：
@@ -153,17 +163,19 @@ python scripts/generate_showcase_textures.py
 
 `examples/packaging/run.py` 委托给 `ufactory-packaging-showcase`。
 
-| 参数 | 取值 / 说明 |
-|------|-------------|
-| `--robot` | 默认 `xarm6`；五机型均支持 sim / dry-run |
-| `--mode` | 仿真必选：`sim`（默认）、`dry-run`（离线预检） |
-| `--executor` | 默认 `servo_j`；也可选 `servo_cartesian` |
-| `--backend` | 可选：`cpu` / `gpu`；含义与抓放相同 |
-| `--cycles N` | 精确仿真轮数（默认 1） |
-| `--speed` | 仿真播放倍率（`>1` 更快） |
-| `--table-height` | 仅覆盖仿真展示高度，不改变基座系几何 |
-| `--visual` | 可选：保持最终查看器画面 |
-| `--config` / `--print-config` / `--report` | 含义与抓放相同 |
+
+| 参数                                         | 取值 / 说明                            |
+| ------------------------------------------ | ---------------------------------- |
+| `--robot`                                  | 默认 `xarm6`；五机型均支持 sim / dry-run    |
+| `--mode`                                   | 仿真必选：`sim`（默认）、`dry-run`（离线预检）     |
+| `--executor`                               | 默认 `servo_j`；也可选 `servo_cartesian` |
+| `--backend`                                | 可选：`cpu` / `gpu`；含义与抓放相同           |
+| `--cycles N`                               | 精确仿真轮数（默认 1）                       |
+| `--speed`                                  | 仿真播放倍率（`>1` 更快）                    |
+| `--table-height`                           | 仅覆盖仿真展示高度，不改变基座系几何                 |
+| `--visual`                                 | 可选：保持最终查看器画面                       |
+| `--config` / `--print-config` / `--report` | 含义与抓放相同                            |
+
 
 ```bash
 # 一轮仿真结束后退出（加 --visual 可保持最终画面）
@@ -190,6 +202,8 @@ python examples/packaging/run.py \
 
 > 真实机械臂装箱操作请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
 
+
+
 ## 强化学习
 
 Linux/NVIDIA xArm6 + Gripper G2 的 RL 抓放主线为纯仿真流程（不宣称真实机械臂策略部署）。安装、评估、从零训练及证据入口详见：
@@ -199,9 +213,12 @@ Linux/NVIDIA xArm6 + Gripper G2 的 RL 抓放主线为纯仿真流程（不宣�
 
 > [!CAUTION]
 > **真机安全规范**：
+>
 > 1. 执行前需安装真机扩展依赖：`pip install -e ".[real]"`（包含 xArm SDK 与 Pinocchio/Coal 碰撞检测）。
 > 2. 真实机械臂物理运动具有碰撞与损坏风险。驱动真机运动必须提供实机逐台标定文件（`--calibration`）并显式传入安全确认门（`--confirm-real`）。缺少任一项均会在连接前直接拒绝执行。
 > 3. 真机模式单次运行强制限制为 **1 轮（cycle）**。
+
+
 
 ### 1. 硬件只读与状态对比指令（不驱动运动）
 
@@ -220,6 +237,8 @@ python examples/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
 ```
+
+
 
 ### 2. 真机物理运动指令（实际驱动机械臂与夹爪）
 
@@ -241,3 +260,4 @@ XARM_IP=<ip> python examples/packaging/run.py \
 ```
 
 > 注：xArm5、xArm7、UF850 的装箱 `--mode real` 会在连接控制器前自动拦截退出，直到对应机型启用真机夹爪支持。
+

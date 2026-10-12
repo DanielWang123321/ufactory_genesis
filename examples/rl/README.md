@@ -2,7 +2,7 @@
 
 The v0.3.0 public RL surface contains one bounded xArm6 + Gripper G2 workflow:
 [fixed-layout training and evaluation](pick_place/README.md). It targets Linux,
-an NVIDIA GPU, Genesis World 1.4.2, Quadrants 1.3.0, PyTorch 2.10, and RSL-RL
+an NVIDIA GPU, Genesis World 1.4.4, Quadrants 1.3.3, PyTorch 2.10, and RSL-RL
 5.4.2.
 
 The bundled seed-7 `model_299_g2stable.pt` was retrained under the

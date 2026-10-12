@@ -27,9 +27,9 @@ pip install -e ".[sim,rl]"   # public fixed-layout RL example + ufactory.trainin
 pip install -e ".[showcase]"
 ```
 
-The `[sim]` extra requires `genesis-world>=1.4.2` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.4.2 and Quadrants 1.3.0; `[rl]` requires RSL-RL 5.3.0+ and the lock pins 5.4.2. Genesis 1.4.1 and older are unsupported. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
+The `[sim]` extra requires `genesis-world>=1.4.2` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.4.4 and Quadrants 1.3.3; `[rl]` requires RSL-RL 5.3.0+ and the lock pins 5.4.2. Genesis 1.4.2 brings Quadrants 1.3.0, and Genesis 1.4.3 and later bring Quadrants 1.3.3. Genesis 1.4.1 and older are unsupported. 1.4.2 and 1.4.3 still run and emit one warning. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
 
-The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). The project is still 0.x, so entry points may be renamed or removed before 1.0.0. Genesis World is validated at 1.4.2 only — see [ROADMAP.md](ROADMAP.md).
+The official repository is [xArm-Developer/ufactory_genesis](https://github.com/xArm-Developer/ufactory_genesis). The project is still 0.x, so entry points may be renamed or removed before 1.0.0. Genesis World 1.4.4 is the validated baseline — see [ROADMAP.md](ROADMAP.md).
 
 The `tests/` suite is for **contributors and maintainers**, not end-user onboarding. Library users should start from `examples/` and the dynamics CLI entry points.
 

@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/python-3.12%20%7C%203.13-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/version-0.3.0-orange" alt="Version">
-  <img src="https://img.shields.io/badge/genesis-1.4.2-lightgrey" alt="Genesis">
+  <img src="https://img.shields.io/badge/genesis-1.4.4-lightgrey" alt="Genesis">
   <a href="https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml"><img src="https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -12,11 +12,11 @@ UFACTORY robot models and Genesis simulation utilities for visualization, kinema
 
 [中文](README.zh.md) | [Examples](examples/README.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
-> v0.3.0 is the official repository under [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x: entry points may be renamed or removed before 1.0.0. Genesis World is validated at 1.4.2 only.
+> v0.3.0 is the official repository under [xArm-Developer](https://github.com/xArm-Developer/ufactory_genesis). This project is still 0.x, and entry points may be renamed or removed before 1.0.0.
 
 ## Supported scope
 
-- Python 3.12/3.13. Genesis World 1.4.2 is the validated baseline. Newer Genesis releases are not guaranteed; hook checks fail closed when they do not match.
+- Python 3.12/3.13. The minimum Genesis World release is 1.4.2. 1.4.4 is the validated baseline; 1.4.2 and 1.4.3 still run and emit one warning. Newer releases are not guaranteed; hook checks fail closed when they do not match.
 - Source checkout with editable install only; wheels, sdists, and remote asset downloads are unsupported.
 - Visualization, calibrated FK/IK, contact simulation, dry-run, controller simulation, and guarded real execution.
 - Real packaging is enabled only for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper.
@@ -70,7 +70,7 @@ Full visualization, kinematics, CPU/Windows, configuration, and real-robot examp
 
 ## Current entry points
 
-These are what v0.3.0 runs against Genesis World 1.4.2. They are not a promise that later 0.x releases or later Genesis versions will keep them.
+These are the v0.3.0 entry points. Later 0.x releases may remove them.
 
 Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`. `project-check` and `observe-hold-current` are maintainer tools.
 
@@ -107,4 +107,4 @@ Real motion requires exact per-unit calibration, complete predictive preflight, 
 
 Code is MIT licensed; robot URDF and mesh assets include upstream material with separate attribution in [NOTICE](NOTICE). xArm, UF850, and UFACTORY are trademarks of their respective owners.
 
-For research use, cite “genesis-ufactory: UFACTORY Robot Models for Genesis Simulation,” Daniel Wang, 2026, `https://github.com/xArm-Developer/ufactory_genesis`.
+For research use, cite “genesis-ufactory: UFACTORY Robot Models for Genesis Simulation,” UFACTORY, 2026, `https://github.com/xArm-Developer/ufactory_genesis`.
