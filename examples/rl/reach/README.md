@@ -1,6 +1,6 @@
-# 1. Reach: bare-arm xArm 6
+# 1. Reach: xArm 6 target reaching
 
-Simulation only; no Reach weights are bundled. Success requires a distance strictly below **5 mm**; the default training seed is 7. Run the commands below from the repository root.
+The xArm 6 runs without a gripper in simulation; no Reach weights are bundled. Success requires a distance strictly below **5 mm**; the default training seed is 7. Run the commands below from the repository root.
 
 [中文说明](README_cn.md) · [RL examples](../README.md) · [Next: 2. Pick & Place](../pick_place/README.md)
 

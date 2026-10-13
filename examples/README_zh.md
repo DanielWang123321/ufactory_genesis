@@ -6,16 +6,21 @@ v0.3.0 按任务组织公开示例。共享实现位于 `ufactory`，入口模�
 
 ## 前置条件
 
+已验证 Python 3.12/3.13、Genesis World 1.4.4，Genesis 最低版本为 1.4.2。1.4.2 和 1.4.3 会警告一次；更高版本须通过接口检查。详见[版本策略](../ROADMAP.md)。
+
 1. 克隆本仓库，并在**仓库根目录**运行命令。
 2. 使用 editable install（仅支持源码树；不支持 wheel/sdist）：
 
 ```bash
+git clone https://github.com/xArm-Developer/ufactory_genesis.git
+cd ufactory_genesis
 pip install -e ".[sim]"
 
 # 可选：
-#   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
-#   pip install -e ".[showcase]"  # 装箱纸箱贴图（scipy）
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA 到达与抓放
+#   pip install -e ".[sim,rl]"        # Linux/NVIDIA 到达与抓放
+#   pip install -e ".[sim,real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
+#   pip install -e ".[sim,showcase]"  # 装箱纸箱贴图（scipy）
+#   pip install -e ".[sim,dynamics]"  # 动力学参考检查
 ```
 
 3. 运行依赖 Genesis 的流程前，设置可写的 Numba 缓存目录：
@@ -29,7 +34,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 ```
 
 4. 支持的 `--robot`：`xarm5`、`xarm6`、`xarm7`、`uf850`、`lite6`。
-5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。CPU PyTorch 的安装说明见根目录 README「安装」一节。
+5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。强化学习需要 Linux/NVIDIA GPU。
 6. **Windows 下查看器无报错退出：** 若 `view_robot.py` 在 `Building visualizer...` 之后无窗口直接回到提示符：
 
 ```powershell
@@ -52,6 +57,18 @@ python examples/visualization/view_robot.py --robot xarm6
 
 
 学习顺序及训练、推理指南见 [RL 索引](rl/README_cn.md)。
+
+## 支持机型与末端
+
+| 机械臂 | 可用末端 |
+|---|---|
+| `xarm5` | Gripper G2、Bio Gripper G2 |
+| `xarm6` | Gripper G2、Bio Gripper G2 |
+| `xarm7` | Gripper G2、Bio Gripper G2 |
+| `uf850` | Gripper G2、Bio Gripper G2 |
+| `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper |
+
+五类机型均支持仿真与离线预检。真机装箱启用 xArm6 + Gripper G2、Lite6 + Lite6 Gripper，详见[真机操作与硬件校验](#真机操作与硬件校验)。
 
 ## 可视化
 

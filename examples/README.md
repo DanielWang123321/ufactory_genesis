@@ -6,16 +6,21 @@ v0.3.0 organizes public examples by task. Shared implementations live in `ufacto
 
 ## Prerequisites
 
+Validated with Python 3.12/3.13 and Genesis World 1.4.4; the minimum Genesis version is 1.4.2. Versions 1.4.2 and 1.4.3 warn once; newer versions must pass the hook checks. See the [version policy](../ROADMAP.md).
+
 1. Clone this repository and run commands from the repository root.
 2. Editable install (source-only; wheels/sdists are unsupported):
 
 ```bash
+git clone https://github.com/xArm-Developer/ufactory_genesis.git
+cd ufactory_genesis
 pip install -e ".[sim]"
 
 # Optional:
-#   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
-#   pip install -e ".[showcase]"  # packaging box textures (scipy)
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA reach and pick-place
+#   pip install -e ".[sim,rl]"        # Linux/NVIDIA reach and pick-place
+#   pip install -e ".[sim,real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
+#   pip install -e ".[sim,showcase]"  # packaging box textures (scipy)
+#   pip install -e ".[sim,dynamics]"  # dynamics reference checks
 ```
 
 3. Set a writable Numba cache directory before Genesis-backed runs:
@@ -30,7 +35,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 4. Supported `--robot` keys: `xarm5`, `xarm6`, `xarm7`, `uf850`, `lite6`.
 
-5. **Windows / no supported GPU:** install the CPU PyTorch wheel first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). See the CPU PyTorch note under *Install* in the root README.
+5. **Windows / no supported GPU:** install the CPU PyTorch wheel first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). RL requires Linux/NVIDIA GPUs.
 
 6. **Windows, viewer exits with no error:** if `view_robot.py` returns to the prompt with no window after `Building visualizer...`:
 
@@ -52,6 +57,18 @@ Public directories in this release:
 | `rl/` | Bare-arm Reach → tabletop Pick & Place → box packing (planned); Linux/NVIDIA |
 
 See the [RL index](rl/README.md) for the learning sequence and training/inference guides.
+
+## Supported robots and end effectors
+
+| Robot | Available end effectors |
+|---|---|
+| `xarm5` | Gripper G2, Bio Gripper G2 |
+| `xarm6` | Gripper G2, Bio Gripper G2 |
+| `xarm7` | Gripper G2, Bio Gripper G2 |
+| `uf850` | Gripper G2, Bio Gripper G2 |
+| `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper |
+
+All five families support simulation and offline preflight. Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; see [Hardware & Real Robot](#hardware--real-robot).
 
 ## Visualization
 

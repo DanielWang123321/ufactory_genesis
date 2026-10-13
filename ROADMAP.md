@@ -21,11 +21,15 @@ The official repository is [xArm-Developer/ufactory_genesis](https://github.com/
 
 ### Current entry points
 
-README lists the commands, example directories, and `ufactory` root exports that work in v0.3.0. That list is not a compatibility promise. `ufactory.training`, `ufactory.quality`, and modules left off the list can change without a deprecation window.
+Current commands, example directories and `ufactory` root exports are listed below. Later 0.x releases may rename or remove them. `ufactory.training`, `ufactory.quality`, and modules left off the list can change without a deprecation window.
+
+- Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`. `project-check` and `observe-hold-current` are maintainer tools.
+- Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/reach`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries. See the [examples guide](examples/README.md) for usage.
+- Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
 
 ### User promotion checklist
 
-- [ ] Official bilingual README Quick Start runs viewer + one sim example on a clean machine in about 10 minutes.
+- [ ] English and Chinese example guides run a viewer + one simulation example on a clean machine in about 10 minutes.
 - [ ] Clone size remains acceptable (Draco-compressed visual GLBs; `assets/` on the order of tens of MB).
 - [ ] Public CI green on the official repo; Releases attach sanitized sim/hardware evidence summaries.
 - [ ] Support channel documented (Issues and/or internal docs).
