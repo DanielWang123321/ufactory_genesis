@@ -65,7 +65,7 @@ def test_reach_runtime_config_uses_the_bare_arm_and_target_box() -> None:
     config = load_runtime_config("xarm6", task="reach")
     assert config.robot.urdf == "xarm6_1305.urdf"
     assert config.task.name == "reach"
-    assert config.task.parameters["success_distance_m"] == pytest.approx(0.03)
+    assert config.task.parameters["success_distance_m"] == pytest.approx(0.005)
     assert config.task.parameters["target_position_lower_m"] == (0.15, -0.30, 0.05)
     assert config.task.parameters["target_position_upper_m"] == (0.55, 0.30, 0.50)
     assert "assets/configs/runtime/tasks/robots/xarm6_1305_reach.yaml" in config.sources
@@ -116,6 +116,7 @@ def test_reach_recipe_has_the_three_training_sections() -> None:
     assert recipe["train"]["algorithm"]["learning_rate"] == pytest.approx(3.0e-4)
     assert recipe["train"]["runner"]["max_iterations"] == 300
     assert recipe["train"]["num_steps_per_env"] == 24
+    assert recipe["train"]["seed"] == 7
     assert recipe["reward"]["success"] == 2.0
     assert recipe["train"]["algorithm"]["schedule"] == "fixed"
     assert recipe["train"]["algorithm"]["entropy_coef"] == pytest.approx(0.001)
@@ -123,8 +124,17 @@ def test_reach_recipe_has_the_three_training_sections() -> None:
     assert recipe["train"]["actor"]["obs_normalization"] is True
     assert recipe["train"]["critic"]["obs_normalization"] is True
     assert recipe["train"]["actor"]["distribution_cfg"] == {
-        "class_name": "BetaDistribution", "action_range": [-1.0, 1.0],
+        "class_name": "BetaDistribution",
+        "action_range": [-1.0, 1.0],
     }
+
+
+@pytest.mark.parametrize("distance", [0.004, 0.006, 0.01])
+def test_reach_rejects_non_5mm_success_distance(tmp_path: Path, distance: float) -> None:
+    overlay = tmp_path / "runtime.yaml"
+    overlay.write_text(f"schema_version: 1\ntask:\n  parameters:\n    success_distance_m: {distance}\n")
+    with pytest.raises(ValueError, match="success_distance_m must be 0.005"):
+        build_reach_task_configs("xarm6", recipe_path=RECIPE, runtime_config_path=overlay)
 
 
 def test_legacy_reach_checkpoint_requests_retraining(tmp_path: Path) -> None:
@@ -132,14 +142,36 @@ def test_legacy_reach_checkpoint_requests_retraining(tmp_path: Path) -> None:
     legacy = dict(env, num_obs=18)
     legacy.pop("env_version")
     config = tmp_path / "config.yaml"
-    write_training_config(config, task="reach", robot_key="xarm6_1305", env=legacy,
-                          reward=reward, robot=robot, train={"seed": 1})
+    write_training_config(
+        config, task="reach", robot_key="xarm6_1305", env=legacy, reward=reward, robot=robot, train={"seed": 1}
+    )
     checkpoint = tmp_path / "model_0.pt"
     torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
-    write_checkpoint_manifest(checkpoint, training_config=load_training_config(config),
-                              executor_action_contract="normalized_joint_position_delta")
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=load_training_config(config),
+        executor_action_contract="normalized_joint_position_delta",
+    )
     with pytest.raises(ArtifactError, match="retrain"):
         validate_checkpoint_artifacts(checkpoint, config, expected_task="reach", expected_runtime_env=env)
+
+
+def test_reach_checkpoint_rejects_non_5mm_success_distance(tmp_path: Path) -> None:
+    env, reward, robot = build_reach_task_configs("xarm6", recipe_path=RECIPE)
+    env["success_distance_m"] = 0.01
+    config = tmp_path / "config.yaml"
+    write_training_config(
+        config, task="reach", robot_key="xarm6_1305", env=env, reward=reward, robot=robot, train={"seed": 7}
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    write_checkpoint_manifest(
+        checkpoint,
+        training_config=load_training_config(config),
+        executor_action_contract="normalized_joint_position_delta",
+    )
+    with pytest.raises(ArtifactError, match="success_distance_m.*5 mm"):
+        validate_checkpoint_artifacts(checkpoint, config, expected_task="reach")
 
 
 def test_native_beta_distribution_bounds_and_finite_likelihood() -> None:

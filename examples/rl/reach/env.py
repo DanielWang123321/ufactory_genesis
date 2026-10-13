@@ -24,7 +24,7 @@ from tensordict import TensorDict
 import genesis as gs
 from ufactory.dynamics.poses import parse_joint_limits
 from ufactory.simulation import make_rigid_options
-from ufactory.training.reach_config import REACH_ENV_VERSION
+from ufactory.training.reach_config import REACH_ENV_VERSION, REACH_SUCCESS_DISTANCE_M
 from ufactory.training.logic import action_penalty, reach_action_delta_torch, reach_observation, reward_reach_position
 
 
@@ -53,6 +53,8 @@ class XArm6ReachEnv:
         self.action_clip = float(env_cfg["action_clip"])
         self.max_joint_delta_rad = float(env_cfg["max_joint_delta_rad"])
         self.success_distance_m = float(env_cfg["success_distance_m"])
+        if self.success_distance_m != REACH_SUCCESS_DISTANCE_M:
+            raise ValueError("reach success_distance_m must be 0.005 (5 mm)")
         self.success_hold_s = 0.0
         self.target_pos_lower = torch.tensor(env_cfg["target_pos_lower"], device=self.device, dtype=gs.tc_float)
         self.target_pos_upper = torch.tensor(env_cfg["target_pos_upper"], device=self.device, dtype=gs.tc_float)
@@ -173,16 +175,16 @@ class XArm6ReachEnv:
             action_clip=self.action_clip,
             max_joint_delta_rad=self.max_joint_delta_rad,
         )
-        self.position_command.copy_(torch.clamp(
-            self.position_command + joint_delta, self.joint_lower, self.joint_upper
-        ))
+        self.position_command.copy_(
+            torch.clamp(self.position_command + joint_delta, self.joint_lower, self.joint_upper)
+        )
         self.robot.control_dofs_position(self.position_command, self.dof_idx)
         self.scene.step()
         self.metric_steps += 1
         self.metric_sums["action_saturation_rate"] += (actions.abs() >= 0.99 * self.action_clip).float().mean(-1)
         self.metric_sums["command_tracking_error_rad"] += (
-            self.position_command - self.robot.get_dofs_position(self.dof_idx)
-        ).abs().mean(-1)
+            (self.position_command - self.robot.get_dofs_position(self.dof_idx)).abs().mean(-1)
+        )
 
         ee_pos = self.ee_link.get_pos()
         distance_m = torch.linalg.norm(self.target_pos - ee_pos, dim=-1)
@@ -208,14 +210,15 @@ class XArm6ReachEnv:
                 "final_dist_m": done_distance,
                 "elapsed_s": self.episode_length_buf[done_idx].float() * self.ctrl_dt,
             }
-            self.extras["episode"].update({
-                "reward/" + name: values[done_idx].detach().clone()
-                for name, values in self.episode_sums.items()
-            })
-            self.extras["episode"].update({
-                name: (values[done_idx] / self.metric_steps[done_idx]).detach().clone()
-                for name, values in self.metric_sums.items()
-            })
+            self.extras["episode"].update(
+                {"reward/" + name: values[done_idx].detach().clone() for name, values in self.episode_sums.items()}
+            )
+            self.extras["episode"].update(
+                {
+                    name: (values[done_idx] / self.metric_steps[done_idx]).detach().clone()
+                    for name, values in self.metric_sums.items()
+                }
+            )
             self.extras["reach_done_distance_m"] = done_distance
             self.extras["reach_done_success"] = done_success
             self.extras["reach_done_steps"] = self.episode_length_buf[done_idx].detach().clone()
@@ -258,13 +261,24 @@ class XArm6ReachEnv:
     def load_training_state_dict(self, state: dict) -> None:
         if state.get("env_version") != REACH_ENV_VERSION:
             raise ValueError("reach resume state is incompatible; retrain the policy")
-        tensors = {name: state[name].to(self.device) for name in (
-            "joint_pos", "joint_vel", "position_command", "episode_length_buf", "target_pos", "metric_steps"
-        )}
+        tensors = {
+            name: state[name].to(self.device)
+            for name in (
+                "joint_pos",
+                "joint_vel",
+                "position_command",
+                "episode_length_buf",
+                "target_pos",
+                "metric_steps",
+            )
+        }
         for name, expected in (
-            ("joint_pos", self.position_command), ("joint_vel", self.position_command),
-            ("position_command", self.position_command), ("episode_length_buf", self.episode_length_buf),
-            ("target_pos", self.target_pos), ("metric_steps", self.metric_steps),
+            ("joint_pos", self.position_command),
+            ("joint_vel", self.position_command),
+            ("position_command", self.position_command),
+            ("episode_length_buf", self.episode_length_buf),
+            ("target_pos", self.target_pos),
+            ("metric_steps", self.metric_steps),
         ):
             if tensors[name].shape != expected.shape or not torch.isfinite(tensors[name]).all():
                 raise ValueError(f"invalid reach resume state: {name}")
@@ -278,8 +292,10 @@ class XArm6ReachEnv:
             if state[group].keys() != expected.keys():
                 raise ValueError(f"invalid reach resume state: {group}")
             sums[group] = {key: value.to(self.device) for key, value in state[group].items()}
-            if any(value.shape != self.metric_steps.shape or not torch.isfinite(value).all()
-                   for value in sums[group].values()):
+            if any(
+                value.shape != self.metric_steps.shape or not torch.isfinite(value).all()
+                for value in sums[group].values()
+            ):
                 raise ValueError(f"invalid reach resume state: {group}")
         self.robot.set_dofs_position(tensors["joint_pos"], self.dof_idx, zero_velocity=True)
         self.robot.set_dofs_velocity(tensors["joint_vel"], self.dof_idx)

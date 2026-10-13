@@ -52,6 +52,6 @@ train:
     run_name: ""
   num_steps_per_env: 24
   save_interval: 25
-  seed: 1
+  seed: 7
   run_name: ""
   logger: tensorboard

@@ -17,6 +17,8 @@ from typing import Any, Mapping
 
 import yaml
 
+from ufactory.training.reach_config import REACH_SUCCESS_DISTANCE_M
+
 
 class ArtifactError(ValueError):
     pass
@@ -409,6 +411,8 @@ def validate_checkpoint_artifacts(
     if expected_robot_key is not None and manifest.robot_key != expected_robot_key:
         failures.append("robot")
     env = config["env"]
+    if config["task"] == "reach" and env.get("success_distance_m") != REACH_SUCCESS_DISTANCE_M:
+        failures.append("reach success_distance_m (5 mm required)")
     if expected_runtime_config_sha256 is not None and env.get("runtime_config_sha256") != str(
         expected_runtime_config_sha256
     ):
@@ -421,7 +425,9 @@ def validate_checkpoint_artifacts(
         raise ArtifactError("allowed runtime config mismatches require expected_runtime_env")
     if expected_runtime_env is not None:
         if expected_task == "reach" and env.get("env_version") != expected_runtime_env.get("env_version"):
-            raise ArtifactError("reach environment version changed (24 observations, accumulated commands); retrain the policy")
+            raise ArtifactError(
+                "reach environment version changed (24 observations, accumulated commands); retrain the policy"
+            )
         saved_keys = runtime_env_contract_keys(env)
         expected_keys = runtime_env_contract_keys(expected_runtime_env)
         if saved_keys != expected_keys:

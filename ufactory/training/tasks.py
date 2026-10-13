@@ -8,7 +8,7 @@ from typing import Any
 
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.robots.paths import robot_urdf
-from ufactory.training.reach_config import REACH_ENV_VERSION, effective_max_joint_delta_rad
+from ufactory.training.reach_config import REACH_ENV_VERSION, REACH_SUCCESS_DISTANCE_M, effective_max_joint_delta_rad
 from ufactory.training.recipe import load_training_recipe
 
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
@@ -130,6 +130,8 @@ def build_reach_task_configs(
         raise ValueError("the reach RL environment supports only xArm6")
     config = load_runtime_config(robot, task="reach", config_path=runtime_config_path)
     params = config.task.parameters
+    if float(params["success_distance_m"]) != REACH_SUCCESS_DISTANCE_M:
+        raise ValueError("reach success_distance_m must be 0.005 (5 mm)")
     recipe = load_training_recipe(recipe_path)
     env_cfg = deepcopy(recipe["environment"])
     ctrl_dt = float(params["control_dt_s"])

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added a simulation-only bare-arm xArm 6 reach example under `examples/rl/reach`: joint-position increments, random end-effector targets, PPO training, and checkpoint evaluation. No trained weights are bundled, and there is no real-robot policy executor.
+- Added a simulation-only bare-arm xArm 6 reach example under `examples/rl/reach`: a fixed 5 mm success threshold, joint-position increments, random end-effector targets, PPO training, checkpoint selection and evaluation. No trained weights are bundled, and there is no real-robot policy executor.
 
 ### Changed
 
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Reach now accumulates position commands within URDF limits, maps the full action range linearly, and uses 24 observations with command tracking error. PPO uses a bounded Beta distribution and a one-time success bonus. Evaluation runs each fixed target once through success or timeout and can enforce success-rate and distance thresholds. With `--vis`, a successful reach holds for 1 second before the next target; headless evaluation does not hold. Older reach checkpoints require retraining.
+- Reach now accumulates position commands within URDF limits, maps the full action range linearly, and uses 24 observations with command tracking error. PPO uses a bounded Beta distribution and a one-time success bonus. Evaluation runs each fixed target once through success or timeout and can enforce success-rate and distance thresholds. The `visualize` entry provides real-time GLB inference with an independent 1-second hold after each successful reach; `evaluate --vis` prints its replacement command. Reach configurations and checkpoints with other success thresholds are rejected.
 - Updated the asset manifest hash for `assets/configs/runtime/robots/lite6.yaml` so it matches the committed file.
 - Rebound the Lite6 finger-pair collision exemptions to the current `lite6_with_gripper.urdf` hash. The nominal pick-place preflight treats the closed 20 mm gap as expected again. The calibrated-URDF hash is unchanged.
 

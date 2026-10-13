@@ -44,7 +44,7 @@ python examples/visualization/view_robot.py --robot xarm6
 | 目标 | 可编辑安装命令 |
 |------|----------------|
 | 仿真与可视化 | `pip install -e ".[sim]"` |
-| 仿真强化学习（抓放与到达） | `pip install -e ".[sim,rl]"` |
+| 仿真强化学习（到达与抓放） | `pip install -e ".[sim,rl]"` |
 | 真机安全后端 | `pip install -e ".[sim,real]"` |
 | 装箱贴图生成 | `pip install -e ".[sim,showcase]"` |
 | 动力学参考检查 | `pip install -e ".[sim,dynamics]"` |
@@ -76,13 +76,25 @@ ufactory-packaging-showcase --robot lite6 --mode sim --executor servo_cartesian 
 
 命令：`ufactory-pick-place`、`ufactory-packaging-showcase`、`dynamics-sim-check`、`dynamics-sim-collision-check`、`dynamics-hardware-check`。`project-check` 和 `observe-hold-current` 是维护者工具。
 
-示例：`examples/visualization`、`examples/kinematics`、`examples/pick_place`、`examples/packaging`、`examples/rl/pick_place`、`examples/rl/reach`，以及抓放和装箱入口旁的 `runtime.example.yaml`。
+示例：`examples/visualization`、`examples/kinematics`、`examples/pick_place`、`examples/packaging`、`examples/rl/reach`、`examples/rl/pick_place`，以及抓放和装箱入口旁的 `runtime.example.yaml`。
 
 `ufactory` 根导出：`get_robot_profile`、`robot_urdf`、`robot_visual_glb_urdf`、`robot_assets`、`RepositoryAssetStore`。
 
-## v0.3.0 固定位置强化学习
+## 强化学习
 
-公开的 xArm6 + Gripper G2 任务仅使用固定 `+Y` 布局：方块位于 `[0.300, 0, 0.015]` 米，目标位于 `[0.300, 0.300, 0.015]` 米。本版本不包含随机起点。
+示例按裸臂 Reach、桌面 Pick & Place、装箱的顺序由易到难。各阶段指南见 [RL 索引](examples/rl/README_cn.md)。
+
+### 1. Reach：裸臂到达
+
+不装夹爪的 5 mm 仿真示例，默认训练 seed 7，仓库不附带权重。训练、验收和 GLB 实时推理见[训练与推理指令](examples/rl/reach/README_cn.md)。
+
+```bash
+python -m examples.rl.reach.train -e reach
+```
+
+### 2. Pick & Place：桌面抓放
+
+xArm6 + Gripper G2 将方块搬运到桌面目标位置，采用固定 `+Y` 布局：方块位于 `[0.300, 0, 0.015]` 米，目标位于 `[0.300, 0.300, 0.015]` 米。当前示例不包含随机起点。
 
 内置的随机种子 7 模型 `model_299_g2stable.pt` 已在 `g2_stable_v1_3_3` 接触物理配置下重新训练并通过全部发布检查：9 组评估种子/并行数量组合共 219/219 回合、独立固定场景库 64/64、0.02 动作噪声下 512/512。它不能证明随机布局泛化，也没有真机执行接口。
 
@@ -91,15 +103,11 @@ python -m examples.rl.pick_place.evaluate --expert --headless -B 1 --episodes 1
 python -m examples.rl.pick_place.evaluate --headless -B 8 --episodes 8
 ```
 
-训练方式、发布结果、模型校验和限制见[强化学习指南](examples/rl/pick_place/README_cn.md)。
+训练方式、发布结果、模型校验和限制见 [Pick & Place 指南](examples/rl/pick_place/README_cn.md)。
 
-## xArm 6 到达
+### 3. 装箱：待实现
 
-不装夹爪的仿真示例，仓库不带训练好的模型。说明见 [examples/rl/reach/README_cn.md](examples/rl/reach/README_cn.md)。
-
-```bash
-python -m examples.rl.reach.train -e reach
-```
+将物体放入箱内。RL 环境及训练、推理入口尚未实现。
 
 ## 真机安全
 

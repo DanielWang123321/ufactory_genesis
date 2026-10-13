@@ -4,22 +4,14 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-from importlib import metadata
 import json
 from pathlib import Path
 import shutil
 
-from packaging.version import Version
+from .runtime import DEFAULT_RECIPE, OUTPUT_ROOT, configure_runtime, require_checkpoint, require_rsl_runtime
 
-try:
-    try:
-        if metadata.version("rsl-rl"):
-            raise ImportError
-    except metadata.PackageNotFoundError:
-        if Version(metadata.version("rsl-rl-lib")) < Version("5.4.2"):
-            raise ImportError
-except (metadata.PackageNotFoundError, ImportError) as exc:
-    raise ImportError("Please uninstall 'rsl_rl' and install 'rsl-rl-lib>=5.4.2' for the reach Beta policy.") from exc
+configure_runtime()
+require_rsl_runtime()
 
 from rsl_rl.runners import OnPolicyRunner
 
@@ -42,7 +34,6 @@ from ufactory.training import (
 
 from .env import XArm6ReachEnv
 
-DEFAULT_RECIPE = Path(__file__).with_name("recipe.yaml")
 EXECUTOR_ACTION_CONTRACT = "normalized_joint_position_delta"
 
 
@@ -60,7 +51,9 @@ class ArtifactOnPolicyRunner(OnPolicyRunner):
             episodes = self.logger.ep_extras
             keys = {key for episode in episodes for key in episode}
             values = {
-                key: torch.cat([torch.as_tensor(episode[key]).flatten().cpu() for episode in episodes if key in episode])
+                key: torch.cat(
+                    [torch.as_tensor(episode[key]).flatten().cpu() for episode in episodes if key in episode]
+                )
                 for key in keys
             }
             report = {
@@ -147,7 +140,8 @@ def main() -> None:
 
     resume_state = None
     if args.resume is not None:
-        resume_state, _resume_config, _resume_manifest = validate_and_load_rsl_checkpoint(
+        args.resume = require_checkpoint(args.resume)
+        resume_state, resume_config, _resume_manifest = validate_and_load_rsl_checkpoint(
             args.resume,
             args.resume.parent / "config.yaml",
             map_location="cpu",
@@ -157,7 +151,10 @@ def main() -> None:
             expected_runtime_env=env_cfg,
         )
 
-    log_dir = args.log_dir or Path("outputs") / "rl" / "reach" / args.exp_name
+        if int(resume_config["env"]["num_envs"]) != num_envs:
+            parser.error("resume requires the original --num-envs; the checkpoint restores every environment state")
+
+    log_dir = args.log_dir or OUTPUT_ROOT / args.exp_name
     _prepare_log_dir(log_dir, overwrite=args.overwrite)
     write_training_config(
         log_dir / "config.yaml",
@@ -173,6 +170,9 @@ def main() -> None:
     provenance_sources = [
         Path(__file__),
         Path(__file__).with_name("env.py"),
+        Path(__file__).with_name("runtime.py"),
+        repo_root / "pyproject.toml",
+        repo_root / "uv.lock",
         args.recipe,
         repo_root / "ufactory/training/logic/__init__.py",
         repo_root / "ufactory/training/logic/common.py",

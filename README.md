@@ -44,7 +44,7 @@ python examples/visualization/view_robot.py --robot xarm6
 | Goal | Editable install |
 |------|------------------|
 | Simulation and visualization | `pip install -e ".[sim]"` |
-| Simulation RL (pick-place and reach) | `pip install -e ".[sim,rl]"` |
+| Simulation RL (reach and pick-place) | `pip install -e ".[sim,rl]"` |
 | Real-robot safety backends | `pip install -e ".[sim,real]"` |
 | Packaging texture generation | `pip install -e ".[sim,showcase]"` |
 | Dynamics reference checks | `pip install -e ".[sim,dynamics]"` |
@@ -76,13 +76,25 @@ These are the v0.3.0 entry points. Later 0.x releases may remove them.
 
 Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`. `project-check` and `observe-hold-current` are maintainer tools.
 
-Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/pick_place`, `examples/rl/reach`, including the `runtime.example.yaml` files beside the pick-place and packaging entries.
+Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/reach`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries.
 
 Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
 
-## Fixed-layout RL in v0.3.0
+## Reinforcement learning
 
-The public xArm6 + Gripper G2 task uses one fixed `+Y` layout: cube `[0.300, 0, 0.015]` m and target `[0.300, 0.300, 0.015]` m. Random starts are not included in this release.
+The simulation examples progress from bare-arm Reach to tabletop Pick & Place, then box packing. See the [RL index](examples/rl/README.md) for the sequence and task guides.
+
+### 1. Reach: bare arm
+
+Bare-arm 5 mm simulation example, with default training seed 7 and no bundled weights. See the [training and inference guide](examples/rl/reach/README.md) for training, acceptance and real-time GLB inference.
+
+```bash
+python -m examples.rl.reach.train -e reach
+```
+
+### 2. Pick & Place: tabletop
+
+The xArm6 + Gripper G2 task moves a cube to a tabletop target using one fixed `+Y` layout: cube `[0.300, 0, 0.015]` m and target `[0.300, 0.300, 0.015]` m. Random starts are not included in this example.
 
 The bundled seed-7 `model_299_g2stable.pt` was retrained under the `g2_stable_v1_3_3` contact-physics profile and passed every release check: all nine evaluation seed/batch combinations (219/219 episodes), the independent 64-episode fixed bank (64/64), and 512/512 episodes with 0.02 action noise. It is not evidence of random-layout generalization and has no real-robot execution interface.
 
@@ -91,15 +103,11 @@ python -m examples.rl.pick_place.evaluate --expert --headless -B 1 --episodes 1
 python -m examples.rl.pick_place.evaluate --headless -B 8 --episodes 8
 ```
 
-See the [RL guide](examples/rl/pick_place/README.md) for training, release metrics, artifact validation, and limitations.
+See the [Pick & Place guide](examples/rl/pick_place/README.md) for training, release metrics, artifact validation, and limitations.
 
-## xArm 6 reach
+### 3. Box packing: planned
 
-Bare-arm simulation example with no bundled model. See [examples/rl/reach/README.md](examples/rl/reach/README.md).
-
-```bash
-python -m examples.rl.reach.train -e reach
-```
+Place an object inside a box. The RL environment and training/inference entries remain to be implemented.
 
 ## Real-robot safety
 

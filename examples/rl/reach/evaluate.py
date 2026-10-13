@@ -4,24 +4,16 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
-from importlib import metadata
 import hashlib
 import json
 import math
 from pathlib import Path
 import sys
 
-from packaging.version import Version
+from .runtime import DEFAULT_RECIPE, configure_runtime, require_checkpoint, require_rsl_runtime
 
-try:
-    try:
-        if metadata.version("rsl-rl"):
-            raise ImportError
-    except metadata.PackageNotFoundError:
-        if Version(metadata.version("rsl-rl-lib")) < Version("5.4.2"):
-            raise ImportError
-except (metadata.PackageNotFoundError, ImportError) as exc:
-    raise ImportError("Please uninstall 'rsl_rl' and install 'rsl-rl-lib>=5.4.2' for the reach Beta policy.") from exc
+configure_runtime()
+require_rsl_runtime()
 
 from rsl_rl.runners import OnPolicyRunner
 
@@ -37,7 +29,6 @@ from ufactory.training import (
 from ufactory.training.reach_evaluation import evaluate_fixed_targets, sample_reach_targets, summarize_reach_reports
 
 from .env import XArm6ReachEnv
-from .train import DEFAULT_RECIPE
 
 
 def main() -> None:
@@ -51,8 +42,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=17002, help="Fixed target and simulation seed")
     parser.add_argument("--min-success-rate", type=float)
     parser.add_argument("--summary-json", type=Path, help="Save summary, every episode, and artifact hashes")
-    parser.add_argument("--quiet-episodes", action="store_true", help="Only print the summary; JSON retains every episode")
-    parser.add_argument("--vis", action="store_true", help="Open the Genesis viewer")
+    parser.add_argument(
+        "--quiet-episodes", action="store_true", help="Only print the summary; JSON retains every episode"
+    )
+    parser.add_argument("--vis", action="store_true", help="Deprecated; use examples.rl.reach.visualize")
     parser.add_argument(
         "--max-mean-distance-m",
         type=float,
@@ -60,6 +53,18 @@ def main() -> None:
         help="Exit with status 1 when the mean terminal distance exceeds this value",
     )
     args = parser.parse_args()
+    if args.vis:
+        import shlex
+
+        command = ["python", "-m", "examples.rl.reach.visualize", "--checkpoint", str(args.checkpoint)]
+        for option, value in (
+            ("--recipe", args.recipe),
+            ("--runtime-config", args.runtime_config),
+            ("--robot", args.robot),
+        ):
+            if value is not None:
+                command.extend([option, str(value)])
+        parser.error("--vis moved to the real-time GLB viewer. Run: " + shlex.join(command))
     if args.episodes < 1:
         parser.error("--episodes must be positive")
     if args.num_envs < 1:
@@ -71,15 +76,10 @@ def main() -> None:
     if args.min_success_rate is not None and not 0.0 <= args.min_success_rate <= 1.0:
         parser.error("--min-success-rate must be between 0 and 1")
 
-    checkpoint = args.checkpoint.expanduser().resolve()
-    if not checkpoint.is_file():
-        raise FileNotFoundError(
-            f"checkpoint not found: {checkpoint}. Train first with "
-            "`python -m examples.rl.reach.train -e reach`; checkpoints are written under outputs/rl/reach/<exp-name>/."
-        )
+    checkpoint = require_checkpoint(args.checkpoint)
     config_path = checkpoint.parent / "config.yaml"
-    if not config_path.is_file():
-        raise FileNotFoundError(f"missing training config beside checkpoint: {config_path}")
+    if args.summary_json is not None and args.summary_json.exists():
+        raise FileExistsError(f"evaluation report already exists: {args.summary_json}")
     runtime_config = load_runtime_config(args.robot, task="reach", config_path=args.runtime_config)
     expected_env, _reward, _robot = build_reach_task_configs(
         args.robot,
@@ -111,7 +111,7 @@ def main() -> None:
     gs.init(
         backend=gs.gpu,
         precision="32",
-        logging_level="info" if args.vis else "warning",
+        logging_level="warning",
         seed=int(train_cfg["seed"]),
         performance_mode=performance_mode,
     )
@@ -119,10 +119,8 @@ def main() -> None:
         env_cfg=env_cfg,
         reward_cfg=reward_cfg,
         robot_cfg=robot_cfg,
-        show_viewer=args.vis,
+        show_viewer=False,
     )
-    if args.vis:
-        env.success_hold_s = 1.0
     runner = OnPolicyRunner(env, train_cfg, log_dir=None, device=gs.device)
     runner.alg.load(_loaded, None, strict=True)
     policy = runner.get_inference_policy(device=gs.device)
@@ -130,29 +128,43 @@ def main() -> None:
     targets = sample_reach_targets(env_cfg["target_pos_lower"], env_cfg["target_pos_upper"], args.episodes, args.seed)
     with torch.inference_mode():
         reports = evaluate_fixed_targets(env, policy, targets)
+    gs.destroy()
     summary = summarize_reach_reports(reports)
     passed = (args.min_success_rate is None or summary["success_rate"] >= args.min_success_rate) and (
         args.max_mean_distance_m is None or summary["mean_m"] <= args.max_mean_distance_m
     )
     if args.summary_json is not None:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)
-        args.summary_json.write_text(json.dumps({
-            "schema_version": 1,
-            "checkpoint": str(checkpoint),
-            "checkpoint_sha256": manifest.checkpoint_sha256,
-            "config_sha256": artifact["config_sha256"],
-            "urdf_sha256": hashlib.sha256(Path(robot_cfg["urdf_path"]).read_bytes()).hexdigest(),
-            "target_sha256": hashlib.sha256(targets.numpy().tobytes()).hexdigest(),
-            "seed": args.seed,
-            "thresholds": {"min_success_rate": args.min_success_rate, "max_mean_distance_m": args.max_mean_distance_m},
-            "passed": passed,
-            "summary": summary,
-            "episodes": reports,
-        }, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        with args.summary_json.open("x", encoding="utf-8") as stream:
+            stream.write(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checkpoint": str(checkpoint),
+                        "checkpoint_sha256": manifest.checkpoint_sha256,
+                        "config_sha256": artifact["config_sha256"],
+                        "urdf_sha256": hashlib.sha256(Path(robot_cfg["urdf_path"]).read_bytes()).hexdigest(),
+                        "target_sha256": hashlib.sha256(targets.numpy().tobytes()).hexdigest(),
+                        "seed": args.seed,
+                        "thresholds": {
+                            "min_success_rate": args.min_success_rate,
+                            "max_mean_distance_m": args.max_mean_distance_m,
+                        },
+                        "passed": passed,
+                        "summary": summary,
+                        "episodes": reports,
+                    },
+                    indent=2,
+                    allow_nan=False,
+                )
+                + "\n"
+            )
     if not args.quiet_episodes:
         for report in reports:
-            print(f"target={report['index']:04d} success={int(report['success'])} "
-                  f"distance={report['terminal_distance_m'] * 1000:.1f} mm time={report['elapsed_s']:.2f} s")
+            print(
+                f"target={report['index']:04d} success={int(report['success'])} "
+                f"distance={report['terminal_distance_m'] * 1000:.1f} mm time={report['elapsed_s']:.2f} s"
+            )
     print(
         f"episodes={int(summary['episodes'])} "
         f"success={summary['success_rate']:.3f} "

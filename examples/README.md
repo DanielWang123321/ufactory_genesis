@@ -15,7 +15,7 @@ pip install -e ".[sim]"
 # Optional:
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
 #   pip install -e ".[showcase]"  # packaging box textures (scipy)
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA pick-place and reach
+#   pip install -e ".[sim,rl]"    # Linux/NVIDIA reach and pick-place
 ```
 
 3. Set a writable Numba cache directory before Genesis-backed runs:
@@ -49,9 +49,9 @@ Public directories in this release:
 | `kinematics/` | FK/IK / robot verification wrappers |
 | `pick_place/` | Multi-robot pick-place entry + optional overlay |
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
-| `rl/` | Linux/NVIDIA xArm6 + Gripper G2 pick-place, and bare-arm xArm 6 reach |
+| `rl/` | Bare-arm Reach → tabletop Pick & Place → box packing (planned); Linux/NVIDIA |
 
-See the [RL index](rl/README.md) for pick-place and reach installation, training, and evaluation.
+See the [RL index](rl/README.md) for the learning sequence and training/inference guides.
 
 ## Visualization
 
@@ -191,7 +191,13 @@ python examples/packaging/run.py \
 
 ## Reinforcement Learning
 
-The Linux/NVIDIA examples are simulation-only: xArm6 + Gripper G2 pick-place, and bare-arm xArm 6 reach. Neither deploys a policy on a real robot. See [rl/README.md](rl/README.md) for installation, evaluation, and training.
+The Linux/NVIDIA simulation examples follow this order:
+
+1. [Reach](rl/reach/README.md): bare-arm xArm 6, with a 5 mm success threshold.
+2. [Pick & Place](rl/pick_place/README.md): xArm6 + Gripper G2 transfers a cube to a tabletop target.
+3. Box packing: place an object inside a box; the RL example is planned.
+
+See the [RL index](rl/README.md) for training and inference. The packaging showcase above uses trajectory control.
 
 ## Hardware & Real Robot
 

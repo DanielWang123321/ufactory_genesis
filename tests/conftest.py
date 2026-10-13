@@ -28,6 +28,7 @@ _TORCH_OR_GENESIS_COLLECTION_MODULES = frozenset(
         "test_transfer.py",
         "test_reach.py",
         "test_reach_environment.py",
+        "test_reach_realtime.py",
         "test_packaging_multi_robot.py",
         "test_packaging_showcase.py",
         "test_pick_place_preposition.py",

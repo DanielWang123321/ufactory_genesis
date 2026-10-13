@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 REACH_ENV_VERSION = 2
+REACH_SUCCESS_DISTANCE_M = 0.005
 
 
 def effective_max_joint_delta_rad(
@@ -30,4 +31,3 @@ def effective_max_joint_delta_rad(
     if limit <= 0.0:
         raise ValueError(f"max joint delta must be positive, got {limit}")
     return float(limit)
-

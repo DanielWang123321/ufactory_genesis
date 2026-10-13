@@ -1,19 +1,11 @@
 # Reinforcement-learning examples
 
-The v0.3.1 public RL surface has two simulation-only workflows and no real-robot
-policy executor. It targets Linux, an NVIDIA GPU, Genesis World 1.4.4, Quadrants
-1.3.3, PyTorch 2.10, and RSL-RL 5.4.2.
+Follow the examples in increasing order of difficulty. These workflows run in simulation; run their commands as modules from the repository root.
 
-[Fixed-layout pick-place](pick_place/README.md) is the published xArm6 + Gripper G2
-workflow. The bundled seed-7 `model_299_g2stable.pt` was retrained under the
-`g2_stable_v1_3_3` contact-physics profile and passes every release check:
-219/219 episodes across the nine evaluation seed/batch combinations, 64/64 in
-the independent fixed bank, and 512/512 under 0.02 action noise. Details and
-limitations are in the task guide. Random object starts stay outside the public scope.
+1. **[Reach — bare arm](reach/README.md)**: move the xArm 6 end effector to a target without a gripper. Success requires a distance strictly below **5 mm**; the default training seed is 7. The guide covers training, checkpoint selection, acceptance and real-time GLB inference. No weights are bundled.
+2. **[Pick & Place — tabletop](pick_place/README.md)**: use xArm6 + Gripper G2 to grasp, lift and transfer a cube, then set it down and release it at a tabletop target. The current example uses a fixed layout; the guide covers training and inference.
+3. **Box packing — planned**: place an object inside a box, adding box geometry and contact constraints. The RL environment and training/inference entries remain to be implemented.
 
-[Bare-arm reach](reach/README.md) trains an xArm 6 to move its end effector to a
-random point. No trained model is bundled.
-
-Run every entry as a module from the repository root.
+The existing [packaging showcase](../README.md#packaging-showcase-simulation) uses trajectory control.
 
 [中文说明](README_cn.md)

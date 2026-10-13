@@ -1,4 +1,5 @@
 """Exercise reach transitions on CPU using a robot with a fixed tracking lag."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -48,7 +49,7 @@ def make_env(count=2):
     env.device = torch.device("cpu")
     env.ctrl_dt, env.max_episode_length = 0.02, 250
     env.action_scale, env.action_clip, env.max_joint_delta_rad = 0.05, 1.0, 0.01
-    env.success_distance_m = 0.03
+    env.success_distance_m = 0.005
     env.success_hold_s = 0.0
     env.robot, env.dof_idx = Robot(count), list(range(6))
     env.ee_link = SimpleNamespace(get_pos=lambda: torch.zeros(count, 3))
@@ -132,7 +133,7 @@ def test_state_restores_joint_state_commands_and_episode_accounting():
 def test_evaluation_waits_for_slow_episodes_and_handles_partial_batches():
     env = make_env()
     env.max_episode_length = 5
-    targets = torch.tensor([[0.0, 0, 0], [1.0, 1, 1], [0.01, 0, 0]])
+    targets = torch.tensor([[0.0, 0, 0], [1.0, 1, 1], [0.004, 0, 0]])
     reports = evaluate_fixed_targets(env, lambda _: torch.zeros(2, 6), targets)
     assert [report["index"] for report in reports] == [0, 1, 2]
     assert [report["steps"] for report in reports] == [1, 5, 1]
@@ -146,13 +147,15 @@ def _record_scene_steps(env):
     calls = []
 
     def scene_step():
-        calls.append({
-            "command": env.position_command.clone(),
-            "target": env.target_pos.clone(),
-            "q": env.robot.q.clone(),
-            "length": env.episode_length_buf.clone(),
-            "metric_steps": env.metric_steps.clone(),
-        })
+        calls.append(
+            {
+                "command": env.position_command.clone(),
+                "target": env.target_pos.clone(),
+                "q": env.robot.q.clone(),
+                "length": env.episode_length_buf.clone(),
+                "metric_steps": env.metric_steps.clone(),
+            }
+        )
 
     env.scene.step = scene_step
     return calls
@@ -214,9 +217,17 @@ def test_success_hold_does_not_change_reported_arrival_steps():
     env = make_env()
     env.success_hold_s = 1.0
     env.max_episode_length = 5
-    targets = torch.tensor([[0.0, 0, 0], [1.0, 1, 1], [0.01, 0, 0]])
+    targets = torch.tensor([[0.0, 0, 0], [1.0, 1, 1], [0.004, 0, 0]])
     reports = evaluate_fixed_targets(env, lambda _: torch.zeros(2, 6), targets)
     assert [report["index"] for report in reports] == [0, 1, 2]
     assert [report["steps"] for report in reports] == [1, 5, 1]
     assert [report["elapsed_s"] for report in reports] == pytest.approx([0.02, 0.1, 0.02])
     assert [report["success"] for report in reports] == [True, False, True]
+
+
+def test_training_success_is_strictly_below_5mm():
+    env = make_env(count=3)
+    env.success_distance_m = 0.005
+    env.target_pos[:] = torch.tensor([[0.0049, 0, 0], [0.005, 0, 0], [0.0051, 0, 0]])
+    _, _, done, _ = env.step(torch.zeros(3, 6))
+    assert done.tolist() == [True, False, False]

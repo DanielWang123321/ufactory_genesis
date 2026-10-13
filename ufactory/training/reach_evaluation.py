@@ -39,15 +39,17 @@ def evaluate_fixed_targets(env: Any, policy: Callable[[Any], torch.Tensor], targ
                 distances = infos["reach_done_distance_m"][keep].cpu().tolist()
                 successes = infos["reach_done_success"][keep].cpu().tolist()
                 for idx, distance, success in zip(selected, distances, successes, strict=True):
-                    reports.append({
-                        "index": start + idx,
-                        "target_m": batch[idx].tolist(),
-                        "success": bool(success),
-                        "timeout": not bool(success),
-                        "terminal_distance_m": distance,
-                        "steps": step,
-                        "elapsed_s": step * env.ctrl_dt,
-                    })
+                    reports.append(
+                        {
+                            "index": start + idx,
+                            "target_m": batch[idx].tolist(),
+                            "success": bool(success),
+                            "timeout": not bool(success),
+                            "terminal_distance_m": distance,
+                            "steps": step,
+                            "elapsed_s": step * env.ctrl_dt,
+                        }
+                    )
                 active[done_idx] = False
             if not active.any():
                 break

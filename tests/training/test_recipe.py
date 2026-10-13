@@ -70,7 +70,7 @@ def test_recipe_rejects_non_finite_values(tmp_path: Path) -> None:
 
 
 def test_reach_configuration_resolves_without_torch() -> None:
-    code = '''
+    code = """
 import importlib.abc, sys
 class BlockTorch(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path, target=None):
@@ -81,7 +81,7 @@ from ufactory.training import build_reach_task_configs, build_train_config
 env, _, _ = build_reach_task_configs("xarm6", recipe_path="examples/rl/reach/recipe.yaml")
 assert env["num_obs"] == 24
 build_train_config("examples/rl/reach/recipe.yaml", experiment_name="test", max_iterations=1)
-'''
+"""
     result = subprocess.run([sys.executable, "-c", code], cwd=PROJECT_ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 

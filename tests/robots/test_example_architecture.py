@@ -57,6 +57,13 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/rl/reach/evaluate.py",
         "examples/rl/reach/recipe.yaml",
         "examples/rl/reach/train.py",
+        "examples/rl/reach/visualize.py",
+        "examples/rl/reach/realtime_env.py",
+        "examples/rl/reach/realtime_viewer.py",
+        "examples/rl/reach/runtime.py",
+        "examples/rl/reach/run_experiments.py",
+        "examples/rl/reach/README.md",
+        "examples/rl/reach/README_cn.md",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
     assert sorted(path.name for path in (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").iterdir()) == [

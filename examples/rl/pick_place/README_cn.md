@@ -1,9 +1,10 @@
-# 固定布局 xArm6 + Gripper G2 强化学习
+# 2. Pick & Place：xArm6 + Gripper G2 桌面抓放
 
-这条纯仿真主线只训练固定 `+Y` 抓放布局，不宣称随机布局泛化、CPU/Windows 训练或
-RL 真机部署。
+第二个 RL 示例使用 Gripper G2 抓取、抬升并搬运方块，在桌面目标位置放下、松爪。
+仅在仿真中训练固定 `+Y` 布局；随机布局泛化、CPU/Windows 训练和真机策略部署
+不在当前范围内。
 
-[English](README.md)
+[English](README.md) · [RL 示例顺序](../README_cn.md) · [上一步：1. Reach](../reach/README_cn.md)
 
 ## 参考环境与工件状态
 

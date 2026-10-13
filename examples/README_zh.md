@@ -15,7 +15,7 @@ pip install -e ".[sim]"
 # 可选：
 #   pip install -e ".[real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
 #   pip install -e ".[showcase]"  # 装箱纸箱贴图（scipy）
-#   pip install -e ".[sim,rl]"    # Linux/NVIDIA 抓放与到达
+#   pip install -e ".[sim,rl]"    # Linux/NVIDIA 到达与抓放
 ```
 
 3. 运行依赖 Genesis 的流程前，设置可写的 Numba 缓存目录：
@@ -48,11 +48,10 @@ python examples/visualization/view_robot.py --robot xarm6
 | `kinematics/`    | FK/IK / 机型校验包装                          |
 | `pick_place/`    | 多机型抓放入口与可选覆盖配置                          |
 | `packaging/`     | 多机型装箱展示入口与可选覆盖配置                        |
-| `rl/`            | Linux/NVIDIA：xArm6 + Gripper G2 抓放，以及 xArm 6 裸臂到达 |
+| `rl/`            | 裸臂 Reach → 桌面 Pick & Place → 装箱（待实现）；Linux/NVIDIA |
 
 
-抓放和到达的安装、训练、评估入口见
-[rl/README_cn.md](rl/README_cn.md)。
+学习顺序及训练、推理指南见 [RL 索引](rl/README_cn.md)。
 
 ## 可视化
 
@@ -206,8 +205,13 @@ python examples/packaging/run.py \
 
 ## 强化学习
 
-Linux/NVIDIA 上有两条纯仿真流程：xArm6 + Gripper G2 抓放，以及不装夹爪的 xArm 6 到达。都不做真机策略部署。安装、评估和训练入口见
-[rl/README_cn.md](rl/README_cn.md)。
+Linux/NVIDIA 上的仿真示例按以下顺序运行：
+
+1. [Reach](rl/reach/README_cn.md)：xArm 6 裸臂到达，成功阈值为 5 mm。
+2. [Pick & Place](rl/pick_place/README_cn.md)：xArm6 + Gripper G2 将方块搬运到桌面目标位置。
+3. 装箱：将物体放入箱内，RL 示例待实现。
+
+训练、推理指令见 [RL 索引](rl/README_cn.md)。上面的装箱展示采用轨迹控制。
 
 ## 真机操作与硬件校验
 

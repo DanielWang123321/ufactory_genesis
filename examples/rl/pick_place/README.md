@@ -1,10 +1,11 @@
-# Fixed-layout xArm6 + Gripper G2 RL
+# 2. Pick & Place: xArm6 + Gripper G2
 
-This simulation-only workflow trains one fixed `+Y` pick-place layout. It does not
-claim random-layout generalization, CPU/Windows training, or real-robot policy
-deployment.
+This second RL example uses Gripper G2 to grasp, lift and transfer a cube, then
+set it down and release it at a tabletop target. It runs in simulation with one
+fixed `+Y` layout. Random-layout generalization, CPU/Windows training and
+real-robot policy deployment are outside its scope.
 
-[中文说明](README_cn.md)
+[中文说明](README_cn.md) · [RL examples](../README.md) · [Previous: 1. Reach](../reach/README.md)
 
 ## Reference environment and artifact status
 
