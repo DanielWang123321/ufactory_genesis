@@ -12,6 +12,10 @@ UFACTORY 机械臂的 Genesis 模型与仿真工具，覆盖可视化、运动�
 
 [English](README.md) | [示例](examples/README_zh.md) | [变更记录](CHANGELOG.md) | [路线图](ROADMAP.md) | [安全说明](SECURITY.md)
 
+<a href="https://www.bilibili.com/video/BV1NqWc6gEWB/" target="_blank">
+    <img src="https://i0.hdslb.com/bfs/archive/d23d45c6454ae51a396a056312fd101f2b7b8380.jpg@672w_378h_1c.webp" width="60%">
+</a>
+
 ## 支持范围
 
 - Python 3.12/3.13。Genesis World 最低 1.4.2，已在 1.4.4 上验证。1.4.2 和 1.4.3 会警告一次；更高版本未验证，检查失败即停止。

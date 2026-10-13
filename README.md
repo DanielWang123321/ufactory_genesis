@@ -12,6 +12,10 @@ UFACTORY robot models and Genesis simulation utilities for visualization, kinema
 
 [中文](README.zh.md) | [Examples](examples/README.md) | [Changelog](CHANGELOG.md) | [Roadmap](ROADMAP.md) | [Security](SECURITY.md)
 
+<a href="https://youtu.be/Dib244y-zUY" target="_blank">
+    <img src="https://i.ytimg.com/vi/Dib244y-zUY/maxresdefault.jpg" width="60%">
+</a>
+
 ## Supported scope
 
 - Python 3.12/3.13. Genesis World 1.4.2 is the minimum and 1.4.4 is validated. Versions 1.4.2 and 1.4.3 warn once; newer releases are unverified and stop if the hook check fails.
