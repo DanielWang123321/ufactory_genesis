@@ -21,7 +21,7 @@
 
 ## 强化学习
 
-[![Reach 评估演示](https://i.ytimg.com/vi/FRZopwFl-aM/maxresdefault.jpg)](https://youtu.be/FRZopwFl-aM)
+[![Reach 评估演示](https://i.ytimg.com/vi/FRZopwFl-aM/maxresdefault.jpg)](https://www.bilibili.com/video/BV12rpk69ENc/)
 
 在 Linux/NVIDIA GPU 上进行仿真训练与推理。学习顺序及各任务指南见 [RL 索引](examples/rl/README_cn.md)。
 
