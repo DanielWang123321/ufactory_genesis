@@ -54,7 +54,7 @@ from ufactory.simulation import (
 )
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_pbr_surfaces, glb_view_surface
 from ufactory.simulation.g2_adapter import apply_batch_control, configure_g2_drive, measured_gap_mm
-from ufactory.simulation.g2_batch import G2BatchController
+from ufactory.simulation.g2_controller import G2Controller
 from ufactory.simulation.g2_model import G2Model
 from .trace_utils import action_noise_episode_mask, scheduled_action_noise_std
 from ufactory.training.logic import (
@@ -196,7 +196,7 @@ class XArm6PickPlaceEnv:
         g2_command = env_cfg.get("g2", {})
         self.g2_speed_percent = float(g2_command.get("speed_percent", 50))
         self.g2_force_percent = float(g2_command.get("force_percent", 50))
-        self.g2_controller = G2BatchController(self.g2_model, self.num_envs, device=self.device, dtype=gs.tc_float)
+        self.g2_controller = G2Controller(self.g2_model, num_envs=self.num_envs, device=self.device, dtype=gs.tc_float)
         self.g2_controller.command(84, self.g2_speed_percent, self.g2_force_percent)
         self.cfg = env_cfg
         self.reward_scales = reward_cfg.copy()

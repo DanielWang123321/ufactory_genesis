@@ -503,11 +503,9 @@ def main() -> None:
         repo_root / "ufactory/training/transfer.py",
         repo_root / "ufactory/simulation/__init__.py",
         repo_root / "ufactory/simulation/compat.py",
-        repo_root / "ufactory/simulation/g2.py",
         repo_root / "ufactory/simulation/physics.py",
         repo_root / "ufactory/simulation/g2_model.py",
         repo_root / "ufactory/simulation/g2_controller.py",
-        repo_root / "ufactory/simulation/g2_batch.py",
         repo_root / "ufactory/simulation/g2_adapter.py",
     ]
     provenance_sources.extend(repo_root / source for source in runtime_config.sources)

@@ -49,7 +49,7 @@ def _pick_case(robot, speed, force, executor, *, fault=None, monkeypatch=None):
     from ufactory.cli.pick_place import _backends, _build_ik_scene, _build_program
     from ufactory.config import load_runtime_config
     from ufactory.simulation import GenesisRuntimeManager
-    from ufactory.simulation.g2_confirmation import prepare_g2_program
+    from ufactory.trajectory.g2_confirmation import prepare_g2_program
     from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
     from ufactory.trajectory.preflight import create_safety_gate
     from ufactory.trajectory.sim_executor import replay_sim

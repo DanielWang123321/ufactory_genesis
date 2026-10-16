@@ -5,9 +5,8 @@ from copy import deepcopy
 import numpy as np
 import pytest
 
-from ufactory.simulation.g2_controller import G2Controller
 from ufactory.simulation.g2_model import G2Model
-from ufactory.simulation.g2_confirmation import (
+from ufactory.trajectory.g2_confirmation import (
     GripForceGate,
     force_at_target,
     grip_timeout_s,
@@ -24,7 +23,7 @@ def build_program(config, speed_percent=50, position_mm=0):
     return prepare_g2_program(_build_program(config), G2SimulationConfig(position_mm, speed_percent, 50))
 
 
-from ufactory.simulation.g2_confirmation import ReleaseGate, release_at_target, release_timeout_s
+from ufactory.trajectory.g2_confirmation import ReleaseGate, release_at_target, release_timeout_s
 from ufactory.config import load_runtime_config
 
 
@@ -225,10 +224,13 @@ def test_force_band_is_relative_five_percent(ratio, expected):
 @pytest.mark.parametrize("speed,force,gap", [(10, 10, 10), (50, 50, 30), (90, 100, 70)])
 def test_confirmation_uses_speed_force_and_actual_gap_model(speed, force, gap):
     pytest.importorskip("trimesh")
+    pytest.importorskip("torch")
+    from ufactory.simulation.g2_controller import G2Controller
+
     model = G2Model.load()
     controller = G2Controller(model)
     controller.command(0, speed, force)
-    target = model.static_force_n(controller.force_lookup, gap)
+    target = model.static_force_n(controller.force_lookup(), gap)
     gate = GripForceGate()
     assert not gate.observe(force_sample(1, target, target, target))
     assert gate.observe(force_sample(2, target, target, target))

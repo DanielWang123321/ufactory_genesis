@@ -3,7 +3,7 @@
 [English](README.md)
 
 独立夹爪及 xArm5/6/7、UF850 的 G2 仿真统一使用 `g2_calibrated_v1`。
-实现位于 `ufactory/simulation/`，示例只负责启动；本机验证版本为 Genesis World 1.4.4。
+独立夹爪场景和验收用例在 `acceptance.py`；G2 模型、控制器和 Genesis 接口在 `ufactory/simulation/`。本机验证版本为 Genesis World 1.4.4。
 真机和 SDK 仿真仍使用毫米开度，运动镜像使用相同的关节几何。
 
 从项目根目录运行。抓放和包装预检需要 Pinocchio/Coal（`.[real]`）。
@@ -30,9 +30,9 @@ python examples/gripper_g2/verify.py --backend gpu --suite all --out reports/g2/
 不启用 noslip 时，pyramidal 摩擦锥与软接触会使夹持中的方块蠕滑，力 50% 时约 2.4 mm/s。
 抓放 RL 保持 `noslip_iterations: 0`，因为 5 次迭代会使 20480 环境批量仿真慢约 7 倍。
 控制器使用位置、速度反馈及积分抗饱和；接触力仅用于流程确认。
-单环境 `G2Controller` 与 Torch `G2BatchController` 提供
+`G2Controller` 只有一份 Torch 实现，提供
 `command(position_mm, speed_percent, force_percent)`、`update` 和 `reset`；
-批量控制支持按环境复位和独立力矩限制。
+单个场景在 CPU 上以 float64、`num_envs=1` 运行，RL 批量支持按环境复位和独立力矩限制。
 
 稳态力曲线内置于 `ufactory/simulation/g2_model.py`。
 参考原始 SDK 位置为 230，推断开度 24.155872 mm，并非官方声明的传感器厚度。

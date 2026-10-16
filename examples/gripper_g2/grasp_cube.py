@@ -1,6 +1,6 @@
-"""Public Gripper G2 example; implementation lives in ufactory.simulation."""
+"""Gripper G2 free-cube grasp with support removal; the scene lives in acceptance.py."""
 
-from ufactory.simulation.g2_acceptance import grasp_main
+from acceptance import grasp_main
 
 if __name__ == "__main__":
     grasp_main()

@@ -1,19 +1,285 @@
-"""Standalone G2 grasp acceptance: 33-case suite, free-cube grasp and CSV samples."""
+"""Standalone Gripper G2 acceptance: empty, sensor-block and free-cube scenes.
+
+Used by ``verify.py`` (33-case suite) and ``grasp_cube.py`` (free-cube grasp
+with support removal). The G2 model, controller and Genesis integration live in
+``ufactory.simulation``.
+"""
 
 from __future__ import annotations
 
 import argparse
 import csv
+from dataclasses import asdict, dataclass
+from importlib import metadata
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import genesis as gs
 import numpy as np
+import torch
 
-from ufactory.simulation.g2_model import G2Model, checked, sdk_speed_rpm, speed_mm_s
+from ufactory.robots.paths import gripper_g2_movable_visual_urdf
+from ufactory.robots.runtime import G2_GRIPPER_PARAMS
+from ufactory.simulation import (
+    DEFAULT_NOSLIP_ITERATIONS,
+    DEFAULT_SOLVER_ITERATIONS,
+    genesis_backend_constant,
+    make_rigid_options,
+)
+from ufactory.simulation.compat import require_genesis_runtime
+from ufactory.simulation.g2_adapter import (
+    configure_g2_mimic_constraints,
+    object_finger_contact_forces_n,
+    pad_centers,
+    validate_g2_contact_substeps,
+)
+from ufactory.simulation.g2_controller import G2Controller
+from ufactory.simulation.g2_model import (
+    G2Model,
+    checked,
+    g2_physics_summary,
+    sdk_position_counts,
+    sdk_speed_rpm,
+    speed_mm_s,
+)
+from ufactory.trajectory.g2_confirmation import G2Telemetry
+from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 
-if TYPE_CHECKING:
-    from ufactory.simulation.g2_scene import Sample
+
+# ---------------------------------------------------------------------------
+# Scene
+# ---------------------------------------------------------------------------
+
+RATE_HZ = 50
+DT = 1 / RATE_HZ
+SUBSTEPS = 32
+GRIPPER_POS = (0.0, 0.0, 0.45)
+SUPPORT_SIZE_M = (0.020, 0.012, 0.040)
+WORLD_Y = torch.tensor((0.0, 1.0, 0.0))
+
+
+def scalar(value) -> float:
+    return float(torch.as_tensor(value).detach().flatten()[0].item())
+
+
+def tensor(value) -> torch.Tensor:
+    return torch.tensor(value, device=gs.device, dtype=gs.tc_float)
+
+
+@dataclass(frozen=True)
+class Sample(G2Telemetry):
+    """One standalone Gripper G2 sample; adds the held object height."""
+
+    object_z_mm: float
+
+
+def write_samples(path: Path, samples: list[Sample]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(Sample.__dataclass_fields__))
+        writer.writeheader()
+        writer.writerows(asdict(sample) for sample in samples)
+
+
+class G2Scene:
+    def __init__(
+        self,
+        model: G2Model,
+        *,
+        show_viewer: bool = False,
+        object_gap_mm: float | None = None,
+        free_cube: bool = False,
+        sensor_block: bool = False,
+    ):
+        if free_cube and object_gap_mm is None:
+            raise ValueError("cube scene requires object_gap_mm")
+        self.model = model
+        self.object_gap_mm = object_gap_mm
+        self.free_cube = free_cube
+        validate_g2_contact_substeps(dt=DT, substeps=SUBSTEPS)
+        self.scene = gs.Scene(
+            show_viewer=show_viewer,
+            sim_options=gs.options.SimOptions(dt=DT, substeps=SUBSTEPS),
+            rigid_options=make_rigid_options(
+                gs,
+                iterations=DEFAULT_SOLVER_ITERATIONS,
+                noslip_iterations=DEFAULT_NOSLIP_ITERATIONS,
+                constraint_timeconst=2 * DT / SUBSTEPS,
+                enable_collision=True,
+                enable_joint_limit=True,
+                use_gjk_collision=True,
+            ),
+            viewer_options=gs.options.ViewerOptions(
+                refresh_rate=RATE_HZ,
+                camera_pos=(0.38, -0.48, 0.28),
+                camera_lookat=(0.0, 0.0, 0.14),
+                camera_fov=40,
+            ),
+        )
+        self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
+        with glb_pbr_surfaces():
+            self.robot = self.scene.add_entity(
+                gs.morphs.URDF(
+                    file=gripper_g2_movable_visual_urdf(),
+                    pos=GRIPPER_POS,
+                    euler=(180, 0, 0),
+                    fixed=True,
+                    # Numerical regularization of the soft mimic constraints;
+                    # this is not an identified G2 rotor inertia.
+                    default_armature=0.01,
+                ),
+                surface=glb_view_surface(),
+            )
+        self.object = None
+        self.support = None
+        if object_gap_mm is not None:
+            width_m = checked(object_gap_mm, 1, 83, "object_gap_mm") / 1000
+            size = (width_m, width_m, width_m) if free_cube and not sensor_block else (0.020, width_m, 0.030)
+            self.object_height_m = size[2]
+            self.object = self.scene.add_entity(
+                gs.morphs.Box(size=size, pos=(0.80, 0.0, 0.20), fixed=not free_cube),
+                surface=gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=(0.90, 0.10, 0.10))),
+            )
+        if free_cube:
+            self.support = self.scene.add_entity(
+                gs.morphs.Box(
+                    size=(SUPPORT_SIZE_M[0], min(SUPPORT_SIZE_M[1], width_m / 2), SUPPORT_SIZE_M[2]),
+                    pos=(0.80, 0.0, 0.05),
+                    fixed=True,
+                ),
+                surface=gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=(0.55, 0.55, 0.55))),
+            )
+        self.scene.build(n_envs=1)
+        configure_g2_mimic_constraints(self.robot)
+        grip = G2_GRIPPER_PARAMS
+        self.drive_idx = self.robot.get_joint(grip.drive_joint).dofs_idx_local[0]
+        self.all_idx = [self.robot.get_joint(name).dofs_idx_local[0] for name in grip.all_joint_names]
+        self.left, self.right = [self.robot.get_link(name) for name in grip.finger_link_names]
+        self.robot.set_dofs_kp(tensor([40]), [self.drive_idx])
+        self.robot.set_dofs_kv(tensor([5]), [self.drive_idx])
+        self.robot.set_dofs_damping(tensor([grip.damping] * len(self.all_idx)), self.all_idx)
+        self.robot.set_dofs_frictionloss(tensor([grip.frictionloss] * len(self.all_idx)), self.all_idx)
+        self.left.set_friction(1.2)
+        self.right.set_friction(1.2)
+        if self.object is not None:
+            self.object.set_friction(1.0)
+            if free_cube:
+                self.object.set_links_mass(tensor([0.017]))
+        self._last_limit = None
+        self.reset()
+
+    def _pad_centers(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return pad_centers(self.model, self.left, self.right)
+
+    def gap_mm(self) -> float:
+        # The fixed standalone gripper closes along world Y.
+        a, b = self._pad_centers()
+        return scalar((b - a)[..., 1].abs()) * 1000
+
+    def reset(self, initial_position_mm: float = 84) -> None:
+        self.controller = G2Controller(self.model, initial_position_mm=initial_position_mm)
+        self.time_s = 0.0
+        self._last_limit = None
+        self.support_removed = False
+        if self.object is not None:
+            # Read pad center at the specimen's nominal contact posture.
+            contact_q = self.model.linkage.drive_for_gap_m(self.object_gap_mm / 1000)
+            self.robot.set_dofs_position(tensor([[contact_q] * len(self.all_idx)]), self.all_idx, zero_velocity=True)
+            a, b = self._pad_centers()
+            center = (0.5 * (a + b)).detach().cpu().numpy().reshape(-1, 3)[0]
+            self.object.set_pos(tensor(center), zero_velocity=True)
+            if self.support is not None:
+                support_center = center.copy()
+                support_center[2] -= self.object_height_m / 2 + SUPPORT_SIZE_M[2] / 2
+                self.support.set_pos(tensor(support_center), zero_velocity=True)
+        q = self.model.linkage.drive_for_gap_m(initial_position_mm / 1000)
+        self.robot.set_dofs_position(tensor([[q] * len(self.all_idx)]), self.all_idx, zero_velocity=True)
+        self._previous_gap_mm = self.gap_mm()
+
+    def command(self, position_mm: float, speed_percent: float = 50, force_percent: float = 50) -> None:
+        self.controller.command(position_mm, speed_percent, force_percent)
+
+    def remove_support(self) -> None:
+        if self.support is None:
+            raise ValueError("scene has no support")
+        position = self.support.get_pos().detach().clone()
+        position[..., 2] -= 0.25
+        self.support.set_pos(position, zero_velocity=True)
+        self.support_removed = True
+
+    def _contacts(self) -> tuple[float, float]:
+        if self.object is None:
+            return 0.0, 0.0
+        left, right = object_finger_contact_forces_n(
+            self.object.get_contacts(with_entity=self.robot, exclude_self_contact=True),
+            left_link_idx=int(self.left.idx),
+            right_link_idx=int(self.right.idx),
+            # The fixed standalone gripper closes along world Y.
+            left_normal=WORLD_Y,
+            right_normal=WORLD_Y,
+        )
+        return scalar(left), scalar(right)
+
+    def tick(self, phase: str = "hold") -> Sample:
+        q = scalar(self.robot.get_dofs_position([self.drive_idx]))
+        velocity = scalar(self.robot.get_dofs_velocity([self.drive_idx]))
+        output = self.controller.update(q, velocity, DT, measured_gap_mm=self.gap_mm())
+        limit = scalar(output.torque_limit_nm)
+        if limit != self._last_limit:
+            self.robot.set_dofs_force_range(tensor([-limit]), tensor([limit]), [self.drive_idx])
+            self._last_limit = limit
+        self.robot.control_dofs_position_velocity(
+            tensor([[scalar(output.position_rad)]]), tensor([[scalar(output.velocity_rad_s)]]), [self.drive_idx]
+        )
+        self.scene.step()
+        self.time_s += DT
+        q = scalar(self.robot.get_dofs_position([self.drive_idx]))
+        velocity = scalar(self.robot.get_dofs_velocity([self.drive_idx]))
+        gap = self.gap_mm()
+        gap_velocity = (gap - self._previous_gap_mm) / DT
+        self._previous_gap_mm = gap
+        torque = scalar(self.robot.get_dofs_control_force([self.drive_idx]))
+        left, right = self._contacts()
+        object_z_mm = scalar(self.object.get_pos()[..., 2]) * 1000 if self.object is not None else float("nan")
+        c = self.controller
+        lookup = c.force_lookup()
+        position_mm = scalar(c.position_mm)
+        return Sample(
+            self.time_s,
+            phase,
+            position_mm,
+            sdk_position_counts(position_mm),
+            scalar(c.speed_percent),
+            scalar(c.force_percent),
+            scalar(c.requested_speed_mm_s),
+            int(scalar(c.requested_speed_rpm)),
+            lookup.calibration_rpm,
+            lookup.outside_calibration,
+            lookup.force_n,
+            self.model.static_force_n(lookup, max(0, min(84, gap))),
+            scalar(output.reference_gap_mm),
+            gap,
+            gap_velocity,
+            q,
+            velocity,
+            torque,
+            limit,
+            scalar(output.integral_torque_nm),
+            self.model.motor_torque_estimate_nm(torque),
+            left,
+            right,
+            (left + right) / 2,
+            object_z_mm,
+        )
+
+    def advance(self, duration_s: float, phase: str = "hold") -> list[Sample]:
+        return [self.tick(phase) for _ in range(round(duration_s * RATE_HZ))]
+
+
+# ---------------------------------------------------------------------------
+# Acceptance cases and command-line entries
+# ---------------------------------------------------------------------------
 
 
 def summarize(samples, *, support_removed: bool, release_z_mm: float | None) -> dict:
@@ -54,8 +320,6 @@ def grasp_cube_samples(
 ) -> tuple[Any, list[Sample], dict]:
     """Close on a free cube, remove the support after a held contact, then hold."""
 
-    from ufactory.simulation.g2_scene import DT, G2Scene
-
     simulation = G2Scene(model, show_viewer=show_viewer, object_gap_mm=cube_size_mm, free_cube=True)
     simulation.command(84, speed_percent, force_percent)
     samples = simulation.advance(0.4, "settle")
@@ -94,8 +358,6 @@ def run(
     cube_size_mm: float = 30,
     csv_path: Path | None = None,
 ) -> dict:
-    from ufactory.simulation.g2_scene import write_samples
-
     simulation, samples, result = grasp_cube_samples(
         model,
         position_mm=position_mm,
@@ -155,8 +417,6 @@ def force_result(samples, *, reference=False) -> dict:
 
 
 def free_cases(model, save):
-    from ufactory.simulation.g2_scene import G2Scene
-
     simulation = G2Scene(model)
     for speed in (10, 50, 100):
         simulation.reset()
@@ -218,8 +478,6 @@ def free_cases(model, save):
 
 
 def reference_cases(model, save):
-    from ufactory.simulation.g2_scene import G2Scene
-
     # Let the specimen center itself along Y; a fixed specimen would absorb
     # unequal lateral reactions, despite having the same average force.
     simulation = G2Scene(model, object_gap_mm=model.reference_gap_mm, free_cube=True, sensor_block=True)
@@ -279,8 +537,6 @@ def reference_cases(model, save):
 
 
 def thickness_cases(model, save):
-    from ufactory.simulation.g2_scene import G2Scene
-
     for thickness in (10, 50, 70):
         simulation = G2Scene(model, object_gap_mm=thickness, free_cube=True, sensor_block=True)
         simulation.command(0, 50, 80)
@@ -329,10 +585,6 @@ def grasp_main() -> None:
     )
     if lookup.outside_calibration:
         print("转速超出标定范围：力标定使用 3500 rpm 边界曲线，运动速度按输入执行。")
-    import genesis as gs
-    from ufactory.simulation import genesis_backend_constant
-    from ufactory.simulation.compat import require_genesis_runtime
-
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, args.backend), logging_level="error")
     result = run(
@@ -355,18 +607,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("reports/g2/validation"))
     args = parser.parse_args()
     model = G2Model.load()
-    import genesis as gs
-    from ufactory.simulation import genesis_backend_constant
-    from ufactory.simulation.compat import require_genesis_runtime
-    from ufactory.simulation.g2_scene import write_samples
-
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, args.backend), logging_level="error")
     args.out.mkdir(parents=True, exist_ok=True)
     if args.backend == "gpu" and str(gs.device) == "cpu":
         raise RuntimeError("GPU acceptance cannot fall back to CPU")
-    from importlib import metadata
-    from ufactory.simulation.g2_model import g2_physics_summary
 
     (args.out / "run.json").write_text(
         json.dumps(
@@ -405,7 +650,3 @@ def main() -> None:
     passed = all(row["passed"] for row in results)
     print(f"验收：{sum(row['passed'] for row in results)}/{len(results)} 通过；记录 {args.out}", flush=True)
     raise SystemExit(0 if passed else 1)
-
-
-if __name__ == "__main__":
-    main()

@@ -3,7 +3,8 @@
 [中文](README_cn.md)
 
 The standalone gripper, xArm5/6/7 and UF850 simulations use `g2_calibrated_v1`.
-The public implementation is in `ufactory/simulation/`; these examples only start it.
+The standalone scenes and the acceptance suite are in `acceptance.py`; the G2 model,
+controller and Genesis integration are in `ufactory/simulation/`.
 Validated with local Genesis World 1.4.4. Hardware and SDK simulation accept
 opening in millimetres; motion mirrors use the same joint geometry.
 
@@ -36,10 +37,11 @@ held cube creep about 2.4 mm/s at 50% force. Pick-and-place RL keeps
 `noslip_iterations: 0`, because 5 iterations make the 20480-environment batch
 about 7× slower. Only `drive_joint`
 is actuated. The controller uses position/velocity feedback with conditional
-integral anti-windup; contact forces only confirm workflow transitions. Scalar
-`G2Controller` and Torch `G2BatchController` expose `command(position_mm,
-speed_percent, force_percent)`, `update`, and `reset`; the batch implementation
-supports selected-environment reset and independent torque limits.
+integral anti-windup; contact forces only confirm workflow transitions.
+`G2Controller` is one Torch implementation with `command(position_mm,
+speed_percent, force_percent)`, `update`, and `reset`. Single scenes use
+`num_envs=1` on the CPU in float64; RL batches support selected-environment
+reset and independent torque limits.
 
 The steady-force curve is built into `ufactory/simulation/g2_model.py`. The
 reference is raw SDK position 230, inferred as 24.155872 mm; it is not a

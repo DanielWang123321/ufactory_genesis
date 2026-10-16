@@ -1,6 +1,6 @@
-"""Public Gripper G2 example; implementation lives in ufactory.simulation."""
+"""Gripper G2 standalone acceptance suite; the scenes live in acceptance.py."""
 
-from ufactory.simulation.g2_acceptance import main
+from acceptance import main
 
 if __name__ == "__main__":
     main()

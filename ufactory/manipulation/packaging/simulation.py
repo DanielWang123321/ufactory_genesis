@@ -624,7 +624,7 @@ def run_pick_place_cycle(
     else:
         raise ValueError(f"unknown packaging executor: {executor}")
     if config.gripper.adapter == "g2":
-        from ufactory.simulation.g2_confirmation import prepare_g2_program
+        from ufactory.trajectory.g2_confirmation import prepare_g2_program
 
         program = prepare_g2_program(program, config.simulation.g2)
     else:
@@ -635,7 +635,7 @@ def run_pick_place_cycle(
     from ufactory.cli.pick_place import _write_json
     from ufactory.manipulation.packaging.core import packaging_scene_sha256
     from ufactory.trajectory.preflight import create_safety_gate
-    from ufactory.simulation.g2_replay import save_sim_report
+    from ufactory.trajectory.g2_replay import save_sim_report
 
     urdf = Path(traj_ctx.robot_urdf_path)
     kinematics, collision = _backends(config, urdf, calibrated_g2=ctx.g2_controller is not None)

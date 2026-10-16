@@ -458,7 +458,7 @@ def test_xarm7_stationary_seed_offset_stays_inside_cartesian_acceleration_limit(
     from ufactory.cli.pick_place import _backends, _model_and_hashes
     from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
     from ufactory.safety.statistics import compute_motion_statistics
-    from ufactory.simulation.g2_confirmation import prepare_g2_program
+    from ufactory.trajectory.g2_confirmation import prepare_g2_program
     from ufactory.trajectory.preflight import create_safety_gate
 
     config = load_runtime_config("xarm7")

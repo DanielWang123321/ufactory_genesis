@@ -219,7 +219,7 @@ def test_sim_visual_defers_viewer_and_checks_acceptance(monkeypatch, robot, tran
     monkeypatch.setattr(pick_place, "sha256_file", lambda *_args: "u")
     monkeypatch.setattr(pick_place, "_backends", lambda *_args, **_kwargs: (object(), object()))
     monkeypatch.setattr(pick_place, "_build_program", lambda *_args, **_kwargs: SimpleNamespace(segments=()))
-    monkeypatch.setattr("ufactory.simulation.g2_confirmation.prepare_g2_program", lambda program, _settings: program)
+    monkeypatch.setattr("ufactory.trajectory.g2_confirmation.prepare_g2_program", lambda program, _settings: program)
     monkeypatch.setattr(pick_place, "_json_sha256", lambda _value: "scene")
     monkeypatch.setattr(
         pick_place,

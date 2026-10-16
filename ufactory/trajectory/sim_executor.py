@@ -17,7 +17,6 @@ import torch
 
 import genesis as gs
 
-from ufactory.simulation import object_finger_contact_forces_n
 from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
@@ -102,7 +101,7 @@ def replay_sim(
     diagnostics that need to observe intra-segment ordering.
     """
     if getattr(ctx.gripper, "family", "") == "g2":
-        from ufactory.simulation.g2_replay import replay_g2
+        from ufactory.trajectory.g2_replay import replay_g2
 
         return replay_g2(
             program,
@@ -344,7 +343,7 @@ def replay_sim(
             opening_only_grip_idx,
         )
     if csv_path is not None or sim_report_path is not None:
-        from ufactory.simulation.g2_replay import save_sim_report
+        from ufactory.trajectory.g2_replay import save_sim_report
 
         save_sim_report(report, csv_path, sim_report_path)
     return report
@@ -358,24 +357,6 @@ class _TensorBuffers:
     gripper_cpu: torch.Tensor
     arm_numpy: np.ndarray | None = None
     gripper_numpy: np.ndarray | None = None
-
-
-def _object_finger_contact_forces_n(ctx: TrajSceneContext) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return object-only contact loads for the two physical finger links."""
-
-    if ctx.left_finger is None or ctx.right_finger is None or not callable(getattr(ctx.obj, "get_contacts", None)):
-        zero = torch.zeros(1, device=gs.device, dtype=gs.tc_float)
-        return zero, zero.clone()
-    contacts = ctx.obj.get_contacts(with_entity=ctx.robot, exclude_self_contact=True)
-    left, right = object_finger_contact_forces_n(
-        contacts,
-        left_link_idx=int(ctx.left_finger.idx),
-        right_link_idx=int(ctx.right_finger.idx),
-    )
-    return (
-        left.to(device=gs.device, dtype=gs.tc_float),
-        right.to(device=gs.device, dtype=gs.tc_float),
-    )
 
 
 def _assert_finite_replay_state(ctx: TrajSceneContext, *, phase: str, tick: int) -> None:

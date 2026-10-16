@@ -7,7 +7,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from ufactory.simulation.g2 import (
+from ufactory.simulation.g2_adapter import (
     G2_MAX_RIGID_SUBSTEP_DT_S,
     G2_MIMIC_CONSTRAINT_SOL_PARAMS,
     G2_MIMIC_EQUALITY_NAMES,
@@ -88,3 +88,48 @@ def test_object_finger_contact_forces_filter_links_and_padding() -> None:
     # magnitudes to 8 N.  The right pad is deliberately contact side B.
     torch.testing.assert_close(left, torch.tensor([4.0, 1.5]))
     torch.testing.assert_close(right, torch.tensor([2.0, 0.0]))
+
+
+def _reference_normal_forces(contacts, link_idx, normal):
+    """Formula of the removed ``normal_contact_forces`` helper (v0.3.1)."""
+    valid = contacts.get("valid_mask", torch.ones_like(contacts["link_a"], dtype=torch.bool))
+    mask_a = (valid & (contacts["link_a"] == link_idx)).unsqueeze(-1)
+    mask_b = (valid & (contacts["link_b"] == link_idx)).unsqueeze(-1)
+    applied = (
+        torch.where(mask_a, contacts["force_a"], torch.zeros_like(contacts["force_a"]))
+        + torch.where(mask_b, contacts["force_b"], torch.zeros_like(contacts["force_b"]))
+    ).sum(dim=-2)
+    return (applied * normal).sum(dim=-1).abs()
+
+
+@pytest.mark.parametrize("batched", [False, True])
+def test_object_finger_contact_forces_pad_normal_matches_previous_formula(batched: bool) -> None:
+    generator = torch.Generator().manual_seed(7)
+    shape = (3, 6) if batched else (6,)
+    contacts = {
+        "link_a": torch.randint(9, 13, shape, generator=generator),
+        "link_b": torch.randint(9, 13, shape, generator=generator),
+        "force_a": torch.randn(*shape, 3, generator=generator, dtype=torch.float64),
+        "force_b": torch.randn(*shape, 3, generator=generator, dtype=torch.float64),
+        "valid_mask": torch.rand(shape, generator=generator) > 0.2,
+    }
+    normals = torch.nn.functional.normalize(
+        torch.randn(2, *shape[:-1], 3, generator=generator, dtype=torch.float64), dim=-1
+    )
+
+    left, right = object_finger_contact_forces_n(
+        contacts, left_link_idx=10, right_link_idx=11, left_normal=normals[0], right_normal=normals[1]
+    )
+
+    torch.testing.assert_close(
+        left.reshape(-1), _reference_normal_forces(contacts, 10, normals[0]).reshape(-1), rtol=0, atol=1e-12
+    )
+    torch.testing.assert_close(
+        right.reshape(-1), _reference_normal_forces(contacts, 11, normals[1]).reshape(-1), rtol=0, atol=1e-12
+    )
+
+
+def test_object_finger_contact_forces_requires_both_normals() -> None:
+    contacts = {"link_a": torch.tensor([10]), "link_b": torch.tensor([11]), "force_a": torch.ones(1, 3)}
+    with pytest.raises(ValueError, match="given together"):
+        object_finger_contact_forces_n(contacts, left_link_idx=10, right_link_idx=11, left_normal=torch.ones(3))

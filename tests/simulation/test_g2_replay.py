@@ -7,13 +7,13 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from ufactory.config.models import G2SimulationConfig
-from ufactory.simulation.g2_replay import replay_g2
+from ufactory.trajectory.g2_replay import replay_g2
 from ufactory.trajectory.segments import Program, Segment
 
 
 @pytest.mark.parametrize("fault", [None, "grip", "release"])
 def test_confirmation_controls_next_tick_and_timeout_saves_failure(fault, monkeypatch, tmp_path):
-    import ufactory.simulation.g2_replay as replay
+    import ufactory.trajectory.g2_replay as replay
 
     state = SimpleNamespace(command=84, phase_ticks={})
     position = torch.zeros(1, 3)
@@ -22,7 +22,7 @@ def test_confirmation_controls_next_tick_and_timeout_saves_failure(fault, monkey
     )
     obj = SimpleNamespace(get_pos=lambda: position)
     adapter = SimpleNamespace(
-        controller=SimpleNamespace(reference_gap_mm=84),
+        controller=SimpleNamespace(reference_gap_mm=torch.tensor([84.0], dtype=torch.float64)),
         reset=lambda *_: None,
         gap_mm=lambda: 84,
         apply=lambda *_: None,

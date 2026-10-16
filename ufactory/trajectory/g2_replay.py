@@ -12,17 +12,21 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from ufactory.config.models import G2SimulationConfig
-from ufactory.simulation.g2 import G2_PHYSICS_PROFILE
-from ufactory.simulation.g2_adapter import G2GenesisController, normal_contact_forces, pad_centers
-from ufactory.simulation.g2_confirmation import (
+from ufactory.config.models import G2_PHYSICS_PROFILE, G2SimulationConfig
+from ufactory.simulation.g2_adapter import (
+    G2GenesisController,
+    object_finger_contact_forces_n,
+    pad_centers,
+    pad_normal,
+)
+from ufactory.simulation.g2_model import g2_physics_summary, sdk_position_counts
+from ufactory.trajectory.g2_confirmation import (
     G2Telemetry,
     GripForceGate,
     ReleaseGate,
     grip_timeout_s,
     release_timeout_s,
 )
-from ufactory.simulation.g2_model import g2_physics_summary, sdk_position_counts
 
 
 def save_sim_report(report, csv_path=None, sim_report_path=None) -> None:
@@ -74,33 +78,40 @@ def _record(ctx, adapter, output, phase: str, time_s: float, previous_gap: float
     from genesis.utils.geom import transform_by_quat
 
     c, model = adapter.controller, adapter.model
-    lookup = output.force_lookup
+    lookup = c.force_lookup()
+    position_mm = _scalar(c.position_mm)
     gap = adapter.gap_mm()
     q = _scalar(ctx.robot.get_dofs_position(ctx.gripper_dof_idx))
     torque = _scalar(ctx.robot.get_dofs_control_force(ctx.gripper_dof_idx))
-    left, right = normal_contact_forces(ctx.obj, ctx.robot, ctx.left_finger, ctx.right_finger)
+    left, right = object_finger_contact_forces_n(
+        ctx.obj.get_contacts(with_entity=ctx.robot, exclude_self_contact=True),
+        left_link_idx=int(ctx.left_finger.idx),
+        right_link_idx=int(ctx.right_finger.idx),
+        left_normal=pad_normal(ctx.left_finger),
+        right_normal=pad_normal(ctx.right_finger),
+    )
     left, right = _scalar(left), _scalar(right)
     row = {
         "time_s": time_s,
         "phase": phase,
-        "position_mm": c.position_mm,
-        "position_raw_counts": sdk_position_counts(c.position_mm),
-        "speed_percent": c.speed_percent,
-        "force_percent": c.force_percent,
-        "speed_command_mm_s": c.requested_speed_mm_s,
-        "motor_speed_command_rpm": c.requested_speed_rpm,
+        "position_mm": position_mm,
+        "position_raw_counts": sdk_position_counts(position_mm),
+        "speed_percent": _scalar(c.speed_percent),
+        "force_percent": _scalar(c.force_percent),
+        "speed_command_mm_s": _scalar(c.requested_speed_mm_s),
+        "motor_speed_command_rpm": int(_scalar(c.requested_speed_rpm)),
         "calibration_speed_rpm": lookup.calibration_rpm,
         "outside_calibration": lookup.outside_calibration,
         "curve_force_n": lookup.force_n,
         "expected_static_force_n": model.static_force_n(lookup, max(0, min(84, gap))),
-        "reference_gap_mm": output.reference_gap_mm,
+        "reference_gap_mm": _scalar(output.reference_gap_mm),
         "gap_mm": gap,
         "gap_velocity_mm_s": (gap - previous_gap) / dt,
         "drive_rad": q,
         "drive_velocity_rad_s": _scalar(ctx.robot.get_dofs_velocity(ctx.gripper_dof_idx)),
         "drive_torque_nm": torque,
-        "torque_limit_nm": output.torque_limit_nm,
-        "integral_torque_nm": output.integral_torque_nm,
+        "torque_limit_nm": _scalar(output.torque_limit_nm),
+        "integral_torque_nm": _scalar(output.integral_torque_nm),
         "motor_torque_estimate_nm": model.motor_torque_estimate_nm(torque),
         "left_normal_n": left,
         "right_normal_n": right,
@@ -143,7 +154,7 @@ def _record(ctx, adapter, output, phase: str, time_s: float, previous_gap: float
 def replay_g2(
     program, ctx, *, final_metric_settle_s=0.04, on_phase=None, on_tick=None, csv_path=None, sim_report_path=None
 ):
-    from ufactory.simulation.g2_confirmation import summarize
+    from ufactory.trajectory.g2_confirmation import summarize
     from ufactory.trajectory.mirror_executor import resolve_tick_arm_q
     from ufactory.trajectory.sim_executor import PhaseStatus, SimReport, _assert_finite_replay_state
 
@@ -205,7 +216,7 @@ def replay_g2(
             status = PhaseStatus(segment.label or segment.kind, si, 0, 0, segment.v_max, segment.a_max)
             gate = None
             if segment.kind == "gripper" and segment.label in {"grip", "release"}:
-                reference = adapter.controller.reference_gap_mm
+                reference = _scalar(adapter.controller.reference_gap_mm)
                 if segment.label == "grip":
                     deadline = grip_timeout_s(reference, settings.position_mm, settings.speed_percent)
                     gate = GripForceGate(rate)

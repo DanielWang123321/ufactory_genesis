@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "genesis-ufactory"
-version = "0.3.1"
+version = "0.3.2"
 description = "UFACTORY robot models and Genesis simulation utilities"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -112,6 +112,7 @@ omit = [
     "ufactory/robots/paths.py",
     "ufactory/robots/runtime.py",
     "ufactory/trajectory/backends.py",
+    "ufactory/trajectory/g2_replay.py",
     "ufactory/trajectory/ik.py",
     "ufactory/trajectory/mirror_executor.py",
     "ufactory/trajectory/real_executor.py",

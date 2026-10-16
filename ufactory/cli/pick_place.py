@@ -746,7 +746,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         genesis_for_ik = None
         try:
             if args.mode == "sim":
-                from ufactory.simulation.g2_confirmation import prepare_g2_program
+                from ufactory.trajectory.g2_confirmation import prepare_g2_program
 
                 genesis_for_ik = GenesisRuntimeManager(config.simulation)
                 genesis_for_ik.__enter__()

@@ -494,7 +494,7 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
         prepare_packaging_cycle,
     )
     from ufactory.simulation import GenesisRuntimeManager
-    from ufactory.simulation.g2_confirmation import prepare_g2_program
+    from ufactory.trajectory.g2_confirmation import prepare_g2_program
     from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
     from ufactory.trajectory.sim_executor import replay_sim
     from ufactory.visualization.glb import enable_glb_pbr_surfaces

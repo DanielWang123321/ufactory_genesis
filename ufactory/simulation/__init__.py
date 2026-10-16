@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 
 from ufactory.config.models import G2_PHYSICS_PROFILE
 from ufactory.simulation.g2_model import G2Model, g2_physics_summary
-from ufactory.simulation.g2_controller import G2Controller
 from ufactory.simulation.physics import (
     DEFAULT_CONSTRAINT_SOLVER,
     DEFAULT_CONSTRAINT_TIMECONST,
@@ -32,17 +31,18 @@ from ufactory.simulation.runtime import (
 # Torch-dependent exports are loaded on first access so that importing this
 # package (e.g. for ``physics`` or ``runtime``) works without the ``sim`` extra.
 _LAZY_EXPORTS = {
-    "G2BatchController": "ufactory.simulation.g2_batch",
-    "G2_MAX_RIGID_SUBSTEP_DT_S": "ufactory.simulation.g2",
-    "G2_MIMIC_CONSTRAINT_SOL_PARAMS": "ufactory.simulation.g2",
-    "G2_MIMIC_EQUALITY_NAMES": "ufactory.simulation.g2",
-    "configure_g2_mimic_constraints": "ufactory.simulation.g2",
-    "object_finger_contact_forces_n": "ufactory.simulation.g2",
-    "validate_g2_contact_substeps": "ufactory.simulation.g2",
+    "ControlOutput": "ufactory.simulation.g2_controller",
+    "G2Controller": "ufactory.simulation.g2_controller",
+    "G2_MAX_RIGID_SUBSTEP_DT_S": "ufactory.simulation.g2_adapter",
+    "G2_MIMIC_CONSTRAINT_SOL_PARAMS": "ufactory.simulation.g2_adapter",
+    "G2_MIMIC_EQUALITY_NAMES": "ufactory.simulation.g2_adapter",
+    "configure_g2_mimic_constraints": "ufactory.simulation.g2_adapter",
+    "object_finger_contact_forces_n": "ufactory.simulation.g2_adapter",
+    "validate_g2_contact_substeps": "ufactory.simulation.g2_adapter",
 }
 
 if TYPE_CHECKING:
-    from ufactory.simulation.g2 import (
+    from ufactory.simulation.g2_adapter import (
         G2_MAX_RIGID_SUBSTEP_DT_S,
         G2_MIMIC_CONSTRAINT_SOL_PARAMS,
         G2_MIMIC_EQUALITY_NAMES,
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
         object_finger_contact_forces_n,
         validate_g2_contact_substeps,
     )
-    from ufactory.simulation.g2_batch import G2BatchController
+    from ufactory.simulation.g2_controller import ControlOutput, G2Controller
 
 
 def __getattr__(name: str) -> Any:
@@ -80,7 +80,7 @@ __all__ = [
     "G2_PHYSICS_PROFILE",
     "G2Model",
     "G2Controller",
-    "G2BatchController",
+    "ControlOutput",
     "GenesisRuntimeError",
     "GenesisRuntimeManager",
     "configure_g2_mimic_constraints",

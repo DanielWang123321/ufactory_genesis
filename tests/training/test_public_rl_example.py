@@ -136,10 +136,21 @@ def test_training_provenance_hashes_shared_simulation_policy(entry_name: str) ->
     for relative_path in (
         "ufactory/simulation/__init__.py",
         "ufactory/simulation/compat.py",
-        "ufactory/simulation/g2.py",
+        "ufactory/simulation/g2_adapter.py",
         "ufactory/simulation/physics.py",
     ):
         assert f'repo_root / "{relative_path}"' in source
+
+
+@pytest.mark.parametrize("entry_name", ["train.py", "pretrain_bc.py"])
+def test_training_provenance_sources_exist(entry_name: str) -> None:
+    import re
+
+    source = (EXAMPLE / entry_name).read_text(encoding="utf-8")
+    paths = re.findall(r'repo_root / "([^"]+)"', source)
+    assert paths
+    missing = [path for path in paths if not (PROJECT_ROOT / path).is_file()]
+    assert missing == []
 
 
 @pytest.mark.parametrize("entry_name", ["train.py", "pretrain_bc.py"])
