@@ -1,6 +1,6 @@
 # ufactory_genesis
 
-![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-0.3.0-orange) ![Genesis](https://img.shields.io/badge/genesis-1.4.4-lightgrey) ![CI](https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-0.3.1-orange) ![Genesis](https://img.shields.io/badge/genesis-1.4.4-lightgrey) ![CI](https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg)
 
 UFACTORY robot simulation and reinforcement learning examples built on Genesis.
 
@@ -13,6 +13,7 @@ UFACTORY robot simulation and reinforcement learning examples built on Genesis.
 Supports xArm5, xArm6, xArm7, UF850 and Lite6. See the [robot and gripper combinations](examples/README.md#supported-robots-and-end-effectors).
 
 - [Robot and gripper visualization](examples/README.md#visualization): GLB models, movable fingers and gripper opening/closing demos.
+- [Gripper G2 calibrated dynamics](examples/gripper_g2/README.md): percentage control, standalone cube grasp and dynamics acceptance.
 - [Kinematics and contact simulation](examples/README.md#kinematics--dynamics-simulation): FK/IK verification and physics checks.
 - [Trajectory-controlled pick & place](examples/README.md#pick-place): pick up, transfer and place objects.
 - [Box packing simulation](examples/README.md#packaging-showcase-simulation): YAML-configured trajectories and contact simulation.

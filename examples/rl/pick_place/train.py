@@ -24,9 +24,9 @@ except (metadata.PackageNotFoundError, ImportError) as exc:
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
-from ufactory.config import load_runtime_config
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import (
+    load_pick_place_rl_runtime_config,
     load_training_config,
     load_training_recipe,
     build_pick_place_task_configs,
@@ -384,11 +384,7 @@ def main() -> None:
             )
         if not bool(env_cfg.get("strict_action_bounds", False)):
             raise ValueError("BetaDistribution runs must enable environment.strict_action_bounds")
-    runtime_config = load_runtime_config(
-        args.robot,
-        task="pick_place",
-        config_path=args.runtime_config,
-    )
+    runtime_config = load_pick_place_rl_runtime_config(args.robot, config_path=args.runtime_config)
     transfer_path = args.resume or args.warm_start or args.actor_critic_warm_start
     transfer_state = None
     transfer_projection = None
@@ -431,6 +427,7 @@ def main() -> None:
             expected_runtime_config_sha256=runtime_config.sha256,
             expected_runtime_env=env_cfg,
             allowed_runtime_env_mismatches=(() if args.resume is not None else ("fixed_demo_layout",)),
+            full_resume=args.resume is not None,
         )
         source_obs = int(transfer_manifest.observation_dim)
         target_obs = int(env_cfg["num_obs"])
@@ -508,6 +505,10 @@ def main() -> None:
         repo_root / "ufactory/simulation/compat.py",
         repo_root / "ufactory/simulation/g2.py",
         repo_root / "ufactory/simulation/physics.py",
+        repo_root / "ufactory/simulation/g2_model.py",
+        repo_root / "ufactory/simulation/g2_controller.py",
+        repo_root / "ufactory/simulation/g2_batch.py",
+        repo_root / "ufactory/simulation/g2_adapter.py",
     ]
     provenance_sources.extend(repo_root / source for source in runtime_config.sources)
     write_run_provenance(

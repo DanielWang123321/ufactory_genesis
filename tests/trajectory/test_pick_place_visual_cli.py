@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import numpy as np
 
 import pytest
 
@@ -186,19 +187,26 @@ def test_open_sim_viewer_warms_then_start_deferred_viewer(monkeypatch):
     assert calls[3].startswith("start_deferred_viewer:True:")
 
 
-def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
+@pytest.mark.parametrize(
+    ("robot", "transport_passed", "expected_rc"),
+    [("lite6", False, 0), ("xarm6", True, 0), ("xarm6", False, 1)],
+)
+def test_sim_visual_defers_viewer_and_checks_acceptance(monkeypatch, robot, transport_passed, expected_rc):
     calls: list[str] = []
     scene = SimpleNamespace(step=lambda: calls.append("step"))
-    ctx = SimpleNamespace(scene=scene)
+    ctx = SimpleNamespace(scene=scene, robot_urdf_path="/tmp/urdf", home_qpos=np.zeros(1), arm_dof_idx=[0])
 
     monkeypatch.setattr(pick_place, "require_genesis_capabilities", lambda **_kwargs: calls.append("capabilities"))
     monkeypatch.setattr(
         pick_place,
         "load_runtime_config",
         lambda *_args, **_kwargs: SimpleNamespace(
-            robot=SimpleNamespace(key="lite6"),
+            robot=SimpleNamespace(key=robot),
+            gripper=SimpleNamespace(adapter="lite6" if robot == "lite6" else "g2"),
             motion=SimpleNamespace(rate_hz=50.0),
-            simulation=SimpleNamespace(show_viewer=False, backend="gpu", precision="32", seed=1),
+            simulation=SimpleNamespace(
+                show_viewer=False, backend="gpu", precision="32", seed=1, g2=SimpleNamespace(speed_percent=50)
+            ),
             task=SimpleNamespace(parameters={}, allowed_contacts={}),
         ),
     )
@@ -208,8 +216,10 @@ def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
         lambda _config: None,
     )
     monkeypatch.setattr(pick_place, "_model_and_hashes", lambda *_args, **_kwargs: (Path("/tmp/urdf"), "u", "c"))
+    monkeypatch.setattr(pick_place, "sha256_file", lambda *_args: "u")
     monkeypatch.setattr(pick_place, "_backends", lambda *_args, **_kwargs: (object(), object()))
     monkeypatch.setattr(pick_place, "_build_program", lambda *_args, **_kwargs: SimpleNamespace(segments=()))
+    monkeypatch.setattr("ufactory.simulation.g2_confirmation.prepare_g2_program", lambda program, _settings: program)
     monkeypatch.setattr(pick_place, "_json_sha256", lambda _value: "scene")
     monkeypatch.setattr(
         pick_place,
@@ -239,7 +249,7 @@ def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
 
     monkeypatch.setattr(pick_place, "GenesisRuntimeManager", _Runtime)
 
-    def _build_ik_scene(_config, *, calibration=None, show_viewer=False):
+    def _build_ik_scene(_config, *, calibration=None, show_viewer=False, **_kwargs):
         calls.append(f"build_scene:show_viewer={show_viewer}")
         return ctx
 
@@ -253,7 +263,16 @@ def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
         pick_place,
         "execute_sim",
         lambda _approved, runner: (
-            calls.append("execute_sim") or SimpleNamespace(place_error_mm=1.0, home_drift_mm=1.0, metric_settle_ticks=1)
+            calls.append("execute_sim")
+            or SimpleNamespace(
+                place_error_mm=1.0,
+                home_drift_mm=1.0,
+                metric_settle_ticks=1,
+                completed=True,
+                timing_passed=True,
+                transport_passed=transport_passed,
+                failure_reason=None,
+            )
         ),
     )
     monkeypatch.setattr(
@@ -280,7 +299,7 @@ def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
     rc = pick_place.main(
         [
             "--robot",
-            "lite6",
+            robot,
             "--mode",
             "sim",
             "--executor",
@@ -289,7 +308,7 @@ def test_sim_visual_builds_headless_then_defers_viewer(monkeypatch):
         ]
     )
 
-    assert rc == 0
+    assert rc == expected_rc
     assert "build_scene:show_viewer=False" in calls
     assert calls.index("open_sim_viewer:True") < calls.index("execute_sim")
     assert calls.index("execute_sim") < calls.index("hold_viewer:True")

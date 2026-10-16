@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Only the current `0.3.0` development line receives security fixes. This is Alpha robotics software and is not safety-certified.
+Only the current `0.3.1` development line receives security fixes. This is Alpha robotics software and is not safety-certified.
 
 ## Reporting
 
@@ -15,6 +15,7 @@ Do not disclose a suspected vulnerability in a public issue when it could enable
 - The public tree does not ship a legacy pickle migration CLI. If a private checkout still contains one, use it only when `--trusted-input` truthfully applies.
 - Never weaken `ApprovedProgram` binding, collision checks, complete-serial calibration binding, or explicit real-motion confirmation.
 - Repository assets and safety exemptions are integrity-checked; a mismatch fails closed.
+- Lite6 excludes only its two finger-root collision boxes from each other in Genesis and Coal. Finger pads and external collisions retain the normal checks and 5 mm margin; no link-wide Lite6 exemption applies.
 - The bundled v0.2.13 fixed-layout RL checkpoint (`model_299_g2stable.pt`) is a simulation-only artifact; its integrity, manifest, and `g2_stable_v1_3_3` physics-profile binding are verified before a weights-only load. Checkpoints trained under earlier contact physics (such as the retired `model_299.pt`, no longer shipped) fail that binding by design; never bypass the mismatch for evaluation or real use. The public package contains no online real-policy execution, random-action deployment, policy session, or SDK policy-action adapter. `ufactory.deploy` was removed in v0.2.7.
 
 Operators remain responsible for physical guarding, payload/tool validation, emergency-stop access, speed limits and site-specific risk assessment.

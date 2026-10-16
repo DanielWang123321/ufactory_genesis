@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from ufactory.config import load_runtime_config
+from ufactory.robots.paths import robot_visual_glb_urdf
 from ufactory.safety import CollisionResult, ViolationType
 from ufactory.safety.gate import SafetyGate
 from ufactory.safety.sdk_sim import (
@@ -276,6 +277,22 @@ def test_segment_order_gripper_range_and_fk_outputs_fail_closed():
         assert ViolationType.INVALID_INPUT in kinds(gate(kin=kin).preflight(program(), executor="servo_j"))
 
 
+def test_g2_preflight_timeline_uses_geometric_joint_angles():
+    from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive
+
+    path = program(samples=[[0.0] * 6])
+    gaps = (0, 0.010, 0.02415587200800565, 0.030, 0.060, 0.084)
+    path.segments.extend(
+        Segment("gripper", 0.02, 1.0, 1.0, "grip", gap_start=gap, gap_end=gap, samples_count=1) for gap in gaps
+    )
+    timeline, violations = gate()._build_timeline(path)
+    assert not violations
+    assert timeline is not None
+    assert timeline.gripper_drive[-len(gaps) :].tolist() == pytest.approx(
+        [gripper_g2_gap_m_to_sim_drive(gap) for gap in gaps], abs=1e-14
+    )
+
+
 def _line_program():
     line = Segment(
         "movel",
@@ -303,14 +320,19 @@ def test_allowed_task_contacts_and_optional_collision_backend():
     assert gate(config=optional, collision=None).preflight(program(), executor="servo_j").passed
 
 
-def test_lite6_contact_exemptions_match_exact_trajectory_stages():
+@pytest.mark.parametrize("simulation_model", [False, True], ids=["nominal", "simulation-glb"])
+def test_lite6_has_no_link_wide_contact_exemption(simulation_model):
     config = load_runtime_config("lite6")
+    urdf_path = (
+        robot_visual_glb_urdf(config.robot.key, with_lite6_gripper=True, movable=True) if simulation_model else None
+    )
     lite_gate = create_safety_gate(
         config,
         kinematics=Kin(),
         collision=Collision(),
         calibration_sha256="c" * 64,
         scene_sha256="s" * 64,
+        urdf_path=urdf_path,
     )
     finger_pair = CollisionResult(True, 0.0, "uflite_finger1", "uflite_finger2")
     expected_stages = {
@@ -323,10 +345,10 @@ def test_lite6_contact_exemptions_match_exact_trajectory_stages():
         "place-settle",
         "release",
     }
-    assert {item.stage for item in config.safety.exemptions} == expected_stages
-    assert all(lite_gate.collision_allowed(finger_pair, stage) for stage in expected_stages)
-    assert not lite_gate.collision_allowed(finger_pair, "grasp")
-    assert not lite_gate.collision_allowed(finger_pair, "place")
+    assert config.safety.exemptions == ()
+    assert config.safety.excluded_geometry_pairs == (("uflite_finger1_0", "uflite_finger2_0"),)
+    for stage in (*expected_stages, "start", "home->pregrasp", "descend", "retreat", "return-home", "grasp", "place"):
+        assert not lite_gate.collision_allowed(finger_pair, stage)
     wrong_hash_gate = SafetyGate(
         config,
         joint_lower_rad=[-3.0] * 6,
@@ -432,3 +454,52 @@ def test_sdk_simulation_success_failures_and_strict_loader(tmp_path):
     path.write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="fields"):
         load_sdk_simulation_evidence(path)
+
+
+def _stationary_seed_program(q0):
+    """Zero-length MoveJ seed followed by a MoveL, like servo_cartesian pick-place."""
+
+    q0 = np.asarray(q0, dtype=np.float64)
+    pose_start = np.array([0.3, 0.0, 0.3])
+    pose_end = np.array([0.3, 0.0, 0.29])
+    return Program(
+        [
+            Segment(
+                "movej",
+                0.04,
+                1.0,
+                1.0,
+                "start",
+                q_start=q0,
+                q_end=q0,
+                q_samples=np.repeat(q0[None, :], 2, axis=0),
+                samples_count=2,
+            ),
+            Segment(
+                "movel",
+                0.5,
+                0.1,
+                0.8,
+                "home->pregrasp",
+                pose_start=pose_start,
+                pose_end=pose_end,
+            ),
+        ],
+        rate=50.0,
+        robot_key="xarm6_1305",
+    )
+
+
+@pytest.mark.parametrize(
+    ("offset_rad", "projected"),
+    [(5e-4, True), (5e-3, False)],
+)
+def test_stationary_seed_projection_is_bounded(offset_rad, projected):
+    q0 = np.full(6, 0.1)
+    solved = q0 + offset_rad
+    timeline, violations = gate(kin=Kin(inverse=solved))._build_timeline(_stationary_seed_program(q0))
+
+    assert not violations
+    expected_start = solved if projected else q0
+    # Row 0 is the q_start prefix, rows 1-2 are the stationary seed samples.
+    assert np.allclose(timeline.q_rad[:3], expected_start, atol=0.0)

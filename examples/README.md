@@ -2,7 +2,7 @@
 
 [中文](README_zh.md)
 
-v0.3.0 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
+v0.3.1 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
 
 ## Prerequisites
 
@@ -51,6 +51,7 @@ Public directories in this release:
 | Directory | Purpose |
 |---|---|
 | `visualization/` | GLB robot and gripper viewers |
+| `gripper_g2/` | Calibrated Gripper G2 percentage control, cube grasp, and acceptance |
 | `kinematics/` | FK/IK / robot verification wrappers |
 | `pick_place/` | Multi-robot pick-place entry + optional overlay |
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
@@ -69,6 +70,8 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 | `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper |
 
 All five families support simulation and offline preflight. Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; see [Hardware & Real Robot](#hardware--real-robot).
+
+G2 simulations use `g2_calibrated_v1`; see [percentage control, acceptance and execution records](gripper_g2/README.md). Bundled RL weights retain their historical physics and require `--allow-physics-transfer` for evaluation.
 
 ## Visualization
 

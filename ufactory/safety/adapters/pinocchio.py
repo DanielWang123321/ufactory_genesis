@@ -252,6 +252,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
         obstacles: Iterable[EnvironmentObstacle] = (),
         passive_joint_positions: dict[str, float] | None = None,
         adjacent_link_pairs: Iterable[tuple[str, str]] = (),
+        excluded_geometry_pairs: Iterable[tuple[str, str]] = (),
     ) -> None:
         super().__init__(
             urdf_path,
@@ -272,6 +273,11 @@ class PinocchioCollisionBackend(_PinocchioModel):
             package_dirs=[str(self.urdf_path.parent)],
         )
         self.geometry_model.addAllCollisionPairs()
+        excluded_pairs = {frozenset(pair) for pair in excluded_geometry_pairs}
+        geometry_names = {str(geometry.name) for geometry in self.geometry_model.geometryObjects}
+        missing = set().union(*excluded_pairs) - geometry_names if excluded_pairs else set()
+        if missing:
+            raise ValueError(f"excluded collision geometries missing from URDF: {sorted(missing)}")
         urdf_root = ET.parse(self.urdf_path).getroot()
         adjacent_links = {
             frozenset((parent.get("link", ""), child.get("link", "")))
@@ -279,8 +285,8 @@ class PinocchioCollisionBackend(_PinocchioModel):
             if (parent := joint.find("parent")) is not None and (child := joint.find("child")) is not None
         }
         adjacent_links.update(frozenset(map(str, pair)) for pair in adjacent_link_pairs)
-        # Parent-child geometry intersects at the joint by construction and is
-        # excluded.  Every other pair remains enabled.
+        # Parent-child geometry intersects at the joint by construction.
+        # Additional exclusions identify individual geometries, not whole links.
         remove_pairs: list[tuple[int, int]] = []
         for pair in self.geometry_model.collisionPairs:
             first = self.geometry_model.geometryObjects[pair.first]
@@ -294,7 +300,8 @@ class PinocchioCollisionBackend(_PinocchioModel):
                 or int(self.model.parents[joint_b]) == joint_a
                 or frozenset((link_a, link_b)) in adjacent_links
             )
-            if adjacent:
+            excluded = frozenset((str(first.name), str(second.name))) in excluded_pairs
+            if adjacent or excluded:
                 remove_pairs.append((int(pair.first), int(pair.second)))
         for first, second in remove_pairs:
             self.geometry_model.removeCollisionPair(pin.CollisionPair(first, second))
@@ -355,6 +362,8 @@ class PinocchioCollisionBackend(_PinocchioModel):
                 link_a=self._link_name(pair.first),
                 link_b=self._link_name(pair.second),
                 environment=pair.first in self.environment_indices or pair.second in self.environment_indices,
+                geometry_a=str(self.geometry_model.geometryObjects[pair.first].name),
+                geometry_b=str(self.geometry_model.geometryObjects[pair.second].name),
             )
             for index, pair in enumerate(self.geometry_model.collisionPairs)
         )
@@ -452,6 +461,8 @@ class PinocchioCollisionBackend(_PinocchioModel):
                         link_a=self._link_name(pair.first),
                         link_b=self._link_name(pair.second),
                         environment=pair.first in self.environment_indices or pair.second in self.environment_indices,
+                        geometry_a=str(first.name),
+                        geometry_b=str(second.name),
                     )
                 )
             return tuple(results)

@@ -11,9 +11,11 @@ import pytest
 from conftest import PROJECT_ROOT
 from ufactory.config import load_runtime_config
 from ufactory.training import (
+    PICK_PLACE_RL_NOSLIP_ITERATIONS,
     ArtifactError,
     build_pick_place_task_configs,
     build_train_config,
+    load_pick_place_rl_runtime_config,
     load_training_recipe,
 )
 
@@ -21,9 +23,14 @@ GRASP_RECIPE = PROJECT_ROOT / "tests" / "fixtures" / "training" / "pick_place_re
 
 
 def test_pick_place_binds_the_resolved_runtime_hash() -> None:
+    pytest.importorskip("trimesh")
     grasp_env, _reward, _robot = build_pick_place_task_configs("xarm6", recipe_path=GRASP_RECIPE)
 
-    assert grasp_env["runtime_config_sha256"] == load_runtime_config("xarm6", task="pick_place").sha256
+    rl_config = load_pick_place_rl_runtime_config("xarm6")
+    assert grasp_env["runtime_config_sha256"] == rl_config.sha256
+    # RL keeps the no-slip pass off for throughput; deterministic pick-place enables it.
+    assert grasp_env["noslip_iterations"] == rl_config.simulation.noslip_iterations == PICK_PLACE_RL_NOSLIP_ITERATIONS
+    assert rl_config.sha256 != load_runtime_config("xarm6", task="pick_place").sha256
     assert grasp_env["num_obs"] == 30
     assert grasp_env["num_actions"] == 4
     assert grasp_env["lift_height_m"] == pytest.approx(0.08)

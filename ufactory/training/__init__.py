@@ -26,11 +26,13 @@ from ufactory.training.scenarios import (
     write_scenario_bank,
 )
 from ufactory.training.tasks import (
+    PICK_PLACE_RL_NOSLIP_ITERATIONS,
     PICK_PLACE_RL_ROBOTS,
     REACH_RL_ROBOTS,
     build_pick_place_task_configs,
     build_reach_task_configs,
     build_train_config,
+    load_pick_place_rl_runtime_config,
 )
 
 __all__ = [
@@ -40,12 +42,14 @@ __all__ = [
     "PICK_PLACE_SCENARIO_MODES",
     "apply_pick_place_acceptance_profile",
     "load_checkpoint_manifest",
+    "load_pick_place_rl_runtime_config",
     "load_training_config",
     "load_training_recipe",
     "generate_pick_place_scenario_bank",
     "load_scenario_bank",
     "runtime_env_contract",
     "scenario_bank_sha256",
+    "PICK_PLACE_RL_NOSLIP_ITERATIONS",
     "PICK_PLACE_RL_ROBOTS",
     "REACH_RL_ROBOTS",
     "build_pick_place_task_configs",

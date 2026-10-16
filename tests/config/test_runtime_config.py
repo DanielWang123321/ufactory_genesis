@@ -12,9 +12,21 @@ from ufactory.config import (
     load_runtime_config,
     resolve_pick_place_object_spec,
 )
+from ufactory.config.models import G2_NOSLIP_ITERATIONS
 
 
 ROBOTS = ("xarm5", "xarm6", "xarm7", "uf850", "lite6")
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["[ab]", "[[a]]", "[[a, a]]", "[[a, b], [b, a]]", "[[a, 1]]", "[[a, '']]"],
+)
+def test_invalid_geometry_exclusions_are_rejected(tmp_path: Path, value: str) -> None:
+    path = tmp_path / "bad_pairs.yaml"
+    path.write_text(f"schema_version: 1\nsafety:\n  excluded_geometry_pairs: {value}\n")
+    with pytest.raises(ValueError, match="excluded_geometry_pairs"):
+        load_runtime_config("lite6", config_path=path)
 
 
 def test_all_default_robot_configs_are_stable_and_assets_exist():
@@ -60,16 +72,29 @@ def test_dump_config_contains_sources_and_hash_without_importing_genesis():
     assert "sha256:" in text
 
 
-def test_default_rigid_contact_profile_is_explicit_genesis_133() -> None:
+def test_default_calibrated_g2_contact_profile_is_explicit() -> None:
     simulation = load_runtime_config("xarm6").simulation
     assert simulation.substeps == 32
     assert simulation.constraint_solver == "newton"
     assert simulation.friction_cone == "pyramidal"
     assert simulation.contact_resolution == "convex"
     assert simulation.solver_iterations == 100
-    assert simulation.noslip_iterations == 0
-    assert simulation.constraint_time_constant_s == pytest.approx(0.005)
+    assert simulation.noslip_iterations == G2_NOSLIP_ITERATIONS > 0
+    assert simulation.constraint_time_constant_s == pytest.approx(0.00125)
     assert simulation.use_gjk_collision is True
+
+
+@pytest.mark.parametrize("robot", ["xarm5", "xarm6", "xarm7", "uf850"])
+def test_g2_robots_enable_noslip_and_other_grippers_do_not(robot: str) -> None:
+    assert load_runtime_config(robot).simulation.noslip_iterations == G2_NOSLIP_ITERATIONS
+    assert load_runtime_config(robot, task="packaging_showcase").simulation.noslip_iterations == G2_NOSLIP_ITERATIONS
+    assert load_runtime_config("lite6").simulation.noslip_iterations == 0
+
+
+def test_g2_noslip_default_can_be_overridden_by_user_config(tmp_path: Path) -> None:
+    path = tmp_path / "noslip.yaml"
+    path.write_text("schema_version: 1\nsimulation:\n  noslip_iterations: 0\n", encoding="utf-8")
+    assert load_runtime_config("xarm6", config_path=path).simulation.noslip_iterations == 0
 
 
 @pytest.mark.parametrize("value", [0, -1, 31.5, 32.0, True, "many", "32"])

@@ -102,6 +102,7 @@ def test_bundled_checkpoint_hashes_validate_without_writing_to_bundle() -> None:
         expected_task="pick_place",
         expected_robot_key="xarm6_1305",
         expected_runtime_config_sha256=CURRENT_RUNTIME_SHA256,
+        allow_physics_transfer=True,
     )
 
     assert artifact["config_sha256"] == CONFIG_SHA256

@@ -7,6 +7,7 @@ import pytest
 import torch
 import yaml
 
+from ufactory.config.models import G2_PHYSICS_PROFILE
 from ufactory.training import (
     ArtifactError,
     load_training_config,
@@ -25,7 +26,7 @@ def test_safe_checkpoint_manifest_and_weights_only_compatible(tmp_path: Path):
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 18, "num_actions": 6},
+        env={"physics_profile": G2_PHYSICS_PROFILE, "num_obs": 18, "num_actions": 6},
         reward={},
         robot={"joint_names": [f"joint{i}" for i in range(1, 7)]},
         train={"policy": {}},
@@ -52,7 +53,7 @@ def test_checkpoint_tamper_is_rejected(tmp_path: Path):
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 18, "num_actions": 6},
+        env={"physics_profile": G2_PHYSICS_PROFILE, "num_obs": 18, "num_actions": 6},
         reward={},
         robot={"joint_names": ["joint1"] * 6},
         train={},
@@ -67,13 +68,90 @@ def test_checkpoint_tamper_is_rejected(tmp_path: Path):
         validate_checkpoint_artifacts(checkpoint, config_path)
 
 
+def test_old_physics_transfer_is_explicit_and_cannot_fully_resume(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    write_training_config(
+        config_path,
+        task="pick_place",
+        robot_key="xarm6_1305",
+        env={"num_obs": 48, "num_actions": 4, "physics_profile": "g2_stable_v1_3_3"},
+        reward={},
+        robot={},
+        train={},
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    write_checkpoint_manifest(
+        checkpoint, training_config=load_training_config(config_path), executor_action_contract="cartesian_delta"
+    )
+    # Runtime hash bypasses never bypass the physics version guard.
+    with pytest.raises(ArtifactError, match="allow-physics-transfer"):
+        validate_checkpoint_artifacts(checkpoint, config_path)
+    validate_checkpoint_artifacts(checkpoint, config_path, allow_physics_transfer=True)
+    with pytest.raises(ArtifactError, match="cannot fully resume"):
+        validate_checkpoint_artifacts(checkpoint, config_path, allow_physics_transfer=True, full_resume=True)
+    with checkpoint.open("ab") as stream:
+        stream.write(b"tampered")
+    with pytest.raises(ArtifactError, match="checkpoint hash"):
+        validate_checkpoint_artifacts(checkpoint, config_path, allow_physics_transfer=True)
+
+
+def _noslip0_checkpoint(tmp_path: Path, profile: str) -> tuple[Path, Path, dict]:
+    config_path = tmp_path / "config.yaml"
+    saved_env = {
+        "physics_profile": profile,
+        "num_obs": 48,
+        "num_actions": 4,
+        "runtime_config_sha256": "old",
+        "noslip_iterations": 0,
+        "constraint_solver": "newton",
+    }
+    write_training_config(
+        config_path, task="pick_place", robot_key="xarm6_1305", env=saved_env, reward={}, robot={}, train={}
+    )
+    checkpoint = tmp_path / "model_0.pt"
+    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    write_checkpoint_manifest(
+        checkpoint, training_config=load_training_config(config_path), executor_action_contract="cartesian_delta"
+    )
+    current_env = {**saved_env, "physics_profile": G2_PHYSICS_PROFILE, "runtime_config_sha256": "new"}
+    current_env["noslip_iterations"] = 10
+    return checkpoint, config_path, current_env
+
+
+def test_bundled_noslip0_weights_need_explicit_physics_transfer(tmp_path: Path):
+    checkpoint, config_path, current_env = _noslip0_checkpoint(tmp_path, "g2_stable_v1_3_3")
+    kwargs = {"expected_runtime_config_sha256": "new", "expected_runtime_env": current_env}
+    with pytest.raises(ArtifactError, match="allow-physics-transfer"):
+        validate_checkpoint_artifacts(checkpoint, config_path, **kwargs)
+    validate_checkpoint_artifacts(checkpoint, config_path, allow_physics_transfer=True, **kwargs)
+    with pytest.raises(ArtifactError, match="cannot fully resume"):
+        validate_checkpoint_artifacts(checkpoint, config_path, allow_physics_transfer=True, full_resume=True, **kwargs)
+    # Physics transfer covers physics keys only; other contract changes still fail.
+    current_env["constraint_solver"] = "cg"
+    with pytest.raises(ArtifactError, match=r"runtime config body .*constraint_solver"):
+        validate_checkpoint_artifacts(checkpoint, config_path, allow_physics_transfer=True, **kwargs)
+
+
+def test_current_profile_checkpoint_without_noslip_is_rejected(tmp_path: Path):
+    checkpoint, config_path, current_env = _noslip0_checkpoint(tmp_path, G2_PHYSICS_PROFILE)
+    with pytest.raises(ArtifactError, match=r"runtime config body .*noslip_iterations"):
+        validate_checkpoint_artifacts(
+            checkpoint,
+            config_path,
+            allow_physics_transfer=True,
+            expected_runtime_config_sha256="old",
+            expected_runtime_env={**current_env, "runtime_config_sha256": "old"},
+        )
+
+
 def test_checkpoint_with_stale_runtime_config_hash_is_rejected(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 30, "num_actions": 7, "runtime_config_sha256": "old"},
+        env={"physics_profile": G2_PHYSICS_PROFILE, "num_obs": 30, "num_actions": 7, "runtime_config_sha256": "old"},
         reward={},
         robot={"joint_names": [f"joint{i}" for i in range(1, 7)]},
         train={},
@@ -94,6 +172,7 @@ def test_checkpoint_with_stale_runtime_config_hash_is_rejected(tmp_path: Path):
 def test_checkpoint_with_matching_hash_but_conflicting_runtime_body_is_rejected(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     saved_env = {
+        "physics_profile": G2_PHYSICS_PROFILE,
         "num_obs": 35,
         "num_actions": 4,
         "runtime_config_sha256": "same",
@@ -131,11 +210,13 @@ def test_checkpoint_without_current_physics_profile_is_rejected(
 ) -> None:
     config_path = tmp_path / "config.yaml"
     saved_env = {
+        "physics_profile": G2_PHYSICS_PROFILE,
         "num_obs": 48,
         "num_actions": 4,
         "runtime_config_sha256": "same",
         "substeps": 32,
     }
+    saved_env.pop("physics_profile", None)
     if saved_profile is not None:
         saved_env["physics_profile"] = saved_profile
     write_training_config(
@@ -156,7 +237,7 @@ def test_checkpoint_without_current_physics_profile_is_rejected(
         executor_action_contract="cartesian_delta",
     )
 
-    expected_env = {**saved_env, "physics_profile": "g2_stable_v1_3_3"}
+    expected_env = {**saved_env, "physics_profile": G2_PHYSICS_PROFILE}
     with pytest.raises(ArtifactError, match=r"runtime config body .*physics_profile"):
         validate_checkpoint_artifacts(
             checkpoint,
@@ -169,6 +250,7 @@ def test_checkpoint_without_current_physics_profile_is_rejected(
 def test_checkpoint_layout_transfer_allows_only_explicit_layout_mismatch(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     saved_env = {
+        "physics_profile": G2_PHYSICS_PROFILE,
         "num_obs": 44,
         "num_actions": 4,
         "runtime_config_sha256": "same",
@@ -219,7 +301,7 @@ def test_checkpoint_layout_transfer_rejects_unknown_allowed_key(tmp_path: Path):
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 44, "num_actions": 4},
+        env={"physics_profile": G2_PHYSICS_PROFILE, "num_obs": 44, "num_actions": 4},
         reward={},
         robot={},
         train={},
@@ -256,7 +338,12 @@ def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_pat
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 18, "num_actions": 6, "runtime_config_sha256": "runtime"},
+        env={
+            "physics_profile": G2_PHYSICS_PROFILE,
+            "num_obs": 18,
+            "num_actions": 6,
+            "runtime_config_sha256": "runtime",
+        },
         reward={"keypoints": 1.0},
         robot={"joint_names": [f"joint{i}" for i in range(1, 7)]},
         train={"seed": 1},
@@ -298,7 +385,7 @@ def test_validated_rsl_loader_uses_weights_only_mode(tmp_path: Path, monkeypatch
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 44, "num_actions": 4},
+        env={"physics_profile": G2_PHYSICS_PROFILE, "num_obs": 44, "num_actions": 4},
         reward={},
         robot={},
         train={},
@@ -345,7 +432,7 @@ def test_validated_rsl_loader_rejects_config_before_deserialization(
         config_path,
         task="pick_place",
         robot_key="xarm6_1305",
-        env={"num_obs": 44, "num_actions": 4},
+        env={"physics_profile": G2_PHYSICS_PROFILE, "num_obs": 44, "num_actions": 4},
         reward={},
         robot={},
         train={},

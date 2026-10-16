@@ -15,7 +15,9 @@ import yaml
 from ufactory.config.assets import RepositoryAssetStore
 from ufactory.config.models import (
     ArmControlProfile,
+    G2_NOSLIP_ITERATIONS,
     GripperProfile,
+    G2SimulationConfig,
     MotionConfig,
     ResolvedRuntimeConfig,
     RobotSpec,
@@ -372,8 +374,12 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             None if simulation_data["use_gjk_collision"] is None else bool(simulation_data["use_gjk_collision"])
         ),
         show_viewer=bool(simulation_data.get("show_viewer", False)),
+        g2=G2SimulationConfig(**simulation_data["g2"]),
     )
     safety_data = data["safety"]
+    geometry_pairs = safety_data.get("excluded_geometry_pairs", [])
+    if not isinstance(geometry_pairs, list) or any(not isinstance(pair, list | tuple) for pair in geometry_pairs):
+        raise ConfigError("safety.excluded_geometry_pairs must be a list of geometry pairs")
     exemptions = tuple(CollisionExemption(**item) for item in safety_data.get("exemptions", []))
     workspace_lower = _tuple_floats(safety_data["workspace_lower_m"], field="safety.workspace_lower_m", size=3)
     workspace_upper = _tuple_floats(safety_data["workspace_upper_m"], field="safety.workspace_upper_m", size=3)
@@ -394,6 +400,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         require_kinematics=bool(safety_data["require_kinematics"]),
         require_collision=bool(safety_data["require_collision"]),
         exemptions=exemptions,
+        excluded_geometry_pairs=tuple(tuple(pair) for pair in geometry_pairs),
     )
     provisional = ResolvedRuntimeConfig(
         schema_version=1,
@@ -438,6 +445,9 @@ def load_runtime_config(
     sources: list[str] = []
     for path in base_paths:
         layer = _read_yaml(path)
+        if "simulation" in layer and data.get("gripper", {}).get("adapter") == "g2":
+            layer["simulation"]["constraint_time_constant_s"] = 0.00125
+            layer["simulation"]["noslip_iterations"] = G2_NOSLIP_ITERATIONS
         for key, value in layer.items():
             if key != "schema_version":
                 if key in data:

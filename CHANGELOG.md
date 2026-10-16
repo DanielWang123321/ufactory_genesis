@@ -5,21 +5,29 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] — unreleased
+## [0.3.1] — 2026-10-15
 
 ### Added
 
+- Added the `g2_calibrated_v1` Gripper G2 model: rated motor torque 0.22 N·m, peak 0.5 N·m, and holding force from the official current/speed curve. Commands are a 0–84 mm pad gap, speed 0–100%, and force 1–100%. `examples/gripper_g2` provides the free-cube grasp and the 33-case acceptance suite.
 - Added a simulation-only bare-arm xArm 6 reach example under `examples/rl/reach`: a fixed 5 mm success threshold, joint-position increments, random end-effector targets, PPO training, checkpoint selection and evaluation. No trained weights are bundled, and there is no real-robot policy executor.
 
 ### Changed
 
+- Updated joint torque limits for xArm5, xArm6, xArm7, UF850, and Lite6 so each runtime `effort_limits_nm` matches the default URDF. Lite6 joints 4–6 are 1.364505, 3.274812, and 1.364505 N·m. Those joints use PD gains `kp` 40/80/40 and `kv` 8/16/8; URDF damping and friction are 0 on joints 4 and 6 and 0.1 on joint 5.
+- Pick-and-place, packaging, the dynamic viewers, and pick-and-place RL now drive `drive_joint` with the calibrated controller (`kp=40`, `kv=5`, `ki=40`, 0.01 kg·m² added inertia). Grasp and release continue on the next control cycle after two confirming frames; a timeout stops the following arm motion. All 11 standard G2 URDFs encode the nominal 0–84 mm stroke directly; six linkage joints use limits `0.057210812728026743–0.86509464599328212 rad` and velocity `2.608067454724 rad/s`. Scalar, Torch, adapter, preflight and mirror conversions use actual joint geometry. The `derive_urdf()` / `derive_g2_urdf` interfaces were removed.
+- Bundled pick-and-place weights stay on `g2_stable_v1_3_3`. Evaluating them on the calibrated model requires `--allow-physics-transfer`.
 - Set the Genesis World reference baseline to **1.4.4** while keeping the minimum at **1.4.2** (`genesis-world>=1.4.2`). Genesis 1.4.2 and 1.4.3 still run and emit one unvalidated-baseline warning. Genesis 1.4.1 and older fail closed. Private hook signatures used by forward kinematics, inverse kinematics, GLB PBR, and the deferred viewer are unchanged. The lock file pins Genesis 1.4.4 and Quadrants 1.3.3 (Genesis 1.4.2 still brings Quadrants 1.3.0). Contact-solver internals changed in 1.4.4, so simulation checks were re-run on 1.4.4; contact numbers are not claimed identical to 1.4.2.
 
 ### Fixed
 
+- Importing the reach viewer no longer selects the GLX platform. That selection stays on the viewer command, so headless simulation checks can release the offscreen context.
+- G2 pick-place and packaging commands now return failure when transport acceptance fails, even if timing and the final pose pass.
 - Reach now accumulates position commands within URDF limits, maps the full action range linearly, and uses 24 observations with command tracking error. PPO uses a bounded Beta distribution and a one-time success bonus. Evaluation runs each fixed target once through success or timeout and can enforce success-rate and distance thresholds. The `visualize` entry provides real-time GLB inference with an independent 1-second hold after each successful reach; `evaluate --vis` prints its replacement command. Reach configurations and checkpoints with other success thresholds are rejected.
+- A stationary joint seed whose forward pose sat a few micrometres off the Cartesian home is re-solved onto that home before preflight. The xArm7 `servo_cartesian` pick-and-place stream stays within the configured 0.8 m/s² Cartesian acceleration limit.
 - Updated the asset manifest hash for `assets/configs/runtime/robots/lite6.yaml` so it matches the committed file.
-- Rebound the Lite6 finger-pair collision exemptions to the current `lite6_with_gripper.urdf` hash. The nominal pick-place preflight treats the closed 20 mm gap as expected again. The calibrated-URDF hash is unchanged.
+- Replaced Lite6's link-wide, stage-specific collision exemptions with one finger-root geometry-pair exclusion shared by Genesis and Coal. Finger pads and external collisions retain the 5 mm safety margin. The filtering API supports Genesis 1.4.2 and later.
+- Deterministic G2 runtime configurations now default to `simulation.noslip_iterations = 5` (`G2_NOSLIP_ITERATIONS`), eliminating pyramidal friction creep during grasp transport with the existing 5 mm slip and pick-and-place 10 mm placement gates. The CPU transport regression requires slip ≤1 mm. G2 tests now occupy seven files with a 22-case GPU suite (9 pick-place, 4 faults, 5 packaging, 2 RL, 2 demos). Batched `pick_place` RL keeps `simulation.noslip_iterations = 0` via `load_pick_place_rl_runtime_config` to preserve training throughput.
 
 ## [0.3.0] — 2026-09-24
 

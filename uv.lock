@@ -967,7 +967,7 @@ wheels = [
 
 [[package]]
 name = "genesis-ufactory"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1005,6 +1005,7 @@ sim = [
     { name = "genesis-world" },
     { name = "packaging" },
     { name = "torch" },
+    { name = "trimesh" },
 ]
 trajectory = [
     { name = "roboticstoolbox-python" },
@@ -1032,6 +1033,7 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'showcase'", specifier = ">=1.11" },
     { name = "tensorboard", marker = "extra == 'rl'" },
     { name = "torch", marker = "extra == 'sim'", specifier = "==2.10.0" },
+    { name = "trimesh", marker = "extra == 'sim'", specifier = ">=4.8.2" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "xarm-python-sdk", marker = "extra == 'real'" },
 ]

@@ -11,9 +11,15 @@ import argparse
 import copy
 from pathlib import Path
 
-from .runtime import DEFAULT_RECIPE, configure_runtime, require_checkpoint, require_rsl_runtime
+from .runtime import DEFAULT_RECIPE, configure_runtime, patch_pyglet_screen, require_checkpoint, require_rsl_runtime
 
-configure_runtime(viewer=True)
+# GLX is only for the interactive command. Importing this module from tests must
+# leave the headless platform alone, or later Genesis teardowns lose the context.
+if __name__ == "__main__":
+    configure_runtime(viewer=True)
+else:
+    configure_runtime()
+    patch_pyglet_screen()
 require_rsl_runtime()
 
 import torch

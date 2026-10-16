@@ -28,7 +28,6 @@ from ufactory.trajectory.planner import CartesianWaypoint, TrajectoryPlannerConf
 from ufactory.trajectory.real_executor import RealExecutorConfig, replay_real
 from ufactory.trajectory.segments import build_pickplace_program
 from ufactory.trajectory.mirror_executor import (
-    G2_MIRROR_VISUAL_GAP_SHRINK_M,
     LITE6_MIRROR_VISUAL_GAP_SHRINK_M,
     mirror_grip_drive_for_gap_m,
     resolve_segment_start_arm_q,
@@ -150,7 +149,7 @@ def test_resolve_tick_grip_drive_open_and_close():
     samples = np.array([[0.084], [0.024]], dtype=np.float64)
     open_drive = resolve_tick_grip_drive(samples, 0, G2_GRIPPER_PARAMS)
     close_drive = resolve_tick_grip_drive(samples, 1, G2_GRIPPER_PARAMS)
-    assert open_drive == pytest.approx(0.0)
+    assert open_drive == pytest.approx(G2_GRIPPER_PARAMS.open_pos)
     assert close_drive > open_drive
 
 
@@ -160,7 +159,7 @@ def test_mirror_grip_drive_floors_g2_and_lite6_visual_gap():
     g2_ctx = SimpleNamespace(gripper=G2_GRIPPER_PARAMS, obj_size=(obj_w, obj_w, obj_w))
     lite_ctx = SimpleNamespace(gripper=LITE6_GRIPPER_PARAMS, obj_size=(obj_w, obj_w, obj_w))
 
-    g2_floor = obj_w - G2_MIRROR_VISUAL_GAP_SHRINK_M
+    g2_floor = obj_w
     lite_floor = obj_w - LITE6_MIRROR_VISUAL_GAP_SHRINK_M
     assert mirror_grip_drive_for_gap_m(g2_ctx, 0.022) == pytest.approx(drive_for_gap_m(g2_floor, G2_GRIPPER_PARAMS))
     assert mirror_grip_drive_for_gap_m(g2_ctx, g2_floor + 0.001) == pytest.approx(

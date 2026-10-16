@@ -97,10 +97,20 @@ class SafetyPolicy:
     require_kinematics: bool = True
     require_collision: bool = True
     exemptions: tuple[CollisionExemption, ...] = ()
+    excluded_geometry_pairs: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if self.schema_version != 1:
             raise ValueError(f"unsupported safety schema_version: {self.schema_version}")
+        pairs = self.excluded_geometry_pairs
+        if any(
+            len(pair) != 2 or any(not isinstance(name, str) or not name.strip() for name in pair) or pair[0] == pair[1]
+            for pair in pairs
+        ):
+            raise ValueError("excluded_geometry_pairs must contain pairs of distinct geometry names")
+        if len({frozenset(pair) for pair in pairs}) != len(pairs):
+            raise ValueError("excluded_geometry_pairs cannot contain duplicate pairs")
+        object.__setattr__(self, "excluded_geometry_pairs", tuple(tuple(pair) for pair in pairs))
         finite = {
             "joint_limit_margin_rad": self.joint_limit_margin_rad,
             "z_min_m": self.z_min_m,

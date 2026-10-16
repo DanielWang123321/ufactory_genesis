@@ -22,6 +22,10 @@ from ufactory.grippers.lite6 import snap_object_to_lite6_glb_grasp
 
 def gap_m_from_drive(drive: float, gripper) -> float:
     """Map a gripper drive-DOF value back to a physical two-finger gap (m)."""
+    if gripper.family == "g2":
+        from ufactory.grippers.g2 import gripper_g2_sim_drive_to_gap_m
+
+        return gripper_g2_sim_drive_to_gap_m(drive)
     open_fraction = (float(drive) - gripper.close_pos) / (gripper.open_pos - gripper.close_pos)
     open_fraction = max(0.0, min(1.0, open_fraction))
     closed_gap = float(getattr(gripper, "closed_gap_m", 0.0))
@@ -81,11 +85,6 @@ def resolve_tick_grip_drive(samples: np.ndarray, tick_idx: int, gripper) -> floa
 # the object width still leaves ~1.1 mm air per face. Shrink the visual floor so
 # the teleported pads meet the cube sides without relying on contact.
 LITE6_MIRROR_VISUAL_GAP_SHRINK_M = 0.0022
-# Gripper G2: the drive→gap map is the SDK two-finger opening, but teleported
-# finger-link AABBs sit ~2 mm/side inside that number. A 22 mm preload plan on a
-# 30 mm cube therefore embeds ~2 mm/side in the kinematic mirror. Floor the
-# visual gap at obj_w - this shrink (~25.6 mm) so pads meet the faces.
-G2_MIRROR_VISUAL_GAP_SHRINK_M = 0.0044
 
 
 def mirror_grip_drive_for_gap_m(ctx: TrajSceneContext, gap_m: float) -> float:
@@ -104,7 +103,7 @@ def mirror_grip_drive_for_gap_m(ctx: TrajSceneContext, gap_m: float) -> float:
     if family == "lite6":
         shrink = LITE6_MIRROR_VISUAL_GAP_SHRINK_M
     elif family == "g2":
-        shrink = G2_MIRROR_VISUAL_GAP_SHRINK_M
+        shrink = 0.0  # The geometric G2 gap already measures the collision pad surfaces.
     if shrink is not None:
         gap = max(gap, obj_w - shrink)
     return drive_for_gap_m(gap, gripper)

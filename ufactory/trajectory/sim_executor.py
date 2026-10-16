@@ -17,14 +17,12 @@ import torch
 
 import genesis as gs
 
-from ufactory.simulation import G2ContactHoldController, object_finger_contact_forces_n
-from ufactory.trajectory.mirror_executor import gap_m_from_drive, resolve_tick_arm_q, resolve_tick_grip_drive
+from ufactory.simulation import object_finger_contact_forces_n
+from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
 
-# 6.9 mm: matches the prior Gripper-G2-only tuning (0.07 drive-radians at the
-# G2's 0.85-radian/84mm drive-to-gap ratio), expressed in physical gap units
-# and normalized by each gripper's effective open-close travel.
+# Legacy hold bias in physical gap units, normalized by each gripper's travel.
 DEFAULT_GRIPPER_HOLD_BIAS_GAP_M = 0.0069
 # Lite6: small flat pad + unified cube μ=1.0 / pad μ=1.2 need a slightly larger
 # post-contact hold bias than the prior 0.8 mm (tuned for μ=5.0) so friction
@@ -62,6 +60,17 @@ class SimReport:
     total_ticks: int = 0
     total_duration: float = 0.0
     metric_settle_ticks: int = 0
+    completed: bool = True
+    timeout_phase: str | None = None
+    failure_reason: str | None = None
+    physics_profile: str | None = None
+    physics_parameters: dict = field(default_factory=dict)
+    confirmations: dict = field(default_factory=dict)
+    timing_passed: bool = True
+    transport_passed: bool = False
+    acceptance: dict = field(default_factory=dict)
+    records: list[dict] = field(default_factory=list, repr=False)
+    record_paths: dict = field(default_factory=dict)
 
 
 def replay_sim(
@@ -75,6 +84,8 @@ def replay_sim(
     final_metric_settle_s: float = DEFAULT_FINAL_METRIC_SETTLE_S,
     on_phase: Callable[[PhaseStatus, Segment], None] | None = None,
     on_tick: Callable[[Segment, int], None] | None = None,
+    csv_path: object | None = None,
+    sim_report_path: object | None = None,
 ) -> SimReport:
     """Replay ``program`` in the Genesis scene and return a SimReport.
 
@@ -90,6 +101,18 @@ def replay_sim(
     ``on_tick`` runs after each commanded physics step and is intended for
     diagnostics that need to observe intra-segment ordering.
     """
+    if getattr(ctx.gripper, "family", "") == "g2":
+        from ufactory.simulation.g2_replay import replay_g2
+
+        return replay_g2(
+            program,
+            ctx,
+            final_metric_settle_s=final_metric_settle_s,
+            on_phase=on_phase,
+            on_tick=on_tick,
+            csv_path=csv_path,
+            sim_report_path=sim_report_path,
+        )
     robot = ctx.robot
     scene = ctx.scene
     ik_link = ctx.ik_link
@@ -119,16 +142,6 @@ def replay_sim(
 
     gripper = ctx.gripper
     current_grip_drive = drive_for_gap_m(gripper.open_gap_m, gripper)
-    g2_contact_hold = (
-        G2ContactHoldController(
-            1,
-            device=gs.device,
-            dtype=gs.tc_float,
-            initial_gap_m=float(gripper.open_gap_m),
-        )
-        if getattr(gripper, "family", "") == "g2"
-        else None
-    )
     last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy() if len(ctx.home_qpos) else None
     grasp_welded = False
     buffers = _TensorBuffers(
@@ -232,21 +245,6 @@ def replay_sim(
                     buffers=buffers,
                 )
                 _assert_finite_replay_state(ctx, phase=status.label, tick=t)
-                if g2_contact_hold is not None:
-                    requested_gap_m = float(samples[t, 0])
-                    current_grip_drive = _advance_g2_contact_hold(
-                        g2_contact_hold,
-                        ctx,
-                        requested_gap_m=requested_gap_m,
-                        closing=(
-                            gripper_holds_after_grasp
-                            and not is_opening
-                            and requested_gap_m < float(gripper.open_gap_m) - 1e-9
-                        ),
-                        release=is_opening,
-                    )
-                    if bool(g2_contact_hold.latched[0].item()):
-                        contact_hold_drive = current_grip_drive
                 if on_tick is not None:
                     on_tick(seg, t)
                 if (
@@ -263,12 +261,8 @@ def replay_sim(
                     )
                     current_grip_drive = contact_hold_drive
             if is_closing:
-                # Work in a "closedness" fraction (0=open, 1=closed) rather
-                # than the raw drive-DOF: this is monotonic in the same
-                # direction for both Gripper G2 (open=0.0 < close=0.85) and
-                # Lite6 (close=0.0 < open=0.0089), so the "hold a bit past
-                # actual contact, but never past the originally planned
-                # closedness" logic generalizes unchanged across grippers.
+                # The normalized closing fraction has the same direction for
+                # G2 and Lite6 despite their opposite joint directions.
                 if contact_hold_drive is not None:
                     current_grip_drive = contact_hold_drive
                 else:
@@ -303,15 +297,6 @@ def replay_sim(
                     buffers=buffers,
                 )
                 _assert_finite_replay_state(ctx, phase=status.label, tick=t)
-                if g2_contact_hold is not None:
-                    requested_gap_m = gap_m_from_drive(current_grip_drive, gripper)
-                    current_grip_drive = _advance_g2_contact_hold(
-                        g2_contact_hold,
-                        ctx,
-                        requested_gap_m=requested_gap_m,
-                        closing=requested_gap_m < float(gripper.open_gap_m) - 1e-9,
-                        release=False,
-                    )
                 if on_tick is not None:
                     on_tick(seg, t)
 
@@ -358,6 +343,10 @@ def replay_sim(
             torch.zeros((1, len(opening_only_grip_idx)), device=gs.device, dtype=gs.tc_float),
             opening_only_grip_idx,
         )
+    if csv_path is not None or sim_report_path is not None:
+        from ufactory.simulation.g2_replay import save_sim_report
+
+        save_sim_report(report, csv_path, sim_report_path)
     return report
 
 
@@ -369,30 +358,6 @@ class _TensorBuffers:
     gripper_cpu: torch.Tensor
     arm_numpy: np.ndarray | None = None
     gripper_numpy: np.ndarray | None = None
-
-
-def _advance_g2_contact_hold(
-    controller: G2ContactHoldController,
-    ctx: TrajSceneContext,
-    *,
-    requested_gap_m: float,
-    closing: bool,
-    release: bool,
-) -> float:
-    """Observe the completed physics tick and resolve the next G2 drive target."""
-
-    left_force, right_force = _object_finger_contact_forces_n(ctx)
-    measured_drive = _current_drive(ctx.robot, ctx.gripper_dof_idx)
-    measured_gap = gap_m_from_drive(measured_drive, ctx.gripper)
-    next_gap = controller.update(
-        requested_gap_m=torch.tensor([requested_gap_m], device=gs.device, dtype=gs.tc_float),
-        measured_gap_m=torch.tensor([measured_gap], device=gs.device, dtype=gs.tc_float),
-        left_force_n=left_force,
-        right_force_n=right_force,
-        closing=torch.tensor([closing], device=gs.device, dtype=torch.bool),
-        release=torch.tensor([release], device=gs.device, dtype=torch.bool),
-    )
-    return drive_for_gap_m(float(next_gap[0].item()), ctx.gripper)
 
 
 def _object_finger_contact_forces_n(ctx: TrajSceneContext) -> tuple[torch.Tensor, torch.Tensor]:

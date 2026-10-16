@@ -6,7 +6,8 @@ from typing import NamedTuple
 
 import torch
 
-from ufactory.grippers.g2 import GRIPPER_G2_SIM_CLOSE_DRIVE
+from ufactory.grippers.g2 import GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE
+from ufactory.grippers.g2_torch import drive_for_gap_m, pad_gap_m
 from ufactory.training.logic.common import action_penalty
 
 __all__ = [
@@ -115,12 +116,12 @@ class PickPlaceTaskState(NamedTuple):
 
 def gap_m_to_drive(gap_m: torch.Tensor, close_gap_m: float, open_gap_m: float) -> torch.Tensor:
     clipped = torch.clamp(gap_m, close_gap_m, open_gap_m)
-    return GRIPPER_G2_SIM_CLOSE_DRIVE * (1.0 - clipped / open_gap_m)
+    return drive_for_gap_m(clipped)
 
 
 def drive_to_gap_m(drive: torch.Tensor, open_gap_m: float) -> torch.Tensor:
-    clipped = torch.clamp(drive, 0.0, GRIPPER_G2_SIM_CLOSE_DRIVE)
-    return open_gap_m * (1.0 - clipped / GRIPPER_G2_SIM_CLOSE_DRIVE)
+    clipped = torch.clamp(drive, GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE)
+    return pad_gap_m(clipped).clamp(0, open_gap_m)
 
 
 def arm_target_qpos(

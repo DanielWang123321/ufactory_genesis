@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M, GRIPPER_G2_SIM_CLOSE_DRIVE
+from ufactory.grippers.g2 import GRIPPER_G2_OPEN_GAP_M, GRIPPER_G2_SIM_CLOSE_DRIVE, GRIPPER_G2_SIM_OPEN_DRIVE
 from ufactory.training.logic import (
     action_penalty,
     action_to_cartesian_delta,
@@ -395,9 +395,9 @@ def test_layout_offsets_follow_the_complete_existing_observation_prefix() -> Non
 def test_gap_drive_roundtrip_endpoints() -> None:
     open_t = torch.tensor([OPEN])
     closed_t = torch.tensor([0.0])
-    assert gap_m_to_drive(open_t, 0.0, OPEN).item() == pytest.approx(0.0, abs=1e-6)
+    assert gap_m_to_drive(open_t, 0.0, OPEN).item() == pytest.approx(GRIPPER_G2_SIM_OPEN_DRIVE, abs=1e-6)
     assert gap_m_to_drive(closed_t, 0.0, OPEN).item() == pytest.approx(CLOSE_DRIVE, abs=1e-6)
-    assert drive_to_gap_m(torch.tensor([0.0]), OPEN).item() == pytest.approx(OPEN, abs=1e-6)
+    assert drive_to_gap_m(torch.tensor([GRIPPER_G2_SIM_OPEN_DRIVE]), OPEN).item() == pytest.approx(OPEN, abs=1e-6)
     assert drive_to_gap_m(torch.tensor([CLOSE_DRIVE]), OPEN).item() == pytest.approx(0.0, abs=1e-6)
 
 

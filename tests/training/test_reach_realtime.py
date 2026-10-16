@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import random
 import sys
 from types import SimpleNamespace
@@ -19,6 +20,10 @@ from examples.rl.reach import visualize as vis_realtime
 from examples.rl.reach.realtime_env import RealtimeReachEnv
 from examples.rl.reach.realtime_viewer import RealtimeClock, warmup
 from examples.rl.reach.env import XArm6ReachEnv
+
+
+def test_visualize_import_does_not_force_glx() -> None:
+    assert os.environ.get("PYOPENGL_PLATFORM") != "glx"
 
 
 @pytest.mark.parametrize("entry", ["evaluate", "visualize"])

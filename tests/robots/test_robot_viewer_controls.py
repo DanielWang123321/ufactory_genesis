@@ -79,7 +79,7 @@ class _FakeScene:
             return object()
         return self.robot
 
-    def build(self):
+    def build(self, **kwargs):
         pass
 
     def step(self, *args, **kwargs):
@@ -132,7 +132,7 @@ def _load_robot_viewer(monkeypatch):
     return importlib.import_module("ufactory.visualization.robot_viewer")
 
 
-def test_gripper_demo_without_pd_holds_arm_kinematically(monkeypatch):
+def test_g2_demo_holds_arm_with_pd_and_only_drives_master(monkeypatch, tmp_path):
     robot_viewer = _load_robot_viewer(monkeypatch)
     robot = _FakeRobot()
     scene = _FakeScene(robot)
@@ -144,22 +144,45 @@ def test_gripper_demo_without_pd_holds_arm_kinematically(monkeypatch):
     monkeypatch.setattr(robot_viewer, "enable_glb_pbr_surfaces", lambda: None)
     monkeypatch.setattr(robot_viewer, "glb_view_surface", lambda: object())
     monkeypatch.setattr(robot_viewer, "setup_arm_pd", lambda *args: arm_pd_calls.append(args))
+    monkeypatch.setattr(robot_viewer, "resolve_robot_link", lambda *_args: object())
+    monkeypatch.setattr("ufactory.kinematics.genesis.solve_link6_ik", lambda *_args, **_kwargs: [0.0] * 5)
+    model = tmp_path / "fake.urdf"
+    model.write_text('<robot><joint name="drive_joint"/></robot>')
+
+    def setup_gripper(robot, drive, all_idx):
+        robot.set_dofs_kp([40], drive)
+        robot._ufactory_g2_controller = types.SimpleNamespace(gap_mm=lambda: 84)
+
+    monkeypatch.setattr(robot_viewer, "setup_gripper_pd", setup_gripper)
+    monkeypatch.setattr(
+        robot_viewer,
+        "set_gripper_pose",
+        lambda robot, drive, all_idx, value: robot.set_dofs_position([value] * len(all_idx), all_idx),
+    )
+    monkeypatch.setattr(
+        robot_viewer,
+        "control_gripper_pose",
+        lambda robot, drive, all_idx, value: robot.control_dofs_position([value], drive),
+    )
 
     robot_viewer.run_glb_viewer(
         get_robot_profile("xarm5_1305"),
-        "fake.urdf",
+        str(model),
         headless=True,
         pd_demo=False,
         gripper_demo=True,
+        headless_steps=2,
     )
 
     arm_dofs = set(range(5))
-    assert arm_pd_calls == []
-    assert not [call for call in robot.calls if call[0] == "control_position" and arm_dofs.intersection(call[1])]
+    assert len(arm_pd_calls) == 1
+    assert [call for call in robot.calls if call[0] == "control_position" and arm_dofs.intersection(call[1])]
     assert any(call == ("set_position", (0, 1, 2, 3, 4), True) for call in robot.calls)
     assert ("kp", (5,), None) in robot.calls
-    assert ("control_position", (5, 6, 7), None) in robot.calls
-    assert scene.step_count == 3
+    assert ("control_position", (5,), None) in robot.calls
+    assert ("control_position", (5, 6, 7), None) not in robot.calls
+    assert len([call for call in robot.calls if call[0] == "set_position" and 5 in call[1]]) == 1
+    assert scene.step_count == 5
 
 
 def test_kinematic_step_reholds_before_visual_update(monkeypatch):

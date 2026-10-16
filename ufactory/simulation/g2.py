@@ -1,8 +1,7 @@
-"""Genesis 1.3.3 stability policy for physical Gripper G2 contact scenes."""
+"""G2 physical stability policy: rigid substep guard, mimic equalities, pad contact forces."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 from numbers import Integral
 from typing import Any, Mapping
@@ -11,7 +10,8 @@ import numpy as np
 import torch
 
 
-G2_PHYSICS_PROFILE = "g2_stable_v1_3_3"
+from ufactory.config.models import G2_PHYSICS_PROFILE
+
 G2_MAX_RIGID_SUBSTEP_DT_S = 0.000625
 # Genesis solver tuple:
 # (timeconst, dampratio, dmin, dmax, width, midpoint, power).
@@ -31,186 +31,6 @@ G2_MIMIC_EQUALITY_NAMES = frozenset(
         "mimic_right_inner_knuckle_joint_to_drive_joint",
     }
 )
-
-
-@dataclass(frozen=True)
-class G2ContactHoldPolicy:
-    """Fixed physical force-hold policy shared by trajectory and RL control."""
-
-    contact_threshold_n: float = 0.2
-    contact_confirm_steps: int = 2
-    # Empirical Genesis 1.3.3 G2 working point.  A 3 N target let the delayed
-    # position-driven linkage open through the load-bearing point during lift;
-    # 10 +/- 2 N retains transient margin while remaining well below the
-    # roughly 23 N produced by the former open-loop over-close command.
-    target_force_n: float = 10.0
-    force_deadband_n: float = 2.0
-    max_gap_step_m: float = 0.00025
-    latch_window_m: float = 0.002
-    contact_loss_steps: int = 3
-
-    def __post_init__(self) -> None:
-        finite_positive = (
-            self.contact_threshold_n,
-            self.target_force_n,
-            self.force_deadband_n,
-            self.max_gap_step_m,
-            self.latch_window_m,
-        )
-        if any(not math.isfinite(value) or value <= 0.0 for value in finite_positive):
-            raise ValueError("G2 contact-hold force and gap parameters must be finite and positive")
-        if self.force_deadband_n >= self.target_force_n:
-            raise ValueError("G2 contact-hold deadband must be smaller than its force target")
-        if self.contact_confirm_steps < 1 or self.contact_loss_steps < 1:
-            raise ValueError("G2 contact-hold confirmation counts must be positive")
-
-
-G2_CONTACT_HOLD_POLICY = G2ContactHoldPolicy()
-
-
-class G2ContactHoldController:
-    """Batched contact-confirmed gap regulator for a physical G2 drive joint.
-
-    The public command remains a physical two-finger gap.  Before contact it is
-    passed through unchanged.  Once both object-facing pads have carried load
-    for two consecutive steps, the measured contact gap is latched and a small,
-    bounded gap correction regulates the weaker pad around 10 N.  Release always
-    has priority and clears the latch immediately.
-    """
-
-    def __init__(
-        self,
-        num_envs: int,
-        *,
-        device: torch.device | str,
-        dtype: torch.dtype,
-        initial_gap_m: float,
-        policy: G2ContactHoldPolicy = G2_CONTACT_HOLD_POLICY,
-    ) -> None:
-        if int(num_envs) < 1:
-            raise ValueError("G2 contact-hold controller requires at least one environment")
-        if not math.isfinite(float(initial_gap_m)) or float(initial_gap_m) < 0.0:
-            raise ValueError("G2 contact-hold initial gap must be finite and non-negative")
-        self.num_envs = int(num_envs)
-        self.policy = policy
-        self.device = torch.device(device)
-        self.dtype = dtype
-        self.latched = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        self.contact_count = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
-        self.loss_count = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
-        self.latch_gap_m = torch.full(
-            (self.num_envs,),
-            float(initial_gap_m),
-            dtype=self.dtype,
-            device=self.device,
-        )
-        self.applied_gap_m = self.latch_gap_m.clone()
-
-    def reset(self, envs_idx: Any = None, *, gap_m: float | torch.Tensor | None = None) -> None:
-        """Clear selected latches and seed their next applied gap."""
-
-        idx = slice(None) if envs_idx is None else envs_idx
-        self.latched[idx] = False
-        self.contact_count[idx] = 0
-        self.loss_count[idx] = 0
-        if gap_m is not None:
-            value = torch.as_tensor(gap_m, device=self.device, dtype=self.dtype)
-            self.latch_gap_m[idx] = value
-            self.applied_gap_m[idx] = value
-
-    def prime(self, envs_idx: Any, gap_m: float | torch.Tensor) -> None:
-        """Start selected reset environments already holding at a known gap."""
-
-        value = torch.as_tensor(gap_m, device=self.device, dtype=self.dtype)
-        self.latched[envs_idx] = True
-        self.contact_count[envs_idx] = self.policy.contact_confirm_steps
-        self.loss_count[envs_idx] = 0
-        self.latch_gap_m[envs_idx] = value
-        self.applied_gap_m[envs_idx] = value
-
-    def update(
-        self,
-        *,
-        requested_gap_m: torch.Tensor,
-        measured_gap_m: torch.Tensor,
-        left_force_n: torch.Tensor,
-        right_force_n: torch.Tensor,
-        closing: torch.Tensor,
-        release: torch.Tensor,
-    ) -> torch.Tensor:
-        """Return the next bounded applied-gap target for each environment."""
-
-        requested = self._vector("requested_gap_m", requested_gap_m, self.dtype)
-        measured = self._vector("measured_gap_m", measured_gap_m, self.dtype)
-        left_force = self._vector("left_force_n", left_force_n, self.dtype)
-        right_force = self._vector("right_force_n", right_force_n, self.dtype)
-        closing_mask = self._vector("closing", closing, torch.bool)
-        release_mask = self._vector("release", release, torch.bool)
-        self._require_finite(requested, measured, left_force, right_force)
-
-        # Release has priority over every hold/reacquire path.
-        if bool(release_mask.any().item()):
-            self.reset(release_mask, gap_m=requested[release_mask])
-
-        bilateral = (left_force >= self.policy.contact_threshold_n) & (right_force >= self.policy.contact_threshold_n)
-        confirming = closing_mask & (~release_mask) & (~self.latched) & bilateral
-        self.contact_count = torch.where(
-            confirming,
-            self.contact_count + 1,
-            torch.zeros_like(self.contact_count),
-        )
-        newly_latched = confirming & (self.contact_count >= self.policy.contact_confirm_steps)
-        if bool(newly_latched.any().item()):
-            self.latched[newly_latched] = True
-            self.latch_gap_m[newly_latched] = measured[newly_latched]
-            # Preserve the existing closing preload.  Jumping straight from the
-            # requested close command to the larger measured contact gap removes
-            # position stiffness exactly when the lift begins.
-            self.applied_gap_m[newly_latched] = requested[newly_latched]
-
-        free = (~self.latched) & (~release_mask)
-        self.applied_gap_m[free] = requested[free]
-
-        holding = self.latched & (~release_mask)
-        lost = holding & (~bilateral)
-        self.loss_count = torch.where(lost, self.loss_count + 1, torch.zeros_like(self.loss_count))
-
-        weaker_force = torch.minimum(left_force, right_force)
-        # Position control has several frames of response delay during a lift.
-        # Preserve the prior target inside the deadband so contact spring-back
-        # cannot drag the target open, but cap every opening correction both by
-        # target slew and by measured-gap lead.  This is the anti-windup boundary:
-        # the regulator retains physical preload without accumulating millimetres
-        # of unseen opening command while the linkage is still catching up.
-        regulated = self.applied_gap_m.clone()
-        loaded = holding & bilateral
-        underloaded = loaded & (weaker_force < self.policy.target_force_n - self.policy.force_deadband_n)
-        overloaded = loaded & (weaker_force > self.policy.target_force_n + self.policy.force_deadband_n)
-        regulated[underloaded] = self.applied_gap_m[underloaded] - self.policy.max_gap_step_m
-        regulated[overloaded] = torch.minimum(
-            self.applied_gap_m[overloaded] + self.policy.max_gap_step_m,
-            measured[overloaded] + self.policy.max_gap_step_m,
-        )
-        reacquire = lost & (self.loss_count >= self.policy.contact_loss_steps)
-        regulated[reacquire] = self.applied_gap_m[reacquire] - self.policy.max_gap_step_m
-
-        lower = self.latch_gap_m - self.policy.latch_window_m
-        upper = self.latch_gap_m + self.policy.latch_window_m
-        regulated = torch.maximum(lower, torch.minimum(upper, regulated))
-        self.applied_gap_m[holding] = regulated[holding]
-        return self.applied_gap_m.clone()
-
-    def _vector(self, name: str, value: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
-        tensor = torch.as_tensor(value, device=self.device, dtype=dtype)
-        if tensor.shape != (self.num_envs,):
-            raise ValueError(f"{name} must have shape ({self.num_envs},), got {tuple(tensor.shape)}")
-        return tensor
-
-    @staticmethod
-    def _require_finite(*values: torch.Tensor) -> None:
-        for value in values:
-            if not bool(torch.isfinite(value).all().item()):
-                raise RuntimeError("G2 contact-hold input contains NaN or Inf")
 
 
 def object_finger_contact_forces_n(
@@ -312,9 +132,6 @@ def configure_g2_mimic_constraints(robot: Any) -> int:
 
 
 __all__ = [
-    "G2_CONTACT_HOLD_POLICY",
-    "G2ContactHoldController",
-    "G2ContactHoldPolicy",
     "G2_MAX_RIGID_SUBSTEP_DT_S",
     "G2_MIMIC_CONSTRAINT_SOL_PARAMS",
     "G2_MIMIC_EQUALITY_NAMES",

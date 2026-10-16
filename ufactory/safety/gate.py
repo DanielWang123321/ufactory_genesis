@@ -13,6 +13,7 @@ from collections.abc import Iterable
 import numpy as np
 
 from ufactory.config.models import ResolvedRuntimeConfig
+from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.safety.approved import ApprovedProgram, issue_approved_program
 from ufactory.safety.interfaces import CollisionBackend, CollisionResult, KinematicsBackend
@@ -28,8 +29,12 @@ from ufactory.safety.sdk_sim import (
     SdkSimulationEvidence,
     stream_sha256,
 )
-from ufactory.trajectory.segments import Program
+from ufactory.trajectory.segments import Program, Segment
 from ufactory.types import FloatArray
+
+# Stationary-seed projection only absorbs FK disagreement between IK backends
+# (measured <= 1.4e-4 rad). Larger offsets are real motion and stay in the timeline.
+_STATIONARY_SEED_MAX_PROJECTION_RAD = 1e-3
 
 
 @dataclass(frozen=True)
@@ -134,6 +139,63 @@ class SafetyGate:
         if np.any(self.joint_lower_rad >= self.joint_upper_rad):
             raise ValueError("joint lower bounds must be below upper bounds")
 
+    def _project_stationary_seed(
+        self,
+        program: Program,
+        segment: Segment,
+        start_q: FloatArray,
+        samples: FloatArray,
+    ) -> FloatArray | None:
+        """Put a held joint seed on the following Cartesian start.
+
+        Genesis and Pinocchio can disagree by a few micrometres on the same
+        joint vector. Leaving that point in the finite-difference stream makes
+        the first planned acceleration step look faster than the Cartesian
+        command. A stationary seed is re-solved onto ``pose_start``; a segment
+        that already moves is left unchanged.
+
+        The executor still sends the original seed, so the projection is
+        bounded by ``_STATIONARY_SEED_MAX_PROJECTION_RAD``. A larger offset is
+        not projected and is checked as real motion.
+        """
+
+        if self.kinematics is None or segment.pose_start is not None:
+            return None
+        if start_q.shape != (self.config.robot.dof,) or not np.all(np.isfinite(start_q)):
+            return None
+        if samples.ndim != 2 or samples.shape[1] != self.config.robot.dof:
+            return None
+        if float(np.max(np.abs(samples - start_q))) > 1e-8:
+            return None
+        if segment.q_end is not None:
+            end_q = np.asarray(segment.q_end, dtype=np.float64).reshape(-1)
+            if end_q.shape != start_q.shape or float(np.max(np.abs(end_q - start_q))) > 1e-8:
+                return None
+        pose_start: FloatArray | None = None
+        seen = False
+        for later in program.segments:
+            if not seen:
+                if later is segment:
+                    seen = True
+                continue
+            if later.kind == "movel" and later.pose_start is not None:
+                pose_start = np.asarray(later.pose_start, dtype=np.float64).reshape(3)
+                break
+            if later.kind == "movej":
+                return None
+        if pose_start is None or pose_start.shape != (3,) or not np.all(np.isfinite(pose_start)):
+            return None
+        pose = np.concatenate((pose_start, np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64)))
+        try:
+            projected = np.asarray(self.kinematics.inverse(pose, start_q), dtype=np.float64).reshape(-1)
+        except Exception:
+            return None
+        if projected.shape != start_q.shape or not np.all(np.isfinite(projected)):
+            return None
+        if float(np.max(np.abs(projected - start_q))) > _STATIONARY_SEED_MAX_PROJECTION_RAD:
+            return None
+        return projected
+
     def _build_timeline(self, program: Program) -> tuple[_Timeline | None, list[SafetyViolation]]:
         violations: list[SafetyViolation] = []
         if self.kinematics is None and self.config.safety.require_kinematics:
@@ -174,6 +236,10 @@ class SafetyGate:
                 q_segment = samples
                 if current_q is None and segment.q_start is not None:
                     start_q = np.asarray(segment.q_start, dtype=np.float64).reshape(-1)
+                    projected = self._project_stationary_seed(program, segment, start_q, samples)
+                    if projected is not None:
+                        start_q = projected
+                        q_segment = np.repeat(projected[None, :], len(samples), axis=0)
                     if start_q.shape == (self.config.robot.dof,) and np.all(np.isfinite(start_q)):
                         q_segment = np.concatenate((start_q[None, :], q_segment), axis=0)
                 drive_segment: FloatArray = np.full(len(q_segment), current_drive, dtype=np.float64)
@@ -255,9 +321,12 @@ class SafetyGate:
                         _violation(ViolationType.INVALID_INPUT, stage, "gripper gap exceeds configured range")
                     )
                     continue
-                drive_segment = self.config.gripper.closed_drive + ratios * (
-                    self.config.gripper.open_drive - self.config.gripper.closed_drive
-                )
+                if self.config.gripper.adapter == "g2":
+                    drive_segment = np.asarray([gripper_g2_gap_m_to_sim_drive(gap) for gap in gaps])
+                else:
+                    drive_segment = self.config.gripper.closed_drive + ratios * (
+                        self.config.gripper.open_drive - self.config.gripper.closed_drive
+                    )
                 current_drive = float(drive_segment[-1])
             for q, drive in zip(q_segment, drive_segment, strict=True):
                 if not np.all(np.isfinite(q)):

@@ -66,7 +66,7 @@
     <parent link="xarm_gripper_base_link"/>
     <child link="left_outer_knuckle"/>
     <axis xyz="1 0 0"/>
-    <limit effort="50" lower="0" upper="0.85" velocity="2"/>
+    <limit effort="50" lower="0.057210812728026743" upper="0.86509464599328212" velocity="2.608067454724"/>
   </joint>
   <link name="left_finger">
     <inertial>
@@ -93,7 +93,7 @@
     <parent link="left_outer_knuckle"/>
     <child link="left_finger"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="50" lower="0" upper="0.85" velocity="2"/>
+    <limit effort="50" lower="0.057210812728026743" upper="0.86509464599328212" velocity="2.608067454724"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
   <link name="left_inner_knuckle">
@@ -121,7 +121,7 @@
     <parent link="xarm_gripper_base_link"/>
     <child link="left_inner_knuckle"/>
     <axis xyz="1 0 0"/>
-    <limit effort="50" lower="0" upper="0.85" velocity="2"/>
+    <limit effort="50" lower="0.057210812728026743" upper="0.86509464599328212" velocity="2.608067454724"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
   <link name="right_outer_knuckle">
@@ -149,7 +149,7 @@
     <parent link="xarm_gripper_base_link"/>
     <child link="right_outer_knuckle"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="50" lower="0" upper="0.85" velocity="2"/>
+    <limit effort="50" lower="0.057210812728026743" upper="0.86509464599328212" velocity="2.608067454724"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
   <link name="right_finger">
@@ -177,7 +177,7 @@
     <parent link="right_outer_knuckle"/>
     <child link="right_finger"/>
     <axis xyz="1 0 0"/>
-    <limit effort="50" lower="0" upper="0.85" velocity="2"/>
+    <limit effort="50" lower="0.057210812728026743" upper="0.86509464599328212" velocity="2.608067454724"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
   <link name="right_inner_knuckle">
@@ -205,7 +205,7 @@
     <parent link="xarm_gripper_base_link"/>
     <child link="right_inner_knuckle"/>
     <axis xyz="-1 0 0"/>
-    <limit effort="50" lower="0" upper="0.85" velocity="2"/>
+    <limit effort="50" lower="0.057210812728026743" upper="0.86509464599328212" velocity="2.608067454724"/>
     <mimic joint="drive_joint" multiplier="1" offset="0"/>
   </joint>
   <link name="link_tcp"/>

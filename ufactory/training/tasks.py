@@ -13,6 +13,21 @@ from ufactory.training.recipe import load_training_recipe
 
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
 REACH_RL_ROBOTS = ("xarm6", "xarm6_1305")
+# RL keeps the no-slip pass off: noslip_iterations=5 slows the 20480-environment
+# batch about 7x on an RTX 5090. Held cubes therefore still creep about 2.4 mm/s;
+# deterministic pick-place and packaging use the G2 default instead.
+PICK_PLACE_RL_NOSLIP_ITERATIONS = 0
+
+
+def load_pick_place_rl_runtime_config(robot: str, *, config_path: str | Path | None = None) -> Any:
+    """Resolve the runtime configuration shared by pick-place RL training and evaluation."""
+
+    return load_runtime_config(
+        robot,
+        task="pick_place",
+        config_path=config_path,
+        overrides={"simulation.noslip_iterations": PICK_PLACE_RL_NOSLIP_ITERATIONS},
+    )
 
 
 def build_train_config(
@@ -38,10 +53,11 @@ def build_pick_place_task_configs(
     """Resolve the retained xArm6 + Gripper G2 pick-place RL task."""
 
     from ufactory.simulation import G2_PHYSICS_PROFILE
+    from ufactory.simulation.g2_model import g2_physics_summary, G2_KP, G2_KV
 
     if robot not in PICK_PLACE_RL_ROBOTS:
         raise ValueError("the v0.2.13 pick-place RL environment supports only xArm6 + Gripper G2")
-    config = load_runtime_config(robot, task="pick_place", config_path=runtime_config_path)
+    config = load_pick_place_rl_runtime_config(robot, config_path=runtime_config_path)
     if config.gripper is None or config.gripper.adapter != "g2":
         raise ValueError("the pick-place RL environment requires Gripper G2")
     params = config.task.parameters
@@ -52,6 +68,11 @@ def build_pick_place_task_configs(
         {
             "runtime_config_sha256": config.sha256,
             "physics_profile": G2_PHYSICS_PROFILE,
+            "g2": {
+                "speed_percent": config.simulation.g2.speed_percent,
+                "force_percent": config.simulation.g2.force_percent,
+            },
+            "g2_physics": g2_physics_summary(simulation=config.simulation, rate_hz=1 / float(params["control_dt_s"])),
             "episode_length_s": float(params["episode_length_s"]),
             "ctrl_dt": float(params["control_dt_s"]),
             "table_height": float(params["table_height_m"]),
@@ -106,8 +127,8 @@ def build_pick_place_task_configs(
         "kv": list(config.arm.kv),
         "force_lower": list(config.arm.force_lower_nm),
         "force_upper": list(config.arm.force_upper_nm),
-        "gripper_kp": gripper.kp,
-        "gripper_kv": gripper.kv,
+        "gripper_kp": G2_KP,
+        "gripper_kv": G2_KV,
         "gripper_force_lower": gripper.force_lower_n,
         "gripper_force_upper": gripper.force_upper_n,
         "all_gripper_joint_names": list(gripper.all_joint_names),

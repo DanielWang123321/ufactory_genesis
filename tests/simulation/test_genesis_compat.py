@@ -222,6 +222,7 @@ def test_installed_genesis_matches_runtime_and_hook_contracts():
 
 
 def test_start_deferred_viewer_resolves_options_from_scene_options(monkeypatch):
+    pytest.importorskip("genesis")
     from ufactory.visualization.viewer import start_deferred_viewer
 
     viewer_options = SimpleNamespace(res=(800, 600), run_in_thread=True, realtime_factor=1.0, refresh_rate=60)
@@ -249,6 +250,7 @@ def test_start_deferred_viewer_resolves_options_from_scene_options(monkeypatch):
 
 
 def test_start_deferred_viewer_primes_visual_states_before_build(monkeypatch):
+    pytest.importorskip("genesis")
     from ufactory.visualization.viewer import start_deferred_viewer
 
     calls: list[str] = []

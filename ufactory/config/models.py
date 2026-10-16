@@ -11,6 +11,12 @@ from ufactory.safety.models import SafetyPolicy
 
 
 FloatTuple = tuple[float, ...]
+G2_PHYSICS_PROFILE = "g2_calibrated_v1"
+# Pyramidal friction with soft constraints lets a held cube creep (about 2.4 mm/s
+# at 38 N); the no-slip post-pass removes it without changing normal forces.
+# Five iterations converge on GPU; one is worse than none and three leave little
+# packaging placement margin.
+G2_NOSLIP_ITERATIONS = 5
 
 
 def _immutable_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -204,6 +210,21 @@ class MotionConfig:
 
 
 @dataclass(frozen=True)
+class G2SimulationConfig:
+    """SDK position and percentage commands for the calibrated G2 servo."""
+
+    position_mm: float = 0.0
+    speed_percent: float = 50.0
+    force_percent: float = 50.0
+
+    def __post_init__(self) -> None:
+        for name, low, high in (("position_mm", 0, 84), ("speed_percent", 0, 100), ("force_percent", 1, 100)):
+            value = float(getattr(self, name))
+            if not math.isfinite(value) or not low <= value <= high:
+                raise ValueError(f"simulation.g2.{name} must be finite and within {low}–{high}")
+
+
+@dataclass(frozen=True)
 class SimulationConfig:
     """Validated Genesis process and rigid-solver settings."""
 
@@ -219,6 +240,7 @@ class SimulationConfig:
     constraint_time_constant_s: float
     use_gjk_collision: bool | None
     show_viewer: bool
+    g2: G2SimulationConfig = G2SimulationConfig()
 
     def __post_init__(self) -> None:
         if self.backend not in {"cpu", "gpu"}:

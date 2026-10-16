@@ -84,7 +84,7 @@ def _model_and_hashes(config: Any, calibration_path: Path | None, serial_number:
     return output, sha256_file(output), calibration.sha256
 
 
-def _backends(config: Any, urdf: Path) -> tuple[Any, Any]:
+def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[Any, Any]:
     passive = {config.gripper.drive_joint: config.gripper.open_drive} if config.gripper is not None else {}
     kinematics = PinocchioKinematicsBackend(
         urdf,
@@ -107,12 +107,17 @@ def _backends(config: Any, urdf: Path) -> tuple[Any, Any]:
             ee_link=config.robot.ee_link,
             passive_joint_positions=passive,
             adjacent_link_pairs=config.robot.adjacent_collision_pairs,
+            excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
             obstacles=obstacles,
         ),
         spawn_center_m=object_position,
         place_center_m=target_position,
         relocated_stages=OBJECT_RELOCATED_STAGES,
     )
+    if calibrated_g2 and config.gripper.adapter == "g2":
+        from ufactory.simulation.g2_adapter import G2ContactCollisionBackend
+
+        collision = G2ContactCollisionBackend(collision, object_width_m=object_size[1])
     return kinematics, collision
 
 
@@ -255,7 +260,9 @@ def _arm_q_from_scene(ctx: Any) -> np.ndarray:
     return q_full[arm_idx].copy()
 
 
-def _build_ik_scene(config: Any, *, calibration: Path | None, show_viewer: bool = False) -> Any:
+def _build_ik_scene(
+    config: Any, *, calibration: Path | None, show_viewer: bool = False, calibrated_g2: bool = False
+) -> Any:
     from ufactory.trajectory.scene import build_scene
 
     return build_scene(
@@ -271,6 +278,9 @@ def _build_ik_scene(config: Any, *, calibration: Path | None, show_viewer: bool 
         constraint_timeconst=config.simulation.constraint_time_constant_s,
         use_gjk_collision=config.simulation.use_gjk_collision,
         kinematics_yaml=str(calibration) if calibration is not None else None,
+        calibrated_g2=calibrated_g2,
+        g2_settings=config.simulation.g2,
+        excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
         **_scene_layout_kwargs(config),
     )
 
@@ -671,6 +681,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--calibration", type=Path)
     parser.add_argument("--confirm-real", action="store_true")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--csv", type=Path, help="Simulation execution samples")
+    parser.add_argument("--sim-report", type=Path, help="Simulation execution report")
+    parser.add_argument("--position-mm", type=float)
+    parser.add_argument("--speed-percent", type=float)
+    parser.add_argument("--force-percent", type=float)
     parser.add_argument(
         "--visual",
         action="store_true",
@@ -688,7 +703,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
 
-    config = load_runtime_config(args.robot, config_path=args.config)
+    g2_overrides = {
+        f"simulation.g2.{name}": getattr(args, name)
+        for name in ("position_mm", "speed_percent", "force_percent")
+        if getattr(args, name) is not None
+    }
+    if args.mode != "sim" and (g2_overrides or args.csv or args.sim_report):
+        parser.error("percentage commands and execution records require --mode sim")
+    config = load_runtime_config(args.robot, config_path=args.config, overrides=g2_overrides)
+    if args.mode == "sim" and config.gripper.adapter == "g2" and config.simulation.g2.speed_percent <= 0:
+        parser.error("automatic G2 manipulation requires --speed-percent > 0")
     if args.backend is not None:
         config = override_simulation_backend(config, args.backend)
     if args.print_config:
@@ -717,12 +741,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     try:
         urdf, urdf_hash, calibration_hash = _model_and_hashes(config, args.calibration, serial)
-        kinematics, collision = _backends(config, urdf)
         ik_ctx = None
         q_home: np.ndarray | None = None
         genesis_for_ik = None
         try:
-            if args.executor == "servo_j":
+            if args.mode == "sim":
+                from ufactory.simulation.g2_confirmation import prepare_g2_program
+
+                genesis_for_ik = GenesisRuntimeManager(config.simulation)
+                genesis_for_ik.__enter__()
+                ik_ctx = _build_ik_scene(config, calibration=args.calibration, calibrated_g2=True)
+                urdf = Path(ik_ctx.robot_urdf_path)
+                urdf_hash = sha256_file(urdf)
+                kinematics, collision = _backends(config, urdf, calibrated_g2=True)
+                q_home = _arm_q_from_scene(ik_ctx)
+                program = _build_program(config, q_home=q_home)
+                if config.gripper.adapter == "g2":
+                    program = prepare_g2_program(program, config.simulation.g2)
+                if args.executor == "servo_j":
+                    program = compile_cartesian_program_to_joint_stream(program, ik_ctx)
+            elif args.executor == "servo_j":
+                kinematics, collision = _backends(config, urdf)
                 print(
                     "[ik-compile] building Genesis scene and compiling servo_j trajectory...",
                     flush=True,
@@ -737,6 +776,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 _print_ik_compile_complete(program, elapsed_s=time.perf_counter() - ik_started)
             else:
+                kinematics, collision = _backends(config, urdf)
                 program = _build_program(config, kinematics)
             scene_hash = _json_sha256(
                 {"task": dict(config.task.parameters), "contacts": dict(config.task.allowed_contacts)}
@@ -761,30 +801,40 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.mode == "dry-run":
                 return 0
             if args.mode == "sim":
+                assert ik_ctx is not None
                 approved = gate.approve_simulation(program, preflight)
                 from ufactory.trajectory.sim_executor import replay_sim
 
                 show_viewer = bool(args.visual) or bool(config.simulation.show_viewer)
-                if ik_ctx is not None:
-                    if show_viewer:
-                        _open_sim_viewer(ik_ctx)
-                    sim_report = execute_sim(approved, lambda checked: replay_sim(checked, ik_ctx))
-                    if show_viewer:
-                        _hold_viewer(ik_ctx)
-                else:
-                    with GenesisRuntimeManager(config.simulation):
-                        ctx = _build_ik_scene(config, calibration=None, show_viewer=False)
-                        if show_viewer:
-                            _open_sim_viewer(ctx)
-                        sim_report = execute_sim(approved, lambda checked: replay_sim(checked, ctx))
-                        if show_viewer:
-                            _hold_viewer(ctx)
+                if show_viewer:
+                    _open_sim_viewer(ik_ctx)
+                sim_report = execute_sim(
+                    approved,
+                    lambda checked: replay_sim(checked, ik_ctx, csv_path=args.csv, sim_report_path=args.sim_report),
+                )
+                if show_viewer:
+                    _hold_viewer(ik_ctx)
                 print(
                     f"place_error_mm={sim_report.place_error_mm:.3f} "
                     f"home_drift_mm={sim_report.home_drift_mm:.3f} "
                     f"metric_settle_ticks={sim_report.metric_settle_ticks}"
                 )
-                return 0 if sim_report.place_error_mm < 50.0 and sim_report.home_drift_mm < 10.0 else 1
+                if config.gripper.adapter == "g2":
+                    print(
+                        f"completed={sim_report.completed} timing={'PASS' if sim_report.timing_passed else 'FAIL'} "
+                        f"transport={'PASS' if sim_report.transport_passed else 'FAIL'}"
+                    )
+                if sim_report.failure_reason:
+                    print(sim_report.failure_reason)
+                return (
+                    0
+                    if sim_report.completed
+                    and sim_report.timing_passed
+                    and (config.gripper.adapter != "g2" or sim_report.transport_passed)
+                    and sim_report.place_error_mm < 50.0
+                    and sim_report.home_drift_mm < 10.0
+                    else 1
+                )
 
             assert arm is not None and serial is not None
             home_xyz = _home_xyz_m(config)

@@ -62,6 +62,7 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
         show_viewer=show_viewer,
         robot_urdf_path=str(urdf),
         runtime_config=config,
+        calibrated_g2=False,
     )
     standard_offset = (0.0, 0.0)
     showcase_ctx = init_showcase_robot(
@@ -71,6 +72,7 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
         runtime_config=config,
         cartesian_xy_offset_m=standard_offset,
         arm_kp_scale=1.0,
+        calibrated_g2=False,
     )
     traj_ctx = _trajectory_context(
         scene,
@@ -84,7 +86,7 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
     return traj_ctx
 
 
-def _backends(config: Any, urdf: Path) -> tuple[Any, Any]:
+def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[Any, Any]:
     if config.gripper is None:
         raise ValueError("packaging requires a configured gripper")
     layout = packaging_layout(config)
@@ -103,12 +105,17 @@ def _backends(config: Any, urdf: Path) -> tuple[Any, Any]:
             ee_link=config.robot.ee_link,
             passive_joint_positions=passive,
             adjacent_link_pairs=config.robot.adjacent_collision_pairs,
+            excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
             obstacles=packaging_obstacles(layout),
         ),
         spawn_center_m=layout.object_position_m,
         place_center_m=layout.target_position_m,
         relocated_stages=OBJECT_RELOCATED_STAGES,
     )
+    if calibrated_g2 and config.gripper.adapter == "g2":
+        from ufactory.simulation.g2_adapter import G2ContactCollisionBackend
+
+        collision = G2ContactCollisionBackend(collision, object_width_m=layout.object_size_m[1])
     return kinematics, collision
 
 
@@ -139,6 +146,10 @@ def _run_sim(args: argparse.Namespace) -> int:
         sim_args.append("--visual")
     if args.capture_keyframes:
         sim_args.append("--capture-keyframes")
+    for name in ("position_mm", "speed_percent", "force_percent", "csv", "sim_report", "report"):
+        value = getattr(args, name, None)
+        if value is not None:
+            sim_args.extend(("--" + name.replace("_", "-"), str(value)))
     return _packaging_simulation_main(sim_args)
 
 
@@ -172,12 +183,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--calibration", type=Path)
     parser.add_argument("--confirm-real", action="store_true")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--csv", type=Path)
+    parser.add_argument("--sim-report", type=Path)
+    parser.add_argument("--position-mm", type=float)
+    parser.add_argument("--speed-percent", type=float)
+    parser.add_argument("--force-percent", type=float)
     parser.add_argument("--visual", action="store_true")
     parser.add_argument("--speed", type=float, default=1.0, help="Simulation-only playback multiplier")
     parser.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
     parser.add_argument("--table-height", type=float, default=None)
     parser.add_argument("--capture-keyframes", action="store_true")
     args = parser.parse_args(argv)
+    g2_overrides = {
+        f"simulation.g2.{name}": getattr(args, name)
+        for name in ("position_mm", "speed_percent", "force_percent")
+        if getattr(args, name) is not None
+    }
+    if args.mode != "sim" and (g2_overrides or args.csv or args.sim_report):
+        parser.error("percentage commands and execution records require --mode sim")
 
     if args.speed <= 0.0:
         parser.error("--speed must be positive")
@@ -189,7 +212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("real packaging motion requires --confirm-real")
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
-    config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config)
+    config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config, overrides=g2_overrides)
     if args.backend is not None:
         config = override_simulation_backend(config, args.backend)
     if args.print_config:

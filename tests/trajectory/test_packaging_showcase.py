@@ -439,8 +439,8 @@ def test_packaging_sim_skips_preload_relax_and_steps_release_target() -> None:
     ("lift_z_mm", "place_error_mm", "home_drift_mm", "expected"),
     [
         (900.0, 5.0, 2.0, None),
+        (900.0, 45.0, 2.0, None),
         (800.0, 5.0, 2.0, "grasp/lift failed"),
-        (900.0, 30.0, 2.0, "place error"),
         (900.0, 5.0, 12.0, "home drift"),
     ],
 )
@@ -467,6 +467,22 @@ def test_packaging_cycle_failure_reason(
         assert reason is not None and expected in reason
 
 
+@pytest.mark.parametrize("transport_passed", [True, False])
+def test_packaging_g2_cycle_requires_transport_acceptance(transport_passed: bool) -> None:
+    from ufactory.config.models import G2_PHYSICS_PROFILE
+    from ufactory.manipulation.packaging.simulation import _cycle_failure_reason
+
+    report = SimReport(
+        phases=[PhaseStatus("lift", 0, 1, 0.02, 1.0, 1.0, obj_pos_mm=(0.0, 0.0, 900.0))],
+        home_drift_mm=2.0,
+        physics_profile=G2_PHYSICS_PROFILE,
+        transport_passed=transport_passed,
+    )
+    reason = _cycle_failure_reason(report, SimpleNamespace(table_top_z=0.75), SimpleNamespace())
+
+    assert reason == (None if transport_passed else "transport acceptance failed")
+
+
 @pytest.mark.gpu
 @pytest.mark.slow
 @pytest.mark.integration
@@ -474,11 +490,11 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
     from ufactory.manipulation.packaging.scene import build_packaging_scene
     from ufactory.manipulation.packaging.simulation import (
         _trajectory_context,
-        _with_sim_release_timing,
         init_showcase_robot,
         prepare_packaging_cycle,
     )
     from ufactory.simulation import GenesisRuntimeManager
+    from ufactory.simulation.g2_confirmation import prepare_g2_program
     from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
     from ufactory.trajectory.sim_executor import replay_sim
     from ufactory.visualization.glb import enable_glb_pbr_surfaces
@@ -497,7 +513,7 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
             place_xy_offset_m=(0.0, 0.0),
         )
         program = compile_cartesian_program_to_joint_stream(source, traj_ctx)
-        program = _with_sim_release_timing(program, speed=1.0)
+        program = prepare_g2_program(program, config.simulation.g2)
 
         release_start: dict[str, float] = {}
         release_ticks: list[tuple[int, float, float]] = []
@@ -510,14 +526,14 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
             return max(abs(float(left[0] - right[0])), abs(float(left[1] - right[1])))
 
         def _on_phase(_status, segment) -> None:
-            if segment.label in {"home->pregrasp", "grip-settle"}:
+            if segment.label in {"home->pregrasp", "grip"}:
                 obj = block.get_pos()[0]
                 finger_mid = (traj_ctx.left_finger.get_pos()[0] + traj_ctx.right_finger.get_pos()[0]) / 2.0
                 horizontal_center_errors_m[segment.label] = math.hypot(
                     float(finger_mid[0] - obj[0]),
                     float(finger_mid[1] - obj[1]),
                 )
-            if segment.label == "grip-settle":
+            if segment.label == "grip":
                 contacts = block.get_contacts(with_entity=robot)
                 valid = contacts["valid_mask"][0]
                 link_a = contacts["link_a"][0]
@@ -556,7 +572,7 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
         assert report.home_drift_mm < 10.0
         assert max(phase.eside_arm_mm for phase in report.phases) < 20.0
         assert horizontal_center_errors_m["home->pregrasp"] < 0.001
-        assert horizontal_center_errors_m["grip-settle"] < 0.001
+        assert horizontal_center_errors_m["grip"] < 0.001
         assert bilateral_contact == {"left": True, "right": True}
         assert release_ticks
         start_z = release_start["object_z"]

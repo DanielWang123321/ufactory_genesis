@@ -27,7 +27,6 @@ environment:
   include_quality_observations: true
   include_contact_observations: true
   include_normalized_layout_offsets: false
-  use_contact_holding: true
   privileged_critic_obs: true
   strict_action_bounds: true
   # Hashed expert parameters shared by BC labelling and the observation hint.

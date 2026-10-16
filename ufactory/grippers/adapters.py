@@ -7,6 +7,7 @@ import math
 from typing import Protocol, runtime_checkable
 
 from ufactory.config.models import GripperProfile
+from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive, gripper_g2_sim_drive_to_gap_m
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,14 @@ class ConfiguredGripperAdapter:
 
 
 class G2Adapter(ConfiguredGripperAdapter):
+    def gap_to_drive(self, gap_m: float) -> float:
+        super().gap_to_drive(gap_m)  # Retain finite-value and configured-range validation.
+        return gripper_g2_gap_m_to_sim_drive(gap_m)
+
+    def drive_to_gap(self, drive: float) -> float:
+        super().drive_to_gap(drive)
+        return gripper_g2_sim_drive_to_gap_m(drive)
+
     def prepare_real(self, arm: object) -> int:
         code, error = getattr(arm, "get_gripper_err_code")()
         if int(code) != 0:

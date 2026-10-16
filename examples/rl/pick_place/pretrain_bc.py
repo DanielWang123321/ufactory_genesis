@@ -19,9 +19,9 @@ from pathlib import Path
 import torch
 from tensordict import TensorDict
 
-from ufactory.config import load_runtime_config
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import (
+    load_pick_place_rl_runtime_config,
     build_pick_place_task_configs,
     build_train_config,
     load_training_config,
@@ -644,11 +644,7 @@ def main() -> None:
     if log_dir.exists():
         raise FileExistsError(f"refusing to overwrite behaviour-cloning run: {log_dir}")
     log_dir.mkdir(parents=True)
-    runtime_config = load_runtime_config(
-        args.robot,
-        task="pick_place",
-        config_path=args.runtime_config,
-    )
+    runtime_config = load_pick_place_rl_runtime_config(args.robot, config_path=args.runtime_config)
     warm_start_state = None
     transfer_projection = None
     transfer_requires_initialization = False

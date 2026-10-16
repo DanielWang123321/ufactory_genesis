@@ -34,6 +34,7 @@ from ufactory.simulation import (
     make_rigid_options,
     validate_g2_contact_substeps,
 )
+from ufactory.simulation.collision import apply_collision_geometry_filters
 from ufactory.robots.paths import robot_visual_glb_urdf, robot_urdf
 from ufactory.robots.registry import joint_names
 from ufactory.robots.runtime import GripperControlParams, RobotRuntimeProfile, get_robot_runtime_profile
@@ -146,6 +147,9 @@ class TrajSceneContext:
     obj_mass_kg: float = 0.0
     obj_pos_base: tuple[float, float, float] = (0.0, 0.0, 0.0)
     place_pos_base: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    g2_settings: object | None = None
+    g2_controller: object | None = None
+    simulation_parameters: dict = field(default_factory=dict)
 
     def base_to_world(self, pos_base) -> list[float]:
         """Convert a base-frame xyz (m) to the Genesis world frame (m)."""
@@ -225,6 +229,7 @@ def _robot_defaults(robot_key: str) -> dict:
         "finger_close_descent_m": gripper_profile.finger_close_descent_m,
         "grasp_table_clearance_m": gripper_profile.grasp_table_clearance_m,
         "grasp_height_extra_m": gripper_profile.grasp_height_extra_m,
+        "excluded_geometry_pairs": config.safety.excluded_geometry_pairs,
     }
 
 
@@ -291,7 +296,7 @@ def build_scene(
     noslip_iterations: int = RIGID_NOSLIP_ITERATIONS,
     friction_cone: str = DEFAULT_FRICTION_CONE,
     contact_resolution: str = DEFAULT_CONTACT_RESOLUTION,
-    constraint_timeconst: float = RIGID_CONSTRAINT_TIMECONST,
+    constraint_timeconst: float | None = None,
     use_gjk_collision: bool | None = True,
     contact_sol_params: tuple[float, float, float, float, float, float, float] | None = None,
     base_pos: tuple[float, float, float] | None = None,
@@ -307,6 +312,9 @@ def build_scene(
     obj_mass_kg: float | None = None,
     lift_z: float | None = None,
     home_z: float | None = None,
+    calibrated_g2: bool = True,
+    g2_settings: object | None = None,
+    excluded_geometry_pairs: tuple[tuple[str, str], ...] | None = None,
 ) -> TrajSceneContext:
     """Build the single-env Genesis scene and configure PD gains + finger offsets.
 
@@ -372,6 +380,9 @@ def build_scene(
             robot_name=profile.robot_name,
             joint_count=profile.dof,
         )
+    is_calibrated_g2 = calibrated_g2 and gripper.family == "g2"
+    if constraint_timeconst is None:
+        constraint_timeconst = 0.00125 if is_calibrated_g2 else RIGID_CONSTRAINT_TIMECONST
     substep_dt = dt / int(substeps)
     constraint_timeconst = max(float(constraint_timeconst), 2.0 * substep_dt)
     camera_lookat = _base_to_world(robot_base, (0.30, 0.15, 0.10))
@@ -447,6 +458,9 @@ def build_scene(
         ),
     )
 
+    apply_collision_geometry_filters(
+        robot, defaults["excluded_geometry_pairs"] if excluded_geometry_pairs is None else excluded_geometry_pairs
+    )
     scene.build(n_envs=1)
 
     ee_link_name = profile.ee_link
@@ -510,6 +524,10 @@ def build_scene(
         torch.full((n_grip,), gripper.frictionloss, device=gs.device, dtype=gs.tc_float),
         all_gripper_dof_idx,
     )
+    if is_calibrated_g2:
+        from ufactory.simulation.g2_adapter import configure_g2_drive
+
+        configure_g2_drive(robot, damping=gripper.damping, frictionloss=gripper.frictionloss)
 
     dq = xyz_to_quat(
         torch.tensor([GRIPPER_DOWN_RPY_RAD], device=gs.device, dtype=gs.tc_float),
@@ -529,7 +547,12 @@ def build_scene(
     for i, idx in enumerate(arm_dof_idx):
         init_qpos[:, idx] = home_qpos_result[0, arm_dof_idx[i]]
     for idx in all_gripper_dof_idx:
-        init_qpos[:, idx] = gripper.open_pos
+        if is_calibrated_g2:
+            from ufactory.simulation.g2_model import G2Model
+
+            init_qpos[:, idx] = G2Model.load().linkage.drive_for_gap_m(0.084)
+        else:
+            init_qpos[:, idx] = gripper.open_pos
     robot.set_qpos(init_qpos)
     scene.step()
 
@@ -548,11 +571,13 @@ def build_scene(
     grasp_extra = float(defaults["grasp_height_extra_m"])
 
     grasp_link6_z = table_clearance + close_descent + pad_below_fc + finger_z_offset + grasp_extra
+    if is_calibrated_g2:
+        grasp_link6_z = dry_heights(profile.key).grasp_link6_z
     pre_grasp_link6_z = grasp_link6_z + 0.10
     lift_link6_z = lift_z
     home_qpos_np = init_qpos[0].detach().cpu().numpy().astype(np.float64).copy()
 
-    return TrajSceneContext(
+    ctx = TrajSceneContext(
         scene=scene,
         robot=robot,
         obj=obj,
@@ -585,17 +610,35 @@ def build_scene(
         obj_mass_kg=obj_mass_kg,
         obj_pos_base=obj_pos_base,
         place_pos_base=place_pos_base,
+        g2_settings=g2_settings,
+        simulation_parameters={
+            "rate_hz": rate,
+            "substeps": substeps,
+            "constraint_time_constant_s": constraint_timeconst,
+            "constraint_solver": constraint_solver,
+            "solver_iterations": solver_iterations,
+            "noslip_iterations": noslip_iterations,
+            "friction_cone": friction_cone,
+            "contact_resolution": contact_resolution,
+            "use_gjk_collision": use_gjk_collision,
+        },
     )
+    if is_calibrated_g2:
+        from ufactory.simulation.g2_adapter import G2GenesisController
+
+        robot.set_qpos(init_qpos, zero_velocity=True)
+        robot.control_dofs_position(init_qpos[:, arm_dof_idx], arm_dof_idx)
+        obj.set_pos(init_qpos.new_tensor([obj_pos_world]), zero_velocity=True)
+        ctx.g2_controller = G2GenesisController(robot, left_finger, right_finger, axis_link=ik_link)
+    return ctx
 
 
 def drive_for_gap_m(gap_m: float, gripper: GripperControlParams) -> float:
-    """Convert a physical two-finger gap (m) to the Genesis drive-DOF value.
+    """Convert pad gap (m) using G2 geometry or linear prismatic travel."""
+    if gripper.family == "g2":
+        from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive
 
-    Interpolates linearly between ``gripper.close_pos``
-    (gap=``closed_gap_m``) and ``gripper.open_pos``
-    (gap=``open_gap_m``); works for both Gripper G2 (open=0.0 < close=0.85)
-    and Lite6 (close=0.0 < open=0.0089) sign conventions.
-    """
+        return gripper_g2_gap_m_to_sim_drive(gap_m)
     closed_gap = float(getattr(gripper, "closed_gap_m", 0.0))
     open_gap = float(gripper.open_gap_m)
     span = open_gap - closed_gap

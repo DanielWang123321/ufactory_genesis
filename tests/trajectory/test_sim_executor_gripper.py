@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pytest
 import torch
 
 from ufactory.robots.runtime import G2_GRIPPER_PARAMS, LITE6_GRIPPER_PARAMS
+from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.trajectory.mirror_executor import gap_m_from_drive
 from ufactory.trajectory.segments import Program, Segment
@@ -41,6 +42,13 @@ def test_drive_gap_mapping_round_trips_physical_range(gripper, closed_gap, open_
     assert open_drive == pytest.approx(gripper.open_pos)
     assert gap_m_from_drive(close_drive, gripper) == pytest.approx(closed_gap)
     assert gap_m_from_drive(open_drive, gripper) == pytest.approx(open_gap)
+
+
+@pytest.mark.parametrize("gap_m", [0, 0.010, 0.02415587200800565, 0.030, 0.060, 0.084])
+def test_g2_trajectory_and_mirror_use_the_actual_joint_angle(gap_m):
+    q = drive_for_gap_m(gap_m, G2_GRIPPER_PARAMS)
+    assert q == pytest.approx(gripper_g2_gap_m_to_sim_drive(gap_m), abs=1e-14)
+    assert gap_m_from_drive(q, G2_GRIPPER_PARAMS) == pytest.approx(gap_m, abs=1e-12)
 
 
 def test_default_grasp_gaps_match_contact_preload_targets():
@@ -195,7 +203,9 @@ class _FakeCtx:
     place_xy: tuple[float, float] = (0.30, 0.30)
     place_pos_base: tuple[float, float, float] = (0.30, 0.30, 0.020)
     home_pos_base: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    gripper: object = G2_GRIPPER_PARAMS
+    # Generic legacy PD executor fixture. Calibrated G2 replay is covered by
+    # test_g2_replay.py and the physical manipulation matrix.
+    gripper: object = replace(G2_GRIPPER_PARAMS, family="test")
 
     def base_to_world(self, pos):
         return list(pos)
@@ -225,7 +235,7 @@ def test_replay_sim_holds_contact_limited_gripper_drive_after_close(monkeypatch)
 
     replay_sim(program, ctx)
 
-    gripper = G2_GRIPPER_PARAMS
+    gripper = ctx.gripper  # The legacy PD fixture uses a generic linear gripper.
     overclosed_target = drive_for_gap_m(0.024, gripper)
     # Hold closedness = actual contact-limited closedness + bias, capped at
     # the originally-planned target closedness (see sim_executor.replay_sim).
@@ -274,7 +284,7 @@ def test_replay_sim_calls_on_tick_after_each_commanded_physics_step(monkeypatch)
 
     scene = _FakeScene()
     ctx = _FakeCtx(
-        robot=_FakeRobot(contact_limited_drive=0.85),
+        robot=_FakeRobot(contact_limited_drive=G2_GRIPPER_PARAMS.close_pos),
         scene=scene,
         obj=_FakeObj(),
         ik_link=_FakeLink(),
@@ -320,7 +330,7 @@ def test_replay_sim_controls_mimic_dofs_only_while_opening(monkeypatch):
     monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
     monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
 
-    robot = _FakeRobot(contact_limited_drive=0.85)
+    robot = _FakeRobot(contact_limited_drive=G2_GRIPPER_PARAMS.close_pos)
     ctx = _FakeCtx(
         robot=robot,
         scene=_FakeScene(),
@@ -352,7 +362,7 @@ def test_replay_sim_uses_all_release_dofs_until_initial_clearance(monkeypatch):
     monkeypatch.setattr(sim_executor.gs, "device", torch.device("cpu"), raising=False)
     monkeypatch.setattr(sim_executor.gs, "tc_float", torch.float32, raising=False)
 
-    robot = _FakeRobot(contact_limited_drive=0.85)
+    robot = _FakeRobot(contact_limited_drive=G2_GRIPPER_PARAMS.close_pos)
     ctx = _FakeCtx(
         robot=robot,
         scene=_FakeScene(),

@@ -17,6 +17,7 @@ from ufactory.training import (
     PICK_PLACE_ACCEPTANCE_PROFILES,
     apply_pick_place_acceptance_profile,
     build_pick_place_task_configs,
+    load_pick_place_rl_runtime_config,
     load_scenario_bank,
     scenario_bank_sha256,
     validate_and_load_rsl_checkpoint,
@@ -40,7 +41,7 @@ except (metadata.PackageNotFoundError, ImportError) as e:
 from rsl_rl.runners import OnPolicyRunner
 
 import genesis as gs
-from ufactory.config import load_runtime_config
+from ufactory.config.models import G2_PHYSICS_PROFILE
 from ufactory.simulation.compat import require_genesis_runtime
 
 from .env import XArm6PickPlaceEnv
@@ -307,7 +308,6 @@ _EVALUATION_COMPATIBILITY_ENV_KEYS = (
     "include_quality_observations",
     "include_contact_observations",
     "include_ee_setpoint_residual",
-    "use_contact_holding",
     "privileged_critic_obs",
     "strict_action_bounds",
     "ctrl_dt",
@@ -388,7 +388,7 @@ def _run_expert_eval(args: argparse.Namespace) -> None:
         recipe_path=args.recipe,
         runtime_config_path=args.runtime_config,
     )
-    runtime_config = load_runtime_config("xarm6", task="pick_place", config_path=args.runtime_config)
+    runtime_config = load_pick_place_rl_runtime_config("xarm6", config_path=args.runtime_config)
     scenario_bank = _load_eval_scenario_bank(args, env_cfg, runtime_config)
     _resolve_episode_count(args, scenario_bank, default=8)
     pinned_stage = _pin_eval_curriculum_stage(env_cfg, args.stage if args.stage is not None else 0)
@@ -999,6 +999,19 @@ def _write_summary_json(
     summary = {
         "schema_version": 4,
         "checkpoint": str(ckpt_path),
+        "physics_profile": G2_PHYSICS_PROFILE,
+        "physics_transfer": bool(getattr(args, "allow_physics_transfer", False)),
+        "source_physics_profile": None if artifact is None else artifact["env"].get("physics_profile"),
+        "g2_physics": (
+            None
+            if runtime_config is None
+            else {
+                "speed_percent": runtime_config.simulation.g2.speed_percent,
+                "force_percent": runtime_config.simulation.g2.force_percent,
+                "constraint_time_constant_s": runtime_config.simulation.constraint_time_constant_s,
+                "noslip_iterations": runtime_config.simulation.noslip_iterations,
+            }
+        ),
         "checkpoint_sha256": None if manifest is None else manifest.checkpoint_sha256,
         "training_config_sha256": None if artifact is None else artifact["config_sha256"],
         "runtime_config_sha256": None if runtime_config is None else runtime_config.sha256,
@@ -1297,6 +1310,11 @@ def main():
         help="Optional episode CSV path; use 'auto' for reports/pick_place_eval_<timestamp>.csv",
     )
     parser.add_argument(
+        "--allow-physics-transfer",
+        action="store_true",
+        help="Evaluate an intact older checkpoint with current G2 dynamics",
+    )
+    parser.add_argument(
         "--allow-runtime-config-mismatch",
         action="store_true",
         default=False,
@@ -1439,7 +1457,7 @@ def main():
         raise FileNotFoundError(
             f"Missing {config_path}; checkpoint evaluation requires its original hashed training config"
         )
-    runtime_config = load_runtime_config("xarm6", task="pick_place", config_path=args.runtime_config)
+    runtime_config = load_pick_place_rl_runtime_config("xarm6", config_path=args.runtime_config)
     expected_hash = None if args.allow_runtime_config_mismatch else runtime_config.sha256
     expected_runtime_env = None
     if not args.allow_runtime_config_mismatch:
@@ -1458,6 +1476,7 @@ def main():
         expected_robot_key=runtime_config.robot.key,
         expected_runtime_config_sha256=expected_hash,
         expected_runtime_env=expected_runtime_env,
+        allow_physics_transfer=args.allow_physics_transfer,
     )
     artifacts = {ckpt_path: artifact}
     manifests = {ckpt_path: _manifest}
@@ -1474,6 +1493,7 @@ def main():
             expected_task="pick_place",
             expected_robot_key=runtime_config.robot.key,
             expected_runtime_config_sha256=expected_hash,
+            allow_physics_transfer=args.allow_physics_transfer,
         )
         artifacts[extra_ckpt] = extra_artifact
         manifests[extra_ckpt] = extra_manifest
@@ -1496,6 +1516,21 @@ def main():
     reward_cfg = deepcopy(artifact["reward"])
     robot_cfg = deepcopy(artifact["robot"])
     train_cfg = deepcopy(artifact["train"])
+    if args.allow_physics_transfer:
+        from ufactory.simulation.g2_model import g2_physics_summary
+
+        env_cfg.update(
+            physics_profile=G2_PHYSICS_PROFILE,
+            constraint_time_constant_s=runtime_config.simulation.constraint_time_constant_s,
+            noslip_iterations=runtime_config.simulation.noslip_iterations,
+            substeps=runtime_config.simulation.substeps,
+            g2={
+                "speed_percent": runtime_config.simulation.g2.speed_percent,
+                "force_percent": runtime_config.simulation.g2.force_percent,
+            },
+            g2_physics=g2_physics_summary(),
+        )
+        _stamp(f"Physics transfer: {artifact['env'].get('physics_profile')} -> {G2_PHYSICS_PROFILE}")
     robot_cfg["urdf_path"] = robot_urdf(
         runtime_config.robot.key,
         runtime_config.robot.urdf,

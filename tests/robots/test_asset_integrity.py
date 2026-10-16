@@ -41,6 +41,41 @@ def test_public_urdf_mesh_references_exist() -> None:
     assert missing == []
 
 
+def test_standard_g2_urdfs_share_joint_limits_and_mimic_linkage() -> None:
+    from ufactory.grippers.g2 import (
+        G2_LINKAGE_GEOMETRY,
+        GRIPPER_G2_SIM_OPEN_DRIVE,
+        GRIPPER_G2_SIM_CLOSE_DRIVE,
+        GRIPPER_G2_JOINT_VELOCITY_RAD_S,
+    )
+    from ufactory.simulation.g2_model import G2_JOINT_NAMES
+
+    models = []
+    for path in sorted((PROJECT_ROOT / "assets/urdf").rglob("*.urdf")):
+        root = ET.parse(path).getroot()
+        if root.find("./joint[@name='drive_joint']") is not None:
+            models.append((path, root))
+    assert len(models) == 11
+    for path, root in models:
+        for name in G2_JOINT_NAMES:
+            joint = root.find(f"./joint[@name='{name}']")
+            assert joint is not None, (path, name)
+            limit = joint.find("limit")
+            assert limit is not None, (path, name)
+            assert float(limit.attrib["lower"]) == GRIPPER_G2_SIM_OPEN_DRIVE, path
+            assert float(limit.attrib["upper"]) == GRIPPER_G2_SIM_CLOSE_DRIVE, path
+            assert float(limit.attrib["velocity"]) == GRIPPER_G2_JOINT_VELOCITY_RAD_S, path
+            if name != "drive_joint":
+                mimic = joint.find("mimic")
+                assert mimic is not None, (path, name)
+                assert mimic.get("joint") == "drive_joint", (path, name)
+                assert float(mimic.get("multiplier", "1")) == 1, (path, name)
+                assert float(mimic.get("offset", "0")) == 0, (path, name)
+    assert (
+        GRIPPER_G2_JOINT_VELOCITY_RAD_S * G2_LINKAGE_GEOMETRY.gap_jacobian_m_per_rad(GRIPPER_G2_SIM_OPEN_DRIVE) >= 0.225
+    )
+
+
 def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
     forbidden_markers = [
         "visual_glb_raw",

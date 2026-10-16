@@ -29,11 +29,19 @@ requires the commanded gripper gap to climb well above the close gap before a
 release latches. Checkpoints saved before this change evaluate with
 `--release-command-margin-m 0.0005`.
 
-The bundled seed-7 `model_299_g2stable.pt` (SHA-256 `f2142a63…f783f2`) was
-trained under the current `g2_stable_v1_3_3` physics profile and is the default
-evaluation target. The earlier seed-7 `model_299.pt`, trained under the preceding
-contact model, is no longer bundled: it has no `g2_stable_v1_3_3` physics-profile
-binding and the current evaluator rejects it by design.
+The current physics profile is `g2_calibrated_v1`: `kp=40`, `kv=5`, `ki=40`,
+0.01 kg·m² gripper joint armature and a 1.25 ms contact time constant. RL keeps
+`noslip_iterations: 0` (deterministic pick-place uses 5) because the no-slip pass
+makes the 20480-environment batch about 7× slower; held cubes therefore creep
+about 2.4 mm/s in the pad frame during training and evaluation. The policy
+keeps its existing position action, observation dimensions and reward functions;
+`simulation.g2` supplies speed and force percentages. See the [G2 guide](../../gripper_g2/README.md).
+
+Bundled seed-7 `model_299_g2stable.pt` (SHA-256 `f2142a63…f783f2`) remains
+unchanged under historical `g2_stable_v1_3_3` physics. Evaluating it requires
+`--allow-physics-transfer`; original config and checkpoint hashes are still checked.
+Older-physics checkpoints cannot fully resume training. Published historical success
+rates do not describe the new dynamics.
 
 ## Layered guidance disclosure
 
@@ -97,13 +105,18 @@ python -m examples.rl.pick_place.evaluate \
   --headless -B 8 --episodes 8 --acceptance-profile contact_v1
 ```
 
-The current fixed bank is bound to runtime config `654b538e…7ed` and has SHA-256
-`2238202c…eb0`:
+The archived bank remains bound to runtime config `654b538e…7ed` (SHA-256
+`2238202c…eb0`). Generate a separate bank for new dynamics:
+
+```bash
+python -m examples.rl.pick_place.make_scenario_bank --mode fixed --count 512 --seed 17000 \
+  --output reports/g2/fixed_seed17000_n512.json
+```
 
 ```bash
 python -m examples.rl.pick_place.evaluate \
   --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank examples/rl/pick_place/scenarios/fixed_seed17000_n512.json \
+  --scenario-bank reports/g2/fixed_seed17000_n512.json \
   --headless -B 64 --episodes 64 --acceptance-profile contact_v1 \
   --require-target standard
 ```
@@ -114,7 +127,7 @@ The formal action-noise trial uses standard deviation `0.02` and the new bank se
 ```bash
 python -m examples.rl.pick_place.evaluate \
   --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank examples/rl/pick_place/scenarios/fixed_seed17000_n512.json \
+  --scenario-bank reports/g2/fixed_seed17000_n512.json \
   --headless -B 64 --episodes 512 --acceptance-profile contact_v1 \
   --action-noise-std 0.02 --action-noise-bank 20260817 \
   --require-target robustness
@@ -134,7 +147,7 @@ zero action clipping, IK failures, and IK jump rejects:
 hold time, and every selected quality limit. A failed screening run is not promoted
 to a published artifact, even if training metrics or partial task stages look good.
 
-## Release result
+## Historical release result (`g2_stable_v1_3_3`)
 
 The bundled `model_299_g2stable.pt` was trained end to end under the
 `g2_stable_v1_3_3` profile on Genesis World 1.3.3. The 48-column observation

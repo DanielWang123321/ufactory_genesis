@@ -7,6 +7,7 @@ import math
 import xml.etree.ElementTree as ET
 
 from ufactory.robots.registry import RobotModelSpec, get_robot_profile, joint_names, robot_cli_choices
+from ufactory.grippers.g2 import GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE
 
 
 FloatTuple = tuple[float, ...]
@@ -61,10 +62,8 @@ class GripperControlParams:
     radians for Gripper G2's angled ``drive_joint``, metres for Lite6's
     prismatic ``finger_joint1``) at the fully-open/fully-closed physical
     two-finger gap. ``closed_gap_m``/``open_gap_m`` describe that physical gap
-    range. The two families use opposite sign conventions (G2: open=0.0 <
-    close=0.85; Lite6: close=0.0 < open=0.0089), so callers must always
-    interpolate through ``open_pos``/``close_pos`` rather than assuming
-    "larger drive = more closed".
+    range. G2 uses its linkage geometry; Lite6 uses linear prismatic travel.
+    Increasing the joint value closes G2 and opens Lite6.
     """
 
     family: str
@@ -130,8 +129,8 @@ G2_GRIPPER_PARAMS = GripperControlParams(
         "right_inner_knuckle_joint",
     ),
     finger_link_names=("left_finger", "right_finger"),
-    open_pos=0.0,
-    close_pos=0.85,
+    open_pos=GRIPPER_G2_SIM_OPEN_DRIVE,
+    close_pos=GRIPPER_G2_SIM_CLOSE_DRIVE,
     closed_gap_m=0.0,
     open_gap_m=0.084,
     kp=20.0,

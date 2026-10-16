@@ -197,7 +197,6 @@ TRACE_BASE_FIELDS = [
     "gap_m",
     "commanded_gap_m",
     "applied_gripper_gap_m",
-    "gripper_force_hold_latched",
     "action_x",
     "action_y",
     "action_z",
@@ -568,9 +567,6 @@ def env0_trace_row(
         "gap_m": gap,
         "commanded_gap_m": float(snapshot["commanded_gap_m"][0].item()),
         "applied_gripper_gap_m": float(snapshot.get("applied_gripper_gap_m", snapshot["commanded_gap_m"])[0].item()),
-        "gripper_force_hold_latched": int(
-            bool(snapshot.get("gripper_force_hold_latched", torch.zeros(1, dtype=torch.bool))[0].item())
-        ),
         "action_x": float(step_action[0].item()),
         "action_y": float(step_action[1].item()),
         "action_z": float(step_action[2].item()),

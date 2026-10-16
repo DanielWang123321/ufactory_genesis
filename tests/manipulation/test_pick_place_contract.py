@@ -10,7 +10,7 @@ import pytest
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.manipulation.frames import base_to_world_pos, world_to_base_pos
 from ufactory.simulation import G2_PHYSICS_PROFILE
-from ufactory.training import build_pick_place_task_configs
+from ufactory.training import build_pick_place_task_configs, load_pick_place_rl_runtime_config
 
 
 def test_base_world_translation_contract():
@@ -23,6 +23,7 @@ def test_base_world_translation_contract():
 
 
 def test_pick_place_task_defaults_are_runtime_bound():
+    pytest.importorskip("trimesh")
     recipe = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "training" / "pick_place_recipe.yaml"
     env_cfg, reward_cfg, robot_cfg = build_pick_place_task_configs("xarm6", recipe_path=recipe)
 
@@ -36,6 +37,7 @@ def test_pick_place_task_defaults_are_runtime_bound():
     assert env_cfg["gripper_delta_mm"] == pytest.approx(4.0)
     assert env_cfg["success_hold_steps"] == 5
     assert env_cfg["substeps"] == 32
+    assert env_cfg["noslip_iterations"] == 0
     assert env_cfg["physics_profile"] == G2_PHYSICS_PROFILE
     assert "substeps" not in load_runtime_config("xarm6", task="pick_place").task.parameters
     assert env_cfg["fixed_demo_layout"] is True
@@ -44,7 +46,7 @@ def test_pick_place_task_defaults_are_runtime_bound():
     object_spec = resolve_pick_place_object_spec(load_runtime_config("xarm6"))
     assert env_cfg["obj_size"] == pytest.approx(object_spec.size_m)
     assert env_cfg["obj_mass_kg"] == pytest.approx(object_spec.mass_kg)
-    assert env_cfg["runtime_config_sha256"] == load_runtime_config("xarm6", task="pick_place").sha256
+    assert env_cfg["runtime_config_sha256"] == load_pick_place_rl_runtime_config("xarm6").sha256
     assert env_cfg["fixed_obj_pos"] == pytest.approx((0.30, 0.00, 0.015))
     assert env_cfg["fixed_target_pos"] == pytest.approx((0.30, 0.30, 0.015))
     assert robot_cfg["base_pos"] == [0.30, 0.0, env_cfg["table_height"]]

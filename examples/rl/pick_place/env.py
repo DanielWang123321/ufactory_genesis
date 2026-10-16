@@ -35,6 +35,8 @@ from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.manipulation.frames import base_to_world_pos, world_to_base_pos
 from ufactory.grippers.g2 import (
     GRIPPER_G2_OPEN_GAP_M,
+    GRIPPER_G2_SIM_OPEN_DRIVE,
+    GRIPPER_G2_SIM_CLOSE_DRIVE,
 )
 from ufactory.trajectory.scene import (
     FINGER_FRICTION,
@@ -45,20 +47,20 @@ from ufactory.trajectory.scene import (
 )
 from ufactory.simulation import (
     G2_PHYSICS_PROFILE,
-    G2ContactHoldController,
     configure_g2_mimic_constraints,
     make_rigid_options,
     object_finger_contact_forces_n,
     validate_g2_contact_substeps,
 )
 from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_pbr_surfaces, glb_view_surface
+from ufactory.simulation.g2_adapter import apply_batch_control, configure_g2_drive, measured_gap_mm
+from ufactory.simulation.g2_batch import G2BatchController
+from ufactory.simulation.g2_model import G2Model
 from .trace_utils import action_noise_episode_mask, scheduled_action_noise_std
 from ufactory.training.logic import (
     arm_target_ee_pos,
     annealed_frac,
     desired_grasp_pos_base as logic_desired_grasp_pos_base,
-    drive_to_gap_m,
-    gap_m_to_drive,
     gripper_target_gap,
     leashed_ee_setpoint,
     next_curriculum_stage,
@@ -190,6 +192,12 @@ class XArm6PickPlaceEnv:
                 f"xArm6 G2 pick-place requires physics_profile={G2_PHYSICS_PROFILE!r}, got {self.physics_profile!r}"
             )
         # rsl-rl >=5 Logger stores env.cfg alongside the train config.
+        self.g2_model = G2Model.load()
+        g2_command = env_cfg.get("g2", {})
+        self.g2_speed_percent = float(g2_command.get("speed_percent", 50))
+        self.g2_force_percent = float(g2_command.get("force_percent", 50))
+        self.g2_controller = G2BatchController(self.g2_model, self.num_envs, device=self.device, dtype=gs.tc_float)
+        self.g2_controller.command(84, self.g2_speed_percent, self.g2_force_percent)
         self.cfg = env_cfg
         self.reward_scales = reward_cfg.copy()
         self.action_scale = float(env_cfg["action_scale"])
@@ -349,15 +357,16 @@ class XArm6PickPlaceEnv:
         self.contact_force_scale_n = float(env_cfg.get("contact_force_scale_n", 5.0))
         self.contact_force_threshold_n = float(env_cfg.get("contact_force_threshold_n", 0.05))
         self.include_contact_observations = bool(env_cfg.get("include_contact_observations", False))
-        self.use_contact_holding = True
         # A held reset must begin at the cube-contact equilibrium, not at the
         # no-load close command. Teleporting every mimic joint to the latter
         # over-penetrates the cube and the first constraint solve ejects it.
         self.held_gripper_initial_drive = float(env_cfg.get("held_gripper_initial_drive", 0.60))
         if not math.isclose(self.gripper_open_gap_m, GRIPPER_G2_OPEN_GAP_M, rel_tol=0.0, abs_tol=1e-9):
             raise ValueError("Gripper G2 open gap must match the 84 mm SDK contract")
-        if not 0.0 <= self.held_gripper_initial_drive <= 0.85:
-            raise ValueError("held_gripper_initial_drive must be in [0.0, 0.85]")
+        if not GRIPPER_G2_SIM_OPEN_DRIVE <= self.held_gripper_initial_drive <= GRIPPER_G2_SIM_CLOSE_DRIVE:
+            raise ValueError(
+                f"held_gripper_initial_drive must be in [{GRIPPER_G2_SIM_OPEN_DRIVE}, {GRIPPER_G2_SIM_CLOSE_DRIVE}] rad"
+            )
 
         self.base_pos_world = torch.tensor(
             robot_cfg.get("base_pos", [0.30, 0.0, self.table_height]),
@@ -434,6 +443,7 @@ class XArm6PickPlaceEnv:
                 contact_resolution=self.contact_resolution,
                 enable_collision=True,
                 enable_joint_limit=True,
+                batch_dofs_info=True,
                 iterations=self.solver_iterations,
                 noslip_iterations=self.noslip_iterations,
                 constraint_timeconst=float(constraint_timeconst),
@@ -641,29 +651,8 @@ class XArm6PickPlaceEnv:
             self.arm_dof_idx,
         )
 
-        self.robot.set_dofs_kp(
-            torch.tensor([robot_cfg["gripper_kp"]], device=self.device, dtype=gs.tc_float), self.gripper_dof_idx
-        )
-        self.robot.set_dofs_kv(
-            torch.tensor([robot_cfg["gripper_kv"]], device=self.device, dtype=gs.tc_float), self.gripper_dof_idx
-        )
-        self.robot.set_dofs_force_range(
-            torch.tensor([robot_cfg["gripper_force_lower"]], device=self.device, dtype=gs.tc_float),
-            torch.tensor([robot_cfg["gripper_force_upper"]], device=self.device, dtype=gs.tc_float),
-            self.gripper_dof_idx,
-        )
-
-        self.all_gripper_dof_idx = [
-            self.robot.get_joint(name).dofs_idx_local[0] for name in robot_cfg["all_gripper_joint_names"]
-        ]
-        n_grip = len(self.all_gripper_dof_idx)
-        self.robot.set_dofs_damping(
-            torch.full((n_grip,), robot_cfg["gripper_damping"], device=self.device, dtype=gs.tc_float),
-            self.all_gripper_dof_idx,
-        )
-        self.robot.set_dofs_frictionloss(
-            torch.full((n_grip,), robot_cfg["gripper_frictionloss"], device=self.device, dtype=gs.tc_float),
-            self.all_gripper_dof_idx,
+        _, self.all_gripper_dof_idx = configure_g2_drive(
+            self.robot, damping=robot_cfg["gripper_damping"], frictionloss=robot_cfg["gripper_frictionloss"]
         )
 
     def _default_arm_qpos_from_ik(self, env_cfg: dict) -> torch.Tensor:
@@ -811,12 +800,6 @@ class XArm6PickPlaceEnv:
         self.commanded_gap = torch.full(
             (self.num_envs,), self.gripper_open_gap_m, device=self.device, dtype=gs.tc_float
         )
-        self.gripper_contact_hold = G2ContactHoldController(
-            self.num_envs,
-            device=self.device,
-            dtype=gs.tc_float,
-            initial_gap_m=self.gripper_open_gap_m,
-        )
         self.previous_action = torch.zeros(
             self.num_envs,
             self.num_actions,
@@ -875,7 +858,7 @@ class XArm6PickPlaceEnv:
         # Reset the integrated gripper command to fully open; place bootstrap overrides to
         # closed below since it starts already holding the cube.
         self.commanded_gap[envs_idx] = self.gripper_open_gap_m
-        self.gripper_contact_hold.reset(envs_idx, gap_m=self.commanded_gap[envs_idx])
+        self.g2_controller.reset(envs_idx, position_mm=84)
         self.previous_action[envs_idx] = 0.0
         self.episode_place_success[envs_idx] = False
         self.episode_success[envs_idx] = False
@@ -1011,7 +994,12 @@ class XArm6PickPlaceEnv:
                         dtype=gs.tc_float,
                     )
                 )
-                self.gripper_contact_hold.prime(global_held, held_gap)
+                self.g2_controller.reset(
+                    global_held,
+                    position_mm=held_gap * 1000,
+                    target_mm=self.commanded_gap[global_held] * 1000,
+                    prime=True,
+                )
                 self.ever_grasped[global_held] = True
                 self.ever_lifted[global_held] = True
                 # Place bootstrap already starts held above the target: latch the
@@ -1596,26 +1584,18 @@ class XArm6PickPlaceEnv:
             self.gripper_open_gap_m,
         )
         target_gap = self.commanded_gap
-        measured_gap = self.gripper_gap_m()
-        left_force, right_force = self.finger_contact_forces_n()
-        release_intent = (clipped_actions[:, 3] > self.release_action_threshold) & (
-            self.commanded_gap > self.gripper_min_command_gap_m + self.release_command_margin_m
-        )
-        closing = (self.commanded_gap < self.gripper_open_gap_m - 1e-9) & (~release_intent)
-        applied_gap = self.gripper_contact_hold.update(
-            requested_gap_m=self.commanded_gap,
-            measured_gap_m=measured_gap,
-            left_force_n=left_force,
-            right_force_n=right_force,
-            closing=closing,
-            release=release_intent,
-        )
-        target_drive = self.gap_m_to_drive_t(applied_gap)
+        self.g2_controller.command(self.commanded_gap * 1000, self.g2_speed_percent, self.g2_force_percent)
 
         self._accumulate_action_stats(raw_actions, cart_delta_unclipped, target_gap)
         self.previous_action.copy_(clipped_actions.detach())
         self.robot.control_dofs_position(target_q, self.arm_dof_idx)
-        self.robot.control_dofs_position(target_drive.unsqueeze(-1), self.gripper_dof_idx)
+        apply_batch_control(
+            self.robot,
+            self.g2_controller,
+            self.gripper_dof_idx,
+            measured_gap_mm(self.g2_model, self.left_finger_link, self.right_finger_link),
+            self.ctrl_dt,
+        )
         try:
             self.scene.step()
         except Exception as exc:
@@ -1745,8 +1725,7 @@ class XArm6PickPlaceEnv:
             "grasp_pos": self.desired_grasp_pos_base().detach().clone(),
             "gap_m": self.gripper_gap_m().detach().clone(),
             "commanded_gap_m": self.commanded_gap.detach().clone(),
-            "applied_gripper_gap_m": self.gripper_contact_hold.applied_gap_m.detach().clone(),
-            "gripper_force_hold_latched": self.gripper_contact_hold.latched.detach().clone(),
+            "applied_gripper_gap_m": (self.g2_controller.reference_gap_mm / 1000).detach().clone(),
             "actions": actions.detach().clone(),
             "policy_actions": policy_actions.detach().clone(),
             "action_noise": action_noise.detach().clone(),
@@ -1959,10 +1938,10 @@ class XArm6PickPlaceEnv:
         self.release_clearance_achieved |= cleared_now
 
     def drive_to_gap_m_t(self, drive: torch.Tensor) -> torch.Tensor:
-        return drive_to_gap_m(drive, self.gripper_open_gap_m)
+        return self.g2_controller.gap_mm(drive).clamp(0, 84) / 1000
 
     def gap_m_to_drive_t(self, gap_m: torch.Tensor) -> torch.Tensor:
-        return gap_m_to_drive(gap_m, self.gripper_min_command_gap_m, self.gripper_open_gap_m)
+        return self.g2_controller.drive_for_gap_mm(gap_m * 1000)
 
     def gripper_gap_m(self) -> torch.Tensor:
         drive = self.robot.get_dofs_position(self.gripper_dof_idx).squeeze(-1)

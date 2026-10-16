@@ -26,6 +26,8 @@ class CollisionResult:
     link_a: str = ""
     link_b: str = ""
     environment: bool = False
+    geometry_a: str = ""
+    geometry_b: str = ""
 
 
 @runtime_checkable

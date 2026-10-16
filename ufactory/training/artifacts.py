@@ -18,6 +18,7 @@ from typing import Any, Mapping
 import yaml
 
 from ufactory.training.reach_config import REACH_SUCCESS_DISTANCE_M
+from ufactory.config.models import G2_PHYSICS_PROFILE
 
 
 class ArtifactError(ValueError):
@@ -27,6 +28,8 @@ class ArtifactError(ValueError):
 _RUNTIME_ENV_CONTRACT_KEYS = (
     "runtime_config_sha256",
     "physics_profile",
+    "g2",
+    "g2_physics",
     "episode_length_s",
     "ctrl_dt",
     "table_height",
@@ -394,6 +397,8 @@ def validate_checkpoint_artifacts(
     expected_runtime_config_sha256: str | None = None,
     expected_runtime_env: Mapping[str, Any] | None = None,
     allowed_runtime_env_mismatches: Collection[str] = (),
+    allow_physics_transfer: bool = False,
+    full_resume: bool = False,
 ) -> tuple[dict[str, Any], CheckpointManifest]:
     checkpoint = Path(checkpoint_path)
     config = load_training_config(config_path)
@@ -411,10 +416,17 @@ def validate_checkpoint_artifacts(
     if expected_robot_key is not None and manifest.robot_key != expected_robot_key:
         failures.append("robot")
     env = config["env"]
+    physics_changed = config["task"] == "pick_place" and env.get("physics_profile") != G2_PHYSICS_PROFILE
+    if physics_changed and full_resume:
+        failures.append("old G2 physics checkpoint cannot fully resume training")
+    elif physics_changed and not allow_physics_transfer:
+        failures.append("G2 physics version (use --allow-physics-transfer for evaluation)")
     if config["task"] == "reach" and env.get("success_distance_m") != REACH_SUCCESS_DISTANCE_M:
         failures.append("reach success_distance_m (5 mm required)")
-    if expected_runtime_config_sha256 is not None and env.get("runtime_config_sha256") != str(
-        expected_runtime_config_sha256
+    if (
+        not (physics_changed and allow_physics_transfer)
+        and expected_runtime_config_sha256 is not None
+        and env.get("runtime_config_sha256") != str(expected_runtime_config_sha256)
     ):
         failures.append("runtime config hash")
     allowed_mismatches = frozenset(str(key) for key in allowed_runtime_env_mismatches)
@@ -438,7 +450,21 @@ def validate_checkpoint_artifacts(
             mismatched_keys = [
                 key
                 for key in saved_keys
-                if key not in allowed_mismatches and saved_contract.get(key) != expected_contract.get(key)
+                if key not in allowed_mismatches
+                and not (
+                    physics_changed
+                    and allow_physics_transfer
+                    and key
+                    in {
+                        "physics_profile",
+                        "runtime_config_sha256",
+                        "g2",
+                        "g2_physics",
+                        "constraint_time_constant_s",
+                        "noslip_iterations",
+                    }
+                )
+                and saved_contract.get(key) != expected_contract.get(key)
             ]
             if mismatched_keys:
                 failures.append(f"runtime config body ({', '.join(mismatched_keys)})")
@@ -460,6 +486,8 @@ def validate_and_load_rsl_checkpoint(
     expected_runtime_config_sha256: str | None = None,
     expected_runtime_env: Mapping[str, Any] | None = None,
     allowed_runtime_env_mismatches: Collection[str] = (),
+    allow_physics_transfer: bool = False,
+    full_resume: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], CheckpointManifest]:
     """Validate a complete artifact bundle before safely loading RSL-RL weights.
 
@@ -477,6 +505,8 @@ def validate_and_load_rsl_checkpoint(
         expected_runtime_config_sha256=expected_runtime_config_sha256,
         expected_runtime_env=expected_runtime_env,
         allowed_runtime_env_mismatches=allowed_runtime_env_mismatches,
+        allow_physics_transfer=allow_physics_transfer,
+        full_resume=full_resume,
     )
 
     # Keep torch optional for configuration-only users and lightweight CI

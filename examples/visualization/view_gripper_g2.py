@@ -20,7 +20,7 @@ def _controller(robot):
 
 def main() -> None:
     run_standalone_gripper_viewer(
-        "Gripper G2 open/close demo (standalone)", gripper_g2_movable_visual_urdf(), _controller
+        "Gripper G2 open/close demo (standalone)", gripper_g2_movable_visual_urdf(), _controller, calibrated_g2=True
     )
 
 

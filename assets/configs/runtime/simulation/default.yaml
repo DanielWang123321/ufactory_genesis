@@ -15,3 +15,7 @@ simulation:
   # Genesis documents GJK as the slower but more stable collision path.
   use_gjk_collision: true
   show_viewer: false
+  g2:
+    position_mm: 0.0
+    speed_percent: 50.0
+    force_percent: 50.0

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-v0.3.0 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
+v0.3.1 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
 
 ## 前置条件
 
@@ -50,6 +50,7 @@ python examples/visualization/view_robot.py --robot xarm6
 | 目录               | 用途                                      |
 | ---------------- | --------------------------------------- |
 | `visualization/` | GLB 机型与夹爪查看器                            |
+| `gripper_g2/`    | Gripper G2 标定动力学：百分比控制、方块夹持与验收        |
 | `kinematics/`    | FK/IK / 机型校验包装                          |
 | `pick_place/`    | 多机型抓放入口与可选覆盖配置                          |
 | `packaging/`     | 多机型装箱展示入口与可选覆盖配置                        |
@@ -69,6 +70,8 @@ python examples/visualization/view_robot.py --robot xarm6
 | `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper |
 
 五类机型均支持仿真与离线预检。真机装箱启用 xArm6 + Gripper G2、Lite6 + Lite6 Gripper，详见[真机操作与硬件校验](#真机操作与硬件校验)。
+
+G2 仿真使用 `g2_calibrated_v1`，百分比控制、验收与执行记录见 [G2 说明](gripper_g2/README_cn.md)。内置 RL 权重保留旧动力学，评估必须显式加 `--allow-physics-transfer`。
 
 ## 可视化
 

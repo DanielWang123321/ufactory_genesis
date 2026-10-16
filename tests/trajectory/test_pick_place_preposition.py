@@ -451,3 +451,39 @@ def test_lite6_cartesian_preflight_preserves_gripper_down_orientation():
         quaternion /= np.linalg.norm(quaternion)
         errors.append(2.0 * np.arccos(np.clip(abs(float(np.dot(quaternion, desired))), 0.0, 1.0)))
     assert max(errors) <= 1e-4
+
+
+def test_xarm7_stationary_seed_offset_stays_inside_cartesian_acceleration_limit():
+    pytest.importorskip("pinocchio")
+    from ufactory.cli.pick_place import _backends, _model_and_hashes
+    from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
+    from ufactory.safety.statistics import compute_motion_statistics
+    from ufactory.simulation.g2_confirmation import prepare_g2_program
+    from ufactory.trajectory.preflight import create_safety_gate
+
+    config = load_runtime_config("xarm7")
+    urdf, _urdf_hash, calibration_hash = _model_and_hashes(config, None, None)
+    kinematics, _collision = _backends(config, urdf)
+    home = _home_xyz_m(config)
+    quaternion = np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64)
+    on_path = np.asarray(
+        kinematics.inverse(np.concatenate((home, quaternion)), np.asarray(config.arm.default_qpos_rad)),
+        dtype=np.float64,
+    )
+    # Same micrometre Genesis/Pinocchio mismatch that previously read as 0.802 m/s².
+    offset = home + np.array([-4.176e-6, -9.6e-8, -7.43e-7])
+    q_home = np.asarray(kinematics.inverse(np.concatenate((offset, quaternion)), on_path), dtype=np.float64)
+    program = prepare_g2_program(_build_program(config, q_home=q_home), config.simulation.g2)
+    gate = create_safety_gate(
+        config,
+        kinematics=kinematics,
+        collision=None,
+        calibration_sha256=calibration_hash,
+        scene_sha256="b" * 64,
+        urdf_path=urdf,
+    )
+    timeline, violations = gate._build_timeline(program)
+    assert not violations
+    stats = compute_motion_statistics(timeline.q_rad, timeline.xyz_m, rate_hz=program.rate)
+    limit = config.motion.cartesian_acceleration_m_s2
+    assert stats.max_cartesian_acceleration_m_s2 <= limit * 1.001 + 1e-12

@@ -18,6 +18,7 @@ from ufactory.simulation import (
     validate_g2_contact_substeps,
 )
 from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION
+from ufactory.simulation.collision import apply_collision_geometry_filters
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TEXTURE_DIR = REPO_ROOT / "assets" / "scenes" / "packaging_showcase" / "textures"
@@ -335,6 +336,7 @@ def build_packaging_scene(
     capture_res: tuple[int, int] = (1280, 720),
     robot_urdf_path: str | None = None,
     runtime_config=None,
+    calibrated_g2: bool = True,
 ):
     config = runtime_config or PACKAGING_CONFIG
     layout = make_layout(table_top_z, config)
@@ -385,6 +387,7 @@ def build_packaging_scene(
     else:
         urdf_path = robot_urdf_path
     robot = _add_packaging_robot(scene, layout, urdf_path)
+    robot._ufactory_model_path = str(urdf_path)
 
     block = scene.add_entity(
         gs.morphs.Box(
@@ -399,6 +402,7 @@ def build_packaging_scene(
         surface=color_rough(BLOCK_COLOR),
     )
 
+    apply_collision_geometry_filters(robot, config.safety.excluded_geometry_pairs)
     if build_scene:
         scene.build(n_envs=1)
         if config.gripper.adapter == "g2":

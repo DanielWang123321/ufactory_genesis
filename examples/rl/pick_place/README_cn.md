@@ -24,10 +24,15 @@ export NUMBA_CACHE_DIR="$HOME/.cache/numba"
 释放意图迟滞（配方 `release_command_margin_m`，18 mm）要求指令间隙显著越过闭合间隙
 才认定松爪。此变更前保存的检查点评估时请传 `--release-command-margin-m 0.0005`。
 
-内置的 seed 7 `model_299_g2stable.pt`（SHA-256 `f2142a63…f783f2`）在现行
-`g2_stable_v1_3_3` 物理配置下训练，是默认评估目标。上一版接触模型训练的
-`model_299.pt` 不再随仓库发布：它没有绑定 `g2_stable_v1_3_3` 物理配置，
-当前评估器会按设计拒绝它。
+当前动力学版本为 `g2_calibrated_v1`：`kp=40、kv=5、ki=40`，夹爪关节附加惯量
+0.01 kg·m²、接触时间常数 1.25 ms。RL 保持 `noslip_iterations: 0`（确定性抓放为 5），
+因为 noslip 会使 20480 环境批量仿真慢约 7 倍；因此训练和评估中夹持的方块相对指垫约以 2.4 mm/s 蠕滑。
+策略位置动作、观测维度和奖励函数保持原接口，
+`simulation.g2` 提供速度和力百分比，详见 [G2 说明](../../gripper_g2/README_cn.md)。
+
+内置 seed-7 `model_299_g2stable.pt`（SHA-256 `f2142a63…f783f2`）保持原文件和历史
+`g2_stable_v1_3_3` 动力学版本。评估必须显式加 `--allow-physics-transfer`，
+仍校验原配置和检查点哈希；旧动力学检查点不能完整续训。历史成功率不代表新动力学表现。
 
 ## 分层引导披露
 
@@ -70,6 +75,13 @@ done
 产物只写入已忽略的 `outputs/rl/pick_place/`。不要把 `pretrained/` 当训练目录，
 也不要加载旧物理基线训练出的检查点。
 
+新动力学请另建固定布局文件，保留仓库中的历史布局和哈希：
+
+```bash
+python -m examples.rl.pick_place.make_scenario_bank --mode fixed --count 512 --seed 17000 \
+  --output reports/g2/fixed_seed17000_n512.json
+```
+
 ## 评估专家或显式指定的现行物理候选
 
 完整工件包包含 `model_N.pt`、`config.yaml` 和
@@ -92,7 +104,7 @@ python -m examples.rl.pick_place.evaluate \
 ```bash
 python -m examples.rl.pick_place.evaluate \
   --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank examples/rl/pick_place/scenarios/fixed_seed17000_n512.json \
+  --scenario-bank reports/g2/fixed_seed17000_n512.json \
   --headless -B 64 --episodes 64 --acceptance-profile contact_v1 \
   --require-target standard
 ```
@@ -102,7 +114,7 @@ python -m examples.rl.pick_place.evaluate \
 ```bash
 python -m examples.rl.pick_place.evaluate \
   --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank examples/rl/pick_place/scenarios/fixed_seed17000_n512.json \
+  --scenario-bank reports/g2/fixed_seed17000_n512.json \
   --headless -B 64 --episodes 512 --acceptance-profile contact_v1 \
   --action-noise-std 0.02 --action-noise-bank 20260817 \
   --require-target robustness
@@ -120,7 +132,7 @@ python -m examples.rl.pick_place.evaluate \
 `Full success` 同时要求抓取、抬升、有效放下/松爪、最终位姿和速度、保持时间及全部
 质量限制。即使训练指标或局部阶段看起来较好，筛选失败也不会发布工件。
 
-## 发布结果
+## 历史发布结果（g2_stable_v1_3_3）
 
 内置的 `model_299_g2stable.pt` 在 Genesis World 1.3.3 的 `g2_stable_v1_3_3`
 物理配置下完成全部训练。48 维观测修复了 2026-08-21 定位的阶段标签歧义。

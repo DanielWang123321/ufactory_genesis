@@ -13,6 +13,16 @@ OUTPUT_ROOT = ROOT / "outputs" / "rl" / "reach"
 CACHE_ROOT = ROOT / ".cache" / "rl" / "reach"
 
 
+def patch_pyglet_screen() -> None:
+    """Pyglet's RandR fallback reads ``is_primary`` on the plain Xlib screen."""
+    if sys.platform != "linux":
+        return
+    from pyglet.display.xlib import XlibScreen
+
+    if not hasattr(XlibScreen, "is_primary"):
+        XlibScreen.is_primary = False
+
+
 def configure_runtime(cache_root: Path | None = None, *, viewer: bool = False) -> None:
     """Keep generated caches in the checkout; configure GLX before its imports."""
     cache_root = Path(cache_root or os.environ.get("REACH_CACHE_DIR", CACHE_ROOT)).expanduser().resolve()
@@ -38,12 +48,7 @@ def configure_runtime(cache_root: Path | None = None, *, viewer: bool = False) -
         import pyglet
 
         pyglet.options["shadow_window"] = False
-        if sys.platform == "linux":
-            from pyglet.display.xlib import XlibScreen
-
-            # Pyglet's RandR fallback still queries this attribute.
-            if not hasattr(XlibScreen, "is_primary"):
-                XlibScreen.is_primary = False
+        patch_pyglet_screen()
 
 
 def require_rsl_runtime() -> None:

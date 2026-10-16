@@ -24,8 +24,8 @@ gripper:
   drive_joint: drive_joint
   all_joint_names: [drive_joint, left_finger_joint, left_inner_knuckle_joint, right_outer_knuckle_joint, right_finger_joint, right_inner_knuckle_joint]
   finger_link_names: [left_finger, right_finger]
-  open_drive: 0.0
-  closed_drive: 0.85
+  open_drive: 0.057210812728026743
+  closed_drive: 0.86509464599328212
   open_gap_m: 0.084
   closed_gap_m: 0.0
   kp: 20.0

@@ -14,6 +14,7 @@ from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.robots.registry import RobotModelSpec, joint_names
 from ufactory.simulation import forward_kinematics, make_rigid_options
+from ufactory.simulation.collision import configure_lite6_collision_filters
 from ufactory.simulation.compat import require_genesis_runtime
 
 from ufactory.visualization.bio_gripper_g2_viewer import (
@@ -161,6 +162,7 @@ def run_glb_diagnose(
         )
         morph = gs.morphs.URDF(file=urdf_path, pos=(0.0, 0.0, 0.0), fixed=True, requires_jac_and_IK=True)
         robot = scene.add_entity(morph, surface=glb_view_surface()) if use_glb else scene.add_entity(morph)
+        configure_lite6_collision_filters(robot)
         scene.build()
         return robot, scene, _link_world_positions(robot, link_names)
 
@@ -335,9 +337,25 @@ def run_glb_viewer(
     show_tcp: bool = False,
     show_base_axes: bool = False,
     backend: str = "gpu",
+    position_mm: float = 0,
+    speed_percent: float = 50,
+    force_percent: float = 50,
+    headless_steps: int = 600,
 ) -> None:
     from ufactory.simulation import genesis_backend_constant
 
+    import xml.etree.ElementTree as ET
+
+    calibrated_g2 = gripper_demo and ET.parse(urdf_path).getroot().find("./joint[@name='drive_joint']") is not None
+    if calibrated_g2:
+        from ufactory.simulation.g2_model import checked
+
+        for name, value, low, high in (
+            ("position_mm", position_mm, 0, 84),
+            ("speed_percent", speed_percent, 0, 100),
+            ("force_percent", force_percent, 1, 100),
+        ):
+            checked(value, low, high, name)
     require_genesis_runtime(gs)
     enable_glb_pbr_surfaces()
     gs.init(backend=genesis_backend_constant(gs, backend))
@@ -348,8 +366,8 @@ def run_glb_viewer(
             camera_fov=40,
             refresh_rate=60,
         ),
-        sim_options=gs.options.SimOptions(dt=0.01),
-        rigid_options=make_rigid_options(gs),
+        sim_options=gs.options.SimOptions(dt=0.02, substeps=32) if calibrated_g2 else gs.options.SimOptions(dt=0.01),
+        rigid_options=make_rigid_options(gs, constraint_timeconst=0.00125) if calibrated_g2 else make_rigid_options(gs),
         show_viewer=False,
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
@@ -368,19 +386,35 @@ def run_glb_viewer(
     if show_base_axes and not headless:
         add_base_axes(scene)
         print("Base axes: X=red, Y=green, Z=blue (robot base origin)")
-    scene.build()
+    configure_lite6_collision_filters(robot)
+    if calibrated_g2:
+        scene.build(n_envs=1)
+    else:
+        scene.build()
 
     jnames = joint_names(profile)
     home = np.zeros(profile.dof)
     joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
     arm_dof_idx = [joint_map[n].dofs_idx_local[0] for n in jnames if n in joint_map]
+    if calibrated_g2:
+        from ufactory.kinematics.genesis import solve_link6_ik
+
+        # Neutral xArm poses put G2 fingers through the ground. Initialize a
+        # reachable gripper-down pose before starting physical opening/closing.
+        home = solve_link6_ik(
+            robot,
+            resolve_robot_link(robot, profile.ee_link),
+            (0.30, 0.0, 0.35),
+            arm_dof_idx=arm_dof_idx,
+            init_qpos=np.asarray(get_robot_runtime_profile(profile.key).arm.default_qpos),
+        )
     gripper_dof_idx, all_gripper_dof_idx = gripper_dof_indices(robot)
     lite6_gripper_dof_idx, all_lite6_gripper_dof_idx = lite6_gripper_dof_indices(robot)
     # Use BioGripperG2 class for discovery and control (preferred API).
     bio_gripper = BioGripperG2(robot)
     bio_gripper_g2_dof_idx = bio_gripper.drive_dof_idx
     all_bio_gripper_g2_dof_idx = bio_gripper.all_dof_idx
-    arm_kinematic_hold = not pd_demo
+    arm_kinematic_hold = not pd_demo and not calibrated_g2
     idle_gripper_kinematic_hold = not gripper_demo
 
     ee_link = None
@@ -411,7 +445,15 @@ def run_glb_viewer(
         setup_arm_pd(robot, arm_dof_idx, profile)
         robot.set_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
         robot.control_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
+    elif calibrated_g2 and arm_dof_idx:
+        # A dynamic gripper needs a physically held arm. Zeroing arm effort
+        # and teleporting it after each tick injects acceleration into the
+        # compliant mimic linkage during every intermediate substep.
+        setup_arm_pd(robot, arm_dof_idx, profile)
+        robot.set_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx, zero_velocity=True)
+        robot.control_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
     if gripper_demo and gripper_dof_idx:
+        robot._ufactory_g2_demo_settings = (position_mm, speed_percent, force_percent)
         setup_gripper_pd(robot, gripper_dof_idx, all_gripper_dof_idx)
         set_gripper_pose(robot, gripper_dof_idx, all_gripper_dof_idx, GRIPPER_OPEN)
     elif gripper_demo and lite6_gripper_dof_idx:
@@ -426,8 +468,10 @@ def run_glb_viewer(
         bio_gripper.setup_pd()
         bio_gripper.set_pose(BIO_GRIPPER_G2_OPEN)
 
-    warmup_steps = 3 if arm_kinematic_hold else 100
+    warmup_steps = 3 if arm_kinematic_hold or calibrated_g2 else 100
     for _ in range(warmup_steps):
+        if calibrated_g2:
+            control_gripper_pose(robot, gripper_dof_idx, all_gripper_dof_idx, GRIPPER_OPEN)
         if pd_demo and arm_dof_idx:
             robot.control_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
         if tcp_marker is not None and ee_link is not None:
@@ -445,9 +489,10 @@ def run_glb_viewer(
             bio_gripper=bio_gripper,
         )
 
-    if headless:
+    if headless and not calibrated_g2:
         return
-    start_deferred_viewer(scene)
+    if not headless:
+        start_deferred_viewer(scene)
 
     if gripper_demo:
         print(f"Viewer: {profile.key} — gripper open/close demo")
@@ -460,6 +505,7 @@ def run_glb_viewer(
     demo_done_announced = False
     step = 0
     last_gripper_phase = -1
+    g2_gaps = []
     while True:
         arm_target = None
         if joint_demo is not None and not joint_demo.finished:
@@ -521,7 +567,14 @@ def run_glb_viewer(
             arm_target=arm_target,
         )
         step += 1
-        time.sleep(0.01)
+        if calibrated_g2:
+            g2_gaps.append(robot._ufactory_g2_controller.gap_mm())
+        if headless and step >= headless_steps:
+            break
+        if not headless:
+            time.sleep(0.02 if calibrated_g2 else 0.01)
+    if calibrated_g2:
+        return {"min_gap_mm": min(g2_gaps), "max_gap_mm": max(g2_gaps), "final_gap_mm": g2_gaps[-1], "ticks": step}
 
 
 def _lite6_demo_poses_deg() -> list[list[float]]:

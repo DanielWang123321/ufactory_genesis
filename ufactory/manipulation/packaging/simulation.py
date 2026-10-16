@@ -30,6 +30,11 @@ from genesis.utils.geom import transform_quat_by_quat, xyz_to_quat
 
 from ufactory.config import load_runtime_config
 from ufactory.grippers import create_gripper_adapter
+from ufactory.grippers.g2 import (
+    GRIPPER_G2_SIM_OPEN_DRIVE as GRIPPER_OPEN,
+    GRIPPER_G2_SIM_CLOSE_DRIVE as GRIPPER_CLOSE,
+    gripper_g2_gap_m_to_sim_drive,
+)
 from ufactory.manipulation.packaging.core import build_packaging_program, packaging_layout
 from ufactory.manipulation.packaging.scene import (
     FINGER_FRICTION_MU,
@@ -39,18 +44,15 @@ from ufactory.manipulation.packaging.scene import (
     make_layout,
 )
 from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
-from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
+from ufactory.simulation import G2_PHYSICS_PROFILE, GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
 from ufactory.trajectory.scene import TrajSceneContext
 from ufactory.trajectory.sim_executor import SimReport, replay_sim
 from ufactory.visualization.viewer import start_deferred_viewer
 
-GRIPPER_OPEN = 0.0
-GRIPPER_CLOSE = 0.85
-GRIPPER_OPEN_GAP_M = 0.084  # drive=0 → ~84 mm two-finger gap
-GRIPPER_GAP_CALIBRATION_OFFSET_M = 0.0053  # linear model under-closes vs G2 pad kinematics
-GRASP_SQUEEZE_GAP_MARGIN = 0.0  # flush with block width; calibration offset handles pad error
+GRIPPER_OPEN_GAP_M = 0.084
+GRASP_SQUEEZE_GAP_MARGIN = 0.0  # Flush with the block's pad contact surfaces.
 SIM_DT = 0.02
 SETTLE_STEPS = 40
 # The shared trajectory keeps the production/dry-run G2 timing. Genesis needs
@@ -94,18 +96,18 @@ class ShowcaseRobotCtx:
     gripper_initial_open_dof_idx: list[int] | None = None
     gripper_initial_open_clearance_m: float = 0.0
     home_settle_steps: int = SETTLE_STEPS
+    g2_controller: object | None = None
 
 
 def gripper_drive_for_gap(gap_m: float) -> float:
     """Map desired two-finger gap (m) to drive_joint command."""
-    gap_m = max(0.0, min(GRIPPER_OPEN_GAP_M, gap_m))
-    return GRIPPER_CLOSE * (1.0 - gap_m / GRIPPER_OPEN_GAP_M)
+    return gripper_g2_gap_m_to_sim_drive(gap_m)
 
 
 def grasp_gripper_drive(obj_size: tuple[float, float, float]) -> float:
     """Partial close target for a block grasped with gripper pointing down (Y axis)."""
     obj_width = obj_size[1]
-    target_gap = max(0.0, obj_width + GRASP_SQUEEZE_GAP_MARGIN - GRIPPER_GAP_CALIBRATION_OFFSET_M)
+    target_gap = max(0.0, obj_width + GRASP_SQUEEZE_GAP_MARGIN)
     return gripper_drive_for_gap(target_gap)
 
 
@@ -219,7 +221,7 @@ def _world_down_quat() -> torch.Tensor:
     return transform_quat_by_quat(tcp_base_quat, base_yaw_quat)
 
 
-def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None):
+def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None, calibrated_g2: bool = True):
     gripper = config.gripper
     if gripper is None:
         raise RuntimeError(f"{config.robot.key} packaging showcase requires a configured gripper")
@@ -233,7 +235,9 @@ def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None):
     gripper_dof_idx = [robot.get_joint(gripper.drive_joint).dofs_idx_local[0]]
     all_gripper_dof_idx = [robot.get_joint(name).dofs_idx_local[0] for name in gripper.all_joint_names]
     opening_gripper_dof_idx = (
-        [gripper_dof_idx[0], all_gripper_dof_idx[3]] if gripper.adapter == "g2" else list(gripper_dof_idx)
+        list(gripper_dof_idx)
+        if calibrated_g2 or gripper.adapter != "g2"
+        else [gripper_dof_idx[0], all_gripper_dof_idx[3]]
     )
     applied_arm_kp_scale = layout.simulation_arm_kp_scale if arm_kp_scale is None else float(arm_kp_scale)
     robot.set_dofs_kp(
@@ -276,6 +280,10 @@ def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None):
         all_gripper_dof_idx,
     )
 
+    if calibrated_g2 and gripper.adapter == "g2":
+        from ufactory.simulation.g2_adapter import configure_g2_drive
+
+        configure_g2_drive(robot, damping=gripper.damping, frictionloss=gripper.frictionloss)
     down_quat = _world_down_quat()
 
     return ik_link, left_finger, right_finger, arm_dof_idx, gripper_dof_idx, all_gripper_dof_idx, down_quat
@@ -322,6 +330,7 @@ def init_showcase_robot(
     runtime_config=None,
     cartesian_xy_offset_m: tuple[float, float] | None = None,
     arm_kp_scale: float | None = None,
+    calibrated_g2: bool = True,
 ) -> ShowcaseRobotCtx:
     """Apply PD gains, set home qpos via IK, and prime finger geometry."""
     config = runtime_config or load_runtime_config(layout.robot_key, task="packaging_showcase")
@@ -334,7 +343,12 @@ def init_showcase_robot(
         layout,
         config,
         arm_kp_scale=arm_kp_scale,
+        calibrated_g2=calibrated_g2,
     )
+    from ufactory.simulation.g2_model import G2Model
+
+    is_g2 = calibrated_g2 and gripper.adapter == "g2"
+    open_drive = G2Model.load().linkage.drive_for_gap_m(0.084) if is_g2 else float(gripper.open_drive)
     home_pos = _world_home(layout, cartesian_xy_offset_m=cartesian_xy_offset_m)
     home_qpos_saved = _init_home_qpos(
         robot,
@@ -343,12 +357,14 @@ def init_showcase_robot(
         all_gripper_dof_idx,
         down_quat,
         home_pos,
-        gripper_open_drive=float(gripper.open_drive),
+        gripper_open_drive=open_drive,
     )
     scene.step()
     finger_z_offset = _measure_finger_offset(ik_link, left_finger, right_finger)
     grasp_drive = create_gripper_adapter(gripper).gap_to_drive(task_layout.grasp_gap_m)
-    is_g2 = gripper.adapter == "g2"
+    from ufactory.simulation.g2_adapter import G2GenesisController
+
+    adapter = G2GenesisController(robot, left_finger, right_finger, axis_link=ik_link) if is_g2 else None
     return ShowcaseRobotCtx(
         ik_link=ik_link,
         left_finger=left_finger,
@@ -361,10 +377,11 @@ def init_showcase_robot(
         home_qpos_saved=home_qpos_saved,
         finger_z_offset=finger_z_offset,
         grasp_drive=grasp_drive,
-        gripper_open_drive=float(gripper.open_drive),
-        gripper_open_dof_idx=([all_gripper_dof_idx[0], all_gripper_dof_idx[3]] if is_g2 else list(gripper_dof_idx)),
-        gripper_initial_open_dof_idx=list(all_gripper_dof_idx) if is_g2 else [],
-        gripper_initial_open_clearance_m=0.003 if is_g2 else 0.0,
+        gripper_open_drive=open_drive,
+        gripper_open_dof_idx=list(gripper_dof_idx),
+        gripper_initial_open_dof_idx=[],
+        gripper_initial_open_clearance_m=0.0,
+        g2_controller=adapter,
         home_settle_steps=max(1, int(round(task_layout.simulation_home_settle_s * config.motion.rate_hz))),
     )
 
@@ -374,7 +391,11 @@ def hold_robot_home(robot, scene, ctx: ShowcaseRobotCtx, *, steps: int = 1) -> N
     gripper_open = torch.full((1, 1), ctx.gripper_open_drive, device=gs.device, dtype=gs.tc_float)
     for _ in range(steps):
         robot.control_dofs_position(target_qpos[:, ctx.arm_dof_idx], ctx.arm_dof_idx)
-        robot.control_dofs_position(gripper_open, ctx.gripper_dof_idx)
+        if ctx.g2_controller is not None:
+            ctx.g2_controller.command(84)
+            ctx.g2_controller.apply(SIM_DT)
+        else:
+            robot.control_dofs_position(gripper_open, ctx.gripper_dof_idx)
         scene.step()
 
 
@@ -406,6 +427,8 @@ def prepare_packaging_cycle(
         torch.zeros((1, len(release_only_dof_idx)), device=gs.device, dtype=gs.tc_float),
         release_only_dof_idx,
     )
+    if getattr(ctx, "g2_controller", None) is not None:
+        ctx.g2_controller.reset(84)
     _reset_block(block, layout)
     hold_robot_home(robot, scene, ctx, steps=_scale_steps(getattr(ctx, "home_settle_steps", SETTLE_STEPS), speed))
 
@@ -445,16 +468,20 @@ def _with_sim_release_timing(program, *, speed: float, task_layout=None):
     return replace(program, segments=segments)
 
 
-def _speed_config(robot_key: str, speed: float, config_path: Path | None = None):
+def _speed_config(robot_key: str, speed: float, config_path: Path | None = None, *, base_config=None):
     """Load the versioned task with a simulation-only playback multiplier."""
     mult = max(0.25, float(speed))
-    base = load_runtime_config(robot_key, task="packaging_showcase", config_path=config_path)
+    base = base_config or load_runtime_config(robot_key, task="packaging_showcase", config_path=config_path)
     p = base.task.parameters
     return load_runtime_config(
         robot_key,
         task="packaging_showcase",
         config_path=config_path,
         overrides={
+            "simulation.backend": base.simulation.backend,
+            "simulation.g2.position_mm": base.simulation.g2.position_mm,
+            "simulation.g2.speed_percent": base.simulation.g2.speed_percent,
+            "simulation.g2.force_percent": base.simulation.g2.force_percent,
             "motion.joint_speed_rad_s": base.motion.joint_speed_rad_s * mult,
             "motion.joint_acceleration_rad_s2": base.motion.joint_acceleration_rad_s2 * mult,
             "motion.cartesian_speed_m_s": base.motion.cartesian_speed_m_s * mult,
@@ -528,6 +555,20 @@ def _trajectory_context(
         obj_mass_kg=task_layout.object_mass_kg,
         obj_pos_base=task_layout.object_position_m,
         place_pos_base=task_layout.target_position_m,
+        robot_urdf_path=getattr(robot, "_ufactory_model_path", ""),
+        g2_settings=config.simulation.g2,
+        g2_controller=ctx.g2_controller,
+        simulation_parameters={
+            "rate_hz": config.motion.rate_hz,
+            "substeps": config.simulation.substeps,
+            "constraint_time_constant_s": config.simulation.constraint_time_constant_s,
+            "constraint_solver": config.simulation.constraint_solver,
+            "solver_iterations": config.simulation.solver_iterations,
+            "noslip_iterations": config.simulation.noslip_iterations,
+            "friction_cone": config.simulation.friction_cone,
+            "contact_resolution": config.simulation.contact_resolution,
+            "use_gjk_collision": config.simulation.use_gjk_collision,
+        },
     )
 
 
@@ -544,6 +585,10 @@ def run_pick_place_cycle(
     config_path: Path | None = None,
     robot_key: str | None = None,
     executor: str = "servo_cartesian",
+    runtime_config=None,
+    csv_path: Path | None = None,
+    sim_report_path: Path | None = None,
+    preflight_report_path: Path | None = None,
 ) -> SimReport | None:
     """Replay the shared physical trajectory without kinematic object carry."""
     selected_robot = robot_key or layout.robot_key
@@ -556,7 +601,7 @@ def run_pick_place_cycle(
             capture_hook("Home")
         return None
 
-    config = _speed_config(selected_robot, speed, config_path)
+    config = _speed_config(selected_robot, speed, config_path, base_config=runtime_config)
     task_layout = packaging_layout(config)
     traj_ctx = _trajectory_context(scene, robot, block, layout, ctx, config)
     sim_offset = task_layout.simulation_grasp_center_compensation_xy_m
@@ -572,12 +617,43 @@ def run_pick_place_cycle(
     elif executor == "servo_cartesian":
         program = build_packaging_program(
             config,
+            q_home=traj_ctx.home_qpos[traj_ctx.arm_dof_idx],
             cartesian_xy_offset_m=sim_offset,
             place_xy_offset_m=(0.0, 0.0),
         )
     else:
         raise ValueError(f"unknown packaging executor: {executor}")
-    program = _with_sim_release_timing(program, speed=speed, task_layout=task_layout)
+    if config.gripper.adapter == "g2":
+        from ufactory.simulation.g2_confirmation import prepare_g2_program
+
+        program = prepare_g2_program(program, config.simulation.g2)
+    else:
+        program = _with_sim_release_timing(program, speed=speed, task_layout=task_layout)
+
+    # Preflight the exact built model and executable program.
+    from ufactory.cli.packaging import _backends
+    from ufactory.cli.pick_place import _write_json
+    from ufactory.manipulation.packaging.core import packaging_scene_sha256
+    from ufactory.trajectory.preflight import create_safety_gate
+    from ufactory.simulation.g2_replay import save_sim_report
+
+    urdf = Path(traj_ctx.robot_urdf_path)
+    kinematics, collision = _backends(config, urdf, calibrated_g2=ctx.g2_controller is not None)
+    gate = create_safety_gate(
+        config,
+        kinematics=kinematics,
+        collision=collision,
+        calibration_sha256="0" * 64,
+        scene_sha256=packaging_scene_sha256(config),
+        urdf_path=urdf,
+    )
+    preflight = gate.preflight(program, executor=executor)
+    _write_json(preflight_report_path, preflight.to_dict())
+    if not preflight.passed:
+        report = SimReport(completed=False, failure_reason="preflight failed", timing_passed=False)
+        save_sim_report(report, csv_path, sim_report_path)
+        return report
+    approved = gate.approve_simulation(program, preflight)
 
     def _on_phase(status, segment) -> None:
         obj = tuple(value / 1000.0 for value in status.obj_pos_mm)
@@ -595,24 +671,39 @@ def run_pick_place_cycle(
         f"  release object-bottom clearance={task_layout.release_object_bottom_clearance_m * 1000.0:.0f} mm  "
         f"grasp gap={task_layout.grasp_gap_m * 1000.0:.0f} mm"
     )
-    report = replay_sim(
-        program,
-        traj_ctx,
-        stabilize_grasp_weld=False,
-        on_phase=_on_phase,
+    from ufactory.trajectory.execution import execute_sim
+
+    report = execute_sim(
+        approved,
+        lambda checked: replay_sim(
+            checked,
+            traj_ctx,
+            stabilize_grasp_weld=False,
+            on_phase=_on_phase,
+            csv_path=csv_path,
+            sim_report_path=sim_report_path,
+        ),
     )
-    ok = (
-        report.place_error_mm < task_layout.place_success_distance_m * 1000.0
-        and report.home_drift_mm < task_layout.home_success_distance_m * 1000.0
-    )
+    ok = _cycle_failure_reason(report, layout, task_layout) is None
     print(
         f"\n  Place error: {report.place_error_mm:.1f} mm  "
         f"Home drift: {report.home_drift_mm:.1f} mm  {'OK' if ok else 'CHECK'}"
     )
+    if config.gripper.adapter == "g2":
+        print(
+            f"  completed={report.completed} timing={'PASS' if report.timing_passed else 'FAIL'} "
+            f"transport={'PASS' if report.transport_passed else 'FAIL'}"
+        )
     return report
 
 
 def _cycle_failure_reason(report: SimReport, layout, task_layout) -> str | None:
+    if not report.completed:
+        return report.failure_reason or "simulation incomplete"
+    if not report.timing_passed:
+        return "timing acceptance failed"
+    if report.physics_profile == G2_PHYSICS_PROFILE and not report.transport_passed:
+        return "transport acceptance failed"
     phases = {phase.label: phase for phase in report.phases}
     lift = phases.get("lift")
     lift_clearance_m = float(getattr(task_layout, "lift_success_clearance_m", 0.100))
@@ -620,9 +711,6 @@ def _cycle_failure_reason(report: SimReport, layout, task_layout) -> str | None:
     if lift is None or lift.obj_pos_mm[2] <= min_lift_z_mm:
         actual_z_mm = float("nan") if lift is None else lift.obj_pos_mm[2]
         return f"grasp/lift failed: block_z={actual_z_mm:.1f} mm, required>{min_lift_z_mm:.1f} mm"
-    place_limit_mm = task_layout.place_success_distance_m * 1000.0
-    if report.place_error_mm >= place_limit_mm:
-        return f"place error {report.place_error_mm:.1f} mm exceeds {place_limit_mm:.1f} mm"
     home_limit_mm = float(getattr(task_layout, "home_success_distance_m", 0.010)) * 1000.0
     if report.home_drift_mm >= home_limit_mm:
         return f"home drift {report.home_drift_mm:.1f} mm exceeds {home_limit_mm:.1f} mm"
@@ -707,14 +795,33 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run startup pose debug sequence then exit (use headless script for PNGs)",
     )
+    parser.add_argument("--position-mm", type=float)
+    parser.add_argument("--speed-percent", type=float)
+    parser.add_argument("--force-percent", type=float)
+    parser.add_argument("--csv", type=Path)
+    parser.add_argument("--sim-report", type=Path)
+    parser.add_argument("--report", type=Path)
     args = parser.parse_args(argv)
-    runtime_config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config)
+    overrides = {
+        f"simulation.g2.{name}": getattr(args, name)
+        for name in ("position_mm", "speed_percent", "force_percent")
+        if getattr(args, name) is not None
+    }
+    runtime_config = load_runtime_config(
+        args.robot, task="packaging_showcase", config_path=args.config, overrides=overrides
+    )
+    if runtime_config.gripper.adapter == "g2" and runtime_config.simulation.g2.speed_percent <= 0:
+        parser.error("automatic G2 manipulation requires --speed-percent > 0")
     if args.backend is not None:
         runtime_config = override_simulation_backend(runtime_config, args.backend)
 
     require_genesis_capabilities(gs, pbr=True, deferred_viewer=True)
     with GenesisRuntimeManager(runtime_config.simulation):
         return _run_packaging_sim_body(args, runtime_config)
+
+
+def _cycle_path(path: Path | None, cycle: int, limit: int) -> Path | None:
+    return path.with_name(f"{path.stem}.cycle-{cycle}{path.suffix}") if path is not None and limit > 1 else path
 
 
 def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
@@ -763,6 +870,10 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
                 config_path=args.config,
                 robot_key=runtime_config.robot.key,
                 executor=args.executor,
+                runtime_config=runtime_config,
+                csv_path=_cycle_path(args.csv, cycle, cycle_limit),
+                sim_report_path=_cycle_path(args.sim_report, cycle, cycle_limit),
+                preflight_report_path=_cycle_path(args.report, cycle, cycle_limit),
             )
             assert report is not None
             failure_reason = _cycle_failure_reason(report, layout, task_layout)
