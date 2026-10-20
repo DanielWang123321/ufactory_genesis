@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -231,7 +232,7 @@ def test_packaging_cli_parses_simulation_repetition(
 
     captured: dict[str, object] = {}
 
-    def _fake_run_sim(args) -> int:
+    def _fake_run_sim(args, config) -> int:
         captured["cycles"] = args.cycles
         return 0
 
@@ -263,40 +264,48 @@ def test_packaging_cli_rejects_unknown_loop_flag() -> None:
         main(["--mode", "sim", "--loop"])
 
 
-@pytest.mark.parametrize(
-    ("cycles", "expected_tail"),
-    [
-        (None, []),
-        (3, ["--cycles", "3"]),
-    ],
-)
-def test_packaging_cli_forwards_repetition_to_showcase(
-    monkeypatch: pytest.MonkeyPatch,
-    cycles: int | None,
-    expected_tail: list[str],
-) -> None:
+@pytest.mark.parametrize("cycles", [None, 3])
+def test_packaging_cli_passes_repetition_and_records_directly(monkeypatch, cycles) -> None:
     from ufactory.cli import packaging
+    from ufactory.manipulation.packaging import simulation
 
-    received: list[str] = []
-
-    def _fake_main(argv: list[str]) -> int:
-        received.extend(argv)
-        return 0
-
-    monkeypatch.setattr(packaging, "_packaging_simulation_main", _fake_main)
-    args = SimpleNamespace(
-        speed=1.0,
-        robot="xarm6",
-        executor="servo_j",
-        cycles=cycles,
-        table_height=None,
-        config=None,
-        backend=None,
-        capture_keyframes=False,
+    received = []
+    monkeypatch.setattr(
+        simulation, "run_packaging_simulation", lambda options, config: received.append((options, config)) or 0
     )
-
-    assert packaging._run_sim(args) == 0
-    assert received == ["--robot", "xarm6", "--speed", "1.0", "--executor", "servo_j", *expected_tail]
+    argv = [
+        "--mode",
+        "sim",
+        "--speed",
+        "1.5",
+        "--table-height",
+        "0.8",
+        "--speed-percent",
+        "90",
+        "--force-percent",
+        "80",
+        "--position-mm",
+        "20",
+        "--csv",
+        "out.csv",
+        "--sim-report",
+        "sim.json",
+        "--report",
+        "preflight.json",
+    ]
+    if cycles is not None:
+        argv += ["--cycles", str(cycles)]
+    assert packaging.main(argv) == 0
+    options, config = received[0]
+    assert options.cycles == cycles
+    assert options.speed == 1.5
+    assert options.table_height == 0.8
+    assert options.csv == Path("out.csv")
+    assert options.sim_report == Path("sim.json")
+    assert options.report == Path("preflight.json")
+    assert config.simulation.g2.speed_percent == 90
+    assert config.simulation.g2.force_percent == 80
+    assert config.simulation.g2.position_mm == 20
 
 
 def test_packaging_showcase_resolves_default_and_explicit_repetition() -> None:
@@ -458,7 +467,7 @@ def test_packaging_cycle_failure_reason(
         home_drift_mm=home_drift_mm,
     )
     display_layout = SimpleNamespace(table_top_z=0.75)
-    task_layout = SimpleNamespace(place_success_distance_m=0.025)
+    task_layout = SimpleNamespace()
 
     reason = _cycle_failure_reason(report, display_layout, task_layout)
     if expected is None:

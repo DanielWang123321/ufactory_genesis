@@ -9,17 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Simplified the Gripper G2 simulation modules. `ufactory/simulation/g2.py` was merged into `g2_adapter.py`. The task-level `g2_confirmation.py` and `g2_replay.py` moved to `ufactory/trajectory/`. The standalone scenes and acceptance suite (`g2_scene.py`, `g2_acceptance.py`) moved to `examples/gripper_g2/acceptance.py`; the `verify.py` and `grasp_cube.py` commands are unchanged. Package-level exports from `ufactory.simulation` are unchanged.
+- Share RL metrics, checkpoint manifests and cache setup in `ufactory.training`; reuse Reach state, action and episode accounting in its realtime environment while retaining independent success holds.
+- Limit pick-place configuration to active v3 settings, centralize fixed scene constants, and reject unsupported overrides. Existing v3 checkpoints retain integrity and action-contract validation.
+- Packaging parses arguments and resolves YAML once, then calls a task execution function. Collision backends and common command helpers live outside CLI entry modules.
+- GitHub Actions uses `project-check fast` as the single quality definition. Refresh bilingual guides and the asset manifest.
+- Simplified the Gripper G2 simulation modules. `ufactory/simulation/g2.py` was merged into `g2_adapter.py`, and the task-level `g2_confirmation.py` and `g2_replay.py` moved to `ufactory/trajectory/`. Package-level exports from `ufactory.simulation` are unchanged.
 - Pad contact forces now come from a single `object_finger_contact_forces_n`. Pass `left_normal`/`right_normal` to get the pad-normal clamping force used by the grasp gates; without them it returns the net force magnitude used by RL observations. Both values are unchanged.
 - `G2Controller` is now the single Torch implementation of the calibrated servo (formerly `G2BatchController`); states and outputs are `(num_envs,)` tensors and `num_envs` is keyword-only. Single scenes run it on the CPU in float64 with `num_envs=1`; `force_lookup()` is a method returning the calibration lookup of one environment. A recorded 521-step trajectory from the former scalar controller is kept as a regression reference (float64 within 1e-10).
-- Unified anti-slip rigid contact configuration across deterministic G2 pick-and-place, packaging, standalone G2 verification, and RL training/inference using `DEFAULT_IMPRATIO = 100.0` in `ufactory/simulation/physics.py` and `G2_NOSLIP_ITERATIONS = 0` in `ufactory/config/models.py`, eliminating pyramidal friction creep without the 3x throughput penalty of post-solve no-slip iterations.
+- Unified anti-slip rigid contact configuration across deterministic G2 pick-and-place, packaging, and RL training/inference using `DEFAULT_IMPRATIO = 100.0` in `ufactory/simulation/physics.py` and `G2_NOSLIP_ITERATIONS = 0` in `ufactory/config/models.py`, eliminating pyramidal friction creep without the 3x throughput penalty of post-solve no-slip iterations.
 - Refactored `examples/rl/pick_place` (`env_version=3`) to pure end-to-end PPO with 70 observations and 4 continuous Cartesian and G2 opening increments (`cartesian_and_g2_gap_increment`), strict tabletop pressing (`press_mm <= 1.0 mm`), low-release (`0–3 mm` clearance), and collision-free hold acceptance criteria, plus `visualize.py` and `run_seeds.py` entry points.
 - Training provenance in `examples/rl/pick_place` hashes `g2_adapter.py`, `contacts.py`, `metrics.py`, `runtime.py`, and `pick_place_config.py`; a test checks that every listed source exists.
 
 ### Removed
 
+- The standalone Gripper G2 cube grasp and 33-case acceptance suite are no longer a public example. Calibrated G2 dynamics remain in `ufactory/simulation`, and visualization, pick-place, packaging, and RL examples are unchanged.
+- Remove unused historical pick-place logic, custom policy/transfer, scenario-bank, acceptance-profile and Hugging Face modules with their dedicated tests; drop Hugging Face and Robotics Toolbox dependencies and synchronize the lock file.
+- Remove the unused trajectory compiler/backend stubs, package-embedded asset backend, and 40 unreferenced assets (35 arm collision STL files, two Lite6 finger GLBs, and three textures; 3.80 MB). Current URDF variants and scalar/Torch geometry remain supported.
 - Module paths `ufactory.simulation.g2`, `ufactory.simulation.g2_batch`, `ufactory.simulation.g2_confirmation`, `ufactory.simulation.g2_replay`, `ufactory.simulation.g2_scene` and `ufactory.simulation.g2_acceptance`, the class `G2BatchController`, and the helper `g2_adapter.normal_contact_forces`.
 - Legacy `examples/rl/pick_place` bundled `g2_stable_v1_3_3` weights (`pretrained/`), scenario banks (`scenarios/`), and behavior-cloning/campaign helpers (`bc_gate.py`, `pretrain_bc.py`, `overnight.py`, `make_scenario_bank.py`, `monitor_utils.py`, `trace_utils.py`).
+
+### Fixed
+
+- Packaging GPU regressions accept natural high-release drops and rebound by checking that the final object collision bounds lie inside the box (1 mm contact tolerance). Remove the unused 25 mm center-distance setting; retain grasp, transport, release and return-home checks.
+
+### Known Issues
+
+- On the local Genesis 1.4.4 GPU baseline, the xArm5 pose-4 kinematic contact test reads 0 N after 20 unpowered steps, below its >10 N expectation. Historical link3/link5 PD-hold contact is documented under 0.2.0; the current kinematic assertion remains unresolved.
+- Genesis 1.4.4 defaults to one convex hull per robot collision mesh. At nominal xArm5 pose 4, the source visual STL surfaces have 35.658 mm clearance, while the loaded collision meshes penetrate by 8.581 mm. Restoring the historical simplified STL alone still produces 10.186 mm penetration under the same defaults; preserving concavity or using multiple convex components is required. Asset READMEs explain this processing limitation.
+- The nominal bare xArm6 also has false link4/link6 contacts near J5 = 165–180° with the default convex hull. A 175° hold target stalls near 164.3° at the 30.6 N·m torque limit. Research compound colliders recover this pose; production collision assets remain unchanged pending geometry and workload validation.
 
 ## [0.3.1] — 2026-10-15
 

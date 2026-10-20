@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
+from ufactory.config import ConfigError, load_runtime_config
 from ufactory.robots.paths import robot_urdf
 from ufactory.training.reach_config import REACH_ENV_VERSION, REACH_SUCCESS_DISTANCE_M, effective_max_joint_delta_rad
 from ufactory.training.recipe import load_training_recipe
@@ -27,9 +27,87 @@ PICK_PLACE_RL_NOSLIP_ITERATIONS = 0
 PICK_PLACE_RL_EPISODE_LENGTH_S = 8.0
 
 
+_PICK_PLACE_RUNTIME_OVERRIDES = frozenset(
+    {
+        "task.parameters.control_dt_s",
+        "task.parameters.workspace_lower_m",
+        "task.parameters.workspace_upper_m",
+        "task.parameters.object_mass_kg",
+        "gripper.damping",
+        "gripper.frictionloss",
+        "simulation.substeps",
+        "simulation.constraint_solver",
+        "simulation.solver_iterations",
+        "simulation.friction_cone",
+        "simulation.contact_resolution",
+        "simulation.constraint_time_constant_s",
+        "simulation.use_gjk_collision",
+        "simulation.g2.speed_percent",
+        "simulation.g2.force_percent",
+    }
+)
+_PICK_PLACE_RECIPE_FIELDS = frozenset(
+    {
+        "task_name",
+        "env_version",
+        "num_envs",
+        "num_obs",
+        "num_actions",
+        "control",
+        "genesis_performance_mode",
+        "high_fidelity",
+        "action_scale",
+        "action_clip",
+        "gap_action_scale",
+        "setpoint_leash_m",
+        "pre_grasp_gap_m",
+        "close_floor_gap_m",
+        "reward_gamma",
+        "place_clearance_m",
+        "release_max_height_m",
+        "press_limit_m",
+        "near_table_m",
+        "max_near_table_descent_m_s",
+        "table_overload_margin_n",
+        "place_success_dist_m",
+        "drag_limit_m",
+        "tilt_limit_deg",
+        "success_hold_steps",
+    }
+)
+
+
+def _validate_pick_place_runtime_overrides(config_path: str | Path | None) -> None:
+    if config_path is None:
+        return
+    import yaml
+
+    try:
+        overlay = yaml.safe_load(Path(config_path).expanduser().read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ConfigError(f"cannot read pick-place RL runtime configuration: {exc}") from exc
+    if not isinstance(overlay, dict) or overlay.get("schema_version") != 1:
+        raise ConfigError("pick-place RL runtime configuration requires schema_version 1")
+
+    def validate(mapping: dict[str, Any], prefix: str = "") -> None:
+        for key, value in mapping.items():
+            if not prefix and key == "schema_version":
+                continue
+            field = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(value, dict):
+                if not any(allowed.startswith(field + ".") for allowed in _PICK_PLACE_RUNTIME_OVERRIDES):
+                    raise ConfigError(f"unsupported pick-place RL runtime override: {field}")
+                validate(value, field)
+            elif field not in _PICK_PLACE_RUNTIME_OVERRIDES:
+                raise ConfigError(f"unsupported pick-place RL runtime override: {field}")
+
+    validate(overlay)
+
+
 def load_pick_place_rl_runtime_config(robot: str, *, config_path: str | Path | None = None) -> Any:
     """Resolve the runtime configuration shared by pick-place RL training and evaluation."""
 
+    _validate_pick_place_runtime_overrides(config_path)
     return load_runtime_config(
         robot,
         task="pick_place",
@@ -64,30 +142,32 @@ def build_pick_place_task_configs(
     """Resolve the retained xArm6 + Gripper G2 pick-place RL task."""
 
     from ufactory.simulation import G2_PHYSICS_PROFILE
-    from ufactory.simulation.g2_model import g2_physics_summary, G2_KP, G2_KV
+    from ufactory.simulation.g2_model import g2_physics_summary
 
     if robot not in PICK_PLACE_RL_ROBOTS:
-        raise ValueError("the v0.2.13 pick-place RL environment supports only xArm6 + Gripper G2")
+        raise ValueError("the pick-place RL environment supports only xArm6 + Gripper G2")
     config = load_pick_place_rl_runtime_config(robot, config_path=runtime_config_path)
     if config.gripper is None or config.gripper.adapter != "g2":
         raise ValueError("the pick-place RL environment requires Gripper G2")
     params = config.task.parameters
-    object_spec = resolve_pick_place_object_spec(config)
     recipe = load_training_recipe(recipe_path)
     env_cfg = deepcopy(recipe["environment"])
-    if env_cfg.get("env_version") == PICK_PLACE_ENV_VERSION:
-        env_cfg["task_name"] = "pick_place"
-        if (env_cfg.get("num_obs"), env_cfg.get("num_actions"), env_cfg.get("control")) != (
-            PICK_PLACE_NUM_OBS,
-            PICK_PLACE_NUM_ACTIONS,
-            PICK_PLACE_CONTROL,
-        ):
-            raise ValueError("pick-place v3 requires 70 observations and 4 continuous command increments")
-        if float(env_cfg.get("reward_gamma", 0.995)) != float(recipe["train"]["algorithm"]["gamma"]):
-            raise ValueError("pick-place reward_gamma must match PPO gamma for potential shaping")
-        for key, value in (("place_clearance_m", 0.002), ("release_max_height_m", 0.003), ("press_limit_m", 0.001)):
-            if float(env_cfg[key]) != value:
-                raise ValueError(f"pick-place v3 requires {key}={value}")
+    unsupported = sorted(set(env_cfg) - _PICK_PLACE_RECIPE_FIELDS)
+    if unsupported:
+        raise ValueError(f"unsupported pick-place RL environment fields: {', '.join(unsupported)}")
+    if env_cfg.get("task_name", "pick_place") != "pick_place" or (
+        env_cfg.get("env_version"),
+        env_cfg.get("num_obs"),
+        env_cfg.get("num_actions"),
+        env_cfg.get("control"),
+    ) != (PICK_PLACE_ENV_VERSION, PICK_PLACE_NUM_OBS, PICK_PLACE_NUM_ACTIONS, PICK_PLACE_CONTROL):
+        raise ValueError("pick-place v3 requires 70 observations and 4 continuous command increments")
+    env_cfg["task_name"] = "pick_place"
+    if float(env_cfg.get("reward_gamma", 0.995)) != float(recipe["train"]["algorithm"]["gamma"]):
+        raise ValueError("pick-place reward_gamma must match PPO gamma for potential shaping")
+    for key, value in (("place_clearance_m", 0.002), ("release_max_height_m", 0.003), ("press_limit_m", 0.001)):
+        if float(env_cfg[key]) != value:
+            raise ValueError(f"pick-place v3 requires {key}={value}")
     env_cfg.update(
         {
             "runtime_config_sha256": config.sha256,
@@ -97,18 +177,10 @@ def build_pick_place_task_configs(
                 "force_percent": config.simulation.g2.force_percent,
             },
             "g2_physics": g2_physics_summary(simulation=config.simulation, rate_hz=1 / float(params["control_dt_s"])),
-            "episode_length_s": float(env_cfg.get("episode_length_s", params["episode_length_s"])),
+            "episode_length_s": float(params["episode_length_s"]),
             "ctrl_dt": float(params["control_dt_s"]),
-            "table_height": float(params["table_height_m"]),
-            "default_ee_pos": list(params["default_ee_position_m"]),
             "workspace_lower": list(params["workspace_lower_m"]),
             "workspace_upper": list(params["workspace_upper_m"]),
-            "grasp_center_offset_z": float(params["grasp_center_offset_z_m"]),
-            "lift_height_m": float(params["lift_height_m"]),
-            # Recipes may deliberately tighten these task-level defaults so the
-            # training terminal condition matches the deployment acceptance test.
-            "place_success_dist_m": float(env_cfg.get("place_success_dist_m", params["place_success_distance_m"])),
-            "success_hold_steps": int(env_cfg.get("success_hold_steps", params["success_hold_steps"])),
             "substeps": int(config.simulation.substeps),
             "constraint_solver": config.simulation.constraint_solver,
             "solver_iterations": config.simulation.solver_iterations,
@@ -117,46 +189,12 @@ def build_pick_place_task_configs(
             "contact_resolution": config.simulation.contact_resolution,
             "constraint_time_constant_s": config.simulation.constraint_time_constant_s,
             "use_gjk_collision": config.simulation.use_gjk_collision,
-            "gripper_open_mm": config.gripper.open_gap_m * 1000.0,
-            # Grasp preload target (~22 mm), not the hardware dead-closed gap (0 mm).
-            "gripper_close_mm": float(params["grasp_gap_m"]) * 1000.0,
-            "obj_size": list(object_spec.size_m),
-            "obj_mass_kg": object_spec.mass_kg,
-            "fixed_obj_pos": list(params["fixed_object_position_m"]),
-            "fixed_target_pos": list(params["fixed_target_position_m"]),
-            "obj_spawn_lower": list(params["object_spawn_lower_m"]),
-            "obj_spawn_upper": list(params["object_spawn_upper_m"]),
-            "target_spawn_lower": list(params["target_spawn_lower_m"]),
-            "target_spawn_upper": list(params["target_spawn_upper_m"]),
-            # Recipe may set fixed_demo_layout; default true matches trajectory demo poses.
-            "fixed_demo_layout": bool(env_cfg.get("fixed_demo_layout", True)),
-            # When the layout is not fixed, older recipes randomize both endpoints.
-            "randomize_target": bool(env_cfg.get("randomize_target", True)),
+            "obj_mass_kg": float(params["object_mass_kg"]),
         }
     )
-    gripper = config.gripper
     robot_cfg = {
-        "urdf_path": robot_urdf(config.robot.key, config.robot.urdf),
-        # Match trajectory pick-place scene (DEFAULT_ROBOT_BASE_POS xy = 0.30, 0.00).
-        "base_pos": [0.30, 0.0, env_cfg["table_height"]],
-        "ik_link_name": config.robot.ee_link,
-        "gripper_link_names": list(gripper.finger_link_names),
-        "arm_joint_names": list(config.robot.joint_names),
-        "gripper_joint_name": gripper.drive_joint,
-        "default_qpos": list(config.arm.default_qpos_rad),
-        "default_gripper_pos": gripper.open_drive,
-        "kp": list(config.arm.kp),
-        "kv": list(config.arm.kv),
-        "force_lower": list(config.arm.force_lower_nm),
-        "force_upper": list(config.arm.force_upper_nm),
-        "gripper_kp": G2_KP,
-        "gripper_kv": G2_KV,
-        "gripper_force_lower": gripper.force_lower_n,
-        "gripper_force_upper": gripper.force_upper_n,
-        "all_gripper_joint_names": list(gripper.all_joint_names),
-        "gripper_damping": gripper.damping,
-        "gripper_frictionloss": gripper.frictionloss,
-        "collision_monitor_links": ["link3", "link4", "link5"],
+        "gripper_damping": config.gripper.damping,
+        "gripper_frictionloss": config.gripper.frictionloss,
     }
     return env_cfg, deepcopy(recipe["reward"]), robot_cfg
 

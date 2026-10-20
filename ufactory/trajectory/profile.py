@@ -9,11 +9,7 @@ sampling is the safety-critical time law: ``set_servo_angle_j`` and
 stream replayed in simulation (Genesis PD) and on the real arm is aligned per
 tick by construction.
 
-``roboticstoolbox-python`` is *not* a runtime dependency: the optional
-``[trajectory]`` extra declares it so users who want the reference toolbox's
-``trapezoidal`` / ``mtraj`` / ``ctraj`` tooling can install it, but importing
-``ufactory.trajectory`` or the RL paths never triggers its (heavy) import.
-All profile math in this module is plain NumPy and has zero hard dependency.
+All profile math in this module is plain NumPy.
 
 Unit policy
 ------------

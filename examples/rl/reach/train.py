@@ -13,10 +13,7 @@ from .runtime import DEFAULT_RECIPE, OUTPUT_ROOT, configure_runtime, require_che
 configure_runtime()
 require_rsl_runtime()
 
-from rsl_rl.runners import OnPolicyRunner
-
 import genesis as gs
-import torch
 from ufactory.config import load_runtime_config
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import (
@@ -27,70 +24,16 @@ from ufactory.training import (
     load_training_recipe,
     validate_and_load_rsl_checkpoint,
     write_artifact_inventory,
-    write_checkpoint_manifest,
     write_run_provenance,
     write_training_config,
 )
 
+from ufactory.training.runner import ArtifactOnPolicyRunner
+from ufactory.training.runtime import prepare_log_dir
+
 from .env import XArm6ReachEnv
 
 EXECUTOR_ACTION_CONTRACT = "normalized_joint_position_delta"
-
-
-class ArtifactOnPolicyRunner(OnPolicyRunner):
-    """Write the integrity manifest immediately after every RSL checkpoint."""
-
-    checkpoint_training_config = None
-    checkpoint_env = None
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        original_log = self.logger.log
-
-        def log_with_metrics(**metrics) -> None:
-            episodes = self.logger.ep_extras
-            keys = {key for episode in episodes for key in episode}
-            values = {
-                key: torch.cat(
-                    [torch.as_tensor(episode[key]).flatten().cpu() for episode in episodes if key in episode]
-                )
-                for key in keys
-            }
-            report = {
-                "iteration": metrics["it"],
-                "completed_episodes": values["success_rate"].numel() if "success_rate" in values else 0,
-                "collection_s": metrics["collect_time"],
-                "learning_s": metrics["learn_time"],
-                "learning_rate": metrics["learning_rate"],
-                "action_std": metrics["action_std"].mean().item(),
-                "loss": metrics["loss_dict"],
-                "episode": {key: value.float().mean().item() for key, value in values.items()},
-            }
-            original_log(**metrics)
-            with (Path(self.logger.log_dir) / "training_metrics.jsonl").open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps(report, allow_nan=False) + "\n")
-
-        self.logger.log = log_with_metrics
-
-    def save(self, path: str, infos: dict | None = None) -> None:
-        saved_infos = {} if infos is None else dict(infos)
-        if self.checkpoint_env is not None:
-            saved_infos["ufactory_env_state"] = self.checkpoint_env.training_state_dict()
-        super().save(path, saved_infos)
-        if self.checkpoint_training_config is not None:
-            write_checkpoint_manifest(
-                Path(path),
-                training_config=self.checkpoint_training_config,
-                executor_action_contract=EXECUTOR_ACTION_CONTRACT,
-            )
-
-
-def _prepare_log_dir(path: Path, *, overwrite: bool) -> None:
-    if path.exists():
-        if not overwrite:
-            raise FileExistsError(f"training directory already exists: {path}; pass --overwrite to replace it")
-        shutil.rmtree(path)
-    path.mkdir(parents=True)
 
 
 def main() -> None:
@@ -155,7 +98,7 @@ def main() -> None:
             parser.error("resume requires the original --num-envs; the checkpoint restores every environment state")
 
     log_dir = args.log_dir or OUTPUT_ROOT / args.exp_name
-    _prepare_log_dir(log_dir, overwrite=args.overwrite)
+    prepare_log_dir(log_dir, overwrite=args.overwrite)
     write_training_config(
         log_dir / "config.yaml",
         task="reach",
@@ -179,6 +122,8 @@ def main() -> None:
         repo_root / "ufactory/training/logic/reach.py",
         repo_root / "ufactory/training/tasks.py",
         repo_root / "ufactory/training/artifacts.py",
+        repo_root / "ufactory/training/runner.py",
+        repo_root / "ufactory/training/runtime.py",
         repo_root / "ufactory/training/reach_evaluation.py",
         repo_root / "ufactory/training/reach_config.py",
         repo_root / "ufactory/config/loader.py",
@@ -209,7 +154,9 @@ def main() -> None:
         performance_mode=performance_mode,
     )
     env = XArm6ReachEnv(env_cfg=env_cfg, reward_cfg=reward_cfg, robot_cfg=robot_cfg, show_viewer=args.vis)
-    runner = ArtifactOnPolicyRunner(env, train_cfg, str(log_dir), device=gs.device)
+    runner = ArtifactOnPolicyRunner(
+        env, train_cfg, log_dir=str(log_dir), device=gs.device, executor_action_contract=EXECUTOR_ACTION_CONTRACT
+    )
     runner.checkpoint_training_config = artifact
     runner.checkpoint_env = env
     if resume_state is not None:

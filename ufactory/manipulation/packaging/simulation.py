@@ -15,7 +15,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
 import math
@@ -28,7 +27,8 @@ import torch
 import genesis as gs
 from genesis.utils.geom import transform_quat_by_quat, xyz_to_quat
 
-from ufactory.config import load_runtime_config
+from ufactory.config import load_runtime_config, runtime_config_dict
+from ufactory.config.loader import config_sha256
 from ufactory.grippers import create_gripper_adapter
 from ufactory.grippers.g2 import (
     GRIPPER_G2_SIM_OPEN_DRIVE as GRIPPER_OPEN,
@@ -43,8 +43,8 @@ from ufactory.manipulation.packaging.scene import (
     build_packaging_scene,
     make_layout,
 )
-from ufactory.robots.runtime import get_robot_runtime_profile, robot_runtime_cli_choices
-from ufactory.simulation import G2_PHYSICS_PROFILE, GenesisRuntimeManager, override_simulation_backend
+from ufactory.robots.runtime import get_robot_runtime_profile
+from ufactory.simulation import G2_PHYSICS_PROFILE, GenesisRuntimeManager
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
 from ufactory.trajectory.scene import TrajSceneContext
@@ -469,29 +469,31 @@ def _with_sim_release_timing(program, *, speed: float, task_layout=None):
 
 
 def _speed_config(robot_key: str, speed: float, config_path: Path | None = None, *, base_config=None):
-    """Load the versioned task with a simulation-only playback multiplier."""
+    """Scale the resolved task without reloading or losing user overrides."""
     mult = max(0.25, float(speed))
     base = base_config or load_runtime_config(robot_key, task="packaging_showcase", config_path=config_path)
     p = base.task.parameters
-    return load_runtime_config(
-        robot_key,
-        task="packaging_showcase",
-        config_path=config_path,
-        overrides={
-            "simulation.backend": base.simulation.backend,
-            "simulation.g2.position_mm": base.simulation.g2.position_mm,
-            "simulation.g2.speed_percent": base.simulation.g2.speed_percent,
-            "simulation.g2.force_percent": base.simulation.g2.force_percent,
-            "motion.joint_speed_rad_s": base.motion.joint_speed_rad_s * mult,
-            "motion.joint_acceleration_rad_s2": base.motion.joint_acceleration_rad_s2 * mult,
-            "motion.cartesian_speed_m_s": base.motion.cartesian_speed_m_s * mult,
-            "motion.cartesian_acceleration_m_s2": base.motion.cartesian_acceleration_m_s2 * mult,
-            "motion.gripper_duration_s": base.motion.gripper_duration_s / mult,
-            "task.parameters.grasp_settle_s": float(p["grasp_settle_s"]) / mult,
-            "task.parameters.pre_release_settle_s": float(p["pre_release_settle_s"]) / mult,
-            "task.parameters.post_release_settle_s": float(p["post_release_settle_s"]) / mult,
-        },
+    scaled = replace(
+        base,
+        motion=replace(
+            base.motion,
+            joint_speed_rad_s=base.motion.joint_speed_rad_s * mult,
+            joint_acceleration_rad_s2=base.motion.joint_acceleration_rad_s2 * mult,
+            cartesian_speed_m_s=base.motion.cartesian_speed_m_s * mult,
+            cartesian_acceleration_m_s2=base.motion.cartesian_acceleration_m_s2 * mult,
+            gripper_duration_s=base.motion.gripper_duration_s / mult,
+        ),
+        task=replace(
+            base.task,
+            parameters={
+                **p,
+                "grasp_settle_s": float(p["grasp_settle_s"]) / mult,
+                "pre_release_settle_s": float(p["pre_release_settle_s"]) / mult,
+                "post_release_settle_s": float(p["post_release_settle_s"]) / mult,
+            },
+        ),
     )
+    return replace(scaled, sha256=config_sha256(runtime_config_dict(scaled, include_provenance=False)))
 
 
 def _trajectory_context(
@@ -593,8 +595,11 @@ def run_pick_place_cycle(
     """Replay the shared physical trajectory without kinematic object carry."""
     selected_robot = robot_key or layout.robot_key
     if ctx is None:
-        base_config = load_runtime_config(selected_robot, task="packaging_showcase", config_path=config_path)
+        base_config = runtime_config or load_runtime_config(
+            selected_robot, task="packaging_showcase", config_path=config_path
+        )
         ctx = init_showcase_robot(robot, layout, scene, runtime_config=base_config)
+        runtime_config = base_config
     if stop_after_phase0:
         hold_robot_home(robot, scene, ctx, steps=_scale_steps(SETTLE_STEPS, speed))
         if capture_hook is not None:
@@ -631,14 +636,14 @@ def run_pick_place_cycle(
         program = _with_sim_release_timing(program, speed=speed, task_layout=task_layout)
 
     # Preflight the exact built model and executable program.
-    from ufactory.cli.packaging import _backends
-    from ufactory.cli.pick_place import _write_json
+    from ufactory.manipulation.packaging.safety import build_packaging_backends
+    from ufactory.manipulation.commands import write_json
     from ufactory.manipulation.packaging.core import packaging_scene_sha256
     from ufactory.trajectory.preflight import create_safety_gate
     from ufactory.trajectory.g2_replay import save_sim_report
 
     urdf = Path(traj_ctx.robot_urdf_path)
-    kinematics, collision = _backends(config, urdf, calibrated_g2=ctx.g2_controller is not None)
+    kinematics, collision = build_packaging_backends(config, urdf, calibrated_g2=ctx.g2_controller is not None)
     gate = create_safety_gate(
         config,
         kinematics=kinematics,
@@ -648,7 +653,7 @@ def run_pick_place_cycle(
         urdf_path=urdf,
     )
     preflight = gate.preflight(program, executor=executor)
-    _write_json(preflight_report_path, preflight.to_dict())
+    write_json(preflight_report_path, preflight.to_dict())
     if not preflight.passed:
         report = SimReport(completed=False, failure_reason="preflight failed", timing_passed=False)
         save_sim_report(report, csv_path, sim_report_path)
@@ -731,13 +736,6 @@ def _hold_final_view(scene) -> None:
             raise
 
 
-def _positive_cycles(value: str) -> int:
-    cycles = int(value)
-    if cycles < 1:
-        raise argparse.ArgumentTypeError("cycles must be at least 1")
-    return cycles
-
-
 def _cycle_limit(cycles: int | None) -> int:
     """Return the finite cycle count. The default is one cycle."""
 
@@ -759,72 +757,39 @@ def _capture_keyframes_interactive(scene, robot, block, layout, speed: float, ct
     print("\nKeyframe workflow complete.")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="UFACTORY robot physics packaging showcase")
-    parser.add_argument("--robot", default="xarm6", choices=robot_runtime_cli_choices())
-    parser.add_argument(
-        "--table-height",
-        type=float,
-        default=None,
-        help="Tabletop surface height in meters (default: 0.75)",
-    )
-    parser.add_argument("--speed", type=float, default=1.0, help="Motion speed multiplier")
-    parser.add_argument(
-        "--visual",
-        action="store_true",
-        help="Open the interactive viewer and hold the final frame until the window closes",
-    )
-    parser.add_argument(
-        "--executor",
-        choices=("servo_j", "servo_cartesian"),
-        default="servo_cartesian",
-        help="Simulation arm target stream (default: servo_cartesian)",
-    )
-    parser.add_argument("--config", type=Path, help="Optional packaging task YAML override")
-    parser.add_argument(
-        "--backend",
-        choices=("cpu", "gpu"),
-        default=None,
-        help="Override simulation.backend (use cpu without a Genesis-supported GPU)",
-    )
-    parser.add_argument(
-        "--cycles", type=_positive_cycles, default=None, help="Number of pick-place cycles (default: 1)"
-    )
-    parser.add_argument(
-        "--capture-keyframes",
-        action="store_true",
-        help="Run startup pose debug sequence then exit (use headless script for PNGs)",
-    )
-    parser.add_argument("--position-mm", type=float)
-    parser.add_argument("--speed-percent", type=float)
-    parser.add_argument("--force-percent", type=float)
-    parser.add_argument("--csv", type=Path)
-    parser.add_argument("--sim-report", type=Path)
-    parser.add_argument("--report", type=Path)
-    args = parser.parse_args(argv)
-    overrides = {
-        f"simulation.g2.{name}": getattr(args, name)
-        for name in ("position_mm", "speed_percent", "force_percent")
-        if getattr(args, name) is not None
-    }
-    runtime_config = load_runtime_config(
-        args.robot, task="packaging_showcase", config_path=args.config, overrides=overrides
-    )
-    if runtime_config.gripper.adapter == "g2" and runtime_config.simulation.g2.speed_percent <= 0:
-        parser.error("automatic G2 manipulation requires --speed-percent > 0")
-    if args.backend is not None:
-        runtime_config = override_simulation_backend(runtime_config, args.backend)
+@dataclass(frozen=True)
+class PackagingSimulationOptions:
+    speed: float = 1.0
+    executor: str = "servo_j"
+    cycles: int | None = None
+    table_height: float | None = None
+    visual: bool = False
+    capture_keyframes: bool = False
+    csv: Path | None = None
+    sim_report: Path | None = None
+    report: Path | None = None
 
+
+def run_packaging_simulation(options: PackagingSimulationOptions, runtime_config) -> int:
+    """Execute a resolved command without parsing arguments or reloading YAML."""
+    if not math.isfinite(options.speed) or options.speed <= 0:
+        raise ValueError("speed must be finite and positive")
+    if options.cycles is not None and options.cycles < 1:
+        raise ValueError("cycles must be at least 1")
+    if runtime_config.gripper is None:
+        raise ValueError("packaging requires a configured gripper")
+    if runtime_config.gripper.adapter == "g2" and runtime_config.simulation.g2.speed_percent <= 0:
+        raise ValueError("automatic G2 manipulation requires speed_percent > 0")
     require_genesis_capabilities(gs, pbr=True, deferred_viewer=True)
     with GenesisRuntimeManager(runtime_config.simulation):
-        return _run_packaging_sim_body(args, runtime_config)
+        return _run_packaging_sim_body(options, runtime_config)
 
 
 def _cycle_path(path: Path | None, cycle: int, limit: int) -> Path | None:
     return path.with_name(f"{path.stem}.cycle-{cycle}{path.suffix}") if path is not None and limit > 1 else path
 
 
-def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
+def _run_packaging_sim_body(args: PackagingSimulationOptions, runtime_config) -> int:
     table_top_z = (
         args.table_height if args.table_height is not None else make_layout(runtime_config=runtime_config).table_top_z
     )
@@ -867,7 +832,6 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
                 layout,
                 speed=args.speed,
                 ctx=ctx,
-                config_path=args.config,
                 robot_key=runtime_config.robot.key,
                 executor=args.executor,
                 runtime_config=runtime_config,
@@ -896,7 +860,3 @@ def _run_packaging_sim_body(args: argparse.Namespace, runtime_config) -> int:
     except KeyboardInterrupt:
         return 1 if failed else 0
     return 1 if failed else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

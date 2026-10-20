@@ -51,7 +51,6 @@ class PackagingLayout:
     grasp_settle_s: float
     pre_release_settle_s: float
     post_release_settle_s: float
-    place_success_distance_m: float
     simulation_grasp_center_compensation_xy_m: tuple[float, float]
     simulation_arm_kp_scale: float
     simulation_release_duration_s: float
@@ -144,7 +143,6 @@ def packaging_layout(config: ResolvedRuntimeConfig) -> PackagingLayout:
         grasp_settle_s=float(p["grasp_settle_s"]),
         pre_release_settle_s=float(p["pre_release_settle_s"]),
         post_release_settle_s=float(p["post_release_settle_s"]),
-        place_success_distance_m=float(p["place_success_distance_m"]),
         simulation_grasp_center_compensation_xy_m=sim_compensation,
         simulation_arm_kp_scale=sim_arm_kp_scale,
         simulation_release_duration_s=float(p["simulation_release_duration_s"]),

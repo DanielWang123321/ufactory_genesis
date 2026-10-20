@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import subprocess
 import sys
 
@@ -11,7 +10,6 @@ import pytest
 
 from ufactory.robots.registry import ROBOT_PROFILES
 from ufactory.robots.runtime import get_robot_runtime_profile
-from ufactory.trajectory.backends import OptionalTrajectoryDependencyError, require_roboticstoolbox
 from ufactory.trajectory.planner import (
     CartesianWaypoint,
     JointWaypoint,
@@ -183,11 +181,3 @@ def test_plan_mixed_waypoints_chains_typed_and_dict_waypoints():
     np.testing.assert_allclose(program.segments[-1].pose_start, [0.30, 0.10, 0.30])
     np.testing.assert_allclose(program.segments[-1].pose_end, [0.30, 0.20, 0.30])
     validate_program(program)
-
-
-def test_optional_roboticstoolbox_backend_has_clear_install_hint():
-    if importlib.util.find_spec("roboticstoolbox") is not None:
-        pytest.skip("roboticstoolbox installed in this environment")
-
-    with pytest.raises(OptionalTrajectoryDependencyError, match=r"\.\[trajectory\]"):
-        require_roboticstoolbox()

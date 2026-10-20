@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-import torch
 import yaml
 
 from ufactory.config.models import G2_PHYSICS_PROFILE
@@ -21,6 +20,7 @@ from ufactory.training import (
 
 
 def test_safe_checkpoint_manifest_and_weights_only_compatible(tmp_path: Path):
+    torch = pytest.importorskip("torch")
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,
@@ -59,7 +59,7 @@ def test_checkpoint_tamper_is_rejected(tmp_path: Path):
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"model_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     write_checkpoint_manifest(checkpoint, training_config=artifact, executor_action_contract="servo_j")
     with checkpoint.open("ab") as stream:
@@ -80,7 +80,7 @@ def test_old_physics_transfer_is_explicit_and_cannot_fully_resume(tmp_path: Path
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     write_checkpoint_manifest(
         checkpoint, training_config=load_training_config(config_path), executor_action_contract="cartesian_delta"
     )
@@ -110,7 +110,7 @@ def _noslip0_checkpoint(tmp_path: Path, profile: str) -> tuple[Path, Path, dict]
         config_path, task="pick_place", robot_key="xarm6_1305", env=saved_env, reward={}, robot={}, train={}
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     write_checkpoint_manifest(
         checkpoint, training_config=load_training_config(config_path), executor_action_contract="cartesian_delta"
     )
@@ -157,7 +157,7 @@ def test_checkpoint_with_stale_runtime_config_hash_is_rejected(tmp_path: Path):
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"model_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     write_checkpoint_manifest(checkpoint, training_config=artifact, executor_action_contract="servo_j")
 
@@ -188,7 +188,7 @@ def test_checkpoint_with_matching_hash_but_conflicting_runtime_body_is_rejected(
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"actor_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     write_checkpoint_manifest(checkpoint, training_config=artifact, executor_action_contract="cartesian_delta")
 
@@ -229,7 +229,7 @@ def test_checkpoint_without_current_physics_profile_is_rejected(
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"actor_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     write_checkpoint_manifest(
         checkpoint,
@@ -267,7 +267,7 @@ def test_checkpoint_layout_transfer_allows_only_explicit_layout_mismatch(tmp_pat
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     write_checkpoint_manifest(
         checkpoint,
@@ -307,7 +307,7 @@ def test_checkpoint_layout_transfer_rejects_unknown_allowed_key(tmp_path: Path):
         train={},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"actor_state_dict": {}, "critic_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     write_checkpoint_manifest(
         checkpoint,
@@ -349,7 +349,7 @@ def test_artifact_inventory_contains_resolved_config_and_checkpoint_hash(tmp_pat
         train={"seed": 1},
     )
     checkpoint = tmp_path / "model_0.pt"
-    torch.save({"model_state_dict": {}}, checkpoint)
+    checkpoint.write_bytes(b"checkpoint integrity fixture")
     artifact = load_training_config(config_path)
     output = write_artifact_inventory(
         tmp_path / "evaluation_artifacts.yaml",
@@ -380,6 +380,7 @@ def test_run_provenance_records_quadrants_runtime_version(tmp_path: Path) -> Non
 
 
 def test_validated_rsl_loader_uses_weights_only_mode(tmp_path: Path, monkeypatch) -> None:
+    torch = pytest.importorskip("torch")
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,
@@ -427,6 +428,7 @@ def test_validated_rsl_loader_rejects_config_before_deserialization(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    torch = pytest.importorskip("torch")
     config_path = tmp_path / "config.yaml"
     write_training_config(
         config_path,

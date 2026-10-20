@@ -10,6 +10,10 @@ Observations include joint positions and velocities, EE and object state, relati
 
 Discounted potential differences and one-time grasp, lift, and low-release bonuses guide approach, grasping, lifting, transport, release, and hold. A pre-grasp gap potential varies continuously with actual pad-to-cube distance before placement, encouraging an open approach followed by closing and gradual preload unwinding during descent. Placement uses the cube's lowest point under its actual orientation, with a 2 mm clearance target before release and a 0–2 mm resting band once low release is confirmed. Once low release at the target is confirmed (`place_rewarded`), approach, pre-grasp, and grasp potentials smoothly hand off to contact-free opening progress and settled hold steps, eliminating re-closing incentive. Held descent faster than 20 mm/s within 20 mm of the table, movement after touchdown, table overload, high release, and robot-table collisions incur penalties. Repeated opening, closing, or lifting cannot collect the one-time bonuses again.
 
+The scene geometry and home pose are defined in `ufactory/training/pick_place_config.py`. Runtime YAML overrides support `task.parameters.control_dt_s`, `workspace_lower_m`, `workspace_upper_m`, `object_mass_kg`, gripper damping/friction, solver settings, and G2 speed/force percentages. The 8 s episode, model, cube size and layout are fixed. Unsupported overrides and unused recipe fields raise an error. Existing v3 checkpoints remain loadable with hash, action-contract and safety checks.
+
+Training metrics, checkpoint manifests and caches use shared helpers in `ufactory/training/runner.py` and `runtime.py`.
+
 ## Strict success criteria
 
 - Pre-lift drag ≤10 mm and tilt ≤15°. Confirm bilateral contact for at least three steps, with 0.2 N contact entry and 0.05 N exit thresholds.

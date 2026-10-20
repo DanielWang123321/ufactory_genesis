@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "manifest_version": "0.2.13",
+  "manifest_version": "0.3.2",
   "required_paths": [
     "assets/configs/runtime/motion/default.yaml",
     "assets/configs/runtime/safety/default.yaml",
@@ -21,14 +21,18 @@
     "assets/urdf/xarm6/xarm6_1305_g2_movable_visual.urdf",
     "assets/urdf/xarm7/xarm7_1305_g2_movable_visual.urdf",
     "assets/urdf/uf850/uf850_g2_movable_visual.urdf",
-    "assets/urdf/lite6/lite6_with_gripper.urdf"
+    "assets/urdf/lite6/lite6_with_gripper.urdf",
+    "assets/scenes/packaging_showcase/textures/cardboard.jpg",
+    "assets/scenes/packaging_showcase/meshes/uv_box.obj",
+    "assets/urdf/lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb",
+    "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb"
   ],
   "sha256": {
     "assets/configs/runtime/motion/default.yaml": "ce961bb044f0c95a803fac693bffb7c75b3e78df61ce90e4ab2644e79be73f03",
     "assets/configs/runtime/safety/default.yaml": "081ab8646ebfa46e8535ae4c07cd25be0e7122d569cad77c1a08858978f0f451",
     "assets/configs/runtime/simulation/default.yaml": "1ded5dddaf1f2a5f669f9fed4eeb8d2a3c3c81a24632c3cc8e36839dceef4aa5",
     "assets/configs/runtime/tasks/pick_place.yaml": "3437242b0e05c770e5255a9052496fd46d1978bbae06be79c8b031af0c79882a",
-    "assets/configs/runtime/tasks/packaging_showcase.yaml": "8bc71e0ff95ccb5882993e4903bdb84c752aef4fa3f300ca9fd79b98687da2bd",
+    "assets/configs/runtime/tasks/packaging_showcase.yaml": "0e34b3997b32570b9007e6f25529a95955b54f0f7b7425fb2298f9d91c4e15c2",
     "assets/configs/runtime/tasks/reach.yaml": "15fce661d05c20b2e179eb54f5e585d6bcdbee70a0a0df0893c07c5fc934cd82",
     "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "6c3b455f0a6f43186376a72caa605b65b426f993b8a5b1cebdc79f1925aff5b7",
     "assets/configs/runtime/tasks/robots/lite6_pick_place.yaml": "ba25ff726165172833aa0ae2aa58ce10bc1286069b0598de8d47e3843bdde3a1",
@@ -43,6 +47,10 @@
     "assets/urdf/xarm6/xarm6_1305_g2_movable_visual.urdf": "d9c546ee827f0515a46e9adcd6d69937ad6ab6ef3b5ccd4bd1b352ea45f22a30",
     "assets/urdf/xarm7/xarm7_1305_g2_movable_visual.urdf": "0cb5b733dbb51ba4d907b361a7ca8412984682cccfcbf6c3c39a9d3a7e8138f5",
     "assets/urdf/uf850/uf850_g2_movable_visual.urdf": "c4e569d42a53ed411f20d57342577c00441a1407ce65b8f64797abe15f84fdc6",
-    "assets/urdf/lite6/lite6_with_gripper.urdf": "5fdb3e636164c55537b18d2a04e46aafcafc169bcbbfca39aca160b30f13e38d"
+    "assets/urdf/lite6/lite6_with_gripper.urdf": "5fdb3e636164c55537b18d2a04e46aafcafc169bcbbfca39aca160b30f13e38d",
+    "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
+    "assets/scenes/packaging_showcase/meshes/uv_box.obj": "901c6efc7a1e1b4947af16ed95b9e76b2b1d053fd117d36641a9e770768e35cc",
+    "assets/urdf/lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb": "1b7c3b05eb5ef63fadb5b65bf097fb349c18607ccb19ac321b74af247dd9c406",
+    "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb": "1ae8f67d1ddfa3b5a7f09265aa680eff72bc05f4c817470ac885333dde1cce57"
   }
 }

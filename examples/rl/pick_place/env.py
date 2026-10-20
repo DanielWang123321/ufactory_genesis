@@ -26,6 +26,13 @@ from ufactory.simulation.g2_controller import G2Controller
 from ufactory.simulation.g2_model import G2Model
 from ufactory.training.pick_place_config import (
     PICK_PLACE_ACTION_CONTRACT,
+    HOME_EE_POS,
+    TABLE_SIZE,
+    TABLE_POS,
+    TARGET_PAD_SIZE,
+    TARGET_PAD_POS,
+    PICK_PLACE_ROBOT,
+    PICK_PLACE_URDF,
     PICK_PLACE_CONTROL,
     PICK_PLACE_ENV_VERSION,
     PICK_PLACE_NUM_ACTIONS,
@@ -65,7 +72,6 @@ GAP_ACTION_SCALE = 0.003
 SETPOINT_LEASH_M = 0.025
 PRE_GRASP_GAP_M = 0.050
 CLOSE_FLOOR_GAP_M = 0.012
-HOME_EE_POS = (0.30, 0.0, 0.30)
 
 
 class XArm6PickPlaceEnv:
@@ -180,13 +186,13 @@ class XArm6PickPlaceEnv:
             else None
         )
         self.table = self.scene.add_entity(
-            gs.morphs.Box(size=(0.60, 0.90, 0.04), pos=(0.35, 0.15, -0.02), fixed=True),
+            gs.morphs.Box(size=TABLE_SIZE, pos=TABLE_POS, fixed=True),
             surface=table_surf,
         )
         self.target_pad = self.scene.add_entity(
             gs.morphs.Box(
-                size=(0.05, 0.05, 0.001),
-                pos=(TARGET_X, TARGET_Y, 0.0005),
+                size=TARGET_PAD_SIZE,
+                pos=TARGET_PAD_POS,
                 fixed=True,
                 collision=False,
             ),
@@ -196,14 +202,14 @@ class XArm6PickPlaceEnv:
         )
 
         if self.high_fidelity:
-            urdf_file = robot_visual_glb_urdf("xarm6", with_gripper_g2=True, movable=True)
+            urdf_file = robot_visual_glb_urdf(PICK_PLACE_ROBOT, with_gripper_g2=True, movable=True)
             with glb_pbr_surfaces():
                 self.robot = self.scene.add_entity(
                     gs.morphs.URDF(file=urdf_file, fixed=True),
                     surface=glb_view_surface(),
                 )
         else:
-            urdf_file = robot_urdf("xarm6", "xarm6_with_gripper.urdf")
+            urdf_file = robot_urdf(PICK_PLACE_ROBOT, PICK_PLACE_URDF)
             self.robot = self.scene.add_entity(gs.morphs.URDF(file=urdf_file, fixed=True))
 
         self.obj = self.scene.add_entity(
@@ -235,7 +241,7 @@ class XArm6PickPlaceEnv:
         self.left_finger_link.set_friction(1.2)
         self.right_finger_link.set_friction(1.2)
 
-        profile = get_robot_profile("xarm6")
+        profile = get_robot_profile(PICK_PLACE_ROBOT)
         joint_map = {j.name.split("/")[-1]: j for j in self.robot.joints}
         self.arm_dof_idx = [joint_map[n].dofs_idx_local[0] for n in joint_names(profile)]
         setup_arm_pd(self.robot, self.arm_dof_idx, profile)

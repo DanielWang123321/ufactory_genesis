@@ -7,9 +7,6 @@ environment:
   num_obs: 70
   num_actions: 4
   genesis_performance_mode: false
-  randomize_initial_episode_length: false
-  fixed_demo_layout: true
-  randomize_target: false
   control: cartesian_and_g2_gap_increment
   action_scale: 0.005
   action_clip: 1.0

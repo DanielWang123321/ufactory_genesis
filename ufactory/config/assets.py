@@ -1,10 +1,4 @@
-"""Asset discovery for the supported editable installation.
-
-v0.2.x remains source-tree only: ``discover_asset_store()`` prefers a cloned
-repository with ``assets/`` beside ``pyproject.toml``. A ``PackageAssetStore``
-backend is present as the 0.3.x extension point but is not populated by current
-wheels/sdists, so non-checkout installs still fail closed.
-"""
+"""Asset discovery for source checkouts installed with ``pip install -e .``."""
 
 from __future__ import annotations
 
@@ -71,14 +65,7 @@ class RepositoryAssetStore:
 
     @classmethod
     def discover(cls, start: Path | None = None) -> RepositoryAssetStore:
-        store = discover_asset_store(start=start)
-        if not isinstance(store, RepositoryAssetStore):
-            raise AssetLayoutError(
-                "UFACTORY runtime assets were not found in a source checkout. "
-                "Clone the GitHub source repository and install it with "
-                "`pip install -e .`; wheel/sdist installs are not supported in v0.2.x."
-            )
-        return store
+        return discover_asset_store(start=start)
 
     @classmethod
     def try_discover(cls, start: Path | None = None) -> RepositoryAssetStore | None:
@@ -106,56 +93,12 @@ class RepositoryAssetStore:
         return _load_and_validate_manifest(self, verify_paths=verify_paths)
 
 
-@dataclass(frozen=True)
-class PackageAssetStore:
-    """Locate assets shipped inside the installed ``ufactory`` package.
-
-    Intended for 0.3.x wheels that embed ``ufactory/assets/``. Current v0.2.x
-    builds do not include that tree, so ``try_discover()`` returns ``None``.
-    """
-
-    root: Path
-
-    @classmethod
-    def try_discover(cls) -> PackageAssetStore | None:
-        package_root = Path(__file__).resolve().parents[1]
-        assets_dir = package_root / "assets"
-        if assets_dir.is_dir() and (assets_dir / "manifest.json").is_file():
-            # Package-embedded assets use ``ufactory/`` as the root so that
-            # repository-relative paths such as ``assets/manifest.json`` resolve.
-            return cls(root=package_root)
-        return None
-
-    @property
-    def assets_dir(self) -> Path:
-        return self.root / "assets"
-
-    def require(self, relative_path: str | Path) -> Path:
-        relative = _validate_relative_asset_path(relative_path)
-        path = (self.root / relative).resolve()
-        if not path.is_file():
-            raise AssetLayoutError(f"required package asset is missing: {relative}")
-        return path
-
-    def validate_manifest(self, *, verify_paths: Iterable[str] = ()) -> dict[str, object]:
-        return _load_and_validate_manifest(self, verify_paths=verify_paths)
-
-
-def discover_asset_store(start: Path | None = None) -> AssetStore:
-    """Discover the active asset backend.
-
-    Order: source checkout (``RepositoryAssetStore``), then package-embedded
-    assets (``PackageAssetStore``, 0.3.x). v0.2.x wheels do not ship package
-    assets, so non-checkout installs still raise ``AssetLayoutError``.
-    """
+def discover_asset_store(start: Path | None = None) -> RepositoryAssetStore:
+    """Find a complete source checkout or fail closed."""
     repo = RepositoryAssetStore.try_discover(start=start)
     if repo is not None:
         return repo
-    package = PackageAssetStore.try_discover()
-    if package is not None:
-        return package
     raise AssetLayoutError(
         "UFACTORY runtime assets were not found. Clone the GitHub source repository "
-        "and install it with `pip install -e .`; wheel/sdist installs are not supported "
-        "in v0.2.x (package-embedded assets are reserved for 0.3.x)."
+        "and install it with `pip install -e .`; wheel/sdist installs are not supported."
     )

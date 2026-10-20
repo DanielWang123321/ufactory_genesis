@@ -40,7 +40,6 @@ def test_packaging_simulation_does_not_hardcode_gs_gpu() -> None:
     source = Path("ufactory/manipulation/packaging/simulation.py").read_text(encoding="utf-8")
     assert "gs.init(backend=gs.gpu" not in source
     assert "GenesisRuntimeManager(runtime_config.simulation)" in source
-    assert "override_simulation_backend" in source
 
 
 def test_backend_init_hint_mentions_cpu_path() -> None:

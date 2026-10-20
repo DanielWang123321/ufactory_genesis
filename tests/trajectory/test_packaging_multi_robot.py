@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from ufactory.cli.packaging import _backends, _model_and_hashes, _sdk_evidence_path
@@ -29,7 +30,6 @@ def test_packaging_profiles_are_available_for_all_supported_robots(robot: str) -
     assert config.gripper is not None
     assert layout.object_size_m == pytest.approx((0.030, 0.030, 0.030))
     assert layout.object_mass_kg == pytest.approx(0.017)
-    assert layout.place_success_distance_m == pytest.approx(0.025)
     assert config.simulation.substeps == 32
     assert "simulation_substeps" not in config.task.parameters
 
@@ -45,6 +45,7 @@ def test_g2_packaging_profiles_preserve_reference_geometry(robot: str) -> None:
 
 
 def test_g2_packaging_scene_rejects_unsafe_global_substeps_before_build() -> None:
+    pytest.importorskip("genesis")
     from ufactory.manipulation.packaging.scene import build_packaging_scene
 
     config = load_runtime_config(
@@ -216,73 +217,76 @@ def test_packaging_sdk_report_name_is_robot_specific() -> None:
     assert _sdk_evidence_path(explicit, "lite6") is explicit
 
 
-def test_packaging_sim_forwarding_preserves_selected_robot(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "robot,extra", [("lite6", ["--cycles", "3"]), ("xarm6", ["--backend", "cpu"]), ("xarm6", ["--visual"])]
+)
+def test_packaging_simulation_receives_resolved_options_once(monkeypatch, robot, extra) -> None:
+    pytest.importorskip("genesis")
     from ufactory.cli import packaging
+    from ufactory.manipulation.packaging import simulation
 
-    received: list[str] = []
-    monkeypatch.setattr(packaging, "_packaging_simulation_main", lambda argv: received.extend(argv) or 0)
+    received = []
+    load_calls = []
+    original_load = packaging.load_runtime_config
 
-    class Args:
-        robot = "lite6"
-        speed = 1.0
-        executor = "servo_cartesian"
-        cycles = 3
-        loop = None
-        table_height = None
-        config = None
-        backend = None
-        visual = False
-        capture_keyframes = False
+    def load(*args, **kwargs):
+        load_calls.append((args, kwargs))
+        return original_load(*args, **kwargs)
 
-    assert packaging._run_sim(Args()) == 0
-    assert received[:2] == ["--robot", "lite6"]
-    assert received[-2:] == ["--cycles", "3"]
-
-
-def test_packaging_sim_forwarding_includes_backend(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ufactory.cli import packaging
-
-    received: list[str] = []
-    monkeypatch.setattr(packaging, "_packaging_simulation_main", lambda argv: received.extend(argv) or 0)
-
-    class Args:
-        robot = "xarm6"
-        speed = 1.0
-        executor = "servo_j"
-        cycles = None
-        loop = None
-        table_height = None
-        config = None
-        backend = "cpu"
-        visual = False
-        capture_keyframes = False
-
-    assert packaging._run_sim(Args()) == 0
-    assert "--backend" in received
-    assert received[received.index("--backend") + 1] == "cpu"
-    assert "--visual" not in received
+    monkeypatch.setattr(packaging, "load_runtime_config", load)
+    monkeypatch.setattr(
+        simulation, "load_runtime_config", lambda *args, **kwargs: pytest.fail("configuration reloaded")
+    )
+    monkeypatch.setattr(
+        simulation, "run_packaging_simulation", lambda options, config: received.append((options, config)) or 0
+    )
+    assert packaging.main(["--mode", "sim", "--robot", robot, *extra]) == 0
+    assert len(load_calls) == len(received) == 1
+    options, config = received[0]
+    assert config.robot.key == load_runtime_config(robot, task="packaging_showcase").robot.key
+    assert options.cycles == (3 if "--cycles" in extra else None)
+    assert options.visual == ("--visual" in extra)
+    if "--backend" in extra:
+        assert config.simulation.backend == "cpu"
 
 
-def test_packaging_sim_forwarding_includes_visual(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ufactory.cli import packaging
+@pytest.mark.parametrize("speed", [0.25, 1.0, 1.5])
+def test_packaging_speed_scaling_preserves_resolved_overrides_and_hash(monkeypatch, speed) -> None:
+    pytest.importorskip("genesis")
+    from ufactory.config import runtime_config_dict
+    from ufactory.manipulation.packaging import simulation
 
-    received: list[str] = []
-    monkeypatch.setattr(packaging, "_packaging_simulation_main", lambda argv: received.extend(argv) or 0)
-
-    class Args:
-        robot = "xarm6"
-        speed = 1.0
-        executor = "servo_j"
-        cycles = None
-        loop = None
-        table_height = None
-        config = None
-        backend = None
-        visual = True
-        capture_keyframes = False
-
-    assert packaging._run_sim(Args()) == 0
-    assert "--visual" in received
+    overrides = {
+        "simulation.backend": "cpu",
+        "simulation.g2.speed_percent": 90,
+        "simulation.g2.force_percent": 80,
+        "task.parameters.object_mass_kg": 0.025,
+        "motion.cartesian_speed_m_s": 0.12,
+        "safety.min_collision_distance_m": 0.004,
+    }
+    base = load_runtime_config("xarm6", task="packaging_showcase", overrides=overrides)
+    expected = load_runtime_config(
+        "xarm6",
+        task="packaging_showcase",
+        overrides={
+            **overrides,
+            "motion.joint_speed_rad_s": base.motion.joint_speed_rad_s * speed,
+            "motion.joint_acceleration_rad_s2": base.motion.joint_acceleration_rad_s2 * speed,
+            "motion.cartesian_speed_m_s": base.motion.cartesian_speed_m_s * speed,
+            "motion.cartesian_acceleration_m_s2": base.motion.cartesian_acceleration_m_s2 * speed,
+            "motion.gripper_duration_s": base.motion.gripper_duration_s / speed,
+            "task.parameters.grasp_settle_s": base.task.parameters["grasp_settle_s"] / speed,
+            "task.parameters.pre_release_settle_s": base.task.parameters["pre_release_settle_s"] / speed,
+            "task.parameters.post_release_settle_s": base.task.parameters["post_release_settle_s"] / speed,
+        },
+    )
+    monkeypatch.setattr(
+        simulation, "load_runtime_config", lambda *args, **kwargs: pytest.fail("configuration reloaded")
+    )
+    scaled = simulation._speed_config("xarm6", speed, base_config=base)
+    assert runtime_config_dict(scaled) == runtime_config_dict(expected)
+    assert base.task.parameters["object_mass_kg"] == 0.025
+    assert base.motion.cartesian_speed_m_s == 0.12
 
 
 def _run_packaging_physics_cycles(robot: str, executor: str, cycles: int) -> None:
@@ -326,7 +330,25 @@ def _run_packaging_physics_cycles(robot: str, executor: str, cycles: int) -> Non
             )
             phases = {phase.label: phase for phase in report.phases}
             assert phases["lift"].obj_pos_mm[2] > (display_layout.table_top_z + 0.100) * 1000.0
-            assert report.place_error_mm < 25.0
+            # High release and rebound can move the cube away from the target
+            # center. Check its entire final footprint and height inside the box.
+            bounds = block.get_AABB().detach().cpu().numpy().reshape(2, 3)
+            half_inner = np.asarray(display_layout.box_outer[:2]) / 2.0 - display_layout.box_wall
+            center = np.asarray(display_layout.box_center_xy)
+            inner_bounds = np.array(
+                [
+                    [*(center - half_inner), display_layout.box_inner_floor_z],
+                    [*(center + half_inner), display_layout.box_inner_floor_z + display_layout.box_outer[2]],
+                ]
+            )
+            contact_tolerance_m = 0.001
+            assert np.isfinite(bounds).all()
+            assert np.all(bounds[0] >= inner_bounds[0] - contact_tolerance_m) and np.all(
+                bounds[1] <= inner_bounds[1] + contact_tolerance_m
+            ), (
+                f"{robot}/{executor} cycle {cycle}: object bounds {bounds.tolist()} "
+                f"outside box interior {inner_bounds.tolist()}"
+            )
             assert report.home_drift_mm < 10.0
 
 

@@ -19,7 +19,7 @@ from ufactory.training import (
     load_training_recipe,
 )
 
-GRASP_RECIPE = PROJECT_ROOT / "tests" / "fixtures" / "training" / "pick_place_recipe.yaml"
+GRASP_RECIPE = PROJECT_ROOT / "examples" / "rl" / "pick_place" / "recipe.yaml"
 
 
 def test_pick_place_binds_the_resolved_runtime_hash() -> None:
@@ -31,9 +31,8 @@ def test_pick_place_binds_the_resolved_runtime_hash() -> None:
     # RL keeps the no-slip pass off for throughput; deterministic pick-place enables it.
     assert grasp_env["noslip_iterations"] == rl_config.simulation.noslip_iterations == PICK_PLACE_RL_NOSLIP_ITERATIONS
     assert rl_config.sha256 != load_runtime_config("xarm6", task="pick_place").sha256
-    assert grasp_env["num_obs"] == 30
+    assert grasp_env["num_obs"] == 70
     assert grasp_env["num_actions"] == 4
-    assert grasp_env["lift_height_m"] == pytest.approx(0.08)
     assert grasp_env["workspace_lower"] == pytest.approx([0.10, -0.35, -0.02])
     assert grasp_env["workspace_upper"] == pytest.approx([0.65, 0.35, 0.55])
 
@@ -43,11 +42,64 @@ def test_pick_place_rl_rejects_non_xarm6_robots() -> None:
         build_pick_place_task_configs("lite6", recipe_path=GRASP_RECIPE)
 
 
+@pytest.mark.parametrize(
+    "overlay",
+    [
+        {"arm": {"kp": [1] * 6}},
+        {"robot": {"urdf": "xarm6_1305.urdf"}},
+        {"task": {"parameters": {"object_spawn_lower_m": [0.2, 0, 0.015]}}},
+        {"task": {"parameters": {"object_size_m": [0.04] * 3}}},
+        {"task": {"parameters": {"table_height_m": 0.8}}},
+        {"task": {"parameters": {"episode_length_s": 12}}},
+        {"simulation": {"noslip_iterations": 5}},
+        {"simulation": {"g2": {"position_mm": 10}}},
+    ],
+)
+def test_pick_place_rejects_unused_runtime_overrides(tmp_path, overlay) -> None:
+    path = tmp_path / "runtime.yaml"
+    path.write_text(_yaml({"schema_version": 1, **overlay}))
+    with pytest.raises(ValueError, match="unsupported pick-place RL runtime override"):
+        load_pick_place_rl_runtime_config("xarm6", config_path=path)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("randomize_target", True), ("fixed_demo_layout", False), ("base_pos", [1, 0, 0])]
+)
+def test_pick_place_rejects_unused_recipe_fields(tmp_path, field, value) -> None:
+    recipe = load_training_recipe(GRASP_RECIPE)
+    recipe["environment"][field] = value
+    path = tmp_path / "recipe.yaml"
+    path.write_text(_yaml(recipe))
+    with pytest.raises(ValueError, match="unsupported pick-place RL environment fields"):
+        build_pick_place_task_configs("xarm6", recipe_path=path)
+
+
+def test_pick_place_supported_overrides_reach_the_environment(tmp_path) -> None:
+    pytest.importorskip("trimesh")
+    path = tmp_path / "runtime.yaml"
+    path.write_text(
+        _yaml(
+            {
+                "schema_version": 1,
+                "task": {"parameters": {"object_mass_kg": 0.02, "workspace_upper_m": [0.6, 0.35, 0.55]}},
+                "gripper": {"damping": 0.2, "frictionloss": 0.1},
+                "simulation": {"g2": {"speed_percent": 90, "force_percent": 80}},
+            }
+        )
+    )
+    env, _, robot = build_pick_place_task_configs("xarm6", recipe_path=GRASP_RECIPE, runtime_config_path=path)
+    assert env["obj_mass_kg"] == 0.02
+    assert env["workspace_upper"] == [0.6, 0.35, 0.55]
+    assert env["g2"] == {"speed_percent": 90, "force_percent": 80}
+    assert robot == {"gripper_damping": 0.2, "gripper_frictionloss": 0.1}
+    assert not {"table_height", "obj_size", "obj_spawn_lower", "fixed_obj_pos", "default_ee_pos"} & env.keys()
+
+
 def test_command_line_train_settings_override_recipe() -> None:
     train = build_train_config(GRASP_RECIPE, experiment_name="override", max_iterations=3)
     assert train["runner"]["experiment_name"] == "override"
     assert train["runner"]["max_iterations"] == 3
-    assert train["algorithm"]["gamma"] == pytest.approx(0.99)
+    assert train["algorithm"]["gamma"] == pytest.approx(0.995)
 
 
 def test_recipe_rejects_unknown_top_level_and_runtime_owned_fields(tmp_path: Path) -> None:

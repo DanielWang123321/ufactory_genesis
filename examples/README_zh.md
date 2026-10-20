@@ -50,7 +50,6 @@ python examples/visualization/view_robot.py --robot xarm6
 | 目录               | 用途                                      |
 | ---------------- | --------------------------------------- |
 | `visualization/` | GLB 机型与夹爪查看器                            |
-| `gripper_g2/`    | Gripper G2 标定动力学：百分比控制、方块夹持与验收        |
 | `kinematics/`    | FK/IK / 机型校验包装                          |
 | `pick_place/`    | 多机型抓放入口与可选覆盖配置                          |
 | `packaging/`     | 多机型装箱展示入口与可选覆盖配置                        |
@@ -71,7 +70,7 @@ python examples/visualization/view_robot.py --robot xarm6
 
 五类机型均支持仿真与离线预检。真机装箱启用 xArm6 + Gripper G2、Lite6 + Lite6 Gripper，详见[真机操作与硬件校验](#真机操作与硬件校验)。
 
-G2 仿真使用 `g2_calibrated_v1`，百分比控制、验收与执行记录见 [G2 说明](gripper_g2/README_cn.md)。内置 RL 权重保留旧动力学，评估必须显式加 `--allow-physics-transfer`。
+G2 仿真使用 `g2_calibrated_v1`。策略训练与当前 v3 检查点契约见 [抓放 RL 指南](rl/pick_place/README_cn.md)。
 
 ## 可视化
 
@@ -181,6 +180,8 @@ python scripts/generate_showcase_textures.py
 ```
 
 `examples/packaging/run.py` 委托给 `ufactory-packaging-showcase`。
+
+方块在箱口上方 50 mm 释放后自然下落。GPU 回归允许弹跳，以最终碰撞包围盒位于箱内为准（接触容差 1 mm），不再要求落点距目标中心小于 25 mm；保留抓取、搬运、释放与回零检查。
 
 
 | 参数                                         | 取值 / 说明                            |

@@ -11,42 +11,37 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from ufactory.cli.pick_place import (
-    _connect,
-    _ensure_cartesian_program_start,
-    _ensure_program_start,
-    _model_and_hashes,
-    _print_ik_compile_complete,
-    _print_preflight_complete,
-    _print_preflight_start,
-    _print_preflight_violation_summary,
-    _print_summary,
-    _read_q,
-    _sdk_sim_feedback,
-    _validate_robot_identity,
-    _write_json,
+from ufactory.manipulation.commands import (
+    connect as _connect,
+    ensure_cartesian_program_start as _ensure_cartesian_program_start,
+    ensure_program_start as _ensure_program_start,
+    model_and_hashes as _model_and_hashes,
+    print_ik_compile_complete as _print_ik_compile_complete,
+    print_preflight_complete as _print_preflight_complete,
+    print_preflight_start as _print_preflight_start,
+    print_preflight_violation_summary as _print_preflight_violation_summary,
+    print_summary as _print_summary,
+    read_q as _read_q,
+    sdk_sim_feedback as _sdk_sim_feedback,
+    validate_robot_identity as _validate_robot_identity,
+    write_json as _write_json,
 )
 from ufactory.config import dump_runtime_config, load_runtime_config
 from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn
 from ufactory.manipulation.packaging.core import (
-    OBJECT_RELOCATED_STAGES,
     build_packaging_program,
     packaging_layout,
-    packaging_obstacles,
     packaging_scene_sha256,
-    validate_payload_box_clearance,
 )
+from ufactory.manipulation.packaging.safety import build_packaging_backends as _backends
 from ufactory.robots.registry import robot_cli_choices
 from ufactory.safety import validate_sdk_simulation
-from ufactory.safety.adapters import PinocchioCollisionBackend, PinocchioKinematicsBackend
-from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 from ufactory.safety.gate import program_sha256
 from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real
-from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
 from ufactory.trajectory.preflight import create_safety_gate
 
 
@@ -86,71 +81,21 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
     return traj_ctx
 
 
-def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[Any, Any]:
-    if config.gripper is None:
-        raise ValueError("packaging requires a configured gripper")
-    layout = packaging_layout(config)
-    validate_payload_box_clearance(layout, margin_m=float(config.safety.min_collision_distance_m))
-    passive = {config.gripper.drive_joint: config.gripper.open_drive}
-    kinematics = PinocchioKinematicsBackend(
-        urdf,
-        joint_names=config.robot.joint_names,
-        ee_link=config.robot.ee_link,
-        passive_joint_positions=passive,
+def _run_sim(args: argparse.Namespace, config: Any) -> int:
+    from ufactory.manipulation.packaging.simulation import PackagingSimulationOptions, run_packaging_simulation
+
+    options = PackagingSimulationOptions(
+        speed=args.speed,
+        executor=args.executor,
+        cycles=args.cycles,
+        table_height=args.table_height,
+        visual=args.visual,
+        capture_keyframes=args.capture_keyframes,
+        csv=args.csv,
+        sim_report=args.sim_report,
+        report=args.report,
     )
-    collision = StageAwareObjectCollisionBackend(
-        PinocchioCollisionBackend(
-            urdf,
-            joint_names=config.robot.joint_names,
-            ee_link=config.robot.ee_link,
-            passive_joint_positions=passive,
-            adjacent_link_pairs=config.robot.adjacent_collision_pairs,
-            excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
-            obstacles=packaging_obstacles(layout),
-        ),
-        spawn_center_m=layout.object_position_m,
-        place_center_m=layout.target_position_m,
-        relocated_stages=OBJECT_RELOCATED_STAGES,
-    )
-    if calibrated_g2 and config.gripper.adapter == "g2":
-        from ufactory.simulation.g2_adapter import G2ContactCollisionBackend
-
-        collision = G2ContactCollisionBackend(collision, object_width_m=layout.object_size_m[1])
-    return kinematics, collision
-
-
-def _packaging_simulation_main(argv: list[str]) -> int:
-    from ufactory.manipulation.packaging.simulation import main as packaging_simulation_main
-
-    return int(packaging_simulation_main(argv))
-
-
-def _run_sim(args: argparse.Namespace) -> int:
-    sim_args = [
-        "--robot",
-        getattr(args, "robot", "xarm6"),
-        "--speed",
-        str(args.speed),
-        "--executor",
-        args.executor,
-    ]
-    if args.cycles is not None:
-        sim_args.extend(("--cycles", str(args.cycles)))
-    if args.table_height is not None:
-        sim_args.extend(("--table-height", str(args.table_height)))
-    if args.config is not None:
-        sim_args.extend(("--config", str(args.config)))
-    if getattr(args, "backend", None) is not None:
-        sim_args.extend(("--backend", str(args.backend)))
-    if getattr(args, "visual", False):
-        sim_args.append("--visual")
-    if args.capture_keyframes:
-        sim_args.append("--capture-keyframes")
-    for name in ("position_mm", "speed_percent", "force_percent", "csv", "sim_report", "report"):
-        value = getattr(args, name, None)
-        if value is not None:
-            sim_args.extend(("--" + name.replace("_", "-"), str(value)))
-    return _packaging_simulation_main(sim_args)
+    return run_packaging_simulation(options, config)
 
 
 def _positive_cycles(value: str) -> int:
@@ -222,13 +167,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(
             f"{config.robot.key} has no enabled real gripper; full real packaging is unsupported for this profile"
         )
-    if args.mode == "sim" or args.executor == "servo_j" or args.visual:
+    if args.mode != "sim" and (args.executor == "servo_j" or args.visual):
         require_genesis_capabilities(
             pbr=True,
-            deferred_viewer=args.mode == "sim" or bool(args.visual),
+            deferred_viewer=bool(args.visual),
         )
     if args.mode == "sim":
-        return _run_sim(args)
+        if config.gripper is not None and config.gripper.adapter == "g2" and config.simulation.g2.speed_percent <= 0:
+            parser.error("automatic G2 manipulation requires --speed-percent > 0")
+        return _run_sim(args, config)
     _print_summary(config)
 
     ip = args.ip or os.environ.get("XARM_IP")
@@ -255,6 +202,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ik_ctx = None
         q_home: np.ndarray | None = None
         if args.executor == "servo_j":
+            from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
+
             print(
                 "[ik-compile] building Genesis scene and compiling servo_j trajectory...",
                 flush=True,

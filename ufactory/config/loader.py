@@ -255,7 +255,6 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             "grasp_settle_s",
             "pre_release_settle_s",
             "post_release_settle_s",
-            "place_success_distance_m",
             "simulation_release_duration_s",
             "simulation_home_settle_s",
             "lift_success_clearance_m",

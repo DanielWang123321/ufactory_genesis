@@ -36,6 +36,12 @@ class XArm6ReachEnv:
         robot_cfg: dict,
         show_viewer: bool = False,
     ) -> None:
+        self._init_config(env_cfg, reward_cfg, robot_cfg)
+        self._build_scene(show_viewer=show_viewer)
+        self._init_state()
+        self.reset()
+
+    def _init_config(self, env_cfg: dict, reward_cfg: dict, robot_cfg: dict) -> None:
         self.num_envs = int(env_cfg["num_envs"])
         self.num_obs = int(env_cfg["num_obs"])
         self.num_actions = int(env_cfg["num_actions"])
@@ -44,7 +50,9 @@ class XArm6ReachEnv:
         self.cfg = env_cfg
         self.env_cfg = env_cfg
         self.robot_cfg = robot_cfg
-        if env_cfg.get("env_version") != REACH_ENV_VERSION or self.num_obs != 24:
+        if self.num_envs < 1:
+            raise ValueError("num_envs must be positive")
+        if env_cfg.get("env_version") != REACH_ENV_VERSION or self.num_obs != 24 or self.num_actions != 6:
             raise ValueError("reach environment version changed; retrain the policy with 24 observations")
 
         self.ctrl_dt = float(env_cfg["ctrl_dt"])
@@ -68,6 +76,8 @@ class XArm6ReachEnv:
             self.reward_functions[name] = getattr(self, "_reward_" + name)
             self.episode_sums[name] = torch.zeros(self.num_envs, device=self.device, dtype=gs.tc_float)
 
+    def _build_scene(self, *, show_viewer: bool) -> None:
+        env_cfg, robot_cfg = self.env_cfg, self.robot_cfg
         self.scene = gs.Scene(
             sim_options=gs.options.SimOptions(dt=self.ctrl_dt, substeps=int(env_cfg["substeps"])),
             rigid_options=make_rigid_options(
@@ -107,6 +117,8 @@ class XArm6ReachEnv:
         )
         self.scene.build(n_envs=self.num_envs)
 
+    def _init_state(self) -> None:
+        robot_cfg = self.robot_cfg
         joint_map = {joint.name.split("/")[-1]: joint for joint in self.robot.joints}
         self.joint_names = list(robot_cfg["joint_names"])
         self.dof_idx = [joint_map[name].dofs_idx_local[0] for name in self.joint_names]
@@ -136,7 +148,6 @@ class XArm6ReachEnv:
         }
         self.metric_steps = torch.zeros(self.num_envs, device=self.device, dtype=gs.tc_int)
         self.extras: dict = {"observations": {}}
-        self.reset()
 
     def reset(self) -> tuple[TensorDict, dict]:
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
@@ -160,7 +171,9 @@ class XArm6ReachEnv:
         for values in self.metric_sums.values():
             values[envs_idx] = 0.0
 
-    def step(self, actions: torch.Tensor) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:
+    def _advance(
+        self, actions: torch.Tensor, *, active: torch.Tensor | None = None, update_visualizer: bool = True
+    ) -> None:
         if actions.shape != (self.num_envs, self.num_actions):
             raise ValueError(
                 f"Action shape {tuple(actions.shape)} does not match ({self.num_envs}, {self.num_actions})"
@@ -168,38 +181,52 @@ class XArm6ReachEnv:
         if not torch.isfinite(actions).all():
             raise RuntimeError("policy emitted a non-finite action")
 
-        self.episode_length_buf += 1
+        mask = 1 if active is None else active
+        self.episode_length_buf += mask
         joint_delta = reach_action_delta_torch(
             actions,
             action_scale=self.action_scale,
             action_clip=self.action_clip,
             max_joint_delta_rad=self.max_joint_delta_rad,
         )
+        if active is not None:
+            joint_delta = joint_delta * active[:, None]
         self.position_command.copy_(
             torch.clamp(self.position_command + joint_delta, self.joint_lower, self.joint_upper)
         )
         self.robot.control_dofs_position(self.position_command, self.dof_idx)
-        self.scene.step()
-        self.metric_steps += 1
-        self.metric_sums["action_saturation_rate"] += (actions.abs() >= 0.99 * self.action_clip).float().mean(-1)
+        if update_visualizer:
+            self.scene.step()
+        else:
+            self.scene.step(update_visualizer=False)
+        self.metric_steps += mask
+        self.metric_sums["action_saturation_rate"] += (actions.abs() >= 0.99 * self.action_clip).float().mean(-1) * mask
         self.metric_sums["command_tracking_error_rad"] += (
-            (self.position_command - self.robot.get_dofs_position(self.dof_idx)).abs().mean(-1)
-        )
+            self.position_command - self.robot.get_dofs_position(self.dof_idx)
+        ).abs().mean(-1) * mask
 
-        ee_pos = self.ee_link.get_pos()
-        distance_m = torch.linalg.norm(self.target_pos - ee_pos, dim=-1)
+    def _outcome(
+        self, active: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        distance_m = torch.linalg.norm(self.target_pos - self.ee_link.get_pos(), dim=-1)
         success = distance_m < self.success_distance_m
         timeout = self.episode_length_buf >= self.max_episode_length
+        if active is not None:
+            success = success & active
+            timeout = timeout & active
         dones = success | timeout
         self.extras["time_outs"] = (timeout & ~success).to(dtype=gs.tc_float)
-
         reward = torch.zeros(self.num_envs, device=self.device, dtype=gs.tc_float)
         for name, reward_func in self.reward_functions.items():
             raw = success.float() if name == "success" else reward_func()
             term = raw * self.reward_scales[name]
+            if active is not None:
+                term = term * active
             reward += term
             self.episode_sums[name] += term
+        return reward, dones, distance_m, success, timeout
 
+    def _record_completed(self, dones: torch.Tensor, distance_m: torch.Tensor, success: torch.Tensor) -> torch.Tensor:
         self.extras["episode"] = {}
         done_idx = dones.nonzero(as_tuple=False).flatten()
         if len(done_idx) > 0:
@@ -219,18 +246,23 @@ class XArm6ReachEnv:
                     for name, values in self.metric_sums.items()
                 }
             )
+            self.extras["reach_done_envs_idx"] = done_idx.detach().clone()
             self.extras["reach_done_distance_m"] = done_distance
             self.extras["reach_done_success"] = done_success
             self.extras["reach_done_steps"] = self.episode_length_buf[done_idx].detach().clone()
+        else:
+            for name in ("envs_idx", "distance_m", "success", "steps"):
+                self.extras.pop("reach_done_" + name, None)
+        return done_idx
+
+    def step(self, actions: torch.Tensor) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:
+        self._advance(actions)
+        reward, dones, distance_m, success, _timeout = self._outcome()
+        done_idx = self._record_completed(dones, distance_m, success)
+        if len(done_idx):
             self._hold_successful_pose(success)
             self.reset_idx(done_idx)
-        else:
-            self.extras.pop("reach_done_distance_m", None)
-            self.extras.pop("reach_done_success", None)
-            self.extras.pop("reach_done_steps", None)
-
-        observation = self.get_observations()
-        return observation, reward, dones, self.extras
+        return self.get_observations(), reward, dones, self.extras
 
     def get_observations(self) -> TensorDict:
         joint_pos = self.robot.get_dofs_position(self.dof_idx)

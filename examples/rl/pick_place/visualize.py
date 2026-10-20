@@ -29,7 +29,6 @@ import genesis as gs
 from rsl_rl.runners import OnPolicyRunner
 import torch
 
-from ufactory.robots.paths import robot_urdf
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import (
     PICK_PLACE_RL_ROBOTS,
@@ -117,7 +116,6 @@ def main() -> None:
         reward_cfg = deepcopy(artifact["reward"])
         robot_cfg = deepcopy(artifact["robot"])
         train_cfg = deepcopy(artifact["train"])
-        robot_cfg["urdf_path"] = robot_urdf(runtime_config.robot.key, runtime_config.robot.urdf)
     else:
         env_cfg = deepcopy(expected_env)
         reward_cfg = deepcopy(expected_reward)

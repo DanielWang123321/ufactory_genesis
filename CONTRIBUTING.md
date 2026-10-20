@@ -39,6 +39,8 @@ Local CPU quality reports (same class as public CI; not a substitute for sim/har
 project-check fast
 ```
 
+GitHub Actions invokes the same `project-check fast` command and uploads its JSON report.
+
 ## Running Tests
 
 Use **`project-check`** as the single quality entry. Pytest markers remain orthogonal; do not treat raw `pytest -m "not hardware"` as the default pre-release check (it pulls in long `integration` / `slow` matrices that overlap `sdk-sim`).
@@ -95,11 +97,11 @@ Tests are grouped under `tests/` by `ufactory` module:
 | `tests/dynamics/` | `ufactory.dynamics` | `test_dynamics_validation.py`, `test_dynamics_sim_regression.py` |
 | `tests/hardware/` | `ufactory.hardware` | `test_real_robot_session.py`, `test_xarm6_real.py` |
 | `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
-| `tests/training/` | `ufactory.training` | `test_artifacts.py`, `test_public_rl_example.py`, `test_scenarios.py`, `test_acceptance_profiles.py` |
+| `tests/training/` | `ufactory.training` | `test_artifacts.py`, `test_public_rl_example.py`, `test_recipe.py`, `test_pick_place_e2e.py`, `test_runner.py` |
 | `tests/visualization/` | `ufactory.visualization` | `test_pbr_scope.py` |
-| `tests/manipulation/` | `ufactory.manipulation` | `test_pick_place_contract.py` |
+| `tests/manipulation/` | `ufactory.manipulation` | `test_pick_place_contract.py`, `test_commands.py` |
 
-- Unmarked files — unit / mock tests (fast tier)
+- Unmarked files — unit / mock tests (fast tier). Artifact integrity and command-helper tests run without Torch; serializer and simulation tests require their owning optional dependencies.
 - `tests/robots/test_representative_example_smoke.py` — xArm6 representative integration smoke (examples CLI)
 - `tests/dynamics/test_dynamics_*.py` — dynamics validation helpers and regressions
 
@@ -112,7 +114,9 @@ Tests are grouped under `tests/` by `ufactory` module:
 
 ## Asset Policy
 
-The public release contains final URDF, STL meshes, and GLB visual meshes needed by users and tests. Registered arm URDFs use `meshes/<variant>/visual/*.stl` for link collision (not OBJ; public `collision/**/*.obj` is forbidden). Per-arm `collision/*.stl` shells are historical/vendor comparison assets. Raw/source GLBs, relocalize metrics, and vendor/combo generation scripts are internal maintenance material and are ignored from the public source tree.
+Do not commit RL policy weights or checkpoints. Users train their own policies; keep training artifacts under the Git-ignored `outputs/rl/` directory.
+
+The public release contains final URDF, STL meshes, and GLB visual meshes needed by users and tests. Registered arm URDFs use `meshes/<variant>/visual/*.stl` for link collision (not OBJ; public `collision/**/*.obj` is forbidden). Unused per-arm collision shells and Lite6 finger GLBs have been removed; historical assets remain available in Git. Raw/source GLBs, relocalize metrics, and vendor/combo generation scripts are internal maintenance material and are ignored from the public source tree.
 
 Before release, run the fast tier plus the asset integrity tests. They verify every public URDF mesh reference resolves and prevent raw/source GLB intermediates from returning to the public file set.
 
@@ -131,12 +135,12 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 | `ufactory/grippers/` | Gripper command conversions and controllers |
 | `ufactory/trajectory/`, `ufactory/manipulation/` | Trajectory planning/preflight/execution and reusable task helpers |
 | `ufactory/simulation/` | Shared Genesis runtime ownership |
-| `ufactory/training/` | RL task configuration, action scaling, and safe checkpoint artifacts |
+| `ufactory/training/` | RL configuration, shared runners/caches, action scaling, and safe checkpoint artifacts |
 | `ufactory/visualization/` | GLB/PBR visualization helpers |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
 | `examples/` | Task-oriented visualization, kinematics, pick_place, and packaging entries |
-| `examples/rl/pick_place/` | Linux/NVIDIA fixed-layout RL code, recipe, scenario bank, and validated checkpoint |
+| `examples/rl/pick_place/` | Linux/NVIDIA fixed-layout pure-PPO training, evaluation, visualization, and recipe |
 | `/rl/` | Gitignored maintainer-only experiment archive; never a public dependency |
 | `scripts/` | User helpers and maintainer tools (see `scripts/README.md`) |
 | `tests/` | Contributor pytest suite (not required for library use) |

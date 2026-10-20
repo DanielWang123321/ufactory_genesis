@@ -1,5 +1,7 @@
 # 1. Reach: xArm 6 target reaching
 
+Training and realtime visualization share state initialization, action execution, rewards and episode metrics. Visualization retains its own scene layout and independent success holds. Metrics, manifests and cache setup are shared with pick-place in `ufactory/training`.
+
 The xArm 6 runs without a gripper in simulation; no Reach weights are bundled. Success requires a distance strictly below **5 mm**; the default training seed is 7. Run the commands below from the repository root.
 
 [中文说明](README_cn.md) · [RL examples](../README.md) · [Next: 2. Pick & Place](../pick_place/README.md)

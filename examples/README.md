@@ -51,7 +51,6 @@ Public directories in this release:
 | Directory | Purpose |
 |---|---|
 | `visualization/` | GLB robot and gripper viewers |
-| `gripper_g2/` | Calibrated Gripper G2 percentage control, cube grasp, and acceptance |
 | `kinematics/` | FK/IK / robot verification wrappers |
 | `pick_place/` | Multi-robot pick-place entry + optional overlay |
 | `packaging/` | Multi-robot packaging showcase entry + optional overlay |
@@ -71,7 +70,7 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 
 All five families support simulation and offline preflight. Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; see [Hardware & Real Robot](#hardware--real-robot).
 
-G2 simulations use `g2_calibrated_v1`; see [percentage control, acceptance and execution records](gripper_g2/README.md). Bundled RL weights retain their historical physics and require `--allow-physics-transfer` for evaluation.
+G2 simulations use `g2_calibrated_v1`. The [pick-place RL guide](rl/pick_place/README.md) documents training and the current v3 checkpoint contract.
 
 ## Visualization
 
@@ -171,6 +170,11 @@ python scripts/generate_showcase_textures.py
 ```
 
 `examples/packaging/run.py` delegates to `ufactory-packaging-showcase`.
+
+The cube is released 50 mm above the box rim and falls naturally. GPU regressions
+allow rebound and require its final collision bounds to remain inside the box
+(1 mm contact tolerance), rather than within 25 mm of the target center.
+Grasp, transport, release and return-home checks remain in place.
 
 | Flag | Values / notes |
 |------|----------------|

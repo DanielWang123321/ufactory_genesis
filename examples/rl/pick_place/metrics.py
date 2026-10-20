@@ -7,12 +7,17 @@ from typing import Any
 
 import torch
 
-SPAWN_X, SPAWN_Y = 0.300, 0.000
-TARGET_X, TARGET_Y = 0.300, 0.300
+from ufactory.training.pick_place_config import (
+    SPAWN_X,
+    SPAWN_Y,
+    TARGET_X,
+    TARGET_Y,
+    CUBE_SIZE,
+    CUBE_REST_Z,
+    SAFE_LIFT_Z,
+)
+
 TARGET_TOL_M = 0.020
-CUBE_SIZE = 0.030
-CUBE_REST_Z = CUBE_SIZE / 2
-SAFE_LIFT_Z = 0.080
 DRAG_LIMIT_M = 0.010
 TILT_LIMIT_DEG = 15.0
 SUCCESS_HOLD_STEPS = 10

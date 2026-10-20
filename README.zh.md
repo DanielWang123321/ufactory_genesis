@@ -13,7 +13,6 @@
 支持 xArm5、xArm6、xArm7、UF850 和 Lite6。[机械臂与夹爪组合](examples/README_zh.md#支持机型与末端)见示例指南。
 
 - [机械臂与夹爪可视化](examples/README_zh.md#可视化)：GLB 模型、可动手指与夹爪开合演示。
-- [Gripper G2 标定动力学](examples/gripper_g2/README_cn.md)：百分比控制、独立方块夹持与动力学验收。
 - [运动学与接触仿真](examples/README_zh.md#运动学与动力学仿真)：FK/IK 校验与物理仿真检查。
 - [轨迹控制抓放](examples/README_zh.md#抓放仿真)：抓取、搬运并放置物体。
 - [装箱仿真](examples/README_zh.md#装箱展示仿真)：通过 YAML 配置轨迹，模拟装箱与接触过程。
@@ -27,7 +26,7 @@
 在 Linux/NVIDIA GPU 上进行仿真训练与推理。学习顺序及各任务指南见 [RL 索引](examples/rl/README_cn.md)。
 
 1. **[Reach：目标到达](examples/rl/reach/README_cn.md)**：让未安装夹爪的 xArm6 末端到达目标点，成功距离严格小于 **5 mm**。支持单臂、四臂 GLB 实时推理，仓库不附带 Reach 权重。
-2. **[Pick & Place：桌面抓放](examples/rl/pick_place/README_cn.md)**：xArm6 + Gripper G2 抓取方块并搬运到桌面目标位置。采用固定 `+Y` 布局，包含脚本引导动作，提供参考模型。
+2. **[Pick & Place：桌面抓放](examples/rl/pick_place/README_cn.md)**：xArm6 + Gripper G2 抓取方块并搬运到桌面目标位置。采用固定 `+Y` 布局，以纯 PPO 从零训练策略。
 
 
 

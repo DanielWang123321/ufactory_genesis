@@ -24,39 +24,21 @@ def test_base_world_translation_contract():
 
 def test_pick_place_task_defaults_are_runtime_bound():
     pytest.importorskip("trimesh")
-    recipe = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "training" / "pick_place_recipe.yaml"
+    recipe = Path(__file__).resolve().parents[2] / "examples" / "rl" / "pick_place" / "recipe.yaml"
     env_cfg, reward_cfg, robot_cfg = build_pick_place_task_configs("xarm6", recipe_path=recipe)
-
-    assert env_cfg["num_obs"] == 30
+    assert env_cfg["num_obs"] == 70
     assert env_cfg["num_actions"] == 4
-    assert env_cfg["action_scale"] == pytest.approx(0.01)
-    assert env_cfg["max_cartesian_delta_m"] == pytest.approx(0.01)
-    assert env_cfg["default_ee_pos"] == pytest.approx((0.30, 0.00, 0.30))
-    assert env_cfg["gripper_open_mm"] == pytest.approx(84.0)
-    assert env_cfg["gripper_close_mm"] == pytest.approx(22.0)
-    assert env_cfg["gripper_delta_mm"] == pytest.approx(4.0)
-    assert env_cfg["success_hold_steps"] == 5
+    assert env_cfg["action_scale"] == pytest.approx(0.005)
+    assert env_cfg["gap_action_scale"] == pytest.approx(0.003)
+    assert env_cfg["success_hold_steps"] == 10
     assert env_cfg["substeps"] == 32
     assert env_cfg["noslip_iterations"] == 0
     assert env_cfg["physics_profile"] == G2_PHYSICS_PROFILE
-    assert "substeps" not in load_runtime_config("xarm6", task="pick_place").task.parameters
-    assert env_cfg["fixed_demo_layout"] is True
-    assert env_cfg["place_phase_reset_frac"] == pytest.approx(0.25)
-    assert env_cfg["place_phase_hover_z_m"] == pytest.approx(0.07)
-    object_spec = resolve_pick_place_object_spec(load_runtime_config("xarm6"))
-    assert env_cfg["obj_size"] == pytest.approx(object_spec.size_m)
-    assert env_cfg["obj_mass_kg"] == pytest.approx(object_spec.mass_kg)
-    assert env_cfg["runtime_config_sha256"] == load_pick_place_rl_runtime_config("xarm6").sha256
-    assert env_cfg["fixed_obj_pos"] == pytest.approx((0.30, 0.00, 0.015))
-    assert env_cfg["fixed_target_pos"] == pytest.approx((0.30, 0.30, 0.015))
-    assert robot_cfg["base_pos"] == [0.30, 0.0, env_cfg["table_height"]]
-    assert "keypoints" in reward_cfg
-    assert "place_xy" in reward_cfg
-    assert "place_z" in reward_cfg
-    assert "lower" in reward_cfg
-    assert "holding_table" in reward_cfg
-    assert "place" not in reward_cfg
-    assert "workspace_violation" in reward_cfg
+    config = load_pick_place_rl_runtime_config("xarm6")
+    assert env_cfg["obj_mass_kg"] == config.task.parameters["object_mass_kg"]
+    assert env_cfg["runtime_config_sha256"] == config.sha256
+    assert robot_cfg == {"gripper_damping": config.gripper.damping, "gripper_frictionloss": config.gripper.frictionloss}
+    assert "release_potential" in reward_cfg
 
 
 def test_packaging_showcase_uses_shared_object_spec():

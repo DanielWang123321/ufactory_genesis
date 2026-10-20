@@ -86,7 +86,30 @@ _REACH_RUNTIME_ENV_CONTRACT_KEYS = (
     "constraint_time_constant_s",
     "use_gjk_collision",
 )
-_PICK_PLACE_V3_RUNTIME_ENV_CONTRACT_KEYS = _RUNTIME_ENV_CONTRACT_KEYS + (
+# Older v3 configs also recorded unused scene and robot settings. Their full
+# file hash is still checked; only values consumed by v3 belong in this contract.
+_PICK_PLACE_V3_UNUSED_KEYS = frozenset(
+    {
+        "table_height",
+        "default_ee_pos",
+        "grasp_center_offset_z",
+        "lift_height_m",
+        "gripper_open_mm",
+        "gripper_close_mm",
+        "obj_size",
+        "fixed_obj_pos",
+        "fixed_target_pos",
+        "fixed_demo_layout",
+        "randomize_target",
+        "obj_spawn_lower",
+        "obj_spawn_upper",
+        "target_spawn_lower",
+        "target_spawn_upper",
+    }
+)
+_PICK_PLACE_V3_RUNTIME_ENV_CONTRACT_KEYS = tuple(
+    key for key in _RUNTIME_ENV_CONTRACT_KEYS if key not in _PICK_PLACE_V3_UNUSED_KEYS
+) + (
     "task_name",
     "env_version",
     "num_obs",
@@ -194,9 +217,8 @@ def write_run_provenance(
     *,
     training_config: Mapping[str, Any],
     source_paths: list[str | Path],
-    scenario_bank_path: str | Path | None = None,
 ) -> Path:
-    """Write machine, dependency, Git, config, scenario, and source hashes."""
+    """Write machine, dependency, Git, config and source hashes."""
 
     target = Path(path)
     resolved_sources: list[dict[str, str]] = []
@@ -236,13 +258,6 @@ def write_run_provenance(
     except (OSError, subprocess.CalledProcessError):
         pass
 
-    scenario = None
-    if scenario_bank_path is not None:
-        scenario_path = Path(scenario_bank_path).resolve()
-        if not scenario_path.is_file():
-            raise ArtifactError(f"scenario bank does not exist: {scenario_path}")
-        scenario = {"path": str(scenario_path), "sha256": _file_sha256(scenario_path)}
-
     body = {
         "schema_version": 1,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -256,7 +271,6 @@ def write_run_provenance(
         "git": _git_provenance(Path.cwd()),
         "training_config_sha256": str(training_config["config_sha256"]),
         "runtime_env_contract_sha256": _canonical_sha256(runtime_env_contract(training_config["env"])),
-        "scenario_bank": scenario,
         "sources": resolved_sources,
     }
     target.write_text(json.dumps(body, indent=2, sort_keys=True) + "\n", encoding="utf-8")

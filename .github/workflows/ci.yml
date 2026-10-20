@@ -26,55 +26,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Ruff check
-        run: python -m ruff check .
+      - name: Project checks
+        run: python -m ufactory.quality.project_check fast --report reports/project-check/ci_fast.json
 
-      - name: Ruff format
-        run: python -m ruff format --check .
-
-      - name: Mypy (domain subset)
-        run: |
-          python -m mypy --strict --follow-imports=skip \
-            ufactory/config \
-            ufactory/safety/models.py \
-            ufactory/safety/interfaces.py \
-            ufactory/safety/statistics.py \
-            ufactory/safety/sdk_sim.py \
-            ufactory/safety/gate.py \
-            ufactory/safety/approved.py \
-            ufactory/safety/clock.py \
-            ufactory/trajectory/segments.py \
-            ufactory/trajectory/planner.py \
-            ufactory/trajectory/validation.py \
-            ufactory/trajectory/compile.py \
-            ufactory/trajectory/execution.py \
-            ufactory/trajectory/preflight.py
-
-      - name: Compileall
-        run: python -m compileall -q ufactory examples scripts
-
-      - name: Pytest fast (no GPU / no Genesis required)
-        env:
-          CUDA_VISIBLE_DEVICES: ""
-          QD_KERNEL_COVERAGE: "0"
-        run: |
-          python -m pytest -q \
-            -m "not slow and not gpu and not integration and not display and not hardware" \
-            --cov=ufactory --cov-branch --cov-fail-under=75 \
-            --cov-report=term-missing
-
-      - name: Safety coverage
-        env:
-          CUDA_VISIBLE_DEVICES: ""
-          QD_KERNEL_COVERAGE: "0"
-        run: |
-          # Use --cov=ufactory (not ufactory.safety): submodule cov paths break
-          # numpy extension import on Torch-less CI runners.
-          rm -f .coverage .coverage.*
-          python -m pytest -q tests/safety \
-            --cov=ufactory --cov-branch --cov-fail-under=0 --cov-report=term-missing
-          python -m coverage report \
-            --include='ufactory/safety/*' \
-            --omit='ufactory/safety/adapters/*' \
-            --fail-under=90 \
-            --show-missing
+      - name: Upload check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-check-fast
+          path: reports/project-check/ci_fast.json

@@ -6,7 +6,7 @@ Lite6 平行夹爪。Visual GLB 为高模 + 原生 Draco（合计 < 1MB）；col
 
 `lite6_gripper.urdf` 来自 xarm_ros2，mesh 路径已被展平但未被 Lite6 组合 URDF 直接引用。它保留 vendor 的外部父 link，不作为 Genesis standalone 查看入口；组合 URDF 生成脚本会处理路径替换。
 
-反装外观基准：`assets/urdf/lite6/lite6_gripper_visual.glb.urdf`（`python examples/visualization/view_robot.py --robot lite6 --lite6-gripper`）。可动组合/standalone URDF 使用相同 vendor 手指 joint 帧（`0 0 0.0543`），shell 继续使用 `shell.glb`；可动手指 visual 使用 `finger1.stl` / `finger2.stl`，避免分解 GLB 的跨指间子网格在抓取时看起来插入方块。
+反装外观基准：`assets/urdf/lite6/lite6_gripper_visual.glb.urdf`（`python examples/visualization/view_robot.py --robot lite6 --lite6-gripper`）。可动组合/standalone URDF 使用相同 vendor 手指 joint 帧（`0 0 0.0543`），shell 继续使用 `shell.glb`；可动手指 visual 使用 `finger1.stl` / `finger2.stl`，避免分解 GLB 的跨指间子网格在抓取时看起来插入方块。未引用的两份旧手指 GLB 已删除。
 
 可动 URDF 不再给手指 visual 额外添加横向 `<origin>` 偏移；`finger1.stl` / `finger2.stl` 的原始大面积内侧面闭合间隙约 22.4 mm、张开间隙约 40.2 mm，和 Lite6 反装夹爪的 20-38 mm 控制模型接近。抓放轨迹通过抬高 Lite6 抓取高度，让低位指根/限位凸台越过 30 mm 方块上沿，使方块由大面积内侧面夹持。
 

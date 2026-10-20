@@ -20,8 +20,6 @@ EXAMPLE = PROJECT_ROOT / "examples" / "rl" / "pick_place"
     ("key_path", "expected"),
     (
         (("environment", "env_version"), 3),
-        (("environment", "fixed_demo_layout"), True),
-        (("environment", "randomize_target"), False),
         (("environment", "control"), "cartesian_and_g2_gap_increment"),
         (("environment", "num_envs"), 2048),
         (("environment", "num_obs"), 70),
@@ -71,13 +69,14 @@ def test_public_entries_are_module_only_and_never_use_unsafe_rsl_loading() -> No
 
 
 def test_pick_place_task_configs_bind_current_runtime_hash() -> None:
+    pytest.importorskip("trimesh")
     env_cfg, reward_cfg, robot_cfg = build_pick_place_task_configs("xarm6", recipe_path=EXAMPLE / "recipe.yaml")
     rl_config = load_pick_place_rl_runtime_config("xarm6")
     assert env_cfg["runtime_config_sha256"] == rl_config.sha256
     assert env_cfg["num_obs"] == 70
     assert env_cfg["num_actions"] == 4
     assert reward_cfg["release_potential"] == pytest.approx(4.0)
-    assert robot_cfg["urdf_path"].endswith("xarm6_1305_g2_movable_visual.urdf")
+    assert set(robot_cfg) == {"gripper_damping", "gripper_frictionloss"}
 
 
 def test_training_provenance_hashes_shared_simulation_and_training_policy() -> None:
@@ -91,9 +90,9 @@ def test_training_provenance_hashes_shared_simulation_and_training_policy() -> N
         "ufactory/simulation/physics.py",
         "ufactory/training/logic/__init__.py",
         "ufactory/training/artifacts.py",
-        "ufactory/training/models.py",
+        "ufactory/training/runner.py",
+        "ufactory/training/runtime.py",
         "ufactory/training/tasks.py",
-        "ufactory/training/transfer.py",
     ):
         assert f'repo_root / "{relative_path}"' in source
 

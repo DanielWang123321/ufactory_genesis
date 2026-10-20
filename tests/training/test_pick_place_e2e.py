@@ -245,6 +245,36 @@ def test_v3_manifest_rejects_wrong_executor(tmp_path):
         validate_checkpoint_artifacts(checkpoint, config)
 
 
+def test_existing_v3_checkpoint_loads_after_unused_config_fields_are_removed(tmp_path):
+    from ufactory.training import build_pick_place_task_configs, validate_and_load_rsl_checkpoint
+
+    recipe = Path(__file__).resolve().parents[2] / "examples/rl/pick_place/recipe.yaml"
+    expected, _, _ = build_pick_place_task_configs("xarm6", recipe_path=recipe)
+    old_env = {
+        **expected,
+        "table_height": 0.4,
+        "obj_size": [0.03] * 3,
+        "obj_spawn_lower": [0.28, -0.05, 0.015],
+        "fixed_demo_layout": True,
+        "randomize_target": False,
+    }
+    checkpoint, config = artifact(tmp_path, old_env, PICK_PLACE_ACTION_CONTRACT)
+    state, saved, manifest = validate_and_load_rsl_checkpoint(
+        checkpoint,
+        config,
+        expected_task="pick_place",
+        expected_runtime_env=expected,
+        expected_runtime_config_sha256=expected["runtime_config_sha256"],
+    )
+    assert state == {"actor_state_dict": {}, "critic_state_dict": {}}
+    assert saved["env"] == old_env
+    assert manifest.executor_action_contract == PICK_PLACE_ACTION_CONTRACT
+    with checkpoint.open("ab") as stream:
+        stream.write(b"tampered")
+    with pytest.raises(ArtifactError, match="checkpoint hash"):
+        validate_checkpoint_artifacts(checkpoint, config, expected_runtime_env=expected)
+
+
 def test_checkpoint_ranking_and_acceptance_use_pressing():
     from examples.rl.pick_place.evaluate import acceptance_passed, checkpoint_score
 

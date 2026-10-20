@@ -88,12 +88,11 @@ def test_public_runtime_has_no_development_imports():
     import ast
 
     root = Path(__file__).resolve().parents[2]
-    for folder in ("ufactory", "examples/gripper_g2"):
-        for path in (root / folder).rglob("*.py"):
-            if path.name == "legacy_warm_start.py":
-                continue
-            for node in ast.walk(ast.parse(path.read_text())):
-                if isinstance(node, ast.ImportFrom):
-                    assert not (node.module or "").startswith("dev."), path
-                elif isinstance(node, ast.Import):
-                    assert all(not alias.name.startswith("dev.") for alias in node.names), path
+    for path in (root / "ufactory").rglob("*.py"):
+        if path.name == "legacy_warm_start.py":
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom):
+                assert not (node.module or "").startswith("dev."), path
+            elif isinstance(node, ast.Import):
+                assert all(not alias.name.startswith("dev.") for alias in node.names), path

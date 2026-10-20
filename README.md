@@ -13,7 +13,6 @@ UFACTORY robot simulation and reinforcement learning examples built on Genesis.
 Supports xArm5, xArm6, xArm7, UF850 and Lite6. See the [robot and gripper combinations](examples/README.md#supported-robots-and-end-effectors).
 
 - [Robot and gripper visualization](examples/README.md#visualization): GLB models, movable fingers and gripper opening/closing demos.
-- [Gripper G2 calibrated dynamics](examples/gripper_g2/README.md): percentage control, standalone cube grasp and dynamics acceptance.
 - [Kinematics and contact simulation](examples/README.md#kinematics--dynamics-simulation): FK/IK verification and physics checks.
 - [Trajectory-controlled pick & place](examples/README.md#pick-place): pick up, transfer and place objects.
 - [Box packing simulation](examples/README.md#packaging-showcase-simulation): YAML-configured trajectories and contact simulation.
@@ -27,7 +26,7 @@ Installation and complete commands are in the [examples guide](examples/README.m
 Simulation-only training and inference on Linux/NVIDIA GPUs. See the [RL index](examples/rl/README.md) for the task progression and guides.
 
 1. **[Reach: target reaching](examples/rl/reach/README.md)** — Move the end effector of an xArm6 without a gripper to a target with a success distance strictly below **5 mm**. Supports single-arm and four-arm real-time GLB inference. No Reach weights are bundled.
-2. **[Pick & Place: tabletop](examples/rl/pick_place/README.md)** — xArm6 + Gripper G2 grasps and transfers a cube to a tabletop target. Uses a fixed `+Y` layout with scripted action guidance; reference weights are included.
+2. **[Pick & Place: tabletop](examples/rl/pick_place/README.md)** — xArm6 + Gripper G2 grasps and transfers a cube to a tabletop target. Uses pure PPO with a fixed `+Y` layout; train policies from scratch.
 
 
 

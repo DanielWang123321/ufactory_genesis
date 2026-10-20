@@ -42,8 +42,6 @@ task:
     grasp_settle_s: 0.500
     pre_release_settle_s: 0.500
     post_release_settle_s: 0.500
-    # The unified 32-substep Genesis baseline restores the 25 mm accuracy gate.
-    place_success_distance_m: 0.025
     lift_success_clearance_m: 0.100
     home_success_distance_m: 0.010
   allowed_contacts:

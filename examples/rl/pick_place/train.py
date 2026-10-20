@@ -7,7 +7,6 @@ from copy import deepcopy
 import json
 import math
 from pathlib import Path
-import shutil
 from typing import Any
 
 from .runtime import (
@@ -23,7 +22,6 @@ configure_runtime()
 require_rsl_runtime()
 
 import genesis as gs
-from rsl_rl.runners import OnPolicyRunner
 import torch
 
 from ufactory.robots.paths import robot_urdf
@@ -37,11 +35,12 @@ from ufactory.training import (
     load_training_recipe,
     validate_and_load_rsl_checkpoint,
     write_artifact_inventory,
-    write_checkpoint_manifest,
     write_run_provenance,
     write_training_config,
 )
-from ufactory.training.pick_place_config import PICK_PLACE_ACTION_CONTRACT
+from ufactory.training.pick_place_config import PICK_PLACE_ACTION_CONTRACT, PICK_PLACE_ROBOT, PICK_PLACE_URDF
+from ufactory.training.runner import ArtifactOnPolicyRunner
+from ufactory.training.runtime import prepare_log_dir
 
 from .env import XArm6PickPlaceEnv
 from .evaluate import acceptance_passed, checkpoint_score, evaluate, save_results
@@ -72,54 +71,6 @@ def _install_fixed_learning_rate_guard(runner: Any, train_cfg: dict[str, Any]) -
     runner.alg.update = guarded_update
 
 
-class ArtifactOnPolicyRunner(OnPolicyRunner):
-    """Write the integrity manifest immediately after every RSL-RL checkpoint."""
-
-    checkpoint_training_config: dict[str, Any] | None = None
-    checkpoint_env: XArm6PickPlaceEnv | None = None
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        original_log = self.logger.log
-
-        def log_with_metrics(**metrics: Any) -> None:
-            episodes = self.logger.ep_extras
-            keys = {key for episode in episodes for key in episode}
-            values = {
-                key: torch.cat(
-                    [torch.as_tensor(episode[key]).flatten().cpu() for episode in episodes if key in episode]
-                )
-                for key in keys
-            }
-            report = {
-                "iteration": metrics["it"],
-                "completed_episodes": values["success_rate"].numel() if "success_rate" in values else 0,
-                "collection_s": metrics["collect_time"],
-                "learning_s": metrics["learn_time"],
-                "learning_rate": metrics["learning_rate"],
-                "action_std": metrics["action_std"].mean().item(),
-                "loss": metrics["loss_dict"],
-                "episode": {key: value.float().mean().item() for key, value in values.items()},
-            }
-            original_log(**metrics)
-            with (Path(self.logger.log_dir) / "training_metrics.jsonl").open("a", encoding="utf-8") as stream:
-                stream.write(json.dumps(report, allow_nan=False) + "\n")
-
-        self.logger.log = log_with_metrics
-
-    def save(self, path: str, infos: dict[str, Any] | None = None) -> None:
-        saved_infos = {} if infos is None else dict(infos)
-        if self.checkpoint_env is not None:
-            saved_infos["ufactory_env_state"] = self.checkpoint_env.training_state_dict()
-        super().save(path, saved_infos)
-        if self.checkpoint_training_config is not None:
-            write_checkpoint_manifest(
-                Path(path),
-                training_config=self.checkpoint_training_config,
-                executor_action_contract=EXECUTOR_ACTION_CONTRACT,
-            )
-
-
 def _provenance_sources(repo_root: Path) -> list[Path]:
     return [
         Path(__file__).resolve(),
@@ -137,19 +88,12 @@ def _provenance_sources(repo_root: Path) -> list[Path]:
         repo_root / "ufactory/simulation/physics.py",
         repo_root / "ufactory/training/logic/__init__.py",
         repo_root / "ufactory/training/artifacts.py",
-        repo_root / "ufactory/training/models.py",
+        repo_root / "ufactory/training/runner.py",
+        repo_root / "ufactory/training/runtime.py",
+        Path(robot_urdf(PICK_PLACE_ROBOT, PICK_PLACE_URDF)),
         repo_root / "ufactory/training/tasks.py",
         repo_root / "ufactory/training/pick_place_config.py",
-        repo_root / "ufactory/training/transfer.py",
     ]
-
-
-def _prepare_log_dir(path: Path, *, overwrite: bool) -> None:
-    if path.exists():
-        if not overwrite:
-            raise FileExistsError(f"training directory already exists: {path}; pass --overwrite to replace it")
-        shutil.rmtree(path)
-    path.mkdir(parents=True)
 
 
 def main() -> None:
@@ -234,13 +178,8 @@ def main() -> None:
             parser.error("resume requires the original --num-envs; episodes restart from home")
 
     log_dir = args.log_dir or (OUTPUT_ROOT / args.exp_name)
-    _prepare_log_dir(log_dir, overwrite=args.overwrite)
-    portable_robot_cfg = deepcopy(robot_cfg)
+    prepare_log_dir(log_dir, overwrite=args.overwrite)
     repo_root = Path(__file__).resolve().parents[3]
-    try:
-        portable_robot_cfg["urdf_path"] = Path(robot_cfg["urdf_path"]).resolve().relative_to(repo_root).as_posix()
-    except ValueError:
-        portable_robot_cfg["urdf_path"] = str(robot_cfg["urdf_path"])
 
     write_training_config(
         log_dir / "config.yaml",
@@ -248,7 +187,7 @@ def main() -> None:
         robot_key=runtime_config.robot.key,
         env=env_cfg,
         reward=reward_cfg,
-        robot=portable_robot_cfg,
+        robot=robot_cfg,
         train=train_cfg,
     )
     training_config = load_training_config(log_dir / "config.yaml")
@@ -267,7 +206,6 @@ def main() -> None:
         performance_mode=performance_mode,
     )
     require_backend(gs, args.backend)
-    robot_cfg["urdf_path"] = robot_urdf(runtime_config.robot.key, runtime_config.robot.urdf)
     env = XArm6PickPlaceEnv(
         env_cfg=env_cfg,
         reward_cfg=reward_cfg,
@@ -278,7 +216,9 @@ def main() -> None:
     runner_cfg = deepcopy(train_cfg)
     runner_cfg["runner"]["resume"] = False
     runner_cfg["runner"]["resume_path"] = None
-    runner = ArtifactOnPolicyRunner(env, runner_cfg, log_dir=str(log_dir), device=gs.device)
+    runner = ArtifactOnPolicyRunner(
+        env, runner_cfg, log_dir=str(log_dir), device=gs.device, executor_action_contract=EXECUTOR_ACTION_CONTRACT
+    )
     runner.checkpoint_training_config = training_config
     runner.checkpoint_env = env
     _install_fixed_learning_rate_guard(runner, runner_cfg)

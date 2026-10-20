@@ -3,7 +3,6 @@
 from ufactory.config.assets import (
     AssetLayoutError,
     AssetStore,
-    PackageAssetStore,
     RepositoryAssetStore,
     discover_asset_store,
 )
@@ -31,7 +30,6 @@ __all__ = [
     "G2SimulationConfig",
     "GraspObjectSpec",
     "MotionConfig",
-    "PackageAssetStore",
     "RepositoryAssetStore",
     "ResolvedRuntimeConfig",
     "RobotSpec",

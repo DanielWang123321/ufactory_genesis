@@ -80,7 +80,7 @@ PIP_AUDIT_IGNORED_VULNS = (
     "PYSEC-2026-2689",  # onnx
 )
 
-UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "showcase", "trajectory", "dev")
+UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "showcase", "dev")
 
 
 @dataclass
@@ -326,7 +326,6 @@ class ProjectCheck:
                 "ufactory/trajectory/segments.py",
                 "ufactory/trajectory/planner.py",
                 "ufactory/trajectory/validation.py",
-                "ufactory/trajectory/compile.py",
                 "ufactory/trajectory/execution.py",
                 "ufactory/trajectory/preflight.py",
             ),

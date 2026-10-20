@@ -19,6 +19,12 @@ logs/
 data/
 dev/*
 outputs/
+# RL policies are trained by users; keep local weights out of Git.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
 reports/
 assets/urdf/*/kinematics/user/*.yaml
 assets/urdf/*/*_calib.urdf

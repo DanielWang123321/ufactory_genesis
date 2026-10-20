@@ -24,6 +24,7 @@ from rsl_rl.runners import OnPolicyRunner
 import torch
 
 from ufactory.robots.paths import robot_urdf
+from ufactory.training.pick_place_config import PICK_PLACE_ROBOT, PICK_PLACE_URDF
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import (
     PICK_PLACE_RL_ROBOTS,
@@ -219,12 +220,11 @@ def main() -> None:
         reward_cfg = deepcopy(artifact["reward"])
         robot_cfg = deepcopy(artifact["robot"])
         train_cfg = deepcopy(artifact["train"])
-        robot_cfg["urdf_path"] = robot_urdf(runtime_config.robot.key, runtime_config.robot.urdf)
         extra_meta = {
             "checkpoint": str(checkpoint),
             "checkpoint_sha256": manifest.checkpoint_sha256,
             "config_sha256": artifact["config_sha256"],
-            "urdf_sha256": hashlib.sha256(Path(robot_cfg["urdf_path"]).read_bytes()).hexdigest(),
+            "urdf_sha256": hashlib.sha256(Path(robot_urdf(PICK_PLACE_ROBOT, PICK_PLACE_URDF)).read_bytes()).hexdigest(),
         }
     else:
         env_cfg = deepcopy(expected_env)

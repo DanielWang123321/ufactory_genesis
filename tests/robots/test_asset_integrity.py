@@ -543,8 +543,7 @@ def test_lite6_gripper_visual_glb_budget() -> None:
     names = {path.name for path in glbs}
     assert "lite6_gripper_static_link6.glb" in names
     assert "shell.glb" in names
-    assert "finger1.glb" in names
-    assert "finger2.glb" in names
+    assert names == {"lite6_gripper_static_link6.glb", "shell.glb"}
 
 
 def test_lite6_vacuum_gripper_visual_glb_budget() -> None:
