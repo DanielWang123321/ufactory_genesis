@@ -5,18 +5,21 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2] — 2026-10-16
+## [0.3.2] — 2026-10-20
 
 ### Changed
 
 - Simplified the Gripper G2 simulation modules. `ufactory/simulation/g2.py` was merged into `g2_adapter.py`. The task-level `g2_confirmation.py` and `g2_replay.py` moved to `ufactory/trajectory/`. The standalone scenes and acceptance suite (`g2_scene.py`, `g2_acceptance.py`) moved to `examples/gripper_g2/acceptance.py`; the `verify.py` and `grasp_cube.py` commands are unchanged. Package-level exports from `ufactory.simulation` are unchanged.
 - Pad contact forces now come from a single `object_finger_contact_forces_n`. Pass `left_normal`/`right_normal` to get the pad-normal clamping force used by the grasp gates; without them it returns the net force magnitude used by RL observations. Both values are unchanged.
 - `G2Controller` is now the single Torch implementation of the calibrated servo (formerly `G2BatchController`); states and outputs are `(num_envs,)` tensors and `num_envs` is keyword-only. Single scenes run it on the CPU in float64 with `num_envs=1`; `force_lookup()` is a method returning the calibration lookup of one environment. A recorded 521-step trajectory from the former scalar controller is kept as a regression reference (float64 within 1e-10).
-- Training provenance in `examples/rl/pick_place` hashes `g2_adapter.py` instead of the removed modules; a test now checks that every listed source exists.
+- Unified anti-slip rigid contact configuration across deterministic G2 pick-and-place, packaging, standalone G2 verification, and RL training/inference using `DEFAULT_IMPRATIO = 100.0` in `ufactory/simulation/physics.py` and `G2_NOSLIP_ITERATIONS = 0` in `ufactory/config/models.py`, eliminating pyramidal friction creep without the 3x throughput penalty of post-solve no-slip iterations.
+- Refactored `examples/rl/pick_place` (`env_version=3`) to pure end-to-end PPO with 70 observations and 4 continuous Cartesian and G2 opening increments (`cartesian_and_g2_gap_increment`), strict tabletop pressing (`press_mm <= 1.0 mm`), low-release (`0–3 mm` clearance), and collision-free hold acceptance criteria, plus `visualize.py` and `run_seeds.py` entry points.
+- Training provenance in `examples/rl/pick_place` hashes `g2_adapter.py`, `contacts.py`, `metrics.py`, `runtime.py`, and `pick_place_config.py`; a test checks that every listed source exists.
 
 ### Removed
 
 - Module paths `ufactory.simulation.g2`, `ufactory.simulation.g2_batch`, `ufactory.simulation.g2_confirmation`, `ufactory.simulation.g2_replay`, `ufactory.simulation.g2_scene` and `ufactory.simulation.g2_acceptance`, the class `G2BatchController`, and the helper `g2_adapter.normal_contact_forces`.
+- Legacy `examples/rl/pick_place` bundled `g2_stable_v1_3_3` weights (`pretrained/`), scenario banks (`scenarios/`), and behavior-cloning/campaign helpers (`bc_gate.py`, `pretrain_bc.py`, `overnight.py`, `make_scenario_bank.py`, `monitor_utils.py`, `trace_utils.py`).
 
 ## [0.3.1] — 2026-10-15
 

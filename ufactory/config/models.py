@@ -12,11 +12,10 @@ from ufactory.safety.models import SafetyPolicy
 
 FloatTuple = tuple[float, ...]
 G2_PHYSICS_PROFILE = "g2_calibrated_v1"
-# Pyramidal friction with soft constraints lets a held cube creep (about 2.4 mm/s
-# at 38 N); the no-slip post-pass removes it without changing normal forces.
-# Five iterations converge on GPU; one is worse than none and three leave little
-# packaging placement margin.
-G2_NOSLIP_ITERATIONS = 5
+# Pyramidal friction with DEFAULT_IMPRATIO=100.0 in make_rigid_options() stiffens
+# tangential regularization in the main Newton solver so a held cube does not
+# creep under gravity, keeping the post-solve no-slip PGS pass off globally.
+G2_NOSLIP_ITERATIONS = 0
 
 
 def _immutable_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:

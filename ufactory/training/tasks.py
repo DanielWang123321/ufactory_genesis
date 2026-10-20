@@ -10,13 +10,21 @@ from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.robots.paths import robot_urdf
 from ufactory.training.reach_config import REACH_ENV_VERSION, REACH_SUCCESS_DISTANCE_M, effective_max_joint_delta_rad
 from ufactory.training.recipe import load_training_recipe
+from ufactory.training.pick_place_config import (
+    PICK_PLACE_CONTROL,
+    PICK_PLACE_ENV_VERSION,
+    PICK_PLACE_NUM_ACTIONS,
+    PICK_PLACE_NUM_OBS,
+)
 
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
 REACH_RL_ROBOTS = ("xarm6", "xarm6_1305")
-# RL keeps the no-slip pass off: noslip_iterations=5 slows the 20480-environment
-# batch about 7x on an RTX 5090. Held cubes therefore still creep about 2.4 mm/s;
-# deterministic pick-place and packaging use the G2 default instead.
+# RL keeps the post-solve no-slip PGS pass off (noslip_iterations=5 slows a 512-env
+# batch ~3.5x on an RTX 5090). Tangential creep under pyramidal contact is instead
+# suppressed directly in the main Newton solver via DEFAULT_IMPRATIO=100.0 (~0.01 mm
+# drift over transport at 95.6% of the baseline step rate).
 PICK_PLACE_RL_NOSLIP_ITERATIONS = 0
+PICK_PLACE_RL_EPISODE_LENGTH_S = 8.0
 
 
 def load_pick_place_rl_runtime_config(robot: str, *, config_path: str | Path | None = None) -> Any:
@@ -26,7 +34,10 @@ def load_pick_place_rl_runtime_config(robot: str, *, config_path: str | Path | N
         robot,
         task="pick_place",
         config_path=config_path,
-        overrides={"simulation.noslip_iterations": PICK_PLACE_RL_NOSLIP_ITERATIONS},
+        overrides={
+            "simulation.noslip_iterations": PICK_PLACE_RL_NOSLIP_ITERATIONS,
+            "task.parameters.episode_length_s": PICK_PLACE_RL_EPISODE_LENGTH_S,
+        },
     )
 
 
@@ -64,6 +75,19 @@ def build_pick_place_task_configs(
     object_spec = resolve_pick_place_object_spec(config)
     recipe = load_training_recipe(recipe_path)
     env_cfg = deepcopy(recipe["environment"])
+    if env_cfg.get("env_version") == PICK_PLACE_ENV_VERSION:
+        env_cfg["task_name"] = "pick_place"
+        if (env_cfg.get("num_obs"), env_cfg.get("num_actions"), env_cfg.get("control")) != (
+            PICK_PLACE_NUM_OBS,
+            PICK_PLACE_NUM_ACTIONS,
+            PICK_PLACE_CONTROL,
+        ):
+            raise ValueError("pick-place v3 requires 70 observations and 4 continuous command increments")
+        if float(env_cfg.get("reward_gamma", 0.995)) != float(recipe["train"]["algorithm"]["gamma"]):
+            raise ValueError("pick-place reward_gamma must match PPO gamma for potential shaping")
+        for key, value in (("place_clearance_m", 0.002), ("release_max_height_m", 0.003), ("press_limit_m", 0.001)):
+            if float(env_cfg[key]) != value:
+                raise ValueError(f"pick-place v3 requires {key}={value}")
     env_cfg.update(
         {
             "runtime_config_sha256": config.sha256,
@@ -73,7 +97,7 @@ def build_pick_place_task_configs(
                 "force_percent": config.simulation.g2.force_percent,
             },
             "g2_physics": g2_physics_summary(simulation=config.simulation, rate_hz=1 / float(params["control_dt_s"])),
-            "episode_length_s": float(params["episode_length_s"]),
+            "episode_length_s": float(env_cfg.get("episode_length_s", params["episode_length_s"])),
             "ctrl_dt": float(params["control_dt_s"]),
             "table_height": float(params["table_height_m"]),
             "default_ee_pos": list(params["default_ee_position_m"]),
@@ -108,8 +132,6 @@ def build_pick_place_task_configs(
             "fixed_demo_layout": bool(env_cfg.get("fixed_demo_layout", True)),
             # When the layout is not fixed, older recipes randomize both endpoints.
             "randomize_target": bool(env_cfg.get("randomize_target", True)),
-            "place_phase_reset_frac": float(env_cfg.get("place_phase_reset_frac", 0.25)),
-            "place_phase_hover_z_m": float(env_cfg.get("place_phase_hover_z_m", 0.07)),
         }
     )
     gripper = config.gripper

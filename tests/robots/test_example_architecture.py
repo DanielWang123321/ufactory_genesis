@@ -44,15 +44,17 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/packaging/run.py",
         "examples/packaging/runtime.example.yaml",
         "examples/rl/pick_place/env.py",
-        "examples/rl/pick_place/evaluate.py",
+        "examples/rl/pick_place/contacts.py",
         "examples/rl/pick_place/expert.py",
-        "examples/rl/pick_place/pretrain_bc.py",
-        "examples/rl/pick_place/bc_gate.py",
-        "examples/rl/pick_place/overnight.py",
-        "examples/rl/pick_place/train.py",
-        "examples/rl/pick_place/trace_utils.py",
+        "examples/rl/pick_place/evaluate.py",
+        "examples/rl/pick_place/metrics.py",
         "examples/rl/pick_place/recipe.yaml",
-        "examples/rl/pick_place/scenarios/fixed_seed17000_n512.json",
+        "examples/rl/pick_place/runtime.py",
+        "examples/rl/pick_place/run_seeds.py",
+        "examples/rl/pick_place/train.py",
+        "examples/rl/pick_place/visualize.py",
+        "examples/rl/pick_place/README.md",
+        "examples/rl/pick_place/README_cn.md",
         "examples/rl/reach/env.py",
         "examples/rl/reach/evaluate.py",
         "examples/rl/reach/recipe.yaml",
@@ -66,12 +68,7 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/rl/reach/README_cn.md",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
-    assert sorted(path.name for path in (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").iterdir()) == [
-        "config.yaml",
-        "evaluation_summary.json",
-        "model_299_g2stable.checkpoint_manifest.json",
-        "model_299_g2stable.pt",
-    ]
+    assert not (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").exists()
 
 
 def test_sim_and_rl_extras_do_not_install_pinocchio_or_coal() -> None:

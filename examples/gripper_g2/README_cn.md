@@ -26,9 +26,8 @@ python examples/gripper_g2/verify.py --backend gpu --suite all --out reports/g2/
 力百分比通过曲线限制电机输出，不代表牛顿值。超过 3500 rpm 标定范围时，力采用边界曲线，运动速度保留输入值。
 
 默认参数：`kp=40、kv=5、ki=40`，夹爪关节附加惯量 0.01 kg·m²，
-50 Hz、32 子步、接触时间常数 1.25 ms、noslip 迭代 5 次。只驱动 `drive_joint`。
-不启用 noslip 时，pyramidal 摩擦锥与软接触会使夹持中的方块蠕滑，力 50% 时约 2.4 mm/s。
-抓放 RL 保持 `noslip_iterations: 0`，因为 5 次迭代会使 20480 环境批量仿真慢约 7 倍。
+50 Hz、32 子步、接触时间常数 1.25 ms、`impratio=100.0`、`noslip_iterations=0`。只驱动 `drive_joint`。
+通过 `impratio=100.0` 收紧主 Newton 求解器切向正则化柔度，直接消除金字塔摩擦锥与软接触下的方块蠕滑（约 2.4 mm/s），抓放、包装与 RL 全局统一保持 `noslip_iterations=0`。
 控制器使用位置、速度反馈及积分抗饱和；接触力仅用于流程确认。
 `G2Controller` 只有一份 Torch 实现，提供
 `command(position_mm, speed_percent, force_percent)`、`update` 和 `reset`；
@@ -72,7 +71,7 @@ YAML 参数为 `simulation.g2.position_mm`、`speed_percent` 和 `force_percent`
 `--report` 保存预检；`--sim-report` 保存完成状态、超时阶段、实际阶段时长、
 到力／开爪确认数据、下一动作间隔以及时序和搬运分项结果；`--csv` 保存每个控制周期。
 超时或时序、搬运验收不合格时，命令返回失败；搬运检查包括 5 mm 滑移和（桌面抓放的）10 mm 放置门限。
-确定性 G2 任务默认启用 `simulation.noslip_iterations = 5`；CPU 搬运回归要求滑移不超过 1 mm。
+确定性 G2 任务统一采用 `impratio = 100.0, noslip_iterations = 0`；CPU 搬运回归要求滑移不超过 1 mm。
 
 ## 动态演示与 RL
 
@@ -83,17 +82,12 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable
 
 python -m examples.rl.pick_place.train --num-envs 32 --max-iterations 5 --log-dir reports/g2/rl-short
 python -m examples.rl.pick_place.train --num-envs 32 --max-iterations 1 \
-  --resume reports/g2/rl-short/model_4.pt --log-dir reports/g2/rl-resume
-python -m examples.rl.pick_place.evaluate --allow-physics-transfer --headless -B 1 \
-  --episodes 16 --summary-json reports/g2/legacy-evaluation.json
+  --resume reports/g2/rl-short/model_final.pt --log-dir reports/g2/rl-resume
+python -m examples.rl.pick_place.evaluate --checkpoint reports/g2/rl-short/model_best.pt -B 1 \
+  --episodes 16 --summary-json reports/g2/rl-evaluation.json
 ```
 
-现有 RL 任务仍为 xArm6，动作、观测维度、奖励及策略流程保持原接口。
-位置由策略指令决定，速度和力来自 YAML。训练记录包含有效参数及当前资源、配置哈希。
-固定 URDF 后重新计算哈希，历史检查点和清单保持原文件，兼容性仍严格校验。
-内置权重继续保留原 `g2_stable_v1_3_3` 版本和文件；跨版本评估必须显式加
-`--allow-physics-transfer`，仍校验原始检查点及配置完整性。
-旧动力学检查点不能完整续训，历史成功率不代表新动力学表现。
+RL 抓放任务（`examples/rl/pick_place`，`env_version=3`）采用 70 维观测和 4 维末端笛卡尔及 G2 开度连续增量控制（`cartesian_and_g2_gap_increment`）。开度由策略增量指令决定，速度和力来自 YAML。训练产物记录有效参数及当前资源、配置哈希，兼容性仍严格校验。旧版阶段守卫或旧动力学检查点需重新训练，跨版本不允许完整续训。
 
 G2 测试分为标定、约束、批量、确认、回放、CPU 搬运及 GPU 验收，共 7 个文件。
 GPU 保留 22 项：抓放 9 项、故障 4 项、装箱 5 项（7 轮）、RL 2 项（1／4 环境）、

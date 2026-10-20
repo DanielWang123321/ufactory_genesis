@@ -18,6 +18,7 @@ from typing import Any, Mapping
 import yaml
 
 from ufactory.training.reach_config import REACH_SUCCESS_DISTANCE_M
+from ufactory.training.pick_place_config import PICK_PLACE_ACTION_CONTRACT, PICK_PLACE_ENV_VERSION
 from ufactory.config.models import G2_PHYSICS_PROFILE
 
 
@@ -85,14 +86,38 @@ _REACH_RUNTIME_ENV_CONTRACT_KEYS = (
     "constraint_time_constant_s",
     "use_gjk_collision",
 )
+_PICK_PLACE_V3_RUNTIME_ENV_CONTRACT_KEYS = _RUNTIME_ENV_CONTRACT_KEYS + (
+    "task_name",
+    "env_version",
+    "num_obs",
+    "num_actions",
+    "control",
+    "action_scale",
+    "action_clip",
+    "gap_action_scale",
+    "setpoint_leash_m",
+    "pre_grasp_gap_m",
+    "close_floor_gap_m",
+    "reward_gamma",
+    "place_clearance_m",
+    "release_max_height_m",
+    "press_limit_m",
+    "near_table_m",
+    "max_near_table_descent_m_s",
+    "table_overload_margin_n",
+    "drag_limit_m",
+    "tilt_limit_deg",
+)
 _TRANSFERABLE_RUNTIME_ENV_KEYS = frozenset({"fixed_demo_layout"})
 
 
 def runtime_env_contract_keys(env: Mapping[str, Any]) -> tuple[str, ...]:
-    """Pick-place keeps the historical key list unless the env is marked reach."""
+    """Retain historical contracts while enforcing the full v3 control contract."""
 
     if str(env.get("task_name", "")) == "reach":
         return _REACH_RUNTIME_ENV_CONTRACT_KEYS
+    if str(env.get("task_name", "")) == "pick_place":
+        return _PICK_PLACE_V3_RUNTIME_ENV_CONTRACT_KEYS
     return _RUNTIME_ENV_CONTRACT_KEYS
 
 
@@ -402,6 +427,13 @@ def validate_checkpoint_artifacts(
 ) -> tuple[dict[str, Any], CheckpointManifest]:
     checkpoint = Path(checkpoint_path)
     config = load_training_config(config_path)
+    if (
+        expected_task == "pick_place"
+        and expected_runtime_env is not None
+        and expected_runtime_env.get("env_version") == PICK_PLACE_ENV_VERSION
+        and config["env"].get("env_version") != PICK_PLACE_ENV_VERSION
+    ):
+        raise ArtifactError("pick-place environment v3 changed observations and continuous control; retrain the policy")
     path = Path(manifest_path) if manifest_path else checkpoint.with_suffix(".checkpoint_manifest.json")
     manifest = load_checkpoint_manifest(path)
     failures: list[str] = []
@@ -416,6 +448,9 @@ def validate_checkpoint_artifacts(
     if expected_robot_key is not None and manifest.robot_key != expected_robot_key:
         failures.append("robot")
     env = config["env"]
+    if env.get("task_name") == "pick_place" and env.get("env_version") == PICK_PLACE_ENV_VERSION:
+        if manifest.executor_action_contract != PICK_PLACE_ACTION_CONTRACT:
+            failures.append("pick-place v3 action contract (retrain the policy)")
     physics_changed = config["task"] == "pick_place" and env.get("physics_profile") != G2_PHYSICS_PROFILE
     if physics_changed and full_resume:
         failures.append("old G2 physics checkpoint cannot fully resume training")

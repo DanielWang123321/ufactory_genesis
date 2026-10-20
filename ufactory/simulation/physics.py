@@ -16,6 +16,7 @@ DEFAULT_CONTACT_RESOLUTION = "convex"
 DEFAULT_SOLVER_ITERATIONS = 100
 DEFAULT_NOSLIP_ITERATIONS = 0
 DEFAULT_CONSTRAINT_TIMECONST = 0.005
+DEFAULT_IMPRATIO = 100.0
 
 CONSTRAINT_SOLVERS = (DEFAULT_CONSTRAINT_SOLVER,)
 FRICTION_CONES = ("pyramidal", "elliptic")
@@ -56,6 +57,7 @@ def make_rigid_options(
     iterations: int = DEFAULT_SOLVER_ITERATIONS,
     noslip_iterations: int = DEFAULT_NOSLIP_ITERATIONS,
     constraint_timeconst: float = DEFAULT_CONSTRAINT_TIMECONST,
+    impratio: float = DEFAULT_IMPRATIO,
     **options: Any,
 ) -> Any:
     """Create ``gs.options.RigidOptions`` from the project's named policy."""
@@ -67,10 +69,13 @@ def make_rigid_options(
     iterations = int(iterations)
     noslip_iterations = int(noslip_iterations)
     constraint_timeconst = float(constraint_timeconst)
+    impratio = float(impratio)
     if iterations <= 0:
         raise ValueError("iterations must be positive")
     if constraint_timeconst <= 0.0:
         raise ValueError("constraint_timeconst must be positive")
+    if impratio <= 0.0:
+        raise ValueError("impratio must be positive")
     validate_rigid_physics(
         constraint_solver=constraint_solver,
         friction_cone=friction_cone,
@@ -93,6 +98,7 @@ def make_rigid_options(
         iterations=iterations,
         noslip_iterations=noslip_iterations,
         constraint_timeconst=constraint_timeconst,
+        impratio=impratio,
         **options,
     )
 
@@ -104,6 +110,7 @@ __all__ = [
     "DEFAULT_CONSTRAINT_TIMECONST",
     "DEFAULT_CONTACT_RESOLUTION",
     "DEFAULT_FRICTION_CONE",
+    "DEFAULT_IMPRATIO",
     "DEFAULT_NOSLIP_ITERATIONS",
     "DEFAULT_SOLVER_ITERATIONS",
     "FRICTION_CONES",

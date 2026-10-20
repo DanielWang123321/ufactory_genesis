@@ -79,22 +79,24 @@ def test_default_calibrated_g2_contact_profile_is_explicit() -> None:
     assert simulation.friction_cone == "pyramidal"
     assert simulation.contact_resolution == "convex"
     assert simulation.solver_iterations == 100
-    assert simulation.noslip_iterations == G2_NOSLIP_ITERATIONS > 0
+    assert simulation.noslip_iterations == G2_NOSLIP_ITERATIONS == 0
     assert simulation.constraint_time_constant_s == pytest.approx(0.00125)
     assert simulation.use_gjk_collision is True
 
 
 @pytest.mark.parametrize("robot", ["xarm5", "xarm6", "xarm7", "uf850"])
-def test_g2_robots_enable_noslip_and_other_grippers_do_not(robot: str) -> None:
-    assert load_runtime_config(robot).simulation.noslip_iterations == G2_NOSLIP_ITERATIONS
-    assert load_runtime_config(robot, task="packaging_showcase").simulation.noslip_iterations == G2_NOSLIP_ITERATIONS
+def test_g2_robots_use_unified_noslip_default(robot: str) -> None:
+    assert load_runtime_config(robot).simulation.noslip_iterations == G2_NOSLIP_ITERATIONS == 0
+    assert (
+        load_runtime_config(robot, task="packaging_showcase").simulation.noslip_iterations == G2_NOSLIP_ITERATIONS == 0
+    )
     assert load_runtime_config("lite6").simulation.noslip_iterations == 0
 
 
 def test_g2_noslip_default_can_be_overridden_by_user_config(tmp_path: Path) -> None:
     path = tmp_path / "noslip.yaml"
-    path.write_text("schema_version: 1\nsimulation:\n  noslip_iterations: 0\n", encoding="utf-8")
-    assert load_runtime_config("xarm6", config_path=path).simulation.noslip_iterations == 0
+    path.write_text("schema_version: 1\nsimulation:\n  noslip_iterations: 5\n", encoding="utf-8")
+    assert load_runtime_config("xarm6", config_path=path).simulation.noslip_iterations == 5
 
 
 @pytest.mark.parametrize("value", [0, -1, 31.5, 32.0, True, "many", "32"])

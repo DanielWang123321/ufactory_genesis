@@ -1,147 +1,55 @@
-# 2. Pick & Place：xArm6 + Gripper G2 桌面抓放
+# 2. 抓放：xArm6 + Gripper G2
 
-第二个 RL 示例使用 Gripper G2 抓取、抬升并搬运方块，在桌面目标位置放下、松爪。
-仅在仿真中训练固定 `+Y` 布局；随机布局泛化、CPU/Windows 训练和真机策略部署
-不在当前范围内。
+在仿真中将 30 mm 方块从 `(300, 0) mm` 搬到 `(300, 300) mm`。采用端到端 PPO，从零训练，每回合均从末端 `(300, 0, 300) mm` 和 50 mm 开度开始。
 
-[English](README.md) · [RL 示例顺序](../README_cn.md) · [上一步：1. Reach](../reach/README_cn.md)
+[English](README.md) · [RL 示例](../README_cn.md) · [前一例：Reach](../reach/README_cn.md)
 
-## 参考环境与工件状态
+环境版本为 **3**：70 维观测、4 维动作 `Δx, Δy, Δz, Δgap`，固定夹爪朝下，控制周期 20 ms、32 个物理子步，回合最长 8 s。XYZ 每步最大增量 5 mm，开度每步最大增量 3 mm；命令持续积分，零动作保持命令。四个通道始终有效，仅保留工作空间、URDF 关节限位、IK 检查和 25 mm 设定点距离限制。夹爪使用标定版 [G2Controller](../../../ufactory/simulation/g2_controller.py)。
 
-参考环境为 Linux、NVIDIA GPU、Python 3.12/3.13、Genesis World 1.4.4、
-Quadrants 1.3.3、PyTorch 2.10 和 RSL-RL 5.4.2；仓库锁文件是唯一参考：
+观测包含关节位置与速度、末端和物体状态、目标相对位置、两侧实际指垫中心相对位置、命令与实测开度、末端设定点误差、双指接触力、桌面支撑力、机器人碰桌载荷、上一步动作及任务历史；不包含阶段信息。旧版模型的观测和动作语义不兼容，加载时会要求重新训练，物理迁移选项也不能跳过此检查。
 
-```bash
-uv sync --extra sim --extra rl
-export NUMBA_CACHE_DIR="$HOME/.cache/numba"
-```
+奖励使用折扣势能差及一次性抓取、抬升和低位释放奖励，覆盖接近、夹持、抬升、搬运、释放和稳定保持。抓取前开度势能在放置确认前随指垫与方块距离连续变化，引导先张开接近再闭爪并在下降阶段平滑释放预紧行程。放置势能依据按姿态计算的方块最低点，释放前以 2 mm 离桌高度为缓冲目标，确认低位释放后在 0–2 mm 区间内保持满值。确认目标低位释放（`place_rewarded`）后，接近、预抓取与夹持势能平滑交接至无接触开度进展及稳定保持步数势能，消除脱爪后反手重夹的收益。夹持状态下离桌 20 mm 内过快下降、触桌后继续下移、桌面过载、高处脱爪与机器人碰桌均受罚。开合或反复抬升不能重复获得一次性奖励。
 
-环境只从 `simulation.substeps` 解析 32 个刚体子步，已删除的任务级字段属于非法配置。
-0.625 ms 刚体步长是本项目为正式运行保留的保守裕量，并不表示 Genesis 1.4.4 必须
-使用 32 子步。主要的非数值修复是给 G2 的 5 个联动等式统一使用柔顺求解参数；同一
-参数在 8 子步下也通过了 128 个扰动接触环境的检查。
+## 严格成功条件
 
-释放意图迟滞（配方 `release_command_margin_m`，18 mm）要求指令间隙显著越过闭合间隙
-才认定松爪。此变更前保存的检查点评估时请传 `--release-command-margin-m 0.0005`。
+- 起抓前拖行不超过 10 mm、倾角不超过 15°；双指接触连续确认至少 3 步，接触进入阈值 0.2 N、退出阈值 0.05 N。
+- 夹持方块最低点抬到至少 65 mm（平放时中心高 80 mm），落点水平误差不超过 20 mm，放置倾角不超过 15°。
+- 双指脱离时方块实际离桌高度为 **0–3 mm**，开度至少 35 mm；两指连续 3 步低于 0.05 N 才确认脱离。高处抛落后落入目标区仍判失败。
+- 触桌至双指脱离的末端额外下降不超过 **1 mm**。首次触桌保留前一帧末端高度；单指仍接触及短暂接触抖动继续统计。脱爪后重新接触会重新测量触桌与释放，并保留回合内最差下压量及最高释放高度。
+- 释放后由桌面支撑、物体速度小于 30 mm/s，并连续稳定至少 **0.2 s**；机器人碰桌判失败。
 
-当前动力学版本为 `g2_calibrated_v1`：`kp=40、kv=5、ki=40`，夹爪关节附加惯量
-0.01 kg·m²、接触时间常数 1.25 ms。RL 保持 `noslip_iterations: 0`（确定性抓放为 5），
-因为 noslip 会使 20480 环境批量仿真慢约 7 倍；因此训练和评估中夹持的方块相对指垫约以 2.4 mm/s 蠕滑。
-策略位置动作、观测维度和奖励函数保持原接口，
-`simulation.g2` 提供速度和力百分比，详见 [G2 说明](../../gripper_g2/README_cn.md)。
+接触力通过对象筛选和 `valid_mask` 计算，区分方块支撑与机器人碰桌载荷，见 [Genesis 接触接口](https://genesis-world.readthedocs.io/en/latest/user_guide/theory/rigid_solver/collision_detection.html)。报告包含 `release_height_mm`, `release_confirmed`, `press_mm`, `max_table_force_n`, `max_place_table_force_n`, `max_held_table_force_n` 和 `max_robot_table_force_n`。释放高度需结合是否确认脱爪读取。
 
-内置 seed-7 `model_299_g2stable.pt`（SHA-256 `f2142a63…f783f2`）保持原文件和历史
-`g2_stable_v1_3_3` 动力学版本。评估必须显式加 `--allow-physics-transfer`，
-仍校验原配置和检查点哈希；旧动力学检查点不能完整续训。历史成功率不代表新动力学表现。
+## 基线与训练
 
-## 分层引导披露
-
-观测中包含 4 维脚本引导动作列（44→48，配方开关 `include_scripted_action_hint`）。
-引导与行为克隆打标签用的是同一份哈希脚本专家配置，观测与标签不可能互相矛盾。
-按 v0.2.12 先例，这属于公开披露的分层/仿真器引导策略：发布工件不得表述为脱离引导
-仍能泛化的学习策略。2026-08-21 的诊断（`rl/reports/`）表明 44 维观测无法区分
-"在取件点夹着立方体"与"在目标点夹着立方体"，克隆因此会在取件点松爪；引导列正是
-用来消解这一歧义的。
-
-## 从零训练路径
-
-先确认脚本专家能够达到不可变的 `contact_v1` 目标：
+在项目根目录、`py313` 环境运行；指定 GPU 时若回退 CPU，会明确报错。
 
 ```bash
-python -m examples.rl.pick_place.evaluate --expert --headless -B 8 --episodes 8 \
-  --acceptance-profile contact_v1 --require-target robustness
+python -m examples.rl.pick_place.evaluate --zero-policy -B 16 --episodes 32 --quiet-episodes
+python -m examples.rl.pick_place.evaluate --expert -B 16 --episodes 32 \
+  --min-success-rate 1.0 --max-press-mm 1.0 --quiet-episodes
+
+# 单个种子：完整任务 PPO，从零训练，无专家训练或阶段复位
+python -m examples.rl.pick_place.train -e pick_place_e2e_s1 --seed 1 \
+  -B 2048 --max-iterations 2000 --eval-interval 50 --eval-episodes 64
+
+# 三个种子分别训练、独立评估 64 回合并录制 B=1 GLB 回放
+python -m examples.rl.pick_place.run_seeds
 ```
 
-重新采集示教并在不加载任何旧策略的情况下做行为克隆。标准采集档为
-256 环境 × 8000 步（约 205 万样本）；更小的档会把动作均方误差拟合得更低，
-但闭环行为反而会崩：
+默认种子为 1、2、3；学习率 `3e-4`、`gamma=0.995`、初始动作标准差 `0.5`、熵系数 `0.005`。沿用 `[256, 256]` 网络和每轮 32 步采样。连续两次周期评估达到验收门限后提前停止，最多 2000 轮；`--early-stop-evaluations 0` 可关闭提前停止，实际轮数写入 `training_summary.json`。规则专家是独立评估策略，不参与 PPO。实验目录已存在时停止，避免覆盖训练产物。
 
-```bash
-python -m examples.rl.pick_place.pretrain_bc -B 256 --rollout-steps 8000 \
-  --far-open-penalty 20.0 --seed 1 -e v0213g-fixed-bc-seed1
-```
-
-从这个新 BC actor 启动三个相互独立的 300 轮 PPO：
-
-```bash
-for seed in 1 7 17; do
-  python -m examples.rl.pick_place.train -B 256 --max-iterations 300 \
-    --seed "$seed" \
-    --warm-start outputs/rl/pick_place/v0213g-fixed-bc-seed1/model_0.pt \
-    -e "v0213g-fixed-ppo-seed${seed}"
-done
-```
-
-产物只写入已忽略的 `outputs/rl/pick_place/`。不要把 `pretrained/` 当训练目录，
-也不要加载旧物理基线训练出的检查点。
-
-新动力学请另建固定布局文件，保留仓库中的历史布局和哈希：
-
-```bash
-python -m examples.rl.pick_place.make_scenario_bank --mode fixed --count 512 --seed 17000 \
-  --output reports/g2/fixed_seed17000_n512.json
-```
-
-## 评估专家或显式指定的现行物理候选
-
-完整工件包包含 `model_N.pt`、`config.yaml` 和
-`model_N.checkpoint_manifest.json`。评估器先检查哈希、任务/机器人身份及完整运行时契约，
-再使用 PyTorch 安全的 weights-only 模式加载。
-
-```bash
-# 现行纯物理接触基线
-python -m examples.rl.pick_place.evaluate --expert \
-  --headless -B 8 --episodes 8 --acceptance-profile contact_v1
-
-# 本地完整工件包
-python -m examples.rl.pick_place.evaluate \
-  --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --headless -B 8 --episodes 8 --acceptance-profile contact_v1
-```
-
-当前固定库绑定运行时配置 `654b538e…7ed`，SHA-256 为 `2238202c…eb0`：
+输出位于 `outputs/rl/pick_place/pick_place_e2e_s1/`（其他种子对应 `s2/s3`）。检查点按严格成功率、有效低位触桌率、最大下压量、平均落点误差依次排序；保存配置、源码哈希、检查点清单、训练日志和 JSON/CSV 评估报告。三种子验收各要求成功率 **≥98%**、最大下压 **≤1 mm**；汇总和进程日志在 `outputs/rl/pick_place/e2e_validation/`。
 
 ```bash
 python -m examples.rl.pick_place.evaluate \
-  --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank reports/g2/fixed_seed17000_n512.json \
-  --headless -B 64 --episodes 64 --acceptance-profile contact_v1 \
-  --require-target standard
+  --checkpoint outputs/rl/pick_place/pick_place_e2e_s1/model_best.pt \
+  -B 32 --episodes 64 --seed 18001 --min-success-rate 0.98 --max-press-mm 1.0 \
+  --out outputs/rl/pick_place/pick_place_e2e_s1/test.json
+
+python -m examples.rl.pick_place.visualize -e pick_place_e2e_s1 -B 1
+python -m examples.rl.pick_place.visualize -e pick_place_e2e_s1 -B 1 --episodes 1 \
+  --headless --record outputs/rl/pick_place/pick_place_e2e_s1/replay.mp4
 ```
 
-正式动作噪声试验使用标准差 `0.02` 和新种子 `20260817`：
-
-```bash
-python -m examples.rl.pick_place.evaluate \
-  --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank reports/g2/fixed_seed17000_n512.json \
-  --headless -B 64 --episodes 512 --acceptance-profile contact_v1 \
-  --action-noise-std 0.02 --action-noise-bank 20260817 \
-  --require-target robustness
-```
-
-## 发布要求
-
-候选必须是非零 PPO 检查点，并在动作裁剪、IK 失败和 IK 跳变拒绝均为零的前提下满足：
-
-- 种子 `1/7/17` × 并行数 `1/8/64`：9/9 组、219/219 回合；
-- 独立固定库：完整与质量成功 64/64；
-- 固定布局动作噪声 512 回合：完整与质量成功率均不低于 99%；
-- 最终 XY、夹起前拖动、松爪后漂移的 P99 分别不超过 10、5、3 mm。
-
-`Full success` 同时要求抓取、抬升、有效放下/松爪、最终位姿和速度、保持时间及全部
-质量限制。即使训练指标或局部阶段看起来较好，筛选失败也不会发布工件。
-
-## 历史发布结果（g2_stable_v1_3_3）
-
-内置的 `model_299_g2stable.pt` 在 Genesis World 1.3.3 的 `g2_stable_v1_3_3`
-物理配置下完成全部训练。48 维观测修复了 2026-08-21 定位的阶段标签歧义。
-通过验收的行为克隆从收起姿势运行 8/8 成功，随后种子 1、7、17 分别完成
-300 轮 PPO。最终选择 seed 7 检查点，训练使用 `place_phase_reset_frac: 0.40`
-和学习率 `1e-5`。
-
-同一个候选通过全部 9 组评估种子/并行数组合（219/219 回合）、独立固定场景库
-（完整与质量成功 64/64），以及固定场景 512 回合、标准差 0.02 的动作噪声检查
-（完整与质量成功 512/512）。噪声检查的最终 XY 误差、夹起前拖动、松爪后漂移
-P99 分别为 0.93、0.35、0.07 mm；动作裁剪、IK 失败、IK 跳变拒绝和松爪后再接触
-均为零。机器可读证据见 `pretrained/evaluation_summary.json`。
+录像默认采用 GLB PBR，按 50 FPS 保存，同时输出 JSON/CSV 指标。在统一的 `impratio = 100.0, noslip_iterations = 0` 物理配置下，三种子 GPU 训练（`pick_place_e2e_s1..s3`）、64 回合独立严格评估及 `B=1` GLB 回放验收均已通过（成功率 100%，最大下压 0.084 mm，平均落点误差 4.44 mm）。

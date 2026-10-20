@@ -168,13 +168,24 @@ def test_rl_batch_control_and_independent_reset(num_envs):
     env_cfg, reward, robot = build_pick_place_task_configs(
         "xarm6", recipe_path=Path("examples/rl/pick_place/recipe.yaml")
     )
-    env_cfg.update(
-        num_envs=num_envs, place_phase_reset_frac=0.0, carry_phase_reset_frac=0.0, grasp_phase_reset_frac=0.0
-    )
+    env_cfg.update(num_envs=num_envs)
     with GenesisRuntimeManager(load_runtime_config("xarm6").simulation):
         assert str(gs.device).startswith("cuda"), "GPU acceptance must not silently fall back to CPU"
         env = XArm6PickPlaceEnv(env_cfg=env_cfg, reward_cfg=reward, robot_cfg=robot, show_viewer=False)
         env.reset()
+        command = env.ee_setpoint.clone()
+        gap_command = env.gap_cmd.clone()
+        increments = torch.full((num_envs, 4), 0.1, device=gs.device)
+        obs, _, done, _ = env.step(increments)
+        assert not done.any()
+        assert obs["policy"].shape == (num_envs, 70)
+        assert not hasattr(env, "phase")
+        torch.testing.assert_close(env.ee_setpoint, command + increments[:, :3] * env.action_scale)
+        torch.testing.assert_close(env.gap_cmd, gap_command + increments[:, 3] * env.gap_action_scale)
+        command, gap_command = env.ee_setpoint.clone(), env.gap_cmd.clone()
+        env.step(torch.zeros_like(increments))
+        torch.testing.assert_close(env.ee_setpoint, command, rtol=0, atol=0)
+        torch.testing.assert_close(env.gap_cmd, gap_command, rtol=0, atol=0)
         env.g2_force_percent = torch.linspace(10, 100, num_envs, device=gs.device)
         actions = torch.zeros((num_envs, 4), device=gs.device)
         actions[:, 3] = -1
@@ -189,15 +200,17 @@ def test_rl_batch_control_and_independent_reset(num_envs):
             untouched = torch.arange(1, num_envs, device=gs.device)
             integral = env.g2_controller.integral_torque_nm[untouched].clone()
             reference = env.g2_controller.reference_gap_mm[untouched].clone()
+            command = env.ee_setpoint[untouched].clone()
+            history = env.last_actions[untouched].clone()
+            metrics = env.metrics.max_table_force[untouched].clone()
             env.reset_idx(torch.tensor([0], device=gs.device))
             torch.testing.assert_close(integral, env.g2_controller.integral_torque_nm[untouched], rtol=0, atol=0)
             torch.testing.assert_close(reference, env.g2_controller.reference_gap_mm[untouched], rtol=0, atol=0)
-            assert env.g2_controller.reference_gap_mm[0] == 84
-        # Pre-held resets seed only the selected environments' preload.
-        env.place_phase_reset_frac = 1.0
-        env.reset_idx(torch.tensor([0], device=gs.device))
-        assert env.g2_controller.integral_torque_nm[0] > 0
-        assert env.g2_controller.reference_gap_mm[0] < 84
+            torch.testing.assert_close(command, env.ee_setpoint[untouched], rtol=0, atol=0)
+            torch.testing.assert_close(history, env.last_actions[untouched], rtol=0, atol=0)
+            torch.testing.assert_close(metrics, env.metrics.max_table_force[untouched], rtol=0, atol=0)
+            assert env.g2_controller.reference_gap_mm[0].item() == pytest.approx(env.pre_grasp_gap_m * 1000.0)
+            assert env.g2_controller.integral_torque_nm[0].item() == 0.0
         for _ in range(5):
             env.step(torch.zeros_like(actions))
 

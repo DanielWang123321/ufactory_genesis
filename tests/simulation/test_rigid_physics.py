@@ -30,6 +30,7 @@ def test_make_rigid_options_resolves_project_defaults() -> None:
         "iterations": 100,
         "noslip_iterations": 0,
         "constraint_timeconst": 0.005,
+        "impratio": 100.0,
     }
 
 
@@ -38,6 +39,7 @@ def test_make_rigid_options_resolves_project_defaults() -> None:
     [
         ({"iterations": 0}, "iterations"),
         ({"constraint_timeconst": 0.0}, "constraint_timeconst"),
+        ({"impratio": 0.0}, "impratio"),
     ],
 )
 def test_make_rigid_options_rejects_invalid_numeric_defaults(kwargs: dict, match: str) -> None:

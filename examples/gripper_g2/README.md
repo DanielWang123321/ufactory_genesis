@@ -31,11 +31,11 @@ calibrated motor effort; it is not a force in newtons. Speeds above the chart's
 3500 rpm limit use its boundary force curve while retaining commanded motion speed.
 
 The defaults are `kp=40`, `kv=5`, `ki=40`, 0.01 kg·m² gripper joint armature,
-50 Hz control, 32 substeps, a 1.25 ms contact time constant, and 5 no-slip
-iterations. Without the no-slip pass, pyramidal friction with soft contacts lets a
-held cube creep about 2.4 mm/s at 50% force. Pick-and-place RL keeps
-`noslip_iterations: 0`, because 5 iterations make the 20480-environment batch
-about 7× slower. Only `drive_joint`
+50 Hz control, 32 substeps, a 1.25 ms contact time constant, `impratio=100.0`,
+and `noslip_iterations=0`. Setting `impratio=100.0` stiffens tangential
+regularization in the main Newton solver so pyramidal friction with soft
+contacts prevents the ~2.4 mm/s cube creep without a post-solve no-slip pass.
+Only `drive_joint`
 is actuated. The controller uses position/velocity feedback with conditional
 integral anti-windup; contact forces only confirm workflow transitions.
 `G2Controller` is one Torch implementation with `command(position_mm,
@@ -91,8 +91,8 @@ durations, force/opening confirmation samples, next-action delay and separate
 timing/transport results. `--csv` stores every control sample. The CLI returns
 failure on timeout or failed timing/transport acceptance, including the 5 mm slip
 and (for pick-and-place) 10 mm placement limits.
-Deterministic G2 tasks enable `simulation.noslip_iterations = 5`,
-with a dedicated CPU regression requiring at most 1 mm of slip.
+Deterministic G2 tasks use the unified `impratio = 100.0, noslip_iterations = 0`
+profile, with a dedicated CPU regression requiring at most 1 mm of slip.
 
 ## Demos and RL
 
@@ -103,19 +103,12 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable
 
 python -m examples.rl.pick_place.train --num-envs 32 --max-iterations 5 --log-dir reports/g2/rl-short
 python -m examples.rl.pick_place.train --num-envs 32 --max-iterations 1 \
-  --resume reports/g2/rl-short/model_4.pt --log-dir reports/g2/rl-resume
-python -m examples.rl.pick_place.evaluate --allow-physics-transfer --headless -B 1 \
-  --episodes 16 --summary-json reports/g2/legacy-evaluation.json
+  --resume reports/g2/rl-short/model_final.pt --log-dir reports/g2/rl-resume
+python -m examples.rl.pick_place.evaluate --checkpoint reports/g2/rl-short/model_best.pt -B 1 \
+  --episodes 16 --summary-json reports/g2/rl-evaluation.json
 ```
 
-The existing RL task remains xArm6 with the same policy action, observation and
-reward interfaces. Policy actions keep issuing position commands; YAML supplies
-speed and force. Training artifacts record effective parameters and current asset/configuration
-hashes. These hashes are recomputed for the fixed URDFs; historical checkpoints
-and manifests are preserved and compatibility checks remain strict. Bundled weights retain the historical `g2_stable_v1_3_3` profile and files.
-Evaluating them requires `--allow-physics-transfer`, which still validates original
-checkpoint/config integrity. Cross-version full training resume is rejected.
-Historical success rates do not describe the new physics.
+The RL pick-and-place task (`examples/rl/pick_place`, `env_version=3`) uses 70 observations and 4 continuous Cartesian and G2 opening increments (`cartesian_and_g2_gap_increment`). Policy actions issue gap increments while YAML supplies speed and force. Training artifacts record effective parameters and current asset/configuration hashes, and compatibility checks remain strict. Older phase-guarded or legacy-physics checkpoints require retraining; cross-version full training resume is rejected.
 
 The G2 tests occupy seven files: calibration, constraints, batch control,
 confirmation, replay, CPU transport and GPU acceptance. The GPU suite has

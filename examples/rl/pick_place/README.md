@@ -1,165 +1,55 @@
 # 2. Pick & Place: xArm6 + Gripper G2
 
-This second RL example uses Gripper G2 to grasp, lift and transfer a cube, then
-set it down and release it at a tabletop target. It runs in simulation with one
-fixed `+Y` layout. Random-layout generalization, CPU/Windows training and
-real-robot policy deployment are outside its scope.
+Move a 30 mm cube from `(300, 0) mm` to `(300, 300) mm` in simulation. Train an end-to-end policy from scratch with pure PPO. Every episode starts at EE `(300, 0, 300) mm` with a 50 mm gripper gap.
 
-[中文说明](README_cn.md) · [RL examples](../README.md) · [Previous: 1. Reach](../reach/README.md)
+[中文说明](README_cn.md) · [RL examples](../README.md) · [Previous: Reach](../reach/README.md)
 
-## Reference environment and artifact status
+Environment **v3** uses 70 observations and four actions `Δx, Δy, Δz, Δgap`, a downward gripper orientation, a 20 ms control period, 32 physics substeps, and an 8 s episode limit. Cartesian increments are at most 5 mm per step; gap increments are at most 3 mm. Commands accumulate; zero actions hold the commands. All channels remain available throughout the episode, subject to workspace bounds, URDF joint limits, IK checks, and a 25 mm setpoint leash. Gripper dynamics use the calibrated [G2Controller](../../../ufactory/simulation/g2_controller.py).
 
-Use Linux, an NVIDIA GPU, Python 3.12 or 3.13, Genesis World 1.4.4, Quadrants 1.3.3,
-PyTorch 2.10, and RSL-RL 5.4.2. The repository lock file is the reference:
+Observations include joint positions and velocities, EE and object state, relative target position, actual finger-pad centers relative to the cube, commanded and measured gap, EE command error, finger contacts, table support, robot-table loads, previous actions, and task history. There is no phase observation. Older policies have incompatible observations and control semantics and must be retrained; physics-transfer options cannot bypass this check.
 
-```bash
-uv sync --extra sim --extra rl
-export NUMBA_CACHE_DIR="$HOME/.cache/numba"
-```
+Discounted potential differences and one-time grasp, lift, and low-release bonuses guide approach, grasping, lifting, transport, release, and hold. A pre-grasp gap potential varies continuously with actual pad-to-cube distance before placement, encouraging an open approach followed by closing and gradual preload unwinding during descent. Placement uses the cube's lowest point under its actual orientation, with a 2 mm clearance target before release and a 0–2 mm resting band once low release is confirmed. Once low release at the target is confirmed (`place_rewarded`), approach, pre-grasp, and grasp potentials smoothly hand off to contact-free opening progress and settled hold steps, eliminating re-closing incentive. Held descent faster than 20 mm/s within 20 mm of the table, movement after touchdown, table overload, high release, and robot-table collisions incur penalties. Repeated opening, closing, or lifting cannot collect the one-time bonuses again.
 
-The environment always resolves 32 rigid substeps from `simulation.substeps`; the
-removed task-local fields are invalid. This 0.625 ms rigid-step limit is the
-project's conservative production margin, not a claim that Genesis 1.4.4 always
-needs 32 substeps. The primary numerical fix is the compliant solver tuple applied
-to all five G2 mimic equalities; it also passed the 128-environment perturbed-contact
-check at 8 substeps.
+## Strict success criteria
 
-The release-intent hysteresis (`release_command_margin_m`, 18 mm in the recipe)
-requires the commanded gripper gap to climb well above the close gap before a
-release latches. Checkpoints saved before this change evaluate with
-`--release-command-margin-m 0.0005`.
+- Pre-lift drag ≤10 mm and tilt ≤15°. Confirm bilateral contact for at least three steps, with 0.2 N contact entry and 0.05 N exit thresholds.
+- Lift the held cube's lowest point to ≥65 mm (80 mm center height for an upright cube). Finish within 20 mm of the target with tilt ≤15°.
+- Release at **0–3 mm** actual clearance, with measured gap ≥35 mm. Both fingers must stay below 0.05 N for three steps to confirm detachment. Dropping from height and landing at the target fails.
+- Additional EE descent from touchdown until both fingers detach must be **≤1 mm**. Include the sample before touchdown; retain tracking during single-finger contact and brief contact gaps. Recontact starts another touchdown/release interval while retaining the episode’s worst pressing and highest release.
+- After release, require table support and object speed <30 mm/s for at least **0.2 s**. Robot-table collision fails.
 
-The current physics profile is `g2_calibrated_v1`: `kp=40`, `kv=5`, `ki=40`,
-0.01 kg·m² gripper joint armature and a 1.25 ms contact time constant. RL keeps
-`noslip_iterations: 0` (deterministic pick-place uses 5) because the no-slip pass
-makes the 20480-environment batch about 7× slower; held cubes therefore creep
-about 2.4 mm/s in the pad frame during training and evaluation. The policy
-keeps its existing position action, observation dimensions and reward functions;
-`simulation.g2` supplies speed and force percentages. See the [G2 guide](../../gripper_g2/README.md).
+Contact loads use entity filtering and `valid_mask`, separating object support from robot-table loads; see the [Genesis contact interface](https://genesis-world.readthedocs.io/en/latest/user_guide/theory/rigid_solver/collision_detection.html). Reports include `release_height_mm`, `release_confirmed`, `press_mm`, `max_table_force_n`, `max_place_table_force_n`, `max_held_table_force_n`, and `max_robot_table_force_n`. Read release height together with its confirmation flag.
 
-Bundled seed-7 `model_299_g2stable.pt` (SHA-256 `f2142a63…f783f2`) remains
-unchanged under historical `g2_stable_v1_3_3` physics. Evaluating it requires
-`--allow-physics-transfer`; original config and checkpoint hashes are still checked.
-Older-physics checkpoints cannot fully resume training. Published historical success
-rates do not describe the new dynamics.
+## Baselines and training
 
-## Layered guidance disclosure
-
-The observation includes four scripted guide-action columns (44 -> 48, recipe flag
-`include_scripted_action_hint`). The guide is the same hashed scripted expert that
-labels behaviour-cloning demonstrations, so observations and labels can never
-disagree. This is a disclosed layered/simulator-guided policy in the v0.2.12
-precedent: the published artifact must never be presented as a learned policy that
-generalizes without the guide. A 2026-08-21 diagnosis (`rl/reports/`) showed the
-44-dimensional observation cannot distinguish "holding the cube at the pickup" from
-"holding the cube at the target", which made the clone open its gripper at the
-pickup; the guide column resolves that ambiguity.
-
-## Fresh training path
-
-First prove that the scripted expert reaches the immutable `contact_v1` target:
+Run from the project root in `py313`. Requesting GPU raises an error if Genesis falls back to CPU.
 
 ```bash
-python -m examples.rl.pick_place.evaluate --expert --headless -B 8 --episodes 8 \
-  --acceptance-profile contact_v1 --require-target robustness
+python -m examples.rl.pick_place.evaluate --zero-policy -B 16 --episodes 32 --quiet-episodes
+python -m examples.rl.pick_place.evaluate --expert -B 16 --episodes 32 \
+  --min-success-rate 1.0 --max-press-mm 1.0 --quiet-episodes
+
+# One seed: full-task PPO from scratch, with every reset at home
+python -m examples.rl.pick_place.train -e pick_place_e2e_s1 --seed 1 \
+  -B 2048 --max-iterations 2000 --eval-interval 50 --eval-episodes 64
+
+# Train three seeds, evaluate 64 independent episodes each, record B=1 GLB replays
+python -m examples.rl.pick_place.run_seeds
 ```
 
-Collect new demonstrations and behavior-clone them without a warm start. The
-standard collection tier is 256 environments x 8000 steps (about 2.05 million
-samples); smaller tiers fit the action mean better but collapse closed-loop:
+Defaults: seeds 1, 2, 3; learning rate `3e-4`; `gamma=0.995`; initial action standard deviation `0.5`; entropy coefficient `0.005`. Keep the existing `[256, 256]` networks and 32 rollout steps per iteration. Stop after two consecutive passing periodic evaluations, up to 2000 iterations. Disable this with `--early-stop-evaluations 0`; `training_summary.json` records the actual iteration count. The scripted expert is an independent evaluation policy and never supplies PPO training data. Existing experiment directories cause an error to preserve their artifacts.
 
-```bash
-python -m examples.rl.pick_place.pretrain_bc -B 256 --rollout-steps 8000 \
-  --far-open-penalty 20.0 --seed 1 -e v0213g-fixed-bc-seed1
-```
-
-Run three independent 300-iteration PPO jobs from that new BC actor:
-
-```bash
-for seed in 1 7 17; do
-  python -m examples.rl.pick_place.train -B 256 --max-iterations 300 \
-    --seed "$seed" \
-    --warm-start outputs/rl/pick_place/v0213g-fixed-bc-seed1/model_0.pt \
-    -e "v0213g-fixed-ppo-seed${seed}"
-done
-```
-
-Outputs stay under ignored `outputs/rl/pick_place/`. Do not use `pretrained/` as a
-training directory and do not warm-start from a checkpoint trained under an older
-physics baseline.
-
-## Evaluate the expert or an explicit current-profile candidate
-
-A complete bundle consists of `model_N.pt`, `config.yaml`, and
-`model_N.checkpoint_manifest.json`. Hashes, task/robot identity, and the complete
-runtime contract are checked before PyTorch's safe weights-only load.
-
-```bash
-# Current physical-contact baseline
-python -m examples.rl.pick_place.evaluate --expert \
-  --headless -B 8 --episodes 8 --acceptance-profile contact_v1
-
-# Local complete bundle
-python -m examples.rl.pick_place.evaluate \
-  --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --headless -B 8 --episodes 8 --acceptance-profile contact_v1
-```
-
-The archived bank remains bound to runtime config `654b538e…7ed` (SHA-256
-`2238202c…eb0`). Generate a separate bank for new dynamics:
-
-```bash
-python -m examples.rl.pick_place.make_scenario_bank --mode fixed --count 512 --seed 17000 \
-  --output reports/g2/fixed_seed17000_n512.json
-```
+Outputs go to `outputs/rl/pick_place/pick_place_e2e_s1/` (or `s2/s3`). Rank checkpoints by strict success rate, valid low-touchdown rate, maximum pressing, then mean landing error. Save configuration, source hashes, checkpoint manifests, training logs, and JSON/CSV evaluations. Each seed must achieve **≥98%** success and **≤1 mm** maximum pressing. Combined results and process logs go to `outputs/rl/pick_place/e2e_validation/`.
 
 ```bash
 python -m examples.rl.pick_place.evaluate \
-  --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank reports/g2/fixed_seed17000_n512.json \
-  --headless -B 64 --episodes 64 --acceptance-profile contact_v1 \
-  --require-target standard
+  --checkpoint outputs/rl/pick_place/pick_place_e2e_s1/model_best.pt \
+  -B 32 --episodes 64 --seed 18001 --min-success-rate 0.98 --max-press-mm 1.0 \
+  --out outputs/rl/pick_place/pick_place_e2e_s1/test.json
+
+python -m examples.rl.pick_place.visualize -e pick_place_e2e_s1 -B 1
+python -m examples.rl.pick_place.visualize -e pick_place_e2e_s1 -B 1 --episodes 1 \
+  --headless --record outputs/rl/pick_place/pick_place_e2e_s1/replay.mp4
 ```
 
-The formal action-noise trial uses standard deviation `0.02` and the new bank seed
-`20260817`:
-
-```bash
-python -m examples.rl.pick_place.evaluate \
-  --checkpoint outputs/rl/pick_place/<run>/model_N.pt \
-  --scenario-bank reports/g2/fixed_seed17000_n512.json \
-  --headless -B 64 --episodes 512 --acceptance-profile contact_v1 \
-  --action-noise-std 0.02 --action-noise-bank 20260817 \
-  --require-target robustness
-```
-
-## Release gates
-
-A candidate must be a nonzero PPO checkpoint and satisfy all of the following with
-zero action clipping, IK failures, and IK jump rejects:
-
-- seeds `1/7/17` × batch sizes `1/8/64`: 9/9 runs and 219/219 episodes;
-- an independent fixed-bank run: 64/64 full and quality success;
-- 512 fixed-layout action-noise episodes: at least 99% full and quality success;
-- P99 final XY error ≤10 mm, pre-lift drag ≤5 mm, and post-release drift ≤3 mm.
-
-`Full success` includes grasp, lift, valid set-down/release, final pose and velocity,
-hold time, and every selected quality limit. A failed screening run is not promoted
-to a published artifact, even if training metrics or partial task stages look good.
-
-## Historical release result (`g2_stable_v1_3_3`)
-
-The bundled `model_299_g2stable.pt` was trained end to end under the
-`g2_stable_v1_3_3` profile on Genesis World 1.3.3. The 48-column observation
-fixed the phase-label ambiguity found on 2026-08-21. The accepted behavior clone
-passed 8/8 from home, then three independent PPO jobs ran for 300 iterations with
-seeds 1, 7, and 17. The selected seed-7 final checkpoint uses
-`place_phase_reset_frac: 0.40` and learning rate `1e-5`.
-
-The same selected checkpoint passed all nine evaluation seed/batch combinations
-(219/219 episodes), the independent fixed bank (64/64 full and quality success),
-and the fixed 512-episode sigma-0.02 action-noise bank (512/512). Its noise P99
-final XY error, pre-lift drag, and post-release drift were 0.93, 0.35, and
-0.07 mm; action clipping, IK failures, IK jump rejects, and post-release
-recontacts were zero. See `pretrained/evaluation_summary.json` for the
-machine-readable evidence.
+Video defaults to GLB PBR at 50 FPS, with accompanying JSON/CSV metrics. Three-seed GPU training (`pick_place_e2e_s1..s3`), 64-episode strict evaluation, and `B=1` GLB replay verification pass under the unified `impratio = 100.0, noslip_iterations = 0` profile (100% success, maximum pressing 0.084 mm, mean landing error 4.44 mm).
