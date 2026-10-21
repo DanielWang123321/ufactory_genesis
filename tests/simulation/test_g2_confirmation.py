@@ -363,7 +363,8 @@ def test_metrics_reject_retreat_without_release_confirmation(config, key, value)
 def test_confirmation_controls_next_tick_and_timeout_saves_failure(fault, monkeypatch, tmp_path):
     from types import SimpleNamespace
     import json
-    import torch
+
+    torch = pytest.importorskip("torch")
     import ufactory.trajectory.g2_replay as replay
     from ufactory.trajectory.g2_replay import replay_g2
     from ufactory.trajectory.segments import Program, Segment
