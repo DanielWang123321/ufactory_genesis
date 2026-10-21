@@ -31,11 +31,23 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link_base_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link_base.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link_base_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link_base_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link_base_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link_base_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link_base_col_02.stl" />
+      </geometry>
     </collision>
   </link>
   <link name="link1">
@@ -51,11 +63,29 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link1_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link1.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link1_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link1_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link1_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link1_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link1_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link1_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link1_col_03.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint1" type="revolute">
@@ -79,11 +109,47 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link2_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link2.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link2_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_5">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_6">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link2_col_06.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint2" type="revolute">
@@ -107,11 +173,35 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link3_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link3.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link3_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link3_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link3_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link3_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link3_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link3_col_04.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint3" type="revolute">
@@ -135,11 +225,35 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link4_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link4.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link4_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link4_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link4_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link4_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link4_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link4_col_04.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint4" type="revolute">
@@ -163,11 +277,17 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link5_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link5.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link5_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link5_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/uf850/collision/uf850_link5_col_01.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint5" type="revolute">
@@ -191,11 +311,11 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link6_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/uf850/visual/link6.stl" />
+        <mesh filename="meshes/uf850/collision/uf850_link6_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
   </link>
   <joint name="joint6" type="revolute">

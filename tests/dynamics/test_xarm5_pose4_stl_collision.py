@@ -52,7 +52,7 @@ def _link_pair_force(contacts: list[dict], names: dict[int, str], pair: frozense
 
 
 def test_xarm5_pose4_stl_collision_pd_hold_check_bypass():
-    """Pose 4: STL collision loads; J4 PD may saturate but check allows hardware via pin_G."""
+    """Pose 4: selective multi-hull STL collision eliminates link3↔link5 spurious contact and J4 saturation."""
     runtime = get_robot_runtime_profile("xarm5")
     urdf = robot_urdf("xarm5_1305")
     target_q = _pose4_target_q()
@@ -77,29 +77,25 @@ def test_xarm5_pose4_stl_collision_pd_hold_check_bypass():
     data = model.createData()
     pin_g_target = pin.computeGeneralizedGravity(model, data, target_q)
 
-    # J4 gravity at target should stay ~1 Nm (matches real robot / SDK), not PD-saturation scale.
+    # J4 gravity at target stays ~-0.845 Nm and PD hold settles cleanly without saturation.
     assert abs(pin_g_target[3]) < 2.0
-    assert abs(sample.pd_hold_tau[3]) <= runtime.arm.effort_limits[3] + 1e-6
+    assert sample.settled is True
+    assert sample.saturated is False
+    assert abs(sample.pd_hold_tau[3] - pin_g_target[3]) < 0.2
 
     contacts = sample.self_contacts or []
     names = _link_names(robot)
     link35_force = _link_pair_force(contacts, names, LINK3_LINK5)
-    assert link35_force > 10.0, f"expected link3↔link5 spurious contact, got {link35_force:.1f} N"
+    assert link35_force == 0.0, f"expected zero link3↔link5 contact, got {link35_force:.3f} N"
 
     reference = type("Ref", (), {"gravity": lambda _self, q: pin.computeGeneralizedGravity(model, data, q)})()
     gate = evaluate_pd_hold_gate(sample, target_q, runtime_profile=runtime, reference=reference)
-
-    if not sample.settled:
-        assert gate.block_hardware is False
-        assert gate.reason == "pd_tracking_saturation"
-        assert gate.pin_gravity_theory is not None
-        assert abs(gate.pin_gravity_theory[3]) < 2.0
-    else:
-        assert abs(sample.pd_hold_tau[3]) < 5.0
+    assert gate.block_hardware is False
+    assert gate.reason == "ok"
 
 
 def test_xarm5_pose4_kinematic_self_contact():
-    """Kinematic teleport: link3↔link5 overlap indicates mesh geometry, not PD artifact."""
+    """Kinematic teleport: selective multi-hull geometry has zero link3↔link5 self-contact at pose 4."""
     runtime = get_robot_runtime_profile("xarm5")
     urdf = robot_urdf("xarm5_1305")
     target_q = _pose4_target_q()
@@ -114,10 +110,12 @@ def test_xarm5_pose4_kinematic_self_contact():
     set_pd_gains(robot, dof_idx, runtime)
     robot.set_dofs_kp(np.zeros(len(dof_idx), dtype=np.float32), dof_idx)
     robot.set_dofs_kv(np.zeros(len(dof_idx), dtype=np.float32), dof_idx)
-    for _ in range(20):
+    scene.step()
+    names = _link_names(robot)
+    assert _link_pair_force(capture_self_contacts(robot), names, LINK3_LINK5) == 0.0
+    for _ in range(19):
         scene.step()
 
     contacts = capture_self_contacts(robot)
-    names = _link_names(robot)
     link35_force = _link_pair_force(contacts, names, LINK3_LINK5)
-    assert link35_force > 10.0, f"kinematic link3↔link5 force {link35_force:.1f} N"
+    assert link35_force == 0.0, f"kinematic link3↔link5 force {link35_force:.3f} N"

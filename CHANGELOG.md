@@ -31,12 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Packaging GPU regressions accept natural high-release drops and rebound by checking that the final object collision bounds lie inside the box (1 mm contact tolerance). Remove the unused 25 mm center-distance setting; retain grasp, transport, release and return-home checks.
-
-### Known Issues
-
-- On the local Genesis 1.4.4 GPU baseline, the xArm5 pose-4 kinematic contact test reads 0 N after 20 unpowered steps, below its >10 N expectation. Historical link3/link5 PD-hold contact is documented under 0.2.0; the current kinematic assertion remains unresolved.
-- Genesis 1.4.4 defaults to one convex hull per robot collision mesh. At nominal xArm5 pose 4, the source visual STL surfaces have 35.658 mm clearance, while the loaded collision meshes penetrate by 8.581 mm. Restoring the historical simplified STL alone still produces 10.186 mm penetration under the same defaults; preserving concavity or using multiple convex components is required. Asset READMEs explain this processing limitation.
-- The nominal bare xArm6 also has false link4/link6 contacts near J5 = 165–180° with the default convex hull. A 175° hold target stalls near 164.3° at the 30.6 N·m torque limit. Research compound colliders recover this pose; production collision assets remain unchanged pending geometry and workload validation.
+- Replaced single-hull arm `<collision>` meshes across all 33 registered URDF variants for `xarm5`, `xarm6`, `xarm7`, `lite6`, and `uf850` with 111 selective structure-aware watertight convex-hull STL meshes (`meshes/<prefix>/collision/<robot>_link*_col_*.stl`, `19 / 22 / 26 / 17 / 27` hulls per arm, `<= 128` faces per hull). This eliminates single-hull bridging across curved links (reducing outward P95 envelope inflation from `27–53 mm` to `2.3–7.2 mm`), resolves spurious `xarm5` pose-4 (`link3↔link5`), `xarm6` J5 `175°` (`link4↔link6`), and `lite6` `qpos0` (`link_base↔link6`) self-collisions and torque saturation, and preserves Genesis's purely convex `SupportField` + MPR fast path without significant GPU or RL overhead.
 
 ## [0.3.1] — 2026-10-15
 

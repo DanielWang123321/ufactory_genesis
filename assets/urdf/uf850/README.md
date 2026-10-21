@@ -6,13 +6,12 @@
 
 ```
 meshes/uf850/
-├── visual/*.stl      # 注册 URDF 的 arm collision 与 STL 视觉资源
+├── collision/*.stl   # 注册 URDF 的机械臂选择性多凸包碰撞 STL（27 个凸体）
+├── visual/*.stl      # STL 视觉与 CAD 几何参考资源
 └── visual_glb/       # Draco 压缩视觉 GLB（单臂合计约 0.7–1.0 MB）
 ```
 
-注册机型 URDF 的机械臂连杆 `<collision>` 使用 `visual/*.stl`；末端配件按各自资源保留独立 collision STL。
-
-Genesis 1.4.4 默认将每个机器人碰撞网格取单凸包后再简化，碰撞查看器显示加载后的几何。单凸包会填平源网格的凹处；源 STL 的准确外形不能直接保证仿真碰撞外形准确。历史与加载处理对照见 [xArm5 碰撞说明](../xarm5/README.md#碰撞网格)。
+注册机型 URDF 的机械臂连杆 `<collision>` 使用 `collision/uf850_link*_col_*.stl`（共 27 个水密凸包，`link_base..link6` 分别为 `3/4/7/5/5/2/1` 个凸体，单凸体 `<= 128` 面）；`visual/*.stl` 保留供 STL `<visual>` 与 CAD 几何参考使用，末端配件按各自资源保留独立 collision STL。详见 [xArm5 碰撞说明](../xarm5/README.md#碰撞网格)。
 
 未引用的历史碰撞简化网格已删除，可从 Git 历史获取。
 

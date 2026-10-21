@@ -31,11 +31,17 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link_base_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link_base.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link_base_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link_base_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link_base_col_01.stl" />
+      </geometry>
     </collision>
   </link>
   <link name="link1">
@@ -51,11 +57,17 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link1_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link1.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link1_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link1_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link1_col_01.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint1" type="revolute">
@@ -79,11 +91,35 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link2_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link2.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link2_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_04.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint2" type="revolute">
@@ -107,11 +143,29 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link3_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link3.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link3_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_03.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint3" type="revolute">
@@ -135,11 +189,35 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link4_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link4.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link4_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_04.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint4" type="revolute">
@@ -163,11 +241,35 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link5_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link5.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link5_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_04.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint5" type="revolute">
@@ -191,11 +293,17 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link6_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link6.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link6_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+    <collision name="link6_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link6_col_01.stl" />
+      </geometry>
     </collision>
   </link>
   <joint name="joint6" type="revolute">
@@ -219,11 +327,11 @@
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="Silver" />
     </visual>
-    <collision>
+    <collision name="link7_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm7_1305/visual/link7.stl" />
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link7_col_00.stl" />
       </geometry>
-      <origin rpy="0 0 0" xyz="0 0 0" />
     </collision>
   </link>
   <joint name="joint7" type="revolute">

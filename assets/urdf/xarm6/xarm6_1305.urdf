@@ -1,18 +1,12 @@
 <?xml version='1.0' encoding='utf-8'?>
 <robot name="xarm6_1305">
-
-  
   <material name="White">
     <color rgba="1.0 1.0 1.0 1.0" />
   </material>
   <material name="Silver">
     <color rgba="0.75 0.75 0.75 1.0" />
   </material>
-
-  
   <link name="world" />
-
-  
   <link name="link_base">
     <inertial>
       <origin xyz="0.0 0.0 0.09103" rpy="0 0 0" />
@@ -26,21 +20,24 @@
       </geometry>
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link_base_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link_base.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link_base_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link_base_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link_base_col_01.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="world_joint" type="fixed">
     <parent link="world" />
     <child link="link_base" />
     <origin xyz="0 0 0" rpy="0 0 0" />
   </joint>
-
-  
   <link name="link1">
     <inertial>
       <origin xyz="0.00022 0.02951 -0.0124" rpy="0 0 0" />
@@ -54,14 +51,19 @@
       </geometry>
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link1_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link1.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link1_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link1_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link1_col_01.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="joint1" type="revolute">
     <parent link="link_base" />
     <child link="link1" />
@@ -70,8 +72,6 @@
     <limit lower="-6.2832" upper="6.2832" effort="179.4445" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
-
-  
   <link name="link2">
     <inertial>
       <origin xyz="0.03881 -0.22783 0.03496" rpy="0 0 0" />
@@ -85,14 +85,37 @@
       </geometry>
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link2_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link2.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link2_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link2_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link2_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link2_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link2_col_04.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="joint2" type="revolute">
     <parent link="link1" />
     <child link="link2" />
@@ -101,8 +124,6 @@
     <limit lower="-2.059" upper="2.0944" effort="179.4445" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
-
-  
   <link name="link3">
     <inertial>
       <origin xyz="0.07041 0.11631 0.0107" rpy="0 0 0" />
@@ -116,14 +137,37 @@
       </geometry>
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link3_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link3.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link3_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link3_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link3_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link3_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link3_col_04.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="joint3" type="revolute">
     <parent link="link2" />
     <child link="link3" />
@@ -132,8 +176,6 @@
     <limit lower="-3.927" upper="0.19198" effort="92.0" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
-
-  
   <link name="link4">
     <inertial>
       <origin xyz="-0.00018 0.01798 -0.02291" rpy="0 0 0" />
@@ -147,14 +189,37 @@
       </geometry>
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link4_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link4.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link4_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link4_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link4_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link4_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link4_col_04.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="joint4" type="revolute">
     <parent link="link3" />
     <child link="link4" />
@@ -163,8 +228,6 @@
     <limit lower="-6.2832" upper="6.2832" effort="81.558" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
-
-  
   <link name="link5">
     <inertial>
       <origin xyz="0.0651 0.03096 0.00315" rpy="0 0 0" />
@@ -178,14 +241,19 @@
       </geometry>
       <material name="White" />
     </visual>
-    <collision>
+    <collision name="link5_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link5.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link5_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link5_col_01.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="joint5" type="revolute">
     <parent link="link4" />
     <child link="link5" />
@@ -194,8 +262,6 @@
     <limit lower="-1.69297" upper="3.14159" effort="30.6" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
-
-  
   <link name="link6">
     <inertial>
       <origin xyz="0 -0.00677 -0.01098" rpy="0 0 0" />
@@ -209,14 +275,13 @@
       </geometry>
       <material name="Silver" />
     </visual>
-    <collision>
+    <collision name="link6_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm6_1305/visual/link6.stl" />
+        <mesh filename="meshes/xarm6_1305/collision/xarm6_link6_col_00.stl" />
       </geometry>
     </collision>
   </link>
-
   <joint name="joint6" type="revolute">
     <parent link="link5" />
     <child link="link6" />
@@ -225,14 +290,10 @@
     <limit lower="-6.2832" upper="6.2832" effort="30.6" velocity="3.14" />
     <dynamics damping="1.0" friction="1.0" />
   </joint>
-
-  
   <link name="link_eef" />
-
   <joint name="joint_eef" type="fixed">
     <parent link="link6" />
     <child link="link_eef" />
     <origin xyz="0 0 0" rpy="0 0 0" />
   </joint>
-
 </robot>

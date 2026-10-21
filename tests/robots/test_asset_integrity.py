@@ -363,12 +363,62 @@ def _non_fixed_joint_names(urdf: Path) -> set[str]:
     return {joint.get("name") or "" for joint in root.findall("joint") if joint.get("type") != "fixed"}
 
 
+_EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
+    "xarm5": {
+        "link_base": 2,
+        "link1": 2,
+        "link2": 5,
+        "link3": 7,
+        "link4": 2,
+        "link5": 1,
+    },
+    "xarm6": {
+        "link_base": 2,
+        "link1": 2,
+        "link2": 5,
+        "link3": 5,
+        "link4": 5,
+        "link5": 2,
+        "link6": 1,
+    },
+    "xarm7": {
+        "link_base": 2,
+        "link1": 2,
+        "link2": 5,
+        "link3": 4,
+        "link4": 5,
+        "link5": 5,
+        "link6": 2,
+        "link7": 1,
+    },
+    "lite6": {
+        "link_base": 3,
+        "link1": 2,
+        "link2": 4,
+        "link3": 2,
+        "link4": 4,
+        "link5": 1,
+        "link6": 1,
+    },
+    "uf850": {
+        "link_base": 3,
+        "link1": 4,
+        "link2": 7,
+        "link3": 5,
+        "link4": 5,
+        "link5": 2,
+        "link6": 1,
+    },
+}
+
+
 def test_registered_arm_collision_meshes_use_visual_stl() -> None:
-    """Registered arm links use visual STL as collision; accessories may keep collision STL."""
+    """Registered arm links use selective convex-hull collision STLs; accessories keep their own collision geoms."""
     bad: list[str] = []
     for robot_dir, (dof, mesh_prefix, basenames) in _REGISTERED_ARM_URDFS.items():
         urdf_dir = PROJECT_ROOT / "assets" / "urdf" / robot_dir
         arm_links = _arm_link_names(dof)
+        expected_counts = _EXPECTED_ARM_COLLISION_COUNTS[robot_dir]
         for basename in basenames:
             urdf = urdf_dir / basename
             if not urdf.exists():
@@ -376,23 +426,35 @@ def test_registered_arm_collision_meshes_use_visual_stl() -> None:
                 continue
             root = ET.parse(urdf).getroot()
             seen_arm_links: set[str] = set()
+            all_col_basenames: list[str] = []
             for link in root.findall("link"):
                 link_name = link.get("name") or ""
+                arm_filenames: list[str] = []
                 for collision in link.findall("collision"):
                     mesh = collision.find(".//mesh")
                     if mesh is None:
                         continue
                     filename = mesh.get("filename") or ""
+                    all_col_basenames.append(Path(filename).name)
                     if filename.endswith(".obj"):
                         bad.append(f"{basename}: collision still uses OBJ {filename}")
                     elif "/collision/" in filename and not filename.endswith(".stl"):
                         bad.append(f"{basename}: collision mesh not STL {filename}")
-                    if link_name not in arm_links:
-                        continue
+                    if link_name in arm_links:
+                        arm_filenames.append(filename)
+                if link_name not in arm_links:
+                    continue
+                if arm_filenames:
                     seen_arm_links.add(link_name)
-                    expected = f"meshes/{mesh_prefix}/visual/{link_name}.stl"
-                    if filename != expected:
-                        bad.append(f"{basename}: {link_name} collision should be {expected}, got {filename}")
+                expected = [
+                    f"meshes/{mesh_prefix}/collision/{robot_dir}_{link_name}_col_{idx:02d}.stl"
+                    for idx in range(expected_counts[link_name])
+                ]
+                if arm_filenames != expected:
+                    bad.append(f"{basename}: {link_name} collision should be {expected}, got {arm_filenames}")
+            duplicates = sorted({name for name in all_col_basenames if all_col_basenames.count(name) > 1})
+            if duplicates:
+                bad.append(f"{basename}: duplicate collision mesh basename(s) {duplicates}")
             missing_arm = sorted(arm_links - seen_arm_links)
             if missing_arm:
                 bad.append(f"{basename}: missing arm collision links {missing_arm}")

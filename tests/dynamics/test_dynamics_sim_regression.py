@@ -86,10 +86,7 @@ def _assert_dynamics_sim_regression(tmp_path, robot_key: str) -> None:
             str(jsonl_path),
         ]
     )
-    if robot_key == "xarm5":
-        assert rc in {0, 1}, f"cli_sim_check({robot_key}) unexpected exit {rc}"
-    else:
-        assert rc == 0, f"cli_sim_check({robot_key}) exited {rc}; see {csv_path}/{jsonl_path}"
+    assert rc == 0, f"cli_sim_check({robot_key}) exited {rc}; see {csv_path}/{jsonl_path}"
 
     records = _load_jsonl(jsonl_path)
     run_config = next(r[1] for r in records if isinstance(r, tuple) and r[0] == "run_config")
@@ -100,12 +97,7 @@ def _assert_dynamics_sim_regression(tmp_path, robot_key: str) -> None:
 
     pin_g_l2_threshold = 0.5 if robot_key == "xarm5" else 1.0
     bad_poses = [s for s in samples if s["status"] in {"NOT_SETTLED", "SATURATED"}]
-    if robot_key == "xarm5":
-        assert len(bad_poses) <= 1, bad_poses
-        if bad_poses:
-            assert bad_poses[0]["pose"] == "4"
-    else:
-        assert bad_poses == [], bad_poses
+    assert bad_poses == [], bad_poses
 
     for s in samples:
         tau = np.asarray(s["pd_hold_tau"], dtype=np.float64)

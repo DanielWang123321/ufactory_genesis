@@ -6,13 +6,14 @@
 
 ```
 meshes/lite6/
-├── visual/*.stl
+├── collision/*.stl   # 注册 URDF 的机械臂选择性多凸包碰撞 STL（17 个凸体）
+├── visual/*.stl      # STL 视觉与 CAD 几何参考资源
 └── visual_glb/       # Draco 压缩视觉 GLB（单臂合计约 0.7–1.0 MB）
 ```
 
 末端配件见同级目录 `lite6_gripper/`、`lite6_vacuum_gripper/`。
 
-机械臂连杆碰撞引用 `visual/*.stl`。Genesis 1.4.4 默认将每个机器人碰撞网格取单凸包后再简化，碰撞查看器显示加载后的几何。单凸包会填平源网格的凹处；源 STL 的准确外形不能直接保证仿真碰撞外形准确。历史与加载处理对照见 [xArm5 碰撞说明](../xarm5/README.md#碰撞网格)。
+机械臂连杆 `<collision>` 使用 `collision/lite6_link*_col_*.stl`（共 17 个水密凸包，`link_base..link6` 分别为 `3/2/4/2/4/1/1` 个凸体，单凸体 `<= 128` 面），消除零位 `qpos0` 下底座与腕部的单凸包伪自碰撞及紧凑折叠姿态力矩饱和。详见 [xArm5 碰撞说明](../xarm5/README.md#碰撞网格)。
 
 未引用的历史碰撞简化网格已删除，可从 Git 历史获取。
 
