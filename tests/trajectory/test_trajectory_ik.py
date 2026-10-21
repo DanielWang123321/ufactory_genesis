@@ -148,3 +148,61 @@ def test_retime_ik_joint_stream_bounds_finite_diff_acc():
     vel, acc = signed_velocity_and_acceleration(np.vstack([q0, q_out]), rate_hz=100.0)
     assert float(np.max(np.abs(acc))) <= 2.0 + 1e-3
     assert float(np.max(np.abs(vel))) <= 0.35 + 1e-3
+
+
+def test_retime_ik_joint_stream_and_compile_handle_unconstrained_limits_without_oom(monkeypatch):
+    import pytest
+    from ufactory.trajectory.ik import _MAX_RETIME_SAMPLES, retime_ik_joint_stream
+
+    rng = np.random.default_rng(0)
+    q_start = np.zeros(6, dtype=np.float64)
+    q_rows = q_start + np.cumsum(rng.uniform(-0.02, 0.02, (50, 6)), axis=0)
+
+    q_out, n, dur, n_keys = retime_ik_joint_stream(
+        q_start,
+        q_rows,
+        rate=250.0,
+        duration_s=0.2,
+        v_max=0.0,
+        a_max=0.0,
+    )
+    assert n == 50
+    assert dur == pytest.approx(0.2)
+    assert q_out.shape == (50, 6)
+    assert n_keys >= 2
+    np.testing.assert_allclose(q_out[-1], q_rows[-1])
+
+    monkeypatch.setattr(
+        "ufactory.trajectory.ik._solve_base_xyz",
+        lambda _ctx, xyz_base, *, init_qpos, damping=None: np.array(
+            [xyz_base[0], xyz_base[1], xyz_base[2], 0.0, 0.0, 0.0], dtype=np.float64
+        ),
+    )
+    ctx = SimpleNamespace(robot_key="xarm6_1305")
+    limits = JointLimits(0.35, 2.0, 0.14, 0.8)
+    move_seg = make_movel(
+        np.array([0.30, 0.0, 0.30]),
+        np.array([0.30, 0.0, 0.20]),
+        rate=50.0,
+        limits=limits,
+        label="descend",
+    )
+    unconstrained = Program(
+        rate=50.0,
+        robot_key="xarm6_1305",
+        limits=None,
+        segments=[move_seg],
+    )
+    compiled = compile_cartesian_program_to_joint_stream(unconstrained, ctx)
+    assert len(compiled.segments) == 1
+    assert compiled.segments[0].samples_count == move_seg.samples_count
+
+    with pytest.raises(ValueError, match="exceeds safety cap"):
+        retime_ik_joint_stream(
+            q_start,
+            q_rows,
+            rate=float(_MAX_RETIME_SAMPLES + 100),
+            duration_s=2.0,
+            v_max=0.0,
+            a_max=0.0,
+        )

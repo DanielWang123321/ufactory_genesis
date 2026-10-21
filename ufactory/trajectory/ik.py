@@ -29,6 +29,7 @@ from ufactory.trajectory.validation import validate_program
 _IK_JOINT_PLATEAU_EPS_RAD = 1e-6
 _DEFAULT_IK_DAMPING = 0.01
 _UF850_IK_DAMPING = 0.05
+_MAX_RETIME_SAMPLES = 1_000_000
 
 
 def compile_cartesian_program_to_joint_stream(program: Program, ctx) -> Program:
@@ -195,19 +196,28 @@ def retime_ik_joint_stream(
         return np.tile(keys[-1], (n, 1)), n, duration, n_keys
 
     duration = float(duration_s)
-    needed = lspb_duration(path_len, float(v_max), float(a_max))
-    if needed <= _EPS:
-        needed = max(_EPS, path_len / max(float(v_max), _EPS))
+    v_lim = float(v_max)
+    a_lim = float(a_max)
+    if v_lim > 0.0 and a_lim > 0.0:
+        needed = lspb_duration(path_len, v_lim, a_lim)
+        if needed <= _EPS:
+            needed = max(_EPS, path_len / max(v_lim, _EPS))
+    elif v_lim > 0.0:
+        needed = max(_EPS, path_len / v_lim)
+    else:
+        needed = 0.0
     # Never compress the joint polyline into a window shorter than the LSPB
     # bound; Cartesian duration is a lower bound only when it is already safe.
     if duration < needed:
         duration = needed
     if duration <= _EPS:
-        duration = needed
+        duration = max(_EPS, needed)
     n = max(1, int(round(duration * rate)))
+    if n > _MAX_RETIME_SAMPLES:
+        raise ValueError(f"retimed IK joint stream sample count {n} exceeds safety cap {_MAX_RETIME_SAMPLES}")
     duration = float(n) / rate
     u = _sample_grid(n)
-    alpha = _lspb_alpha_for_duration(path_len, float(v_max), float(a_max), duration)
+    alpha = _lspb_alpha_for_duration(path_len, v_lim, a_lim, duration)
     s = _lspb_displacement(u, path_len, alpha)
 
     q_out = np.empty((n, keys.shape[1]), dtype=np.float64)

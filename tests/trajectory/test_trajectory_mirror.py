@@ -142,6 +142,51 @@ def test_resolve_tick_grip_drive_open_and_close():
     assert close_drive > open_drive
 
 
+def test_mirror_resolve_tick_chains_init_qpos_and_damping_like_compile(monkeypatch):
+    from ufactory.trajectory.segments import JointLimits, make_movel
+
+    recorded: list[tuple[list[float], np.ndarray | None, float | None]] = []
+
+    def fake_solve_link6_ik(_robot, _ik_link, pos_world, *, arm_dof_idx, quat=None, init_qpos=None, damping=None):
+        del arm_dof_idx, quat
+        seed_copy = None if init_qpos is None else np.asarray(init_qpos, dtype=np.float64).copy()
+        recorded.append((list(pos_world), seed_copy, damping))
+        return np.full(6, float(len(recorded)) * 0.1, dtype=np.float64)
+
+    monkeypatch.setattr("ufactory.trajectory.mirror_executor.solve_link6_ik", fake_solve_link6_ik)
+    ctx = SimpleNamespace(
+        robot=object(),
+        ik_link=object(),
+        arm_dof_idx=[0, 1, 2, 3, 4, 5],
+        down_quat=None,
+        home_qpos=np.full(6, 0.05, dtype=np.float64),
+        robot_key="uf850",
+        base_to_world=lambda p: [float(p[0]), float(p[1]), float(p[2])],
+    )
+    limits = JointLimits(0.35, 2.0, 0.14, 0.8)
+    seg = make_movel(
+        np.array([0.30, 0.0, 0.30]),
+        np.array([0.30, 0.0, 0.25]),
+        rate=50.0,
+        limits=limits,
+        label="descend",
+    )
+    samples, n = seg.samples(50.0)
+    assert n >= 2
+
+    q0 = resolve_tick_arm_q(ctx, seg, samples, 0)
+    q1 = resolve_tick_arm_q(ctx, seg, samples, 1)
+
+    # Tick 0 solves pose_start seeded from home_qpos, then samples[0] seeded from pose_start's solution.
+    # Tick 1 solves samples[1] seeded from tick 0's solution.
+    assert len(recorded) == 3
+    np.testing.assert_allclose(recorded[0][1], np.full(6, 0.05))
+    np.testing.assert_allclose(recorded[1][1], np.full(6, 0.1))
+    np.testing.assert_allclose(recorded[2][1], q0)
+    np.testing.assert_allclose(q1, np.full(6, 0.3))
+    assert all(call[2] == pytest.approx(0.05) for call in recorded)
+
+
 def test_mirror_grip_drive_floors_g2_and_lite6_visual_gap():
     """Kinematic mirror must not teleport pads past the cube faces."""
     obj_w = 0.030

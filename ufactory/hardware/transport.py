@@ -14,7 +14,7 @@ from ufactory.hardware.xarm import (
     prime_servo_angle_j,
     wait_for_servo_motion_ready,
 )
-from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
+from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD, wrap_rpy_diff_rad
 from ufactory.safety.interfaces import ArmState
 
 
@@ -216,7 +216,9 @@ class XArmTransport:
             self.stop()
             raise RuntimeError("preposition Cartesian feedback was invalid; controller was stopped")
         xyz_err = float(np.linalg.norm(reported_arr[:3] - target * 1000.0))
-        rpy_err = float(np.linalg.norm(reported_arr[3:6] - np.asarray(orientation, dtype=np.float64)))
+        rpy_err = float(
+            np.linalg.norm(wrap_rpy_diff_rad(reported_arr[3:6] - np.asarray(orientation, dtype=np.float64)))
+        )
         if xyz_err > float(tolerance_mm):
             self.stop()
             raise RuntimeError(

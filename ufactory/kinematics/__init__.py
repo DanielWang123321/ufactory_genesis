@@ -21,7 +21,7 @@ from ufactory.kinematics.calibration import (
     user_kinematics_yaml_exists,
     validate_kinematics_calibration_request,
 )
-from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW, GRIPPER_DOWN_RPY_RAD
+from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW, GRIPPER_DOWN_RPY_RAD, wrap_rpy_diff_rad
 from ufactory.kinematics.tcp_offset import (
     pose_flange_to_tcp,
     pose_tcp_to_flange,
@@ -53,4 +53,5 @@ __all__ = [
     "sn_matching_user_kinematics_yaml_exists",
     "user_kinematics_yaml_exists",
     "validate_kinematics_calibration_request",
+    "wrap_rpy_diff_rad",
 ]

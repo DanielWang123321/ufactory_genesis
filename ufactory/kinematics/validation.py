@@ -18,8 +18,10 @@ from ufactory.kinematics.calibration import (
     resolve_kinematics_suffix,
     validate_kinematics_calibration_request,
 )
+from ufactory.kinematics.genesis import _normalize_init_qpos
 from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, pose_tcp_to_flange, read_tcp_offset
 from ufactory.robots.paths import robot_urdf
+from ufactory.robots.registry import joint_names
 from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile, robot_runtime_cli_choices
 from ufactory.simulation import forward_kinematics, make_rigid_options
 from ufactory.simulation.compat import require_genesis_runtime
@@ -83,10 +85,25 @@ def build_genesis_robot(urdf_path: str, *, backend: str = "cpu", show_viewer: bo
     return scene, robot
 
 
-def genesis_fk(robot, q: np.ndarray, ee_link_idx: int) -> tuple[np.ndarray, np.ndarray]:
+def _resolve_arm_dof_idx(robot, runtime: RobotRuntimeProfile) -> list[int]:
+    jnames = joint_names(runtime.model)
+    joint_map = {j.name.split("/")[-1]: j for j in getattr(robot, "joints", ())}
+    if joint_map and all(name in joint_map for name in jnames):
+        return [int(joint_map[name].dofs_idx_local[0]) for name in jnames]
+    return list(range(int(runtime.model.dof)))
+
+
+def genesis_fk(
+    robot,
+    q: np.ndarray,
+    ee_link_idx: int,
+    *,
+    arm_dof_idx: Sequence[int] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     import genesis as gs
 
-    q_t = torch.tensor(q, dtype=torch.float32, device=gs.device)
+    dof_idx = list(range(int(np.asarray(q).size))) if arm_dof_idx is None else list(arm_dof_idx)
+    q_t = _normalize_init_qpos(robot, q, dof_idx).to(dtype=torch.float32, device=gs.device)
     links_pos, links_quat = forward_kinematics(robot, q_t)
     if links_pos.ndim == 2:
         return links_pos[ee_link_idx].cpu().numpy(), links_quat[ee_link_idx].cpu().numpy()
@@ -165,6 +182,7 @@ def run_fk_validation(args) -> int:
 
     _, robot = build_genesis_robot(urdf_path, backend=args.backend, show_viewer=args.vis)
     ee_link = next(l for l in robot.links if l.name.split("/")[-1] == runtime.arm.ee_link)
+    arm_dof_idx = _resolve_arm_dof_idx(robot, runtime)
 
     failed = 0
     for name, q in validation_configs(runtime):
@@ -172,7 +190,7 @@ def run_fk_validation(args) -> int:
         if code != 0:
             raise RuntimeError(f"SDK FK failed for {name}: code={code}")
         sdk_pose = np.asarray(pose[:6], dtype=np.float64)
-        g_pos, g_quat = genesis_fk(robot, q, int(ee_link.idx_local))
+        g_pos, g_quat = genesis_fk(robot, q, int(ee_link.idx_local), arm_dof_idx=arm_dof_idx)
         g_pos_mm = np.asarray(g_pos, dtype=np.float64) * 1000.0
         g_rpy = np.asarray(quat_to_rpy(g_quat), dtype=np.float64)
         flange_pose = np.concatenate([g_pos_mm, g_rpy])
@@ -202,12 +220,14 @@ def run_ik_validation(args) -> int:
 
     _, robot = build_genesis_robot(urdf_path, backend=args.backend, show_viewer=args.vis)
     ee_link = next(l for l in robot.links if l.name.split("/")[-1] == runtime.arm.ee_link)
+    arm_dof_idx = _resolve_arm_dof_idx(robot, runtime)
     rng = np.random.default_rng(args.seed)
     failed = 0
 
     for i in range(args.samples):
-        q_seed = rng.uniform(-0.5, 0.5, runtime.model.dof)
-        code, pose = arm.get_forward_kinematics(q_seed.tolist(), input_is_radian=True, return_is_radian=True)
+        q_target = rng.uniform(-0.8, 0.8, runtime.model.dof)
+        q_seed = q_target + rng.uniform(-0.15, 0.15, runtime.model.dof)
+        code, pose = arm.get_forward_kinematics(q_target.tolist(), input_is_radian=True, return_is_radian=True)
         if code != 0:
             print(f"SKIP ik_{i}: SDK FK code={code}")
             continue
@@ -215,12 +235,13 @@ def run_ik_validation(args) -> int:
         flange_pose = pose_tcp_to_flange(target_tcp, tcp_offset)
         target_pos = flange_pose[:3] / 1000.0
         target_quat = np.asarray(rpy_to_quat(*flange_pose[3:6]), dtype=np.float64)
-        init_q = torch.tensor(q_seed, dtype=torch.float32, device=gs.device)
+        init_q = _normalize_init_qpos(robot, q_seed, arm_dof_idx)
         result = robot.inverse_kinematics(
             link=ee_link,
             pos=torch.tensor(target_pos, dtype=gs.tc_float, device=gs.device),
             quat=torch.tensor(target_quat, dtype=gs.tc_float, device=gs.device),
             init_qpos=init_q,
+            dofs_idx_local=arm_dof_idx,
             respect_joint_limit=True,
             return_error=True,
             max_solver_iters=args.max_iters,
@@ -230,7 +251,8 @@ def run_ik_validation(args) -> int:
             failed += 1
             continue
         q_sol = result[0] if isinstance(result, tuple) else result
-        q_np = q_sol.cpu().numpy().reshape(-1)[: runtime.model.dof]
+        q_vec = q_sol[0] if getattr(q_sol, "ndim", 1) == 2 else q_sol
+        q_np = q_vec[arm_dof_idx].detach().cpu().numpy().astype(np.float64).reshape(-1)
         code2, pose2 = arm.get_forward_kinematics(q_np.tolist(), input_is_radian=True, return_is_radian=True)
         if code2 != 0:
             print(f"FAIL ik_{i}: SDK FK(solution) code={code2}")

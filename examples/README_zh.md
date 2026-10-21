@@ -191,9 +191,9 @@ python examples/pick_place/run.py \
 
 
 ```bash
-# 一轮仿真结束后退出（加 --visual 可保持最终画面）
+# 一轮仿真结束后退出
 python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j
+  --robot xarm6 --mode sim --executor servo_j --visual
 
 # 仅 CPU / 不支持的显卡
 python examples/packaging/run.py \

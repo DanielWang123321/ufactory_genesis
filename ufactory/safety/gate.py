@@ -259,15 +259,14 @@ class SafetyGate:
                     continue
                 shadow: list[FloatArray] = []
                 seed = current_q.copy()
-                for row in samples:
+                for offset, row in enumerate(samples):
+                    row_index = sample_index + offset
                     try:
                         pose = np.concatenate((row, np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64)))
                         q = np.asarray(self.kinematics.inverse(pose, seed), dtype=np.float64).reshape(-1)
                     except Exception as exc:
                         violations.append(
-                            _violation(
-                                ViolationType.INVALID_INPUT, stage, f"IK failed: {exc}", sample_index=sample_index
-                            )
+                            _violation(ViolationType.INVALID_INPUT, stage, f"IK failed: {exc}", sample_index=row_index)
                         )
                         break
                     if q.shape != (self.config.robot.dof,) or not np.all(np.isfinite(q)):
@@ -276,7 +275,7 @@ class SafetyGate:
                                 ViolationType.INVALID_INPUT,
                                 stage,
                                 "IK returned an invalid joint vector",
-                                sample_index=sample_index,
+                                sample_index=row_index,
                             )
                         )
                         break
@@ -287,19 +286,17 @@ class SafetyGate:
                                 ViolationType.IK_DISCONTINUITY,
                                 stage,
                                 "IK branch jump exceeds policy",
-                                sample_index=sample_index,
+                                sample_index=row_index,
                                 actual=jump,
                                 limit=self.config.safety.max_ik_jump_rad,
                             )
                         )
                     shadow.append(q)
                     seed = q
-                    sample_index += 1
                 if len(shadow) != len(samples):
                     continue
                 q_segment = np.stack(shadow)
                 drive_segment = np.full(len(q_segment), current_drive, dtype=np.float64)
-                sample_index -= len(shadow)
             else:
                 if current_q is None:
                     violations.append(

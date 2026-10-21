@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from ufactory.kinematics.genesis import solve_link6_ik
+from ufactory.trajectory.ik import _ik_damping_for_context
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
 from ufactory.grippers.lite6 import snap_object_to_lite6_glb_grasp
@@ -31,26 +32,48 @@ def gap_m_from_drive(drive: float, gripper) -> float:
     return closed_gap + open_fraction * (float(gripper.open_gap_m) - closed_gap)
 
 
+def _default_ik_seed(ctx: TrajSceneContext) -> np.ndarray | None:
+    cached = getattr(ctx, "_last_ik_qpos", None)
+    if cached is not None:
+        return np.asarray(cached, dtype=np.float64).reshape(-1)
+    home_qpos = getattr(ctx, "home_qpos", None)
+    arm_dof_idx = getattr(ctx, "arm_dof_idx", None)
+    if home_qpos is not None and arm_dof_idx is not None and len(home_qpos):
+        return np.asarray(home_qpos, dtype=np.float64)[arm_dof_idx].copy()
+    return None
+
+
 def resolve_segment_start_arm_q(
     ctx: TrajSceneContext,
     seg: Segment,
+    *,
+    init_qpos: np.ndarray | None = None,
+    damping: float | None = None,
 ) -> np.ndarray:
     """Arm joint vector at the start of an arm segment (matches sim/real preposition)."""
     if seg.kind == "movej":
         if seg.q_start is None:
             raise ValueError(f"MoveJ segment {seg.label!r} has no q_start")
-        return np.asarray(seg.q_start, dtype=np.float64).reshape(-1)
+        q = np.asarray(seg.q_start, dtype=np.float64).reshape(-1)
+        ctx._last_ik_qpos = q.copy()
+        return q
     if seg.kind == "movel":
         if seg.pose_start is None:
             raise ValueError(f"MoveL segment {seg.label!r} has no pose_start")
+        seed = _default_ik_seed(ctx) if init_qpos is None else init_qpos
+        ik_damping = _ik_damping_for_context(ctx) if damping is None else float(damping)
         pose_world = ctx.base_to_world(seg.pose_start)
-        return solve_link6_ik(
+        q = solve_link6_ik(
             ctx.robot,
             ctx.ik_link,
             pose_world,
             arm_dof_idx=ctx.arm_dof_idx,
             quat=ctx.down_quat,
+            init_qpos=seed,
+            damping=ik_damping,
         )
+        ctx._last_ik_qpos = np.asarray(q, dtype=np.float64).reshape(-1).copy()
+        return q
     raise ValueError(f"segment {seg.label!r} is not an arm segment")
 
 
@@ -59,19 +82,40 @@ def resolve_tick_arm_q(
     seg: Segment,
     samples: np.ndarray,
     tick_idx: int,
+    *,
+    init_qpos: np.ndarray | None = None,
+    damping: float | None = None,
 ) -> np.ndarray:
     """Resolve arm joint targets for one tick (same logic as sim replay)."""
     if seg.kind == "movej":
-        return np.asarray(samples[tick_idx], dtype=np.float64)
+        q = np.asarray(samples[tick_idx], dtype=np.float64)
+        ctx._last_ik_qpos = q.reshape(-1).copy()
+        return q
     if seg.kind == "movel":
+        seed = _default_ik_seed(ctx) if init_qpos is None else init_qpos
+        ik_damping = _ik_damping_for_context(ctx) if damping is None else float(damping)
+        if tick_idx == 0 and seg.pose_start is not None:
+            seed = solve_link6_ik(
+                ctx.robot,
+                ctx.ik_link,
+                ctx.base_to_world(seg.pose_start),
+                arm_dof_idx=ctx.arm_dof_idx,
+                quat=ctx.down_quat,
+                init_qpos=seed,
+                damping=ik_damping,
+            )
         pose_world = ctx.base_to_world(samples[tick_idx])
-        return solve_link6_ik(
+        q = solve_link6_ik(
             ctx.robot,
             ctx.ik_link,
             pose_world,
             arm_dof_idx=ctx.arm_dof_idx,
             quat=ctx.down_quat,
+            init_qpos=seed,
+            damping=ik_damping,
         )
+        ctx._last_ik_qpos = np.asarray(q, dtype=np.float64).reshape(-1).copy()
+        return q
     raise ValueError(f"unexpected arm segment kind: {seg.kind}")
 
 
@@ -261,6 +305,7 @@ class TrajKinematicMirror:
             self._last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy()
         else:
             self._last_q_arm = np.zeros(len(arm_idx), dtype=np.float64)
+        ctx._last_ik_qpos = self._last_q_arm.copy()
         self._grip_drive = drive_for_gap_m(ctx.gripper.open_gap_m, ctx.gripper)
         _disable_pd(ctx.robot, arm_idx)
         _disable_pd(ctx.robot, ctx.all_gripper_dof_idx)
@@ -280,13 +325,14 @@ class TrajKinematicMirror:
         arm_idx = self.ctx.arm_dof_idx
         if len(self.ctx.home_qpos):
             self._last_q_arm = self.ctx.home_qpos[arm_idx].astype(np.float64).copy()
+        self.ctx._last_ik_qpos = self._last_q_arm.copy()
         self._grip_drive = drive_for_gap_m(self.ctx.gripper.open_gap_m, self.ctx.gripper)
         kinematic_step(self.ctx, self._last_q_arm, self._visual_grip_drive())
 
     def prime_to_segment_start(self, seg: Segment) -> None:
         if seg.kind not in ("movej", "movel"):
             raise ValueError(f"cannot prime arm pose from segment kind {seg.kind!r}")
-        self._last_q_arm = resolve_segment_start_arm_q(self.ctx, seg)
+        self._last_q_arm = resolve_segment_start_arm_q(self.ctx, seg, init_qpos=self._last_q_arm)
         kinematic_step(self.ctx, self._last_q_arm, self._visual_grip_drive())
 
     def prime_to_first_arm_segment_start(self, program: Program) -> None:
@@ -311,7 +357,13 @@ class TrajKinematicMirror:
                 update_visualizer=update_visualizer,
             )
             return
-        self._last_q_arm = resolve_tick_arm_q(self.ctx, seg, samples, tick_idx)
+        self._last_q_arm = resolve_tick_arm_q(
+            self.ctx,
+            seg,
+            samples,
+            tick_idx,
+            init_qpos=self._last_q_arm,
+        )
         kinematic_step(
             self.ctx,
             self._last_q_arm,

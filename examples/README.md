@@ -182,9 +182,9 @@ Grasp, transport, release and return-home checks remain in place.
 | `--config` / `--print-config` / `--report` | Same roles as pick-place |
 
 ```bash
-# One simulation cycle (exits when done; add --visual to hold the final frame)
+# One simulation cycle
 python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j
+  --robot xarm6 --mode sim --executor servo_j --visual
 
 # CPU-only / unsupported GPU
 python examples/packaging/run.py \

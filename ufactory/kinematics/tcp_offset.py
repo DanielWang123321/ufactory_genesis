@@ -45,7 +45,7 @@ def matrix_to_rpy(rotation: np.ndarray) -> tuple[float, float, float]:
     pitch = math.asin(float(np.clip(-r[2, 0], -1.0, 1.0)))
     if abs(math.cos(pitch)) < 1e-8:
         # Gimbal lock: yaw := 0, roll from remaining DOF.
-        roll = math.atan2(-r[0, 1], r[1, 1])
+        roll = math.atan2(r[0, 1] if pitch >= 0.0 else -r[0, 1], r[1, 1])
         yaw = 0.0
     else:
         roll = math.atan2(r[2, 1], r[2, 2])

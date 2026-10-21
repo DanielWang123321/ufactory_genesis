@@ -534,3 +534,67 @@ def test_cartesian_simulation_approval_does_not_weaken_hardware_evidence_gate():
 
     with pytest.raises(ValueError, match="requires passing current SDK simulation evidence"):
         approved_gate.approve(joint_program, report, expected_serial_number="XI130506XXXXXX")
+
+
+def test_failed_movel_segment_does_not_shift_subsequent_timeline_sample_index():
+    call_count = {"n": 0}
+
+    class MidFailKin(Kin):
+        def inverse(self, pose, seed):
+            del pose
+            call_count["n"] += 1
+            # Call 1 is _project_stationary_seed on start_seg; calls 2..5 are failing_movel rows 0..3.
+            if call_count["n"] == 5:
+                raise RuntimeError("singular target at movel row 3")
+            return np.asarray(seed, dtype=np.float64)
+
+    q0 = np.zeros(6, dtype=np.float64)
+    start_seg = Segment(
+        "movej",
+        0.02,
+        1.0,
+        2.0,
+        "start",
+        q_start=q0,
+        q_end=q0,
+        q_samples=q0[None, :],
+        samples_count=1,
+    )
+    failing_movel = Segment(
+        "movel",
+        0.10,
+        1.0,
+        10.0,
+        "bad-line",
+        pose_start=np.array([0.30, 0.0, 0.30]),
+        pose_end=np.array([0.35, 0.0, 0.30]),
+        samples_count=5,
+    )
+    tail_samples = np.vstack(
+        [
+            np.zeros(6),
+            np.array([2.99, 0.0, 0.0, 0.0, 0.0, 0.0]),
+            np.zeros(6),
+        ]
+    )
+    tail_movej = Segment(
+        "movej",
+        0.06,
+        10.0,
+        100.0,
+        "tail",
+        q_start=q0,
+        q_end=q0,
+        q_samples=tail_samples,
+        samples_count=3,
+    )
+    prog = Program([start_seg, failing_movel, tail_movej], rate=50.0, robot_key="xarm6_1305")
+    report = gate(kin=MidFailKin()).preflight(prog, executor="servo_j")
+
+    ik_fail = next(v for v in report.violations if v.stage == "bad-line" and v.type is ViolationType.INVALID_INPUT)
+    joint_limit = next(v for v in report.violations if v.stage == "tail" and v.type is ViolationType.JOINT_LIMIT)
+    # start_seg contributes 2 timeline rows (q_start + 1 sample: indices 0, 1).
+    # failing_movel fails on its 4th row (offset=3 -> sample_index=5) and is discarded.
+    # tail_movej rows occupy timeline indices 2, 3, 4; its 2nd row (offset=1) is at index 3.
+    assert ik_fail.sample_index == 5
+    assert joint_limit.sample_index == 3

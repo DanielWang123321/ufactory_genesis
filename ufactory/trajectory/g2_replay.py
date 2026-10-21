@@ -233,7 +233,7 @@ def replay_g2(
                 if segment.kind != "gripper":
                     started = time.perf_counter_ns()
                     try:
-                        q_arm = resolve_tick_arm_q(ctx, segment, samples, t)
+                        q_arm = resolve_tick_arm_q(ctx, segment, samples, t, init_qpos=q_arm)
                     except Exception:
                         status.ik_failures += 1
                         raise

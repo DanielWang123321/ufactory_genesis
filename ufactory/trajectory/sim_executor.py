@@ -278,7 +278,7 @@ def replay_sim(
             for t in range(n):
                 ik_started = time.perf_counter_ns()
                 try:
-                    q_arm = resolve_tick_arm_q(ctx, seg, samples, t)
+                    q_arm = resolve_tick_arm_q(ctx, seg, samples, t, init_qpos=last_q_arm)
                 except Exception:
                     status.ik_failures += 1
                     raise

@@ -117,3 +117,118 @@ def test_uf850_gripper_down_shadow_stays_below_joint_acceleration_limit():
     velocity = np.diff(shadow, axis=0) * program.rate
     acceleration = np.diff(velocity, axis=0) * program.rate
     assert float(np.max(np.abs(acceleration), initial=0.0)) <= config.motion.joint_acceleration_rad_s2
+
+
+def test_solve_link6_ik_accepts_pos_world_and_rejects_large_fk_residual(monkeypatch):
+    pytest.importorskip("genesis")
+    from types import SimpleNamespace
+    import genesis as gs
+    from ufactory.kinematics.genesis import solve_link6_ik
+
+    monkeypatch.setattr(gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(gs, "tc_float", torch.float64, raising=False)
+
+    fk_target = np.array([0.30, 0.00, 0.25], dtype=np.float64)
+
+    class _Solver:
+        def forward_kinematics_query(self, _robot, qpos, envs_idx=None):
+            del envs_idx
+            pos = torch.zeros((1, 7, 3), dtype=torch.float64)
+            pos[0, 6] = torch.as_tensor(fk_target, dtype=torch.float64)
+            quat = torch.zeros((1, 7, 4), dtype=torch.float64)
+            return pos, quat
+
+    class _Robot:
+        n_qs = 8
+        solver = _Solver()
+
+        def get_qpos(self):
+            return torch.zeros((1, 8), dtype=torch.float64)
+
+        def inverse_kinematics(self, **kwargs):
+            sol = torch.zeros((1, 8), dtype=torch.float64)
+            sol[0, kwargs["dofs_idx_local"]] = torch.arange(1, 7, dtype=torch.float64) * 0.1
+            return sol
+
+    robot = _Robot()
+    ik_link = SimpleNamespace(idx_local=6)
+    q = solve_link6_ik(
+        robot,
+        ik_link,
+        pos_world=(0.30, 0.00, 0.25),
+        arm_dof_idx=[0, 1, 2, 3, 4, 5],
+        init_qpos=np.zeros(6),
+    )
+    np.testing.assert_allclose(q, np.arange(1, 7) * 0.1)
+
+    with pytest.raises(ValueError, match="position residual"):
+        solve_link6_ik(
+            robot,
+            ik_link,
+            pos_world=(0.50, 0.00, 0.25),
+            arm_dof_idx=[0, 1, 2, 3, 4, 5],
+            max_pos_err_m=2e-3,
+        )
+
+
+def test_run_ik_validation_normalizes_full_dof_seed_and_passes_dofs_idx_local(monkeypatch):
+    pytest.importorskip("genesis")
+    from types import SimpleNamespace
+    import genesis as gs
+    import ufactory.kinematics.validation as val
+
+    monkeypatch.setattr(gs, "device", torch.device("cpu"), raising=False)
+    monkeypatch.setattr(gs, "tc_float", torch.float32, raising=False)
+
+    arm_dof_idx = [2, 3, 4, 5, 6, 7]
+    recorded_ik_kwargs: list[dict] = []
+
+    class _FakeRobot:
+        n_qs = 12
+        links = [SimpleNamespace(name="link6", idx_local=6)]
+        joints = [SimpleNamespace(name=f"joint{i + 1}", dofs_idx_local=[idx]) for i, idx in enumerate(arm_dof_idx)]
+
+        def get_qpos(self):
+            return torch.zeros((1, 12), dtype=torch.float32)
+
+        def inverse_kinematics(self, **kwargs):
+            recorded_ik_kwargs.append(kwargs)
+            q_full = torch.full((1, 12), 99.0, dtype=torch.float32)
+            q_full[0, arm_dof_idx] = torch.tensor([0.1, -0.2, 0.3, -0.1, 0.2, 0.05], dtype=torch.float32)
+            return q_full, torch.zeros((1, 6), dtype=torch.float32)
+
+    class _FakeArm:
+        def get_forward_kinematics(self, q, input_is_radian=True, return_is_radian=True):
+            del q, input_is_radian, return_is_radian
+            return 0, [300.0, 0.0, 250.0, 3.14159265, 0.0, 0.0]
+
+        def disconnect(self):
+            return None
+
+    monkeypatch.setattr(
+        val,
+        "_prepare_sdk_and_urdf",
+        lambda _args, _runtime: (_FakeArm(), "/tmp/xarm6_with_g2.urdf", None, np.zeros(6)),
+    )
+    monkeypatch.setattr(val, "build_genesis_robot", lambda *_a, **_kw: (None, _FakeRobot()))
+
+    args = SimpleNamespace(
+        robot="xarm6",
+        ip="192.168.1.60",
+        robot_model=None,
+        urdf=None,
+        kinematics_suffix=None,
+        kinematics_yaml=None,
+        kinematics_yaml_dir=None,
+        force_kinematics=False,
+        backend="cpu",
+        vis=False,
+        seed=42,
+        samples=2,
+        max_iters=20,
+    )
+    assert val.run_ik_validation(args) == 0
+    assert len(recorded_ik_kwargs) == 2
+    for call in recorded_ik_kwargs:
+        assert call["dofs_idx_local"] == arm_dof_idx
+        assert tuple(call["init_qpos"].shape) == (12,)

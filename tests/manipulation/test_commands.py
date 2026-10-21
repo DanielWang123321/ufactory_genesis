@@ -134,6 +134,23 @@ def test_preposition_cartesian_uses_blocking_set_position_gripper_down():
     assert np.allclose(arm.rpy_rad, [np.pi, 0.0, 0.0])
 
 
+def test_preposition_cartesian_wraps_plus_minus_pi_roll_branch_cut():
+    arm = _FakeArm(np.zeros(6), xyz_mm=np.asarray([100.0, 50.0, 80.0]))
+    orig_set_position = arm.set_position
+
+    def set_position_reporting_minus_pi(*pose, **kwargs):
+        rc = orig_set_position(*pose, **kwargs)
+        # Firmware atan2 commonly reports roll=-pi for a commanded +pi gripper-down pose.
+        arm.rpy_rad = np.asarray([-np.pi, 0.0, 0.0], dtype=np.float64)
+        return rc
+
+    arm.set_position = set_position_reporting_minus_pi
+    transport = XArmTransport(arm, robot_key="xarm6_1305", serial_number="XI130506XXXXXX")
+    xyz_err, rpy_err = transport.preposition_cartesian(np.asarray([0.30, 0.00, 0.30]))
+    assert xyz_err == pytest.approx(0.0, abs=1e-9)
+    assert rpy_err == pytest.approx(0.0, abs=1e-9)
+
+
 def test_leave_software_stop_clears_state_4_without_clean_error():
     arm = _FakeArm(np.zeros(6))
     arm.state = 4

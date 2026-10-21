@@ -123,7 +123,17 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
     _require_parameters(forward, {"entity", "qpos"}, "RigidSolver.forward_kinematics_query")
     _require_parameters(
         inverse,
-        {"link", "pos", "quat", "init_qpos", "dofs_idx_local", "damping"},
+        {
+            "link",
+            "pos",
+            "quat",
+            "init_qpos",
+            "dofs_idx_local",
+            "damping",
+            "respect_joint_limit",
+            "return_error",
+            "max_solver_iters",
+        },
         "RigidEntity.inverse_kinematics",
     )
     return gs_module
