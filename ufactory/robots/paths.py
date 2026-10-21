@@ -1,21 +1,10 @@
-"""Project path helpers for xArm URDF assets."""
+"""Project path helpers for UFACTORY URDF and configuration assets."""
 
 from pathlib import Path
 
 from ufactory.robots.registry import PROJECT_ROOT, get_robot_profile
 
-XARM6_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "xarm6"
-XARM5_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "xarm5"
-XARM7_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "xarm7"
-LITE6_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6"
-UF850_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "uf850"
-BIO_GRIPPER_G2_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2"
-GRIPPER_G2_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "gripper_g2"
-LITE6_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper"
-LITE6_VACUUM_GRIPPER_ASSETS = PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper"
-
-ASSETS_CONFIGS_DIR = PROJECT_ROOT / "assets" / "configs"
-DYNAMICS_VALIDATION_POSES_YAML = ASSETS_CONFIGS_DIR / "dynamics_validation_pose.yaml"
+DYNAMICS_VALIDATION_POSES_YAML = PROJECT_ROOT / "assets" / "configs" / "dynamics_validation_pose.yaml"
 
 
 def _existing_path(path: Path) -> str:
@@ -30,31 +19,22 @@ def _urdf_path(assets: Path, name: str) -> str:
 
 def xarm5_urdf(name: str = "xarm5_1305.urdf") -> str:
     """Return absolute path to an xArm 5 URDF file in project assets."""
-    return _urdf_path(XARM5_ASSETS, name)
+    return _urdf_path(get_robot_profile("xarm5_1305").assets_dir, name)
 
 
 def xarm6_urdf(name: str = "xarm6_1305.urdf") -> str:
     """Return absolute path to an xArm 6 URDF file in project assets."""
-    return _urdf_path(XARM6_ASSETS, name)
+    return _urdf_path(get_robot_profile("xarm6_1305").assets_dir, name)
 
 
 def xarm7_urdf(name: str = "xarm7_1305.urdf") -> str:
     """Return absolute path to an xArm 7 URDF file in project assets."""
-    return _urdf_path(XARM7_ASSETS, name)
+    return _urdf_path(get_robot_profile("xarm7_1305").assets_dir, name)
 
 
 def xarm6_1305_urdf() -> str:
     """Return absolute path to the xArm6 XI1305 simulation URDF."""
     return xarm6_urdf()
-
-
-def xarm6_1305_visual_glb_urdf(
-    with_bio_gripper_g2: bool = False, with_gripper_g2: bool = False, movable: bool = False
-) -> str:
-    """Return URDF path for xArm6 1305 GLB visual model (optionally with Gripper G2 or Bio Gripper G2)."""
-    return robot_visual_glb_urdf(
-        "xarm6_1305", with_bio_gripper_g2=with_bio_gripper_g2, with_gripper_g2=with_gripper_g2, movable=movable
-    )
 
 
 def robot_assets(robot_name: str) -> Path:
@@ -132,94 +112,16 @@ def robot_visual_glb_urdf(
     return _urdf_path(profile.assets_dir, profile.visual_glb_urdf)
 
 
-def xarm5_1305_urdf() -> str:
-    return robot_urdf("xarm5_1305")
-
-
-def xarm5_1305_visual_glb_urdf(with_bio_gripper_g2: bool = False) -> str:
-    return robot_visual_glb_urdf("xarm5_1305", with_bio_gripper_g2=with_bio_gripper_g2)
-
-
-def xarm7_1305_urdf() -> str:
-    return robot_urdf("xarm7_1305")
-
-
-def xarm7_1305_visual_glb_urdf(with_bio_gripper_g2: bool = False) -> str:
-    return robot_visual_glb_urdf("xarm7_1305", with_bio_gripper_g2=with_bio_gripper_g2)
-
-
-def lite6_urdf() -> str:
-    return robot_urdf("lite6")
-
-
-def lite6_visual_glb_urdf(
-    *,
-    with_lite6_gripper: bool = False,
-    with_lite6_vacuum_gripper: bool = False,
-    movable: bool = False,
-) -> str:
-    return robot_visual_glb_urdf(
-        "lite6",
-        with_lite6_gripper=with_lite6_gripper,
-        with_lite6_vacuum_gripper=with_lite6_vacuum_gripper,
-        movable=movable,
-    )
-
-
-def lite6_with_gripper_urdf() -> str:
-    profile = get_robot_profile("lite6")
-    if not profile.lite6_with_gripper_urdf:
-        raise ValueError("lite6 has no with_gripper physics URDF")
-    return _urdf_path(profile.assets_dir, profile.lite6_with_gripper_urdf)
-
-
-def lite6_with_vacuum_gripper_urdf() -> str:
-    profile = get_robot_profile("lite6")
-    if not profile.lite6_with_vacuum_gripper_urdf:
-        raise ValueError("lite6 has no with_vacuum_gripper physics URDF")
-    return _urdf_path(profile.assets_dir, profile.lite6_with_vacuum_gripper_urdf)
-
-
 def lite6_gripper_movable_visual_urdf() -> str:
     """Standalone Lite6 gripper-only movable visual URDF (no arm)."""
-    return _existing_path(LITE6_GRIPPER_ASSETS / "lite6_gripper_movable_visual.urdf")
-
-
-def uf850_urdf() -> str:
-    return robot_urdf("uf850")
-
-
-def uf850_visual_glb_urdf(with_bio_gripper_g2: bool = False) -> str:
-    return robot_visual_glb_urdf("uf850", with_bio_gripper_g2=with_bio_gripper_g2)
-
-
-def bio_gripper_g2_glb(ee_link: str = "link6") -> str:
-    """Return canonical Bio Gripper G2 static visual GLB (ee_link ignored; kept for API compat)."""
-    _ = ee_link
-    return _existing_path(BIO_GRIPPER_G2_ASSETS / "meshes" / "visual" / "bio_gripper_g2_visual.glb")
-
-
-def gripper_g2_static_glb(ee_link: str = "link6") -> str:
-    """Return canonical Gripper G2 static visual GLB (ee_link ignored; kept for API compat)."""
-    _ = ee_link
-    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / "gripper_g2_static.glb")
-
-
-def gripper_g2_base_glb(ee_link: str = "link6") -> str:
-    """Return canonical Gripper G2 movable base visual GLB (ee_link ignored; kept for API compat)."""
-    _ = ee_link
-    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / "visual_glb" / "base.glb")
-
-
-def gripper_g2_shared_glb(name: str) -> str:
-    return _existing_path(GRIPPER_G2_ASSETS / "meshes" / "visual" / "visual_glb" / name)
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf")
 
 
 def gripper_g2_movable_visual_urdf() -> str:
     """Standalone gripper-only movable visual URDF (no arm)."""
-    return _existing_path(GRIPPER_G2_ASSETS / "gripper_g2_movable_visual.urdf")
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "gripper_g2_movable_visual.urdf")
 
 
 def bio_gripper_g2_movable_visual_urdf() -> str:
     """Standalone Bio Gripper G2 movable visual URDF (no arm)."""
-    return _existing_path(BIO_GRIPPER_G2_ASSETS / "bio_gripper_g2_movable_visual.urdf")
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf")

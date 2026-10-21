@@ -170,8 +170,8 @@ def plan_mixed_waypoints(
     """Plan mixed MoveJ/MoveL/Gripper waypoints.
 
     Typed waypoints are chained from ``start_q`` or ``start_xyz``. Dict
-    waypoints also support the existing ``build_pickplace_program`` schema:
-    ``q_start``/``q_end``, ``pose_start``/``pose_end``, and gripper gap fields.
+    waypoints also support explicit ``q_start``/``q_end``,
+    ``pose_start``/``pose_end``, and gripper gap fields.
     """
     config.validate()
     runtime = config.runtime

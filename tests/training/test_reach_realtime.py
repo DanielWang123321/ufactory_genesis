@@ -49,16 +49,6 @@ def test_missing_checkpoint_fails_before_genesis_initialization(entry, tmp_path,
         module.main()
 
 
-def test_old_evaluate_vis_prints_a_copyable_migration_command(monkeypatch, capsys):
-    from examples.rl.reach import evaluate
-
-    monkeypatch.setattr(sys, "argv", ["evaluate", "--checkpoint", "model with space.pt", "--vis"])
-    with pytest.raises(SystemExit) as exc:
-        evaluate.main()
-    assert exc.value.code == 2
-    assert "python -m examples.rl.reach.visualize --checkpoint 'model with space.pt'" in capsys.readouterr().err
-
-
 def test_resume_environment_count_is_checked_before_creating_output(tmp_path, monkeypatch, capsys):
     from examples.rl.reach import train
 

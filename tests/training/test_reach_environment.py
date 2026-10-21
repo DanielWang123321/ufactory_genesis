@@ -50,7 +50,6 @@ def make_env(count=2):
     env.ctrl_dt, env.max_episode_length = 0.02, 250
     env.action_scale, env.action_clip, env.max_joint_delta_rad = 0.05, 1.0, 0.01
     env.success_distance_m = 0.005
-    env.success_hold_s = 0.0
     env.robot, env.dof_idx = Robot(count), list(range(6))
     env.ee_link = SimpleNamespace(get_pos=lambda: torch.zeros(count, 3))
     env.target_marker = SimpleNamespace(set_pos=lambda *args, **kwargs: None)
@@ -173,56 +172,6 @@ def test_success_without_hold_resets_on_the_arrival_step():
     assert info["reach_done_steps"].tolist() == [1]
     assert reward.item() == pytest.approx(2.02)
     assert torch.equal(env.position_command, torch.zeros(1, 6))
-
-
-def test_viewer_success_hold_keeps_pose_for_one_second_then_resets():
-    env = make_env(count=1)
-    env.success_hold_s = 1.0
-    env.target_pos[0] = 0
-    env.position_command[:] = 0.4
-    env.robot.q[:] = 0.4
-    env.robot.command[:] = 0.4
-    calls = _record_scene_steps(env)
-    _, reward, done, info = env.step(torch.zeros(1, 6))
-    assert done.tolist() == [True]
-    assert info["reach_done_steps"].tolist() == [1]
-    assert len(calls) == 51
-    held_command = torch.full((1, 6), 0.4)
-    for call in calls:
-        assert torch.equal(call["command"], held_command)
-        assert torch.equal(call["target"], torch.zeros(1, 3))
-        assert torch.equal(call["q"], held_command)
-        assert call["length"].tolist() == [1]
-    assert calls[0]["metric_steps"].tolist() == [0]
-    assert all(call["metric_steps"].tolist() == [1] for call in calls[1:])
-    assert reward.item() == pytest.approx(2.02)
-    assert torch.equal(env.position_command, torch.zeros(1, 6))
-    assert torch.equal(env.robot.q, torch.zeros(1, 6))
-    assert env.episode_length_buf.tolist() == [0]
-    assert not torch.equal(env.target_pos, torch.zeros(1, 3))
-
-
-def test_timeout_does_not_hold_the_pose():
-    env = make_env(count=1)
-    env.success_hold_s = 1.0
-    env.episode_length_buf[:] = 249
-    calls = _record_scene_steps(env)
-    _, _, done, info = env.step(torch.zeros(1, 6))
-    assert done.tolist() == [True]
-    assert info["time_outs"].tolist() == [1]
-    assert len(calls) == 1
-
-
-def test_success_hold_does_not_change_reported_arrival_steps():
-    env = make_env()
-    env.success_hold_s = 1.0
-    env.max_episode_length = 5
-    targets = torch.tensor([[0.0, 0, 0], [1.0, 1, 1], [0.004, 0, 0]])
-    reports = evaluate_fixed_targets(env, lambda _: torch.zeros(2, 6), targets)
-    assert [report["index"] for report in reports] == [0, 1, 2]
-    assert [report["steps"] for report in reports] == [1, 5, 1]
-    assert [report["elapsed_s"] for report in reports] == pytest.approx([0.02, 0.1, 0.02])
-    assert [report["success"] for report in reports] == [True, False, True]
 
 
 def test_training_success_is_strictly_below_5mm():

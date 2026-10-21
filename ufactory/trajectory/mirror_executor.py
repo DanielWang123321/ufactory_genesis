@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
 
 import numpy as np
 import torch
@@ -230,10 +229,10 @@ def kinematic_step(
     untouched (measured: 0 deadline misses vs. ~15/s with ``scene.step``).
 
     No contact physics is needed. The G2 gripper's non-driven joints
-    (fingers/knuckles) are set explicitly here via ``all_gripper_dof_idx`` (see
-    ``examples/_gripper_demo.py``), and any carried object is positioned
-    directly by :class:`KinematicCarryTracker`. ``set_dofs_position`` runs
-    forward kinematics, so link/geom world transforms are current for rendering.
+    (fingers/knuckles) are set explicitly here via ``all_gripper_dof_idx``, and
+    any carried object is positioned directly by :class:`KinematicCarryTracker`.
+    ``set_dofs_position`` runs forward kinematics, so link/geom world transforms
+    are current for rendering.
 
     Callers that kinematically carry an object should pass
     ``update_visualizer=False``, re-sync the object, then call
@@ -321,7 +320,7 @@ class TrajKinematicMirror:
         )
 
     def on_tick(self, seg: Segment, tick_idx: int) -> None:
-        """Callback compatible with :func:`replay_real` ``on_tick`` hook."""
+        """Callback compatible with :func:`execute_real` ``on_tick`` hook."""
         self.tick(seg, tick_idx)
 
     def hold_step(self, *, update_visualizer: bool = True) -> None:
@@ -339,23 +338,6 @@ class TrajKinematicMirror:
             update_visualizer=update_visualizer,
         )
 
-    def replay_with_pacing(self) -> None:
-        """Play the full program at ``program.rate`` (dry-run visual preview)."""
-        tick_s = 1.0 / self.rate
-        next_deadline = time.monotonic()
-        for seg in self.program.segments:
-            _samples, n = seg.samples(self.rate)
-            for t in range(n):
-                self.tick(seg, t)
-                next_deadline += tick_s
-                sleep_s = next_deadline - time.monotonic()
-                if sleep_s > 0:
-                    time.sleep(sleep_s)
-
-
-def make_on_tick(mirror: TrajKinematicMirror) -> Callable[[Segment, int], None]:
-    return mirror.on_tick
-
 
 class KinematicCarryTracker:
     """Kinematically "attaches" ``ctx.obj`` to the gripper once closed near it.
@@ -371,9 +353,8 @@ class KinematicCarryTracker:
     During the grasp-close segment (``grasp_segment_label``, default
     ``"grip"``), the object pose is frozen at the segment-start pose on every
     tick while the kinematic gripper closes, then latched on the **last tick**
-    of that segment (matching ``xarm6_g2_showcase.py``). This prevents the
-    hybrid "kinematic fingers + physics block" collision push that visibly
-    slides the cube on the table before carry engages.
+    of that segment. This prevents the hybrid "kinematic fingers + physics block"
+    collision push that visibly slides the cube on the table before carry engages.
 
     Before the grasp latch, the spawn-table pose is restored on every tick of
     ``descend`` so coarse collision STLs cannot shove the cube into the table
@@ -384,8 +365,6 @@ class KinematicCarryTracker:
     ``grasp_gap_m`` still sets ``release_gap_m`` for the release segment; it is
     no longer used as a mid-close attach threshold on the grasp segment.
     """
-
-    _PLACE_FREEZE_LABELS = frozenset()
 
     def __init__(
         self,
@@ -523,13 +502,6 @@ class KinematicCarryTracker:
         obj_pos = self.ctx.obj.get_pos()[0]
         return float(torch.norm(obj_pos - self._spawn_freeze_pos)) <= self.attach_dist_m
 
-    def _should_freeze_on_table(self, seg: Segment) -> bool:
-        return (
-            getattr(self.ctx.gripper, "family", None) == "lite6"
-            and self._is_arm_segment(seg)
-            and seg.label in self._PLACE_FREEZE_LABELS
-        )
-
     def _capture_grip_freeze_pose(self) -> None:
         self._grip_freeze_pos = self.ctx.obj.get_pos()[0].clone()
         self._grip_freeze_quat = self.ctx.obj.get_quat()[0].clone()
@@ -572,7 +544,7 @@ class KinematicCarryTracker:
             self._attached = False
 
     def on_tick(self, seg: Segment, tick_idx: int, *, update_visualizer: bool = True) -> None:
-        """Callback compatible with :func:`replay_real` ``on_tick`` hook."""
+        """Callback compatible with :func:`execute_real` ``on_tick`` hook."""
         _, n = seg.samples(self.mirror.rate)
         is_grasp_close = self._is_grasp_close_segment(seg)
         is_release = self._is_release_segment(seg)
@@ -604,8 +576,6 @@ class KinematicCarryTracker:
 
         if self._should_freeze_approach(seg):
             self._restore_spawn_frozen_obj()
-        elif self._should_freeze_on_table(seg):
-            self._snap_object_to_table()
         elif is_release:
             self._restore_release_frozen_obj()
         elif is_grasp_close and not self._attached:

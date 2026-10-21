@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
         "reports",
         nargs="+",
         type=Path,
-        help="One or more project-check JSON reports (e.g. reports/project-check/v0.2.7_sim.json)",
+        help="One or more project-check JSON reports (e.g. reports/project-check/20261021_sim.json)",
     )
     parser.add_argument(
         "-o",

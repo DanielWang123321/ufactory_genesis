@@ -10,7 +10,6 @@ from ufactory.simulation.g2_controller import G2Controller
 from ufactory.simulation.g2_model import G2Model
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive, gripper_g2_sim_drive_to_gap_m
 from ufactory.simulation.g2_model import REFERENCE_GAP_MM
-from ufactory.grippers.g2_torch import drive_for_gap_m, pad_gap_m
 
 # Trajectories recorded from the v0.3.1 scalar controller before it was merged
 # into the Torch implementation (inputs: joint state and measured gap).
@@ -33,10 +32,8 @@ def test_tensor_geometry_matches_scalar_conversions(model, dtype, tolerance_mm):
     q = controller.drive_for_gap_mm(gaps)
     torch.testing.assert_close(q, expected, rtol=0, atol=tolerance_mm / 80)
     torch.testing.assert_close(controller.gap_mm(q), gaps, rtol=0, atol=tolerance_mm)
-    torch.testing.assert_close(drive_for_gap_m(gaps / 1000), q, rtol=0, atol=0)
-    restored = pad_gap_m(q)
     scalar_gaps = torch.tensor([gripper_g2_sim_drive_to_gap_m(float(a)) for a in q], dtype=dtype)
-    torch.testing.assert_close(restored, scalar_gaps, rtol=0, atol=tolerance_mm / 1000)
+    torch.testing.assert_close(controller.gap_mm(q) / 1000, scalar_gaps, rtol=0, atol=tolerance_mm / 1000)
     assert bool((q[:-1] > q[1:]).all())
 
 

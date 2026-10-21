@@ -28,7 +28,7 @@ def configure_runtime(cache_root: Path | None = None, *, viewer: bool = False) -
 
 
 def require_rsl_runtime() -> None:
-    require_training_runtime("reach Beta")
+    require_training_runtime("reach")
 
 
 def require_checkpoint(path: Path) -> Path:

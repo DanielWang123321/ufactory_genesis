@@ -232,6 +232,38 @@ def analyze_hold_timeseries(
     return summary
 
 
+def write_timeseries_rows_csv(
+    path: Path,
+    rows: Sequence[tuple[str, str, Sequence[HoldTimeSeriesSample]]],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows or not rows[0][2]:
+        return
+    dof = rows[0][2][0].tau.size
+    fieldnames = ["context", "pose", "t_s"]
+    for i in range(1, dof + 1):
+        fieldnames.extend([f"q{i}", f"qvel{i}", f"tau{i}", f"current{i}", f"tau_direct{i}"])
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        for context, pose, samples in rows:
+            for sample in samples:
+                row: dict[str, float | str] = {
+                    "context": context,
+                    "pose": pose,
+                    "t_s": f"{sample.t_s:.4f}",
+                }
+                for i in range(dof):
+                    j = i + 1
+                    row[f"q{j}"] = f"{sample.q[i]:.6f}"
+                    row[f"qvel{j}"] = f"{sample.qvel[i]:.6f}"
+                    row[f"tau{j}"] = f"{sample.tau[i]:.6f}"
+                    row[f"current{j}"] = f"{sample.current[i]:.6f}"
+                    direct = sample.tau_direct[i] if sample.tau_direct is not None else float("nan")
+                    row[f"tau_direct{j}"] = f"{direct:.6f}"
+                writer.writerow(row)
+
+
 def write_timeseries_csv(
     path: Path,
     samples: Sequence[HoldTimeSeriesSample],
@@ -239,29 +271,7 @@ def write_timeseries_csv(
     context: str,
     pose: str,
 ) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    dof = samples[0].tau.size if samples else 0
-    fieldnames = ["context", "pose", "t_s"]
-    for i in range(1, dof + 1):
-        fieldnames.extend([f"q{i}", f"qvel{i}", f"tau{i}", f"current{i}", f"tau_direct{i}"])
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        for sample in samples:
-            row: dict[str, float | str] = {
-                "context": context,
-                "pose": pose,
-                "t_s": f"{sample.t_s:.4f}",
-            }
-            for i in range(dof):
-                j = i + 1
-                row[f"q{j}"] = f"{sample.q[i]:.6f}"
-                row[f"qvel{j}"] = f"{sample.qvel[i]:.6f}"
-                row[f"tau{j}"] = f"{sample.tau[i]:.6f}"
-                row[f"current{j}"] = f"{sample.current[i]:.6f}"
-                direct = sample.tau_direct[i] if sample.tau_direct is not None else float("nan")
-                row[f"tau_direct{j}"] = f"{direct:.6f}"
-            writer.writerow(row)
+    write_timeseries_rows_csv(path, [(context, pose, samples)])
 
 
 def print_summary(summary: HoldObserveSummary) -> None:
@@ -459,31 +469,7 @@ def cli_observe_hold_current(argv: Sequence[str] | None = None) -> int:
         finally:
             session.disconnect()
 
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    if all_rows:
-        dof = all_rows[0][2][0].tau.size
-        fieldnames = ["context", "pose", "t_s"]
-        for i in range(1, dof + 1):
-            fieldnames.extend([f"q{i}", f"qvel{i}", f"tau{i}", f"current{i}", f"tau_direct{i}"])
-        with csv_path.open("w", newline="", encoding="utf-8") as fh:
-            writer = csv.DictWriter(fh, fieldnames=fieldnames)
-            writer.writeheader()
-            for context, pose_name, samples in all_rows:
-                for sample in samples:
-                    row: dict[str, float | str] = {
-                        "context": context,
-                        "pose": pose_name,
-                        "t_s": f"{sample.t_s:.4f}",
-                    }
-                    for i in range(dof):
-                        j = i + 1
-                        row[f"q{j}"] = f"{sample.q[i]:.6f}"
-                        row[f"qvel{j}"] = f"{sample.qvel[i]:.6f}"
-                        row[f"tau{j}"] = f"{sample.tau[i]:.6f}"
-                        row[f"current{j}"] = f"{sample.current[i]:.6f}"
-                        direct = sample.tau_direct[i] if sample.tau_direct is not None else float("nan")
-                        row[f"tau_direct{j}"] = f"{direct:.6f}"
-                    writer.writerow(row)
+    write_timeseries_rows_csv(csv_path, all_rows)
 
     json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {

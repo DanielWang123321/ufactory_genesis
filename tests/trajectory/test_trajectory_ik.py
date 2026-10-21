@@ -136,7 +136,7 @@ def test_collapse_joint_keypoints_drops_plateau():
 
 def test_retime_ik_joint_stream_bounds_finite_diff_acc():
     from ufactory.trajectory.ik import retime_ik_joint_stream
-    from ufactory.trajectory.real_executor import compute_servo_stream_stats
+    from ufactory.safety.statistics import signed_velocity_and_acceleration
 
     q0 = np.zeros(6)
     # Leading plateau then a jump — the failure mode seen at 100 Hz.
@@ -145,6 +145,6 @@ def test_retime_ik_joint_stream_bounds_finite_diff_acc():
     assert n_keys < rows.shape[0] + 1
     # Short Cartesian duration is extended to the joint LSPB bound.
     assert dur >= 0.25 - 1e-9
-    stats = compute_servo_stream_stats("j", q_out, q0, rate=100.0, label="synthetic")
-    assert stats.max_acc <= 2.0 + 1e-3
-    assert stats.max_speed <= 0.35 + 1e-3
+    vel, acc = signed_velocity_and_acceleration(np.vstack([q0, q_out]), rate_hz=100.0)
+    assert float(np.max(np.abs(acc))) <= 2.0 + 1e-3
+    assert float(np.max(np.abs(vel))) <= 0.35 + 1e-3

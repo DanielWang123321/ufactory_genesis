@@ -11,8 +11,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-
 # Public CI installs ``.[dev]`` only (no Torch / Genesis). Modules that import
 # those stacks at collection time must be ignored there; maintainer machines
 # with ``.[sim]`` still collect and run them under the usual markers.
@@ -21,12 +19,10 @@ _TORCH_OR_GENESIS_COLLECTION_MODULES = frozenset(
         "test_pinocchio_pose_ik.py",
         "test_tcp_offset.py",
         "test_packaging_drop.py",
-        "test_policy_contract_v5.py",
         "test_reach.py",
         "test_reach_environment.py",
         "test_reach_realtime.py",
         "test_packaging_showcase.py",
-        "test_pick_place_preposition.py",
         "test_pick_place_program_defaults.py",
         "test_pick_place_visual_cli.py",
         "test_sim_executor_gripper.py",

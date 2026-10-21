@@ -9,8 +9,8 @@ targets that the sim and real executors replay tick-for-tick:
 * :class:`GripperSegment` - gripper gap open/close at a fixed EE pose.
 
 Cartesian targets are in the **robot base frame** (flange / ``tcp_offset=0``).
-The real executor consumes these directly; the sim executor converts base to
-world before Genesis IK.
+:func:`ufactory.trajectory.execution.execute_real` consumes these directly; the
+sim executor converts base to world before Genesis IK.
 """
 
 from __future__ import annotations
@@ -245,62 +245,3 @@ class Program:
             arr, _ = seg.samples(self.rate)
             out.append((seg.kind, arr))
         return out
-
-
-def build_pickplace_program(
-    *,
-    rate: float,
-    speed_rad_s: float,
-    mvacc_rad_s2: float,
-    waypoints: list[dict[str, Any]],
-    robot_key: str | None = None,
-    linear_speed_m_s: float | None = None,
-    linear_acc_m_s2: float | None = None,
-) -> Program:
-    """Assemble a Program from an ordered list of move/grip waypoints.
-
-    ``waypoints`` entries are dicts with ``"type"`` in
-    ``{"movej", "movel", "gripper"}`` plus the corresponding fields:
-
-    * ``movej`` -> ``q_start`` / ``q_end`` (rad)
-    * ``movel`` -> ``pose_start`` / ``pose_end`` (base-frame EE xyz, m)
-    * ``gripper`` -> ``gap_start`` / ``gap_end`` (m), ``duration`` (s, optional)
-
-    Motor ``v_max`` / ``a_max`` come from a shared :class:`JointLimits` derived
-    from ``speed_rad_s`` / ``mvacc_rad_s2``. MoveL may override the derived
-    linear limits with ``linear_speed_m_s`` / ``linear_acc_m_s2``. Segment
-    durations are the natural LSPB bottleneck for moves, or explicit
-    ``duration`` for grip.
-    """
-    limits = JointLimits.from_speed_mvacc(
-        speed_rad_s,
-        mvacc_rad_s2,
-        linear_speed_m_s=linear_speed_m_s,
-        linear_acc_m_s2=linear_acc_m_s2,
-    )
-    segments: list[Segment] = []
-    grip_default_s = 2.0
-    for wp in waypoints:
-        t = str(wp["type"])
-        label = str(wp.get("label", t))
-        if t == "movej":
-            segments.append(
-                make_movej(np.array(wp["q_start"]), np.array(wp["q_end"]), rate=rate, limits=limits, label=label)
-            )
-        elif t == "movel":
-            segments.append(
-                make_movel(np.array(wp["pose_start"]), np.array(wp["pose_end"]), rate=rate, limits=limits, label=label)
-            )
-        elif t == "gripper":
-            segments.append(
-                make_gripper(
-                    float(wp["gap_start"]),
-                    float(wp["gap_end"]),
-                    rate=rate,
-                    duration_s=float(wp.get("duration", grip_default_s)),
-                    label=label,
-                )
-            )
-        else:
-            raise ValueError(f"unknown waypoint type: {t}")
-    return Program(segments=segments, rate=rate, limits=limits, robot_key=robot_key)

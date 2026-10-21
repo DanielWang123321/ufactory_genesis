@@ -8,21 +8,13 @@ from typing import Any
 # set_mode values
 MODE_POSITION = 0  # set_servo_angle, set_position
 MODE_SERVO = 1  # set_servo_angle_j, set_servo_cartesian
-MODE_JOINT_TEACH = 2
-MODE_JOINT_VEL = 4  # vc_set_joint_velocity
-MODE_CART_VEL = 5  # vc_set_cartesian_velocity
-MODE_JOINT_ONLINE_PLANNING = 6  # set_servo_angle in joint online trajectory planning
-MODE_CART_ONLINE_PLANNING = 7  # set_position in cartesian online trajectory planning
 
 # set_state parameter values
 STATE_MOTION = 0
-STATE_PAUSE = 3
-STATE_STOP = 4
 
 # get_state() / arm.state reported values (xArm API docs, not set_state params)
 REPORT_STATE_IN_MOTION = 1
 REPORT_STATE_SLEEPING = 2  # idle; normal after set_state(0) in MODE_SERVO
-REPORT_STATE_SUSPENDED = 3
 REPORT_STATE_STOPPING = 4
 
 POLL_INTERVAL_S = 0.15
@@ -30,7 +22,6 @@ POLL_TIMEOUT_S = 2.0
 SERVO_READY_TIMEOUT_S = 2.0
 SERVO_PRIME_RETRIES = 10
 SERVO_PRIME_RETRY_S = 0.02
-SERVO_CMD_RETRIES = 5
 SERVO_CMD_RETRY_S = 0.01
 # xArm UxbusState.STATE_NOT_READY (controller not ready for move_servoj)
 STATE_NOT_READY_SDK = 9
@@ -207,33 +198,4 @@ def prime_servo_cartesian(
         time.sleep(retry_s)
     raise RuntimeError(
         f"prime set_servo_cartesian failed after {retries} attempts, last code={last_code} ({format_arm_status(arm)})"
-    )
-
-
-def prime_online_joint_planning(
-    arm: Any,
-    angles: list[float],
-    *,
-    speed: float,
-    mvacc: float,
-    retries: int = SERVO_PRIME_RETRIES,
-    retry_s: float = SERVO_PRIME_RETRY_S,
-) -> None:
-    """Send current joint target until mode-6 online joint planning accepts commands."""
-    last_code = -1
-    for _ in range(retries):
-        last_code = arm.set_servo_angle(
-            angle=angles,
-            speed=speed,
-            mvacc=mvacc,
-            mvtime=0,
-            wait=False,
-            is_radian=True,
-            radius=None,
-        )
-        if last_code == 0:
-            return
-        time.sleep(retry_s)
-    raise RuntimeError(
-        f"prime online joint planning failed after {retries} attempts, last code={last_code} ({format_arm_status(arm)})"
     )

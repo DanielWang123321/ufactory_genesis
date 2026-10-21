@@ -933,9 +933,6 @@ rl = [
     { name = "rsl-rl-lib" },
     { name = "tensorboard" },
 ]
-showcase = [
-    { name = "scipy" },
-]
 sim = [
     { name = "genesis-world" },
     { name = "packaging" },
@@ -960,14 +957,13 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "rsl-rl-lib", marker = "extra == 'rl'", specifier = ">=5.4.2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.21" },
-    { name = "scipy", marker = "extra == 'showcase'", specifier = ">=1.11" },
     { name = "tensorboard", marker = "extra == 'rl'" },
     { name = "torch", marker = "extra == 'sim'", specifier = "==2.10.0" },
     { name = "trimesh", marker = "extra == 'sim'", specifier = ">=4.8.2" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "xarm-python-sdk", marker = "extra == 'real'" },
 ]
-provides-extras = ["dev", "dynamics", "real", "sim", "rl", "showcase"]
+provides-extras = ["dev", "dynamics", "real", "sim", "rl"]
 
 [[package]]
 name = "genesis-world"

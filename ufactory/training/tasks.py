@@ -20,11 +20,9 @@ from ufactory.training.pick_place_config import (
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
 REACH_RL_ROBOTS = ("xarm6", "xarm6_1305")
 # RL keeps the post-solve no-slip PGS pass off (noslip_iterations=5 slows a 512-env
-# batch ~3.5x on an RTX 5090). Tangential creep under pyramidal contact is instead
-# suppressed directly in the main Newton solver via DEFAULT_IMPRATIO=100.0 (~0.01 mm
-# drift over transport at 95.6% of the baseline step rate).
+# batch ~3.5x on an RTX 5090). Tangential contact stability is handled directly by
+# the elliptic Signorini Newton solver configuration.
 PICK_PLACE_RL_NOSLIP_ITERATIONS = 0
-PICK_PLACE_RL_EPISODE_LENGTH_S = 8.0
 
 
 _PICK_PLACE_RUNTIME_OVERRIDES = frozenset(
@@ -114,7 +112,6 @@ def load_pick_place_rl_runtime_config(robot: str, *, config_path: str | Path | N
         config_path=config_path,
         overrides={
             "simulation.noslip_iterations": PICK_PLACE_RL_NOSLIP_ITERATIONS,
-            "task.parameters.episode_length_s": PICK_PLACE_RL_EPISODE_LENGTH_S,
         },
     )
 
@@ -165,9 +162,9 @@ def build_pick_place_task_configs(
     env_cfg["task_name"] = "pick_place"
     if float(env_cfg.get("reward_gamma", 0.995)) != float(recipe["train"]["algorithm"]["gamma"]):
         raise ValueError("pick-place reward_gamma must match PPO gamma for potential shaping")
-    for key, value in (("place_clearance_m", 0.002), ("release_max_height_m", 0.003), ("press_limit_m", 0.001)):
-        if float(env_cfg[key]) != value:
-            raise ValueError(f"pick-place v3 requires {key}={value}")
+    for key in ("place_clearance_m", "release_max_height_m", "press_limit_m"):
+        if float(env_cfg.get(key, 0.0)) <= 0.0:
+            raise ValueError(f"pick-place v3 requires positive {key}")
     env_cfg.update(
         {
             "runtime_config_sha256": config.sha256,

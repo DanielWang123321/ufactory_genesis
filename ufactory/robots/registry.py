@@ -18,7 +18,6 @@ class RobotModelSpec:
     dof: int
     ee_link: str
     assets_dir: Path
-    mesh_variant: str
     default_urdf: str
     visual_glb_urdf: str
     kinematics_prefix: str
@@ -35,16 +34,13 @@ class RobotModelSpec:
     lite6_vacuum_gripper_visual_urdf: str = ""
     lite6_with_gripper_urdf: str = ""
     lite6_with_vacuum_gripper_urdf: str = ""
-    glb_src_base_name: str = "link0.glb"
-    glb_out_base_name: str = "link_base.glb"
-    stl_base_name: str = "link_base.stl"
 
 
 def _assets(robot: str) -> Path:
     return PROJECT_ROOT / "assets" / "urdf" / robot
 
 
-def _xarm_profile(dof: int, *, glb_src_base_name: str = "link0.glb") -> RobotModelSpec:
+def _xarm_profile(dof: int) -> RobotModelSpec:
     robot = f"xarm{dof}"
     key = f"{robot}_1305"
     return RobotModelSpec(
@@ -54,7 +50,6 @@ def _xarm_profile(dof: int, *, glb_src_base_name: str = "link0.glb") -> RobotMod
         dof=dof,
         ee_link=f"link{dof}",
         assets_dir=_assets(robot),
-        mesh_variant=key,
         default_urdf=f"{key}.urdf",
         visual_glb_urdf=f"{key}_visual.glb.urdf",
         kinematics_prefix=robot,
@@ -62,8 +57,6 @@ def _xarm_profile(dof: int, *, glb_src_base_name: str = "link0.glb") -> RobotMod
         bio_gripper_g2_movable_visual_urdf=f"{key}_bio_gripper_g2_movable_visual.glb.urdf",
         gripper_g2_visual_urdf=f"{key}_g2_visual.urdf",
         gripper_g2_movable_visual_urdf=f"{key}_g2_movable_visual.urdf",
-        glb_src_base_name=glb_src_base_name,
-        glb_out_base_name="link_base.glb",
     )
 
 
@@ -77,7 +70,6 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         dof=6,
         ee_link="link6",
         assets_dir=_assets("lite6"),
-        mesh_variant="lite6",
         default_urdf="lite6.urdf",
         visual_glb_urdf="lite6_visual.glb.urdf",
         kinematics_prefix="lite6",
@@ -101,7 +93,6 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         dof=6,
         ee_link="link6",
         assets_dir=_assets("uf850"),
-        mesh_variant="uf850",
         default_urdf="uf850.urdf",
         visual_glb_urdf="uf850_visual.glb.urdf",
         kinematics_prefix="uf850",
@@ -110,28 +101,12 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         gripper_g2_visual_urdf="uf850_g2_visual.urdf",
         gripper_g2_movable_visual_urdf="uf850_g2_movable_visual.urdf",
     ),
-    "xarm6_1305": _xarm_profile(6, glb_src_base_name="link_base.glb"),
+    "xarm6_1305": _xarm_profile(6),
 }
 
 
 def get_robot_profile(key: str) -> RobotModelSpec:
     return ROBOT_PROFILES[get_profile_key_for_robot_name(key)]
-
-
-def link_glb_stl_pairs(profile: RobotModelSpec) -> tuple[tuple[str, str], ...]:
-    """Map source GLB filenames to STL reference names for relocalization."""
-    return (
-        (profile.glb_src_base_name, profile.stl_base_name),
-        *((f"link{i}.glb", f"link{i}.stl") for i in range(1, profile.dof + 1)),
-    )
-
-
-def glb_output_name(profile: RobotModelSpec, src_glb: str) -> str:
-    return profile.glb_out_base_name if src_glb == profile.glb_src_base_name else src_glb
-
-
-def arm_link_names(profile: RobotModelSpec) -> tuple[str, ...]:
-    return ("link_base", *(f"link{i}" for i in range(1, profile.dof + 1)))
 
 
 def joint_names(profile: RobotModelSpec) -> tuple[str, ...]:

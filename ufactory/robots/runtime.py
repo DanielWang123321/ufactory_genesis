@@ -7,7 +7,7 @@ import math
 import xml.etree.ElementTree as ET
 
 from ufactory.robots.registry import RobotModelSpec, get_robot_profile, joint_names, robot_cli_choices
-from ufactory.grippers.g2 import GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE
+from ufactory.grippers.g2 import G2_JOINT_NAMES, GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE
 
 
 FloatTuple = tuple[float, ...]
@@ -100,11 +100,6 @@ class RobotRuntimeProfile:
     gripper: GripperControlParams | None = None
     task: TaskProfile = field(default_factory=TaskProfile)
 
-    @property
-    def gripper_g2(self) -> GripperControlParams | None:
-        """Deprecated alias for :attr:`gripper` (kept for existing callers)."""
-        return self.gripper
-
 
 XARM6_KP: FloatTuple = (3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0)
 XARM6_KV: FloatTuple = (300.0, 300.0, 200.0, 200.0, 100.0, 100.0)
@@ -120,14 +115,7 @@ _HARDWARE_DYNAMICS_KEYS = frozenset({"xarm5_1305", "xarm6_1305", "uf850", "lite6
 G2_GRIPPER_PARAMS = GripperControlParams(
     family="g2",
     drive_joint="drive_joint",
-    all_joint_names=(
-        "drive_joint",
-        "left_finger_joint",
-        "left_inner_knuckle_joint",
-        "right_outer_knuckle_joint",
-        "right_finger_joint",
-        "right_inner_knuckle_joint",
-    ),
+    all_joint_names=G2_JOINT_NAMES,
     finger_link_names=("left_finger", "right_finger"),
     open_pos=GRIPPER_G2_SIM_OPEN_DRIVE,
     close_pos=GRIPPER_G2_SIM_CLOSE_DRIVE,
@@ -249,7 +237,7 @@ def _arm_params(profile: RobotModelSpec) -> ArmControlParams:
 
 
 def _dynamics_params(profile: RobotModelSpec, arm: ArmControlParams) -> DynamicsValidationParams:
-    from ufactory.dynamics.poses_config import default_configs_named_tuple, stress_configs_for_robot
+    from ufactory.dynamics.poses import default_configs_named_tuple, stress_configs_for_robot
 
     internal_abs = tuple(0.5 for _ in arm.effort_limits)
     yaml_default = default_configs_named_tuple(profile.key)

@@ -28,9 +28,8 @@ def test_pick_place_binds_the_resolved_runtime_hash() -> None:
 
     rl_config = load_pick_place_rl_runtime_config("xarm6")
     assert grasp_env["runtime_config_sha256"] == rl_config.sha256
-    # RL keeps the no-slip pass off for throughput; deterministic pick-place enables it.
     assert grasp_env["noslip_iterations"] == rl_config.simulation.noslip_iterations == PICK_PLACE_RL_NOSLIP_ITERATIONS
-    assert rl_config.sha256 != load_runtime_config("xarm6", task="pick_place").sha256
+    assert rl_config.sha256 == load_runtime_config("xarm6", task="pick_place").sha256
     assert grasp_env["num_obs"] == 70
     assert grasp_env["num_actions"] == 4
     assert grasp_env["workspace_lower"] == pytest.approx([0.10, -0.35, -0.02])
@@ -47,9 +46,9 @@ def test_pick_place_rl_rejects_non_xarm6_robots() -> None:
     [
         {"arm": {"kp": [1] * 6}},
         {"robot": {"urdf": "xarm6_1305.urdf"}},
-        {"task": {"parameters": {"object_spawn_lower_m": [0.2, 0, 0.015]}}},
+        {"task": {"parameters": {"default_ee_position_m": [0.3, 0.0, 0.25]}}},
         {"task": {"parameters": {"object_size_m": [0.04] * 3}}},
-        {"task": {"parameters": {"table_height_m": 0.8}}},
+        {"task": {"parameters": {"fixed_object_position_m": [0.3, 0.1, 0.015]}}},
         {"task": {"parameters": {"episode_length_s": 12}}},
         {"simulation": {"noslip_iterations": 5}},
         {"simulation": {"g2": {"position_mm": 10}}},

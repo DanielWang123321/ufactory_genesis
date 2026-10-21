@@ -13,7 +13,6 @@ import ufactory.visualization.glb as glb
 def clean_patch_state(monkeypatch):
     monkeypatch.setattr(glb, "_REFCOUNT", 0)
     monkeypatch.setattr(glb, "_ORIGINALS", {})
-    monkeypatch.setattr(glb, "_LEGACY_CONTEXTS", [])
     glb._queue().clear()
 
 

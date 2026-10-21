@@ -55,15 +55,24 @@ def test_sim_only_robot_urdf_dynamics_static_checks_have_no_errors():
         assert [issue for issue in issues if issue.severity == "ERROR"] == []
 
 
-def test_xarm7_default_pose_set_is_balanced_hardware_profile():
-    runtime = get_robot_runtime_profile("xarm7")
-    configs = dynamics_default_configs("xarm7", include_stress=True)
+@pytest.mark.parametrize(
+    ("robot_key", "expected_dof"),
+    [
+        ("xarm7", 7),
+        ("uf850", 6),
+        ("lite6", 6),
+        ("xarm5", 5),
+    ],
+)
+def test_non_xarm6_default_pose_set_is_balanced_hardware_profile(robot_key: str, expected_dof: int):
+    runtime = get_robot_runtime_profile(robot_key)
+    configs = dynamics_default_configs(robot_key, include_stress=True)
     names = {name for name, _ in configs}
 
     assert runtime.dynamics.supports_hardware_validation
     assert len(configs) == 20
     assert names == {str(i) for i in range(20)}
-    assert {len(q) for _, q in configs} == {7}
+    assert {len(q) for _, q in configs} == {expected_dof}
     assert len(runtime.dynamics.abs_err_limits) == runtime.model.dof
     assert len(runtime.arm.effort_limits) == runtime.model.dof
     assert len(runtime.arm.kp) == runtime.model.dof
@@ -77,51 +86,6 @@ def test_default_pose_set_is_enterprise_scale_and_excludes_stress_pose():
     assert names == {str(i) for i in range(20)}
     stress_names = {name for name, _ in xarm6_default_dynamics_configs(include_stress=True)}
     assert stress_names == {str(i) for i in range(20)}
-
-
-def test_uf850_default_pose_set_is_balanced_hardware_profile():
-    runtime = get_robot_runtime_profile("uf850")
-    configs = dynamics_default_configs("uf850", include_stress=True)
-    names = {name for name, _ in configs}
-
-    assert runtime.dynamics.supports_hardware_validation
-    assert len(configs) == 20
-    assert names == {str(i) for i in range(20)}
-    assert {len(q) for _, q in configs} == {6}
-    assert len(runtime.dynamics.abs_err_limits) == runtime.model.dof
-    assert len(runtime.arm.effort_limits) == runtime.model.dof
-    assert len(runtime.arm.kp) == runtime.model.dof
-    assert len(runtime.arm.kv) == runtime.model.dof
-
-
-def test_lite6_default_pose_set_is_balanced_hardware_profile():
-    runtime = get_robot_runtime_profile("lite6")
-    configs = dynamics_default_configs("lite6", include_stress=True)
-    names = {name for name, _ in configs}
-
-    assert runtime.dynamics.supports_hardware_validation
-    assert len(configs) == 20
-    assert names == {str(i) for i in range(20)}
-    assert {len(q) for _, q in configs} == {6}
-    assert len(runtime.dynamics.abs_err_limits) == runtime.model.dof
-    assert len(runtime.arm.effort_limits) == runtime.model.dof
-    assert len(runtime.arm.kp) == runtime.model.dof
-    assert len(runtime.arm.kv) == runtime.model.dof
-
-
-def test_xarm5_default_pose_set_is_balanced_hardware_profile():
-    runtime = get_robot_runtime_profile("xarm5")
-    configs = dynamics_default_configs("xarm5", include_stress=True)
-    names = {name for name, _ in configs}
-
-    assert runtime.dynamics.supports_hardware_validation
-    assert len(configs) == 20
-    assert names == {str(i) for i in range(20)}
-    assert {len(q) for _, q in configs} == {5}
-    assert len(runtime.dynamics.abs_err_limits) == runtime.model.dof
-    assert len(runtime.arm.effort_limits) == runtime.model.dof
-    assert len(runtime.arm.kp) == runtime.model.dof
-    assert len(runtime.arm.kv) == runtime.model.dof
 
 
 def test_torque_classification_distinguishes_bias_like_single_joint_failure():
@@ -346,12 +310,6 @@ def test_report_compare_supports_seven_dof():
     assert stats[6]["bias_delta"] == 2
 
 
-def test_non_xarm6_dynamics_configs_match_dof():
-    configs = dynamics_default_configs("xarm7")
-    assert configs
-    assert {len(q) for _, q in configs} == {7}
-
-
 def test_calibrated_urdf_defaults_to_cache(tmp_path: Path):
     kinematics = {
         f"joint{i}": {"x": 0.0, "y": 0.0, "z": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0} for i in range(1, 7)
@@ -400,7 +358,6 @@ def test_run_sim_collision_chain_moves_through_poses_in_order(monkeypatch):
         return 0
 
     session.move_to = move_to
-    session.recover_after_motion_error = lambda **kwargs: True
 
     poses = [
         ("0", np.zeros(6)),
@@ -434,8 +391,6 @@ def test_run_sim_collision_chain_records_failure_and_recovers(monkeypatch):
     session.dof = 6
     session.home_qpos = np.zeros(6)
 
-    recover_calls = {"n": 0}
-
     def move_to(q, *, speed_rad_s, wait, move_strategy):
         del speed_rad_s, wait, move_strategy
         if float(np.asarray(q)[0]) == 0.2:
@@ -450,13 +405,6 @@ def test_run_sim_collision_chain_records_failure_and_recovers(monkeypatch):
         return 0
 
     session.move_to = move_to
-
-    def recover_after_motion_error(**kwargs):
-        del kwargs
-        recover_calls["n"] += 1
-        return True
-
-    session.recover_after_motion_error = recover_after_motion_error
 
     poses = [
         ("0", np.zeros(6)),
@@ -474,4 +422,3 @@ def test_run_sim_collision_chain_records_failure_and_recovers(monkeypatch):
     assert not results[1].passed
     assert results[1].error_code == 22
     assert results[2].passed
-    assert recover_calls["n"] == 1

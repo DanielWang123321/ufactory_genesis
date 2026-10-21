@@ -144,7 +144,6 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
     )
     arm_data = data["arm"]
     arm = ArmControlProfile(
-        home_qpos_rad=_tuple_floats(arm_data["home_qpos_rad"], field="arm.home_qpos_rad", size=dof),
         default_qpos_rad=_tuple_floats(arm_data["default_qpos_rad"], field="arm.default_qpos_rad", size=dof),
         kp=_tuple_floats(arm_data["kp"], field="arm.kp", size=dof),
         kv=_tuple_floats(arm_data["kv"], field="arm.kv", size=dof),
@@ -196,12 +195,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         if any(value <= 0.0 for value in object_size):
             raise ConfigError("task.parameters.object_size_m values must be positive")
         _positive(task_parameters["object_mass_kg"], field="task.parameters.object_mass_kg")
-        position_fields = ["fixed_object_position_m", "fixed_target_position_m", "default_ee_position_m"]
-        if task_name == "pick_place":
-            position_fields.extend(
-                ("object_spawn_lower_m", "object_spawn_upper_m", "target_spawn_lower_m", "target_spawn_upper_m")
-            )
-        for field_name in position_fields:
+        for field_name in ("fixed_object_position_m", "fixed_target_position_m", "default_ee_position_m"):
             _tuple_floats(
                 task_parameters[field_name],
                 field=f"task.parameters.{field_name}",
@@ -210,12 +204,20 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
     if task_name == "pick_place":
         if gripper is None:
             raise ConfigError("pick_place requires a configured gripper")
-        grasp_gap = _positive(task_parameters["grasp_gap_m"], field="task.parameters.grasp_gap_m")
-        if not gripper.closed_gap_m <= grasp_gap <= gripper.open_gap_m:
-            raise ConfigError(
-                "task.parameters.grasp_gap_m must be within the configured gripper gap range "
-                f"[{gripper.closed_gap_m}, {gripper.open_gap_m}]"
-            )
+        _positive(task_parameters["episode_length_s"], field="task.parameters.episode_length_s")
+        _positive(task_parameters["control_dt_s"], field="task.parameters.control_dt_s")
+        ws_lower = _tuple_floats(
+            task_parameters["workspace_lower_m"],
+            field="task.parameters.workspace_lower_m",
+            size=3,
+        )
+        ws_upper = _tuple_floats(
+            task_parameters["workspace_upper_m"],
+            field="task.parameters.workspace_upper_m",
+            size=3,
+        )
+        if any(lower >= upper for lower, upper in zip(ws_lower, ws_upper, strict=True)):
+            raise ConfigError("task.parameters.workspace_lower_m must be below workspace_upper_m on every axis")
     if task_name == "reach":
         _positive(task_parameters["episode_length_s"], field="task.parameters.episode_length_s")
         _positive(task_parameters["control_dt_s"], field="task.parameters.control_dt_s")

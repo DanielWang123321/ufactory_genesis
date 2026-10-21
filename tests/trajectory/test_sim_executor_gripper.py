@@ -14,12 +14,7 @@ from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.trajectory.mirror_executor import gap_m_from_drive
 from ufactory.trajectory.segments import Program, Segment
 from ufactory.trajectory.scene import (
-    LITE6_FINGER_CLOSE_DESCENT,
-    LITE6_FINGER_PAD_BELOW_FC,
-    LITE6_GRASP_LINK6_Z_EXTRA_M,
-    LITE6_GRASP_TABLE_CLEARANCE,
     build_scene,
-    default_grasp_gap_m,
     drive_for_gap_m,
     dry_heights,
 )
@@ -51,14 +46,6 @@ def test_g2_trajectory_and_mirror_use_the_actual_joint_angle(gap_m):
     assert gap_m_from_drive(q, G2_GRIPPER_PARAMS) == pytest.approx(gap_m, abs=1e-12)
 
 
-def test_default_grasp_gaps_match_contact_preload_targets():
-    assert default_grasp_gap_m("xarm5") == pytest.approx(0.022)
-    assert default_grasp_gap_m("xarm6") == pytest.approx(0.022)
-    assert default_grasp_gap_m("xarm7") == pytest.approx(0.022)
-    assert default_grasp_gap_m("uf850") == pytest.approx(0.022)
-    assert default_grasp_gap_m("lite6") == pytest.approx(0.020)
-
-
 def test_scene_rejects_ambiguous_or_invalid_object_contract_before_genesis_init():
     with pytest.raises(ValueError, match="obj_pos_base and obj_xy are mutually exclusive"):
         build_scene(obj_xy=(0.3, 0.0), obj_pos_base=(0.3, 0.0, 0.015))
@@ -74,22 +61,25 @@ def test_g2_scene_rejects_unsafe_substep_size_before_genesis_init() -> None:
 
 
 def test_lite6_default_grasp_height_targets_flat_finger_pad():
+    config = load_runtime_config("lite6")
+    gripper = config.gripper
+    assert gripper is not None
     heights = dry_heights("lite6")
     # link6 height = table clearance + fingertip-plate length + link6->fc offset.
     assert heights.grasp_link6_z == pytest.approx(0.0963)
 
     # Finger-center (fc) height above the table.
     fc_above_table = (
-        LITE6_GRASP_TABLE_CLEARANCE
-        + LITE6_FINGER_CLOSE_DESCENT
-        + LITE6_FINGER_PAD_BELOW_FC
-        + LITE6_GRASP_LINK6_Z_EXTRA_M
+        gripper.grasp_table_clearance_m
+        + gripper.finger_close_descent_m
+        + gripper.finger_pad_below_center_m
+        + gripper.grasp_height_extra_m
     )
     assert fc_above_table == pytest.approx(0.042)
 
     # Positive clearance keeps the low boss/stop region above the cube top while
     # the large flat inner pad still spans the cube sides.
-    cube_size = resolve_pick_place_object_spec(load_runtime_config("lite6")).size_m
+    cube_size = resolve_pick_place_object_spec(config).size_m
     cube_top_below_fc = fc_above_table - cube_size[2]
     assert cube_top_below_fc == pytest.approx(0.012)
     boss_reach_below_fc = 0.0065

@@ -128,9 +128,9 @@ def test_legacy_task_substep_fields_are_rejected(tmp_path: Path, task: str, lega
 @pytest.mark.parametrize(
     "body,match",
     [
-        ("friction_cone: future", "friction cone"),
-        ("contact_resolution: future", "contact resolution"),
-        ("constraint_solver: cg", "constraint solver"),
+        ("friction_cone: future", "friction_cone"),
+        ("contact_resolution: future", "contact_resolution"),
+        ("constraint_solver: cg", "constraint_solver"),
         ("friction_cone: elliptic\n  noslip_iterations: 5", "elliptic friction"),
         ("contact_resolution: signorini", "signorini contact"),
     ],
@@ -153,10 +153,6 @@ def test_all_robots_share_the_30mm_17g_table_object(robot: str):
     for name in (
         "fixed_object_position_m",
         "fixed_target_position_m",
-        "object_spawn_lower_m",
-        "object_spawn_upper_m",
-        "target_spawn_lower_m",
-        "target_spawn_upper_m",
     ):
         assert float(params[name][2]) == pytest.approx(0.015)
 

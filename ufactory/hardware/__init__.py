@@ -12,14 +12,9 @@ from ufactory.hardware.session import (
     build_motion_waypoints,
 )
 from ufactory.hardware.xarm import (
-    MODE_CART_ONLINE_PLANNING,
-    MODE_CART_VEL,
-    MODE_JOINT_ONLINE_PLANNING,
-    MODE_JOINT_VEL,
     MODE_POSITION,
     MODE_SERVO,
     STATE_MOTION,
-    STATE_STOP,
     assert_motion_ready,
     format_arm_status,
     prepare_arm_for_motion,

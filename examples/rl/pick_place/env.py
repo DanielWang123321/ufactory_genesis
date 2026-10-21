@@ -24,6 +24,7 @@ from ufactory.simulation import (
 from ufactory.simulation.g2_adapter import apply_batch_control, configure_g2_drive, measured_gap_mm, pad_centers
 from ufactory.simulation.g2_controller import G2Controller
 from ufactory.simulation.g2_model import G2Model
+from ufactory.training.logic.common import action_penalty as _quadratic_penalty
 from ufactory.training.pick_place_config import (
     PICK_PLACE_ACTION_CONTRACT,
     HOME_EE_POS,
@@ -285,6 +286,9 @@ class XArm6PickPlaceEnv:
             drag_limit=float(env_cfg.get("drag_limit_m", DRAG_LIMIT_M)),
             tilt_limit=float(env_cfg.get("tilt_limit_deg", TILT_LIMIT_DEG)),
             hold_steps=int(env_cfg.get("success_hold_steps", SUCCESS_HOLD_STEPS)),
+            place_clearance=float(env_cfg.get("place_clearance_m", PLACE_CLEARANCE_M)),
+            release_max_height=float(env_cfg.get("release_max_height_m", RELEASE_MAX_HEIGHT_M)),
+            press_limit=float(env_cfg.get("press_limit_m", PRESS_LIMIT_M)),
         )
         self.ep_return = torch.zeros(self.num_envs, device=self.device, dtype=gs.tc_float)
         self.contact_rewarded = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
@@ -471,18 +475,15 @@ class XArm6PickPlaceEnv:
         target_near = torch.exp(-target_error / 0.04)
         target_zone = torch.exp(-(target_error - 0.015).clamp(min=0) / 0.04)
         lifted = self.metrics.ever_lifted_clear.float()
-        place_height_err = (height - PLACE_CLEARANCE_M).clamp(min=0)
+        place_height_err = (height - self.metrics.place_clearance).clamp(min=0)
         both_clear = (self.forces < 0.1).all(-1).float()
         released_clear = self.metrics.release_confirmed.float() * both_clear
         meas_open = ((current_gap - CUBE_SIZE) / (self.pre_grasp_gap_m - CUBE_SIZE)).clamp(0, 1)
-        touchdown_seen = getattr(self.metrics, "touchdown_seen", None)
         at_table = self.metrics.ever_lifted_clear & (
-            (height <= RELEASE_MAX_HEIGHT_M)
-            | (touchdown_seen if touchdown_seen is not None else False)
-            | self.metrics.release_confirmed
+            (height <= self.metrics.release_max_height) | self.metrics.touchdown_seen | self.metrics.release_confirmed
         )
         pad_xy_drift = (pad_xy_err - 0.008).clamp(min=0)
-        if touchdown_seen is not None and hasattr(self, "ee_link"):
+        if hasattr(self, "ee_link"):
             ee_z = self.ee_link.get_pos()[:, 2]
             ref_ee_z = torch.where(self.metrics.touchdown_ee_z > 0, self.metrics.touchdown_ee_z, 0.184)
             has_td_ref = ((self.metrics.touchdown_ee_z > 0) | self.metrics.release_confirmed) & at_table
@@ -499,12 +500,8 @@ class XArm6PickPlaceEnv:
         cmd_open = ((self.gap_cmd - self.close_floor_gap_m) / (self.pre_grasp_gap_m - self.close_floor_gap_m)).clamp(
             0, 1
         )
-        last_actions = getattr(self, "last_actions", None)
-        if last_actions is not None:
-            action_open = (0.5 * (last_actions[:, 3] + 1.0)).clamp(0, 1)
-            open_drive = 0.85 * cmd_open + 0.15 * action_open
-        else:
-            open_drive = cmd_open
+        action_open = (0.5 * (self.last_actions[:, 3] + 1.0)).clamp(0, 1)
+        open_drive = 0.85 * cmd_open + 0.15 * action_open
         release_zone = place_zone * torch.maximum(open_drive, meas_open)
         approach_term = torch.maximum(
             torch.exp(-distance / 0.06) * torch.where(at_table, table_guard, 1.0),
@@ -535,10 +532,9 @@ class XArm6PickPlaceEnv:
     def _action_penalty(self, raw_actions: torch.Tensor) -> torch.Tensor:
         bounded = raw_actions.clamp(-self.action_clip, self.action_clip)
         excess = (raw_actions - bounded).clamp(-5.0, 5.0)
-        penalty = float(self.reward_scales.get("action_penalty", 0.001)) * bounded.square().sum(-1) + float(
+        return float(self.reward_scales.get("action_penalty", 0.001)) * (-_quadratic_penalty(bounded)) + float(
             self.reward_scales.get("action_saturation_penalty", 0.1)
-        ) * excess.square().sum(-1)
-        return penalty
+        ) * (-_quadratic_penalty(excess))
 
     @torch.inference_mode(False)
     @torch.no_grad()

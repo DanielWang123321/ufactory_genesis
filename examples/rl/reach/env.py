@@ -63,7 +63,6 @@ class XArm6ReachEnv:
         self.success_distance_m = float(env_cfg["success_distance_m"])
         if self.success_distance_m != REACH_SUCCESS_DISTANCE_M:
             raise ValueError("reach success_distance_m must be 0.005 (5 mm)")
-        self.success_hold_s = 0.0
         self.target_pos_lower = torch.tensor(env_cfg["target_pos_lower"], device=self.device, dtype=gs.tc_float)
         self.target_pos_upper = torch.tensor(env_cfg["target_pos_upper"], device=self.device, dtype=gs.tc_float)
 
@@ -260,7 +259,6 @@ class XArm6ReachEnv:
         reward, dones, distance_m, success, _timeout = self._outcome()
         done_idx = self._record_completed(dones, distance_m, success)
         if len(done_idx):
-            self._hold_successful_pose(success)
             self.reset_idx(done_idx)
         return self.get_observations(), reward, dones, self.extras
 
@@ -338,15 +336,6 @@ class XArm6ReachEnv:
                 getattr(self, group)[key].copy_(value)
         self.robot.control_dofs_position(self.position_command, self.dof_idx)
         self.target_marker.set_pos(self.target_pos)
-
-    def _hold_successful_pose(self, success: torch.Tensor) -> None:
-        """Keep the reached pose on screen. Extra steps are not part of the episode."""
-        hold_steps = int(round(float(self.success_hold_s) / self.ctrl_dt))
-        if hold_steps <= 0 or not bool(success.any()):
-            return
-        for _ in range(hold_steps):
-            self.robot.control_dofs_position(self.position_command, self.dof_idx)
-            self.scene.step()
 
     def _reward_reach(self) -> torch.Tensor:
         return reward_reach_position(self.ee_link.get_pos(), self.target_pos)

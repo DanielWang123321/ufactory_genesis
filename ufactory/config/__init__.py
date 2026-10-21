@@ -1,4 +1,4 @@
-"""Stable public API for v0.2.5 runtime configuration."""
+"""Structured runtime configuration and asset manifest package."""
 
 from ufactory.config.assets import (
     AssetLayoutError,

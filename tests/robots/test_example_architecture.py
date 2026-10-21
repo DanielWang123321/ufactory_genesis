@@ -89,8 +89,6 @@ def test_public_runtime_has_no_development_imports():
 
     root = Path(__file__).resolve().parents[2]
     for path in (root / "ufactory").rglob("*.py"):
-        if path.name == "legacy_warm_start.py":
-            continue
         for node in ast.walk(ast.parse(path.read_text())):
             if isinstance(node, ast.ImportFrom):
                 assert not (node.module or "").startswith("dev."), path

@@ -67,9 +67,15 @@ class PickPlaceMetrics:
         drag_limit: float = DRAG_LIMIT_M,
         tilt_limit: float = TILT_LIMIT_DEG,
         hold_steps: int = SUCCESS_HOLD_STEPS,
+        place_clearance: float = PLACE_CLEARANCE_M,
+        release_max_height: float = RELEASE_MAX_HEIGHT_M,
+        press_limit: float = PRESS_LIMIT_M,
     ) -> None:
         self.n, self.device = int(n), device
         self.target_tol, self.drag_limit, self.tilt_limit = target_tol, drag_limit, tilt_limit
+        self.place_clearance = float(place_clearance)
+        self.release_max_height = float(release_max_height)
+        self.press_limit = float(press_limit)
         self.required_hold_steps = max(int(hold_steps), math.ceil(0.2 / ctrl_dt))
         self.spawn_xy = torch.zeros(n, 2, device=device)
         self.target_xy = torch.tensor([[TARGET_X, TARGET_Y]], device=device).expand(n, 2)
@@ -165,7 +171,7 @@ class PickPlaceMetrics:
         first_lift_clear = lifted & (~self.ever_lifted_clear)
         self.ever_lifted_clear |= lifted
 
-        supported = (table_force > SUPPORT_FORCE_N) & (self.clearance <= PLACE_CLEARANCE_M)
+        supported = (table_force > SUPPORT_FORCE_N) & (self.clearance <= self.place_clearance)
         first_touchdown = (
             self.ever_lifted_clear
             & supported
@@ -193,10 +199,10 @@ class PickPlaceMetrics:
         self.release_height = torch.where(
             first_release, torch.maximum(self.release_height, self.release_candidate_height), self.release_height
         )
-        self.high_release |= first_release & (self.release_height > RELEASE_MAX_HEIGHT_M + 1e-7)
+        self.high_release |= first_release & (self.release_height > self.release_max_height + 1e-7)
         self.release_confirmed |= first_release
         valid_release = (
-            self.release_confirmed & (~self.high_release) & (self.release_height <= RELEASE_MAX_HEIGHT_M + 1e-7)
+            self.release_confirmed & (~self.high_release) & (self.release_height <= self.release_max_height + 1e-7)
         )
         released = both_clear & (gap >= 0.035) & valid_release
 
@@ -211,7 +217,7 @@ class PickPlaceMetrics:
         self.target_error = torch.linalg.vector_norm(pos[:, :2] - self.target_xy, dim=-1)
         in_target_xy = self.target_error <= self.target_tol
         at_target_table = self.ever_lifted_clear & in_target_xy & supported & (tilt <= self.tilt_limit)
-        press_failed = self.max_press > PRESS_LIMIT_M + 1e-7
+        press_failed = self.max_press > self.press_limit + 1e-7
         collision_failed = self.max_robot_table_force > CONTACT_FORCE_N
         settled = (
             at_target_table

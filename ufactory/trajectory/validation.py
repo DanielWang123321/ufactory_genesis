@@ -2,8 +2,8 @@
 
 These checks cover the light, robot-agnostic contract shared by planners and
 executors: joint-vector dimensionality, Cartesian target shape, optional z-min,
-and gripper segment completeness. Hardware-specific streaming limits remain in
-``real_executor.py``.
+and gripper segment completeness. Hardware-specific streaming limits are
+enforced by :mod:`ufactory.safety.gate` and :mod:`ufactory.trajectory.execution`.
 """
 
 from __future__ import annotations

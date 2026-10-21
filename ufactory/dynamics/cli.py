@@ -39,7 +39,6 @@ from ufactory.dynamics.analysis import (
 )
 from ufactory.dynamics.report import (
     DynamicsSample,
-    TorqueCompareResult,
     ValidationStatus,
     compare_report_records,
     dynamics_report_paths,
@@ -96,7 +95,7 @@ def _display_float(value: object, width: int = 10, precision: int = 3) -> str:
 
 
 def print_compare_table(
-    results: Sequence[DynamicsSample | TorqueCompareResult],
+    results: Sequence[DynamicsSample],
     *,
     runtime_profile: Any | None = None,
 ) -> None:
@@ -109,7 +108,7 @@ def print_compare_table(
     print("-" * 96)
     for r in results:
         summary = torque_summary(r, runtime_profile=runtime_profile)
-        pose_name = r.pose if isinstance(r, DynamicsSample) else r.name
+        pose_name = r.pose
         print(
             f"{pose_name:<20} {r.ee_z_mm:8.1f} {summary['status']:<18} "
             f"{_display_float(summary['torque_l2_err_nm'], width=10)} "
@@ -130,7 +129,7 @@ def print_compare_table(
     print("\n--- Non-PASS pose details ---")
     for r in failures:
         summary = torque_summary(r, runtime_profile=runtime_profile)
-        pose_name = r.pose if isinstance(r, DynamicsSample) else r.name
+        pose_name = r.pose
         reason = summary["status_reason"] or "non-PASS"
         print(f"\n[{pose_name}] {summary['status']}: {reason}")
         print(
@@ -158,7 +157,7 @@ def print_compare_table(
                 f"{_display_float(row['abs_limit_nm'], width=13, precision=3)} "
                 f"{_display_float(row['rel_limit'], width=9, precision=3)}"
             )
-        if not printed and isinstance(r, DynamicsSample) and r.notes:
+        if not printed and r.notes:
             for note in r.notes[:3]:
                 print(f"  note: {note}")
 
@@ -215,7 +214,6 @@ _PD_HOLD_TORQUE_DEF = (
 def _run_genesis_samples(
     scene,
     robot,
-    ee_link,
     dof_idx,
     safe_poses: Sequence[SafePose],
     reference: Any,
@@ -489,7 +487,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
         print("[WARN] Pinocchio reference unavailable; continuing without independent G(q)/M(q)")
 
     print("\n--- Genesis PD hold torques (torques to maintain target joint angles) ---")
-    genesis_data = _run_genesis_samples(scene, robot, ee_link, dof_idx, safe_poses, reference, runtime)
+    genesis_data = _run_genesis_samples(scene, robot, dof_idx, safe_poses, reference, runtime)
 
     session: RealRobotSession | None = None
     results: list[DynamicsSample] = []
@@ -936,7 +934,6 @@ def run_sim_collision_chain(
                     )
                 )
                 print("  FAIL: self-collision error_code=22")
-                session.recover_after_motion_error()
                 continue
             results.append(SimCollisionResult(pose_name=name, passed=True))
             print("  PASS")
@@ -952,7 +949,6 @@ def run_sim_collision_chain(
                 )
             )
             print(f"  FAIL: {exc}")
-            session.recover_after_motion_error()
     return results
 
 

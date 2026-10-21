@@ -506,10 +506,8 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
     from ufactory.trajectory.g2_confirmation import prepare_g2_program
     from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
     from ufactory.trajectory.sim_executor import replay_sim
-    from ufactory.visualization.glb import enable_glb_pbr_surfaces
 
     config = load_runtime_config("xarm6", task="packaging_showcase")
-    enable_glb_pbr_surfaces()
     with GenesisRuntimeManager(config.simulation):
         scene, robot, block, display_layout = build_packaging_scene(show_viewer=False)
         showcase_ctx = init_showcase_robot(robot, display_layout, scene)
@@ -594,3 +592,18 @@ def test_packaging_physics_grasp_and_drop_regression() -> None:
         half_y = display_layout.box_outer[1] / 2.0 - display_layout.box_wall
         assert abs(final[0] - display_layout.box_center_xy[0]) < half_x
         assert abs(final[1] - display_layout.box_center_xy[1]) < half_y
+
+
+@pytest.mark.integration
+def test_packaging_scene_builds_headless_with_shared_object_spec() -> None:
+    from ufactory.manipulation.packaging.scene import build_packaging_scene
+    from ufactory.simulation import GenesisRuntimeManager
+
+    config = load_runtime_config("xarm6")
+    with GenesisRuntimeManager(config.simulation):
+        scene, _robot, block, layout = build_packaging_scene(show_viewer=False)
+        position = block.get_pos()[0].detach().cpu().numpy()
+        assert np.all(np.isfinite(position))
+        assert float(position[2]) == pytest.approx(layout.table_top_z + layout.obj_size[2] / 2.0, abs=1e-4)
+        assert layout.obj_mass_kg == pytest.approx(resolve_manipulation_object_spec(config).mass_kg)
+        del scene

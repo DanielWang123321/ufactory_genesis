@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 
 import numpy as np
 import torch
@@ -14,19 +13,6 @@ from ufactory.robots.paths import robot_urdf
 from ufactory.robots.registry import get_robot_profile, joint_names, robot_cli_choices
 from ufactory.simulation import forward_kinematics, make_rigid_options
 from ufactory.simulation.compat import require_genesis_runtime
-
-
-def quat_to_rpy(quat):
-    w, x, y, z = quat[0], quat[1], quat[2], quat[3]
-    sinr_cosp = 2.0 * (w * x + y * z)
-    cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
-    roll = math.atan2(sinr_cosp, cosr_cosp)
-    sinp = 2.0 * (w * y - z * x)
-    pitch = math.copysign(math.pi / 2, sinp) if abs(sinp) >= 1 else math.asin(sinp)
-    siny_cosp = 2.0 * (w * z + x * y)
-    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
-    yaw = math.atan2(siny_cosp, cosy_cosp)
-    return roll, pitch, yaw
 
 
 def resolve_entity_name(entity, requested_name: str, kind: str) -> str:

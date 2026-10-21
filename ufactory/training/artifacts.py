@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -26,19 +25,15 @@ class ArtifactError(ValueError):
     pass
 
 
-_RUNTIME_ENV_CONTRACT_KEYS = (
+_PICK_PLACE_RUNTIME_ENV_CONTRACT_KEYS = (
     "runtime_config_sha256",
     "physics_profile",
     "g2",
     "g2_physics",
     "episode_length_s",
     "ctrl_dt",
-    "table_height",
-    "default_ee_pos",
     "workspace_lower",
     "workspace_upper",
-    "grasp_center_offset_z",
-    "lift_height_m",
     "place_success_dist_m",
     "success_hold_steps",
     "substeps",
@@ -49,18 +44,27 @@ _RUNTIME_ENV_CONTRACT_KEYS = (
     "contact_resolution",
     "constraint_time_constant_s",
     "use_gjk_collision",
-    "gripper_open_mm",
-    "gripper_close_mm",
-    "obj_size",
     "obj_mass_kg",
-    "fixed_obj_pos",
-    "fixed_target_pos",
-    "fixed_demo_layout",
-    "randomize_target",
-    "obj_spawn_lower",
-    "obj_spawn_upper",
-    "target_spawn_lower",
-    "target_spawn_upper",
+    "task_name",
+    "env_version",
+    "num_obs",
+    "num_actions",
+    "control",
+    "action_scale",
+    "action_clip",
+    "gap_action_scale",
+    "setpoint_leash_m",
+    "pre_grasp_gap_m",
+    "close_floor_gap_m",
+    "reward_gamma",
+    "place_clearance_m",
+    "release_max_height_m",
+    "press_limit_m",
+    "near_table_m",
+    "max_near_table_descent_m_s",
+    "table_overload_margin_n",
+    "drag_limit_m",
+    "tilt_limit_deg",
 )
 _REACH_RUNTIME_ENV_CONTRACT_KEYS = (
     "task_name",
@@ -86,62 +90,14 @@ _REACH_RUNTIME_ENV_CONTRACT_KEYS = (
     "constraint_time_constant_s",
     "use_gjk_collision",
 )
-# Older v3 configs also recorded unused scene and robot settings. Their full
-# file hash is still checked; only values consumed by v3 belong in this contract.
-_PICK_PLACE_V3_UNUSED_KEYS = frozenset(
-    {
-        "table_height",
-        "default_ee_pos",
-        "grasp_center_offset_z",
-        "lift_height_m",
-        "gripper_open_mm",
-        "gripper_close_mm",
-        "obj_size",
-        "fixed_obj_pos",
-        "fixed_target_pos",
-        "fixed_demo_layout",
-        "randomize_target",
-        "obj_spawn_lower",
-        "obj_spawn_upper",
-        "target_spawn_lower",
-        "target_spawn_upper",
-    }
-)
-_PICK_PLACE_V3_RUNTIME_ENV_CONTRACT_KEYS = tuple(
-    key for key in _RUNTIME_ENV_CONTRACT_KEYS if key not in _PICK_PLACE_V3_UNUSED_KEYS
-) + (
-    "task_name",
-    "env_version",
-    "num_obs",
-    "num_actions",
-    "control",
-    "action_scale",
-    "action_clip",
-    "gap_action_scale",
-    "setpoint_leash_m",
-    "pre_grasp_gap_m",
-    "close_floor_gap_m",
-    "reward_gamma",
-    "place_clearance_m",
-    "release_max_height_m",
-    "press_limit_m",
-    "near_table_m",
-    "max_near_table_descent_m_s",
-    "table_overload_margin_n",
-    "drag_limit_m",
-    "tilt_limit_deg",
-)
-_TRANSFERABLE_RUNTIME_ENV_KEYS = frozenset({"fixed_demo_layout"})
 
 
 def runtime_env_contract_keys(env: Mapping[str, Any]) -> tuple[str, ...]:
-    """Retain historical contracts while enforcing the full v3 control contract."""
+    """Return the runtime environment contract keys for the given task."""
 
     if str(env.get("task_name", "")) == "reach":
         return _REACH_RUNTIME_ENV_CONTRACT_KEYS
-    if str(env.get("task_name", "")) == "pick_place":
-        return _PICK_PLACE_V3_RUNTIME_ENV_CONTRACT_KEYS
-    return _RUNTIME_ENV_CONTRACT_KEYS
+    return _PICK_PLACE_RUNTIME_ENV_CONTRACT_KEYS
 
 
 def _plain(value: Any) -> Any:
@@ -435,9 +391,6 @@ def validate_checkpoint_artifacts(
     expected_robot_key: str | None = None,
     expected_runtime_config_sha256: str | None = None,
     expected_runtime_env: Mapping[str, Any] | None = None,
-    allowed_runtime_env_mismatches: Collection[str] = (),
-    allow_physics_transfer: bool = False,
-    full_resume: bool = False,
 ) -> tuple[dict[str, Any], CheckpointManifest]:
     checkpoint = Path(checkpoint_path)
     config = load_training_config(config_path)
@@ -465,25 +418,14 @@ def validate_checkpoint_artifacts(
     if env.get("task_name") == "pick_place" and env.get("env_version") == PICK_PLACE_ENV_VERSION:
         if manifest.executor_action_contract != PICK_PLACE_ACTION_CONTRACT:
             failures.append("pick-place v3 action contract (retrain the policy)")
-    physics_changed = config["task"] == "pick_place" and env.get("physics_profile") != G2_PHYSICS_PROFILE
-    if physics_changed and full_resume:
-        failures.append("old G2 physics checkpoint cannot fully resume training")
-    elif physics_changed and not allow_physics_transfer:
-        failures.append("G2 physics version (use --allow-physics-transfer for evaluation)")
+    if config["task"] == "pick_place" and env.get("physics_profile") != G2_PHYSICS_PROFILE:
+        failures.append("G2 physics version (retrain the policy)")
     if config["task"] == "reach" and env.get("success_distance_m") != REACH_SUCCESS_DISTANCE_M:
         failures.append("reach success_distance_m (5 mm required)")
-    if (
-        not (physics_changed and allow_physics_transfer)
-        and expected_runtime_config_sha256 is not None
-        and env.get("runtime_config_sha256") != str(expected_runtime_config_sha256)
+    if expected_runtime_config_sha256 is not None and env.get("runtime_config_sha256") != str(
+        expected_runtime_config_sha256
     ):
         failures.append("runtime config hash")
-    allowed_mismatches = frozenset(str(key) for key in allowed_runtime_env_mismatches)
-    unsupported_allowed = sorted(allowed_mismatches - _TRANSFERABLE_RUNTIME_ENV_KEYS)
-    if unsupported_allowed:
-        raise ArtifactError("unsupported allowed runtime config mismatch keys: " + ", ".join(unsupported_allowed))
-    if allowed_mismatches and expected_runtime_env is None:
-        raise ArtifactError("allowed runtime config mismatches require expected_runtime_env")
     if expected_runtime_env is not None:
         if expected_task == "reach" and env.get("env_version") != expected_runtime_env.get("env_version"):
             raise ArtifactError(
@@ -496,25 +438,7 @@ def validate_checkpoint_artifacts(
         else:
             saved_contract = runtime_env_contract(env)
             expected_contract = runtime_env_contract(expected_runtime_env)
-            mismatched_keys = [
-                key
-                for key in saved_keys
-                if key not in allowed_mismatches
-                and not (
-                    physics_changed
-                    and allow_physics_transfer
-                    and key
-                    in {
-                        "physics_profile",
-                        "runtime_config_sha256",
-                        "g2",
-                        "g2_physics",
-                        "constraint_time_constant_s",
-                        "noslip_iterations",
-                    }
-                )
-                and saved_contract.get(key) != expected_contract.get(key)
-            ]
+            mismatched_keys = [key for key in saved_keys if saved_contract.get(key) != expected_contract.get(key)]
             if mismatched_keys:
                 failures.append(f"runtime config body ({', '.join(mismatched_keys)})")
     if int(env["num_obs"]) != manifest.observation_dim or int(env["num_actions"]) != manifest.action_dim:
@@ -534,9 +458,6 @@ def validate_and_load_rsl_checkpoint(
     expected_robot_key: str | None = None,
     expected_runtime_config_sha256: str | None = None,
     expected_runtime_env: Mapping[str, Any] | None = None,
-    allowed_runtime_env_mismatches: Collection[str] = (),
-    allow_physics_transfer: bool = False,
-    full_resume: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any], CheckpointManifest]:
     """Validate a complete artifact bundle before safely loading RSL-RL weights.
 
@@ -553,9 +474,6 @@ def validate_and_load_rsl_checkpoint(
         expected_robot_key=expected_robot_key,
         expected_runtime_config_sha256=expected_runtime_config_sha256,
         expected_runtime_env=expected_runtime_env,
-        allowed_runtime_env_mismatches=allowed_runtime_env_mismatches,
-        allow_physics_transfer=allow_physics_transfer,
-        full_resume=full_resume,
     )
 
     # Keep torch optional for configuration-only users and lightweight CI

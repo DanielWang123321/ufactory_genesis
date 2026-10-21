@@ -64,9 +64,6 @@ rl = [
     "rsl-rl-lib>=5.4.2",
     "tensorboard",
 ]
-showcase = [
-    "scipy>=1.11",
-]
 [project.scripts]
 dynamics-sim-check = "ufactory.dynamics.cli:cli_sim_check"
 dynamics-sim-collision-check = "ufactory.dynamics.cli:cli_sim_collision_check"
@@ -106,13 +103,11 @@ omit = [
     "ufactory/trajectory/g2_replay.py",
     "ufactory/trajectory/ik.py",
     "ufactory/trajectory/mirror_executor.py",
-    "ufactory/trajectory/real_executor.py",
     "ufactory/trajectory/scene.py",
     "ufactory/trajectory/sim_executor.py",
     "ufactory/trajectory/mirror_process.py",
     "ufactory/training/logic/*",
     "ufactory/training/runner.py",
-    "ufactory/visualization/bio_gripper_g2_viewer.py",
     "ufactory/visualization/gripper_g2_viewer.py",
     "ufactory/visualization/lite6_gripper_viewer.py",
     "ufactory/visualization/robot_viewer.py",

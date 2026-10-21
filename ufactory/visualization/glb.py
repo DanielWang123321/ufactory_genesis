@@ -12,7 +12,6 @@ _LOCK = threading.RLock()
 _LOCAL = threading.local()
 _REFCOUNT = 0
 _ORIGINALS: dict[str, Any] = {}
-_LEGACY_CONTEXTS: list[Any] = []
 
 
 def _queue() -> list[Any]:
@@ -146,23 +145,6 @@ def glb_pbr_surfaces() -> Iterator[None]:
             _REFCOUNT -= 1
             if _REFCOUNT == 0:
                 _restore_patch()
-
-
-def enable_glb_pbr_surfaces() -> None:
-    """Legacy explicit acquire; new code must prefer ``with glb_pbr_surfaces()``."""
-
-    context = glb_pbr_surfaces()
-    context.__enter__()
-    _LEGACY_CONTEXTS.append(context)
-
-
-def disable_glb_pbr_surfaces() -> None:
-    """Release the most recent legacy acquire."""
-
-    if not _LEGACY_CONTEXTS:
-        return
-    context = _LEGACY_CONTEXTS.pop()
-    context.__exit__(None, None, None)
 
 
 def glb_view_surface() -> Any:

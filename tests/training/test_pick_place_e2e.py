@@ -43,6 +43,7 @@ def controller(monkeypatch):
     env.ee_link = SimpleNamespace(get_pos=lambda: env.ee_setpoint.clone())
     env.robot = SimpleNamespace(control_dofs_position=lambda *args: None)
     env.g2_controller = SimpleNamespace(command=lambda *args: None)
+    env.last_actions = torch.zeros(2, 4)
     env._solve_ik = lambda target: (env.q_target.clone(), torch.zeros(2, dtype=torch.bool))
     monkeypatch.setattr(module, "apply_batch_control", lambda *args: None)
     return env
@@ -90,8 +91,12 @@ def test_approach_potential_prefers_open_gap_until_grasp_alignment(monkeypatch):
         max_held_z=torch.full((2,), 0.015),
         ever_lifted_clear=torch.zeros(2, dtype=torch.bool),
         release_confirmed=torch.zeros(2, dtype=torch.bool),
+        touchdown_seen=torch.zeros(2, dtype=torch.bool),
+        touchdown_ee_z=torch.zeros(2),
         hold_steps=torch.zeros(2, dtype=torch.long),
         required_hold_steps=10,
+        place_clearance=0.002,
+        release_max_height=0.003,
     )
     env.measured_gap = lambda: torch.tensor([0.05, 0.012])
     potential = env._potential()
@@ -200,7 +205,7 @@ def artifact(tmp_path: Path, env: dict, contract: str):
     return checkpoint, config
 
 
-def test_old_phase_checkpoint_requires_retraining_even_with_physics_bypass(tmp_path):
+def test_old_phase_checkpoint_requires_retraining(tmp_path):
     env = {"env_version": 2, "num_obs": 42, "num_actions": 4, "physics_profile": G2_PHYSICS_PROFILE}
     checkpoint, config = artifact(tmp_path, env, "phase_guarded_cartesian_and_g2_gap_delta")
     with pytest.raises(ArtifactError, match="v3.*retrain"):
@@ -209,7 +214,6 @@ def test_old_phase_checkpoint_requires_retraining_even_with_physics_bypass(tmp_p
             config,
             expected_task="pick_place",
             expected_runtime_env={"env_version": 3},
-            allow_physics_transfer=True,
         )
 
 
@@ -245,20 +249,12 @@ def test_v3_manifest_rejects_wrong_executor(tmp_path):
         validate_checkpoint_artifacts(checkpoint, config)
 
 
-def test_existing_v3_checkpoint_loads_after_unused_config_fields_are_removed(tmp_path):
+def test_v3_checkpoint_loads_when_contract_matches(tmp_path):
     from ufactory.training import build_pick_place_task_configs, validate_and_load_rsl_checkpoint
 
     recipe = Path(__file__).resolve().parents[2] / "examples/rl/pick_place/recipe.yaml"
     expected, _, _ = build_pick_place_task_configs("xarm6", recipe_path=recipe)
-    old_env = {
-        **expected,
-        "table_height": 0.4,
-        "obj_size": [0.03] * 3,
-        "obj_spawn_lower": [0.28, -0.05, 0.015],
-        "fixed_demo_layout": True,
-        "randomize_target": False,
-    }
-    checkpoint, config = artifact(tmp_path, old_env, PICK_PLACE_ACTION_CONTRACT)
+    checkpoint, config = artifact(tmp_path, expected, PICK_PLACE_ACTION_CONTRACT)
     state, saved, manifest = validate_and_load_rsl_checkpoint(
         checkpoint,
         config,
@@ -267,12 +263,73 @@ def test_existing_v3_checkpoint_loads_after_unused_config_fields_are_removed(tmp
         expected_runtime_config_sha256=expected["runtime_config_sha256"],
     )
     assert state == {"actor_state_dict": {}, "critic_state_dict": {}}
-    assert saved["env"] == old_env
+    assert saved["env"] == expected
     assert manifest.executor_action_contract == PICK_PLACE_ACTION_CONTRACT
     with checkpoint.open("ab") as stream:
         stream.write(b"tampered")
     with pytest.raises(ArtifactError, match="checkpoint hash"):
         validate_checkpoint_artifacts(checkpoint, config, expected_runtime_env=expected)
+
+
+def test_public_pick_place_policy_samples_stay_finite_and_bounded() -> None:
+    from importlib import metadata
+    from packaging.version import Version
+    from tensordict import TensorDict
+    from ufactory.training import load_training_recipe
+
+    pytest.importorskip("rsl_rl")
+    try:
+        version = Version(metadata.version("rsl-rl-lib"))
+    except metadata.PackageNotFoundError:
+        pytest.skip("rsl-rl-lib is not installed")
+    if version < Version("5.3.0"):
+        pytest.skip("requires rsl-rl-lib >= 5.3")
+
+    from rsl_rl.models import MLPModel
+
+    recipe = load_training_recipe(Path(__file__).resolve().parents[2] / "examples/rl/pick_place/recipe.yaml")
+    obs = TensorDict({"policy": torch.randn(4096, 70)}, batch_size=[4096])
+    actor_cfg = deepcopy(recipe["train"]["actor"])
+    assert actor_cfg.pop("class_name") == "MLPModel"
+    actor = MLPModel(
+        obs,
+        recipe["train"]["obs_groups"],
+        "actor",
+        output_dim=4,
+        **actor_cfg,
+    )
+    stochastic = actor(obs, stochastic_output=True).clamp(-1.0, 1.0)
+    deterministic = actor(obs, stochastic_output=False).clamp(-1.0, 1.0)
+    assert stochastic.shape == (4096, 4)
+    assert torch.isfinite(stochastic).all()
+    assert torch.isfinite(deterministic).all()
+    assert torch.all((stochastic >= -1.0) & (stochastic <= 1.0))
+    assert torch.all((deterministic >= -1.0) & (deterministic <= 1.0))
+
+
+def test_fixed_learning_rate_guard_checks_every_update() -> None:
+    from examples.rl.pick_place.train import _install_fixed_learning_rate_guard
+
+    parameter = torch.nn.Parameter(torch.tensor([0.0]))
+    optimizer = torch.optim.Adam([parameter], lr=3e-5)
+    algorithm = SimpleNamespace(
+        learning_rate=3e-5,
+        optimizer=optimizer,
+        update=lambda: "ok",
+    )
+    runner = SimpleNamespace(alg=algorithm)
+    cfg = {"algorithm": {"schedule": "fixed", "learning_rate": 3e-5}}
+    _install_fixed_learning_rate_guard(runner, cfg)
+    assert runner.alg.update() == "ok"
+
+    def changes_rate() -> None:
+        runner.alg.learning_rate = 1e-3
+        optimizer.param_groups[0]["lr"] = 1e-3
+
+    runner.alg.update = changes_rate
+    _install_fixed_learning_rate_guard(runner, cfg)
+    with pytest.raises(RuntimeError, match="fixed learning rate changed after"):
+        runner.alg.update()
 
 
 def test_checkpoint_ranking_and_acceptance_use_pressing():

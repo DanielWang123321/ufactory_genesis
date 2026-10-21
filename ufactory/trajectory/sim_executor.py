@@ -377,7 +377,7 @@ def _assert_finite_replay_state(ctx: TrajSceneContext, *, phase: str, tick: int)
     for name, value in fields.items():
         tensor = torch.as_tensor(value)
         if not bool(torch.isfinite(tensor).all().item()):
-            raise RuntimeError(f"G2 physical replay produced NaN or Inf in {name} at {phase} tick {tick}")
+            raise RuntimeError(f"Physical replay produced NaN or Inf in {name} at {phase} tick {tick}")
 
 
 def _step(

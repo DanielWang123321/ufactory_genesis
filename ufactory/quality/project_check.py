@@ -80,7 +80,7 @@ PIP_AUDIT_IGNORED_VULNS = (
     "PYSEC-2026-2689",  # onnx
 )
 
-UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "showcase", "dev")
+UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "dev")
 
 
 @dataclass

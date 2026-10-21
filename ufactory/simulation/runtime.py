@@ -106,7 +106,3 @@ class GenesisRuntimeManager(AbstractContextManager["GenesisRuntimeManager"]):
             if self.__class__._active is self:
                 self.__class__._active = None
         return None
-
-    def assert_compatible(self, config: SimulationConfig) -> None:
-        if config != self.config:
-            raise GenesisRuntimeError("scene simulation config differs from active Genesis runtime")

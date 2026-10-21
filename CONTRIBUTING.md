@@ -21,10 +21,9 @@ pip install -e ".[sim,dev]"
 # Optional: Pinocchio for dynamics unit tests in the fast tier
 pip install -e ".[dynamics,dev]"
 
-# Optional: real robot / RL library APIs / showcase workflows
+# Optional: real robot / RL library APIs
 pip install -e ".[real]"
-pip install -e ".[sim,rl]"   # public fixed-layout RL example + ufactory.training
-pip install -e ".[showcase]"
+pip install -e ".[sim,rl]"   # public Reach + Pick-and-Place RL examples + ufactory.training
 ```
 
 The `[sim]` extra requires `genesis-world>=1.4.2` (see also `requirements.txt`). The tracked lock file pins the **reference baseline** Genesis World 1.4.4 and Quadrants 1.3.3; `[rl]` requires `rsl-rl-lib>=5.4.2`, and the lock file pins 5.4.2. Genesis 1.4.2 brings Quadrants 1.3.0, and Genesis 1.4.3 and later bring Quadrants 1.3.3. Genesis 1.4.1 and older are unsupported. 1.4.2 and 1.4.3 still run and emit one warning. Newer releases must pass runtime hook checks and the maintainer sim/hardware checks before they are treated as a verified baseline. Install Genesis from PyPI or follow platform notes at https://genesis-world.readthedocs.io/.
@@ -92,14 +91,14 @@ Tests are grouped under `tests/` by `ufactory` module:
 |--------------|--------|----------|
 | `tests/robots/` | `ufactory.robots`, kinematics SN, assets | `test_robot_registry.py`, `test_asset_integrity.py` |
 | `tests/config/` | `ufactory.config` | `test_runtime_config.py` |
-| `tests/safety/` | `ufactory.safety` | `test_gate_and_approval.py`, `test_models.py` |
+| `tests/safety/` | `ufactory.safety` | `test_gate_failures.py`, `test_models.py` |
 | `tests/kinematics/` | `ufactory.kinematics` | `test_pinocchio_pose_ik.py`, `test_strict_calibration.py` |
 | `tests/dynamics/` | `ufactory.dynamics` | `test_dynamics_validation.py`, `test_dynamics_sim_regression.py` |
 | `tests/hardware/` | `ufactory.hardware` | `test_real_robot_session.py`, `test_xarm6_real.py` |
 | `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
 | `tests/training/` | `ufactory.training` | `test_artifacts.py`, `test_public_rl_example.py`, `test_recipe.py`, `test_pick_place_e2e.py`, `test_runner.py` |
 | `tests/visualization/` | `ufactory.visualization` | `test_pbr_scope.py` |
-| `tests/manipulation/` | `ufactory.manipulation` | `test_pick_place_contract.py`, `test_commands.py` |
+| `tests/manipulation/` | `ufactory.manipulation` | `test_commands.py`, `test_packaging_drop.py` |
 
 - Unmarked files — unit / mock tests (fast tier). Artifact integrity and command-helper tests run without Torch; serializer and simulation tests require their owning optional dependencies.
 - `tests/robots/test_representative_example_smoke.py` — xArm6 representative integration smoke (examples CLI)
@@ -116,7 +115,7 @@ Tests are grouped under `tests/` by `ufactory` module:
 
 Do not commit RL policy weights or checkpoints. Users train their own policies; keep training artifacts under the Git-ignored `outputs/rl/` directory.
 
-The public release contains final URDF, STL meshes, and GLB visual meshes needed by users and tests. Registered arm URDFs use `meshes/<variant>/visual/*.stl` for link collision (not OBJ; public `collision/**/*.obj` is forbidden). Unused per-arm collision shells and Lite6 finger GLBs have been removed; historical assets remain available in Git. Raw/source GLBs, relocalize metrics, and vendor/combo generation scripts are internal maintenance material and are ignored from the public source tree.
+The public release contains final URDF, STL meshes, and GLB visual meshes needed by users and tests. Registered arm URDFs use selective convex-hull STL meshes under `meshes/<variant>/collision/<robot>_<link>_col_<nn>.stl` for link collision (not OBJ; public `collision/**/*.obj` is forbidden). Unused per-arm collision shells and Lite6 finger GLBs have been removed; historical assets remain available in Git. Raw/source GLBs, relocalize metrics, and vendor/combo generation scripts are internal maintenance material and are ignored from the public source tree.
 
 Before release, run the fast tier plus the asset integrity tests. They verify every public URDF mesh reference resolves and prevent raw/source GLB intermediates from returning to the public file set.
 
@@ -140,8 +139,7 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
 | `examples/` | Task-oriented visualization, kinematics, pick_place, and packaging entries |
-| `examples/rl/pick_place/` | Linux/NVIDIA fixed-layout pure-PPO training, evaluation, visualization, and recipe |
-| `/rl/` | Gitignored maintainer-only experiment archive; never a public dependency |
+| `examples/rl/` | Linux/NVIDIA Reach and Pick-and-Place PPO training, evaluation, visualization, and recipes |
 | `scripts/` | User helpers and maintainer tools (see `scripts/README.md`) |
 | `tests/` | Contributor pytest suite (not required for library use) |
 

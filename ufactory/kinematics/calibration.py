@@ -11,10 +11,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Mapping
 
-from ufactory.robots.paths import PROJECT_ROOT, kinematics_user_dir, xarm6_urdf
+from ufactory.robots.paths import PROJECT_ROOT, kinematics_user_dir
 from ufactory.robots.registry import get_robot_profile
-
-DEFAULT_XARM6_URDF = xarm6_urdf()
 
 # SN positions 3-6 (1-based) = four-digit model code, e.g. XI130506... -> 1305
 XARM_KINEMATICS_MIN_SN_MODEL_CODE = 1304  # xarm5/6/7: code < 1304 => no compensation
@@ -139,26 +137,6 @@ def load_kinematics_calibration(
         source_path=yaml_path,
         sha256=_sha256(yaml_path),
     )
-
-
-def load_kinematics_yaml(
-    kinematics_yaml_path: str,
-    joint_count: int | None = None,
-) -> dict[str, dict[str, float]]:
-    """Load strict schema-v1 joint offsets (deprecated narrow convenience API).
-
-    The robot is inferred only from the exact ``<robot>_...`` filename prefix;
-    ambiguous filenames are rejected.  New code should use
-    :func:`load_kinematics_calibration` to also retain identity and hashes.
-    """
-    path = Path(kinematics_yaml_path).expanduser().resolve()
-    candidates = [name for name in ("xarm5", "xarm6", "xarm7", "uf850", "lite6") if path.name.startswith(f"{name}_")]
-    if len(candidates) != 1:
-        raise ValueError(f"cannot infer exact robot from calibration filename: {path.name}")
-    profile = get_robot_profile(candidates[0])
-    if joint_count is not None and int(joint_count) != profile.dof:
-        raise ValueError(f"joint_count {joint_count} does not match {profile.key} DOF {profile.dof}")
-    return load_kinematics_calibration(str(path), robot_key=profile.key).joints
 
 
 def find_kinematics_yaml(

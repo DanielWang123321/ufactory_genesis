@@ -25,20 +25,6 @@ lite6_gripper/
 │   └── visual/                           # GLB 视觉网格
 ```
 
-## Collision 检查
-
-```bash
-# 仅夹爪，collision 网格循环开合
-python dev/ref_scripts/view_accessory_collision.py --accessory lite6-gripper --movable --gripper-demo
-
-# Lite6 + Lite6 Gripper，collision 网格循环开合
-python dev/ref_scripts/view_pose_collision.py --robot lite6 --pose 4 --lite6-gripper --movable --gripper-demo
-
-# 固定开/合两态对比
-python dev/ref_scripts/view_pose_collision.py --robot lite6 --pose 4 --lite6-gripper --movable --gripper-state open
-python dev/ref_scripts/view_pose_collision.py --robot lite6 --pose 4 --lite6-gripper --movable --gripper-state closed
-```
-
 ## Source / License
 
 - 模板与网格源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。

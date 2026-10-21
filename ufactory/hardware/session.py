@@ -22,7 +22,6 @@ from ufactory.hardware.xarm import (
 )
 
 DEFAULT_GRAVITY_DIRECTION = [0.0, 0.0, -1.0]
-HOME_Q = np.zeros(6, dtype=np.float64)
 MOVE_STRATEGY_AXIS_SEQUENTIAL = "axis-sequential"
 MOVE_STRATEGY_DIRECT = "direct"
 MOVE_STRATEGIES = (MOVE_STRATEGY_AXIS_SEQUENTIAL, MOVE_STRATEGY_DIRECT)
@@ -56,8 +55,6 @@ class RealRobotSample:
     tau_direct_std: np.ndarray | None = None
     n_samples: int = 1
     duration_s: float = 0.0
-    temperature: np.ndarray | None = None
-    runtime_s: float | None = None
 
 
 class RobotMotionError(RuntimeError):
@@ -183,11 +180,6 @@ class RealRobotSession:
         self.arm.set_simulation_robot(on_off=True)
         self.arm.set_self_collision_detection(True)
 
-    def recover_after_motion_error(self, *, retries: int = 5) -> bool:
-        """v0.2.5 never performs automatic controller recovery."""
-        del retries
-        return False
-
     def print_config(self) -> None:
         arm = self.arm
         print(f"SDK firmware   : {arm.version}")
@@ -303,8 +295,6 @@ class RealRobotSession:
             tau_direct_std=tau_direct_std,
             n_samples=len(efforts),
             duration_s=duration_s,
-            temperature=None,
-            runtime_s=None,
         )
 
     def collect_hold_timeseries(
@@ -432,15 +422,3 @@ class RealRobotSession:
 
     def disconnect(self) -> None:
         self.arm.disconnect()
-
-
-def sdk_fk_ee_z_mm(arm, q: Sequence[float]) -> float:
-    """EE z in mm from SDK FK (simulation mode not required)."""
-    code, pose = arm.get_forward_kinematics(
-        angles=list(q),
-        input_is_radian=True,
-        return_is_radian=True,
-    )
-    if code != 0:
-        raise RuntimeError(f"SDK FK failed with code {code}")
-    return float(pose[2])

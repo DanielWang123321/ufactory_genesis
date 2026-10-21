@@ -6,7 +6,6 @@ and drop it into the configured open cardboard box.
 Usage:
     export NUMBA_CACHE_DIR=~/.cache/numba
     # Windows PowerShell: $env:NUMBA_CACHE_DIR="$env:USERPROFILE\\.cache\\numba"
-    python scripts/generate_showcase_textures.py   # first time only
     ufactory-packaging-showcase --robot xarm6 --mode sim
     ufactory-packaging-showcase --robot lite6 --mode sim --cycles 3
     # Without a Genesis-supported GPU:
@@ -33,7 +32,6 @@ from ufactory.grippers import create_gripper_adapter
 from ufactory.grippers.g2 import (
     GRIPPER_G2_SIM_OPEN_DRIVE as GRIPPER_OPEN,
     GRIPPER_G2_SIM_CLOSE_DRIVE as GRIPPER_CLOSE,
-    gripper_g2_gap_m_to_sim_drive,
 )
 from ufactory.manipulation.packaging.core import build_packaging_program, packaging_layout
 from ufactory.manipulation.packaging.scene import (
@@ -51,31 +49,8 @@ from ufactory.trajectory.scene import TrajSceneContext
 from ufactory.trajectory.sim_executor import SimReport, replay_sim
 from ufactory.visualization.viewer import start_deferred_viewer
 
-GRIPPER_OPEN_GAP_M = 0.084
-GRASP_SQUEEZE_GAP_MARGIN = 0.0  # Flush with the block's pad contact surfaces.
 SIM_DT = 0.02
 SETTLE_STEPS = 40
-# The shared trajectory keeps the production/dry-run G2 timing. Genesis needs
-# the open target to change in one control tick for this high-clearance drop;
-# streaming intermediate targets lets the curved linkage pads sweep across the
-# cube while it starts falling and adds a large lateral impulse. The joints
-# still open through their configured PD/force limits after the target step.
-# This override is limited to the showcase and leaves every non-Genesis path
-# unchanged.
-SIM_RELEASE_DURATION_S = SIM_DT
-# Ease most of the grasp preload at the box center before commanding full
-# open. This remains below the 30 mm cube width in planned gap coordinates,
-# while the physical linkage starts opening visibly before gravity takes over.
-SIM_PRE_RELEASE_RELAX_GAP_M = 0.029
-SIM_PRE_RELEASE_RELAX_DURATION_S = 0.2
-ALL_GRIPPER_JOINTS = (
-    "drive_joint",
-    "left_finger_joint",
-    "left_inner_knuckle_joint",
-    "right_outer_knuckle_joint",
-    "right_finger_joint",
-    "right_inner_knuckle_joint",
-)
 
 
 @dataclass
@@ -97,90 +72,6 @@ class ShowcaseRobotCtx:
     gripper_initial_open_clearance_m: float = 0.0
     home_settle_steps: int = SETTLE_STEPS
     g2_controller: object | None = None
-
-
-def gripper_drive_for_gap(gap_m: float) -> float:
-    """Map desired two-finger gap (m) to drive_joint command."""
-    return gripper_g2_gap_m_to_sim_drive(gap_m)
-
-
-def grasp_gripper_drive(obj_size: tuple[float, float, float]) -> float:
-    """Partial close target for a block grasped with gripper pointing down (Y axis)."""
-    obj_width = obj_size[1]
-    target_gap = max(0.0, obj_width + GRASP_SQUEEZE_GAP_MARGIN)
-    return gripper_drive_for_gap(target_gap)
-
-
-def collect_gripper_snapshot(robot) -> dict:
-    """All gripper joint q/qd plus knuckle link poses — linkage whip diagnostics."""
-    joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
-    joints: dict[str, dict[str, float]] = {}
-    drive_q: float | None = None
-    max_qd = 0.0
-    max_mimic_err = 0.0
-    for name in ALL_GRIPPER_JOINTS:
-        joint = joint_map.get(name)
-        if joint is None:
-            continue
-        idx = joint.dofs_idx_local[0]
-        q = robot.get_dofs_position()[0, idx].item()
-        qd = robot.get_dofs_velocity()[0, idx].item()
-        joints[name] = {"q": q, "qd": qd}
-        max_qd = max(max_qd, abs(qd))
-        if name == "drive_joint":
-            drive_q = q
-    if drive_q is not None:
-        for name, state in joints.items():
-            if name != "drive_joint":
-                max_mimic_err = max(max_mimic_err, abs(state["q"] - drive_q))
-    knuckles: dict[str, list[float]] = {}
-    for link_name in (
-        "left_outer_knuckle",
-        "left_inner_knuckle",
-        "right_outer_knuckle",
-        "right_inner_knuckle",
-    ):
-        pos = robot.get_link(link_name).get_pos()[0].cpu().tolist()
-        knuckles[link_name] = pos
-    return {
-        "joints": joints,
-        "max_qd": max_qd,
-        "max_mimic_err": max_mimic_err,
-        "knuckles": knuckles,
-    }
-
-
-def collect_pose_snapshot(robot, layout) -> dict:
-    """Return link6 / finger poses and arm qpos for keyframe metadata."""
-    runtime = get_robot_runtime_profile("xarm6")
-    ik_link = robot.get_link(runtime.arm.ee_link)
-    left_finger = robot.get_link("left_finger")
-    right_finger = robot.get_link("right_finger")
-    arm_dof_idx = [robot.get_joint(name).dofs_idx_local[0] for name in runtime.arm.joint_names]
-    gripper_dof_idx = [robot.get_joint("drive_joint").dofs_idx_local[0]]
-
-    link6 = ik_link.get_pos()[0].cpu().tolist()
-    left = left_finger.get_pos()[0].cpu().tolist()
-    right = right_finger.get_pos()[0].cpu().tolist()
-    finger_center_z = (left[2] + right[2]) / 2
-    finger_y_gap_mm = abs(left[1] - right[1]) * 1000.0
-    arm_q = robot.get_dofs_position()[0, arm_dof_idx].cpu().tolist()
-    grip_q = robot.get_dofs_position()[0, gripper_dof_idx[0]].item()
-    table_z = layout.table_top_z
-
-    return {
-        "link6_pos": link6,
-        "left_finger_pos": left,
-        "right_finger_pos": right,
-        "finger_center_z": finger_center_z,
-        "finger_y_gap_mm": finger_y_gap_mm,
-        "table_top_z": table_z,
-        "link6_above_table_mm": (link6[2] - table_z) * 1000.0,
-        "finger_above_table_mm": (finger_center_z - table_z) * 1000.0,
-        "arm_qpos_deg": [math.degrees(q) for q in arm_q],
-        "gripper_q": grip_q,
-        "gripper_detail": collect_gripper_snapshot(robot),
-    }
 
 
 def _scale_steps(steps: int, speed: float) -> int:
@@ -636,8 +527,7 @@ def run_pick_place_cycle(
         program = _with_sim_release_timing(program, speed=speed, task_layout=task_layout)
 
     # Preflight the exact built model and executable program.
-    from ufactory.manipulation.packaging.safety import build_packaging_backends
-    from ufactory.manipulation.commands import write_json
+    from ufactory.manipulation.commands import build_packaging_backends, write_json
     from ufactory.manipulation.packaging.core import packaging_scene_sha256
     from ufactory.trajectory.preflight import create_safety_gate
     from ufactory.trajectory.g2_replay import save_sim_report
@@ -746,17 +636,6 @@ def _cycle_indices(cycle_limit: int) -> Iterator[int]:
     yield from range(1, cycle_limit + 1)
 
 
-def _capture_keyframes_interactive(scene, robot, block, layout, speed: float, ctx: ShowcaseRobotCtx) -> None:
-    """Capture startup keyframes using the interactive viewer camera."""
-    out_dir = Path(__file__).resolve().parents[3] / "debug" / "showcase_keyframes"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\nCapturing keyframes to {out_dir} (viewer open; inspect then Ctrl+C)")
-
-    hold_robot_home(robot, scene, ctx, steps=_scale_steps(SETTLE_STEPS, speed))
-    run_pick_place_cycle(scene, robot, block, layout, speed=speed, ctx=ctx, stop_after_phase0=True)
-    print("\nKeyframe workflow complete.")
-
-
 @dataclass(frozen=True)
 class PackagingSimulationOptions:
     speed: float = 1.0
@@ -764,7 +643,6 @@ class PackagingSimulationOptions:
     cycles: int | None = None
     table_height: float | None = None
     visual: bool = False
-    capture_keyframes: bool = False
     csv: Path | None = None
     sim_report: Path | None = None
     report: Path | None = None
@@ -812,11 +690,6 @@ def _run_packaging_sim_body(args: PackagingSimulationOptions, runtime_config) ->
 
     if args.visual:
         start_deferred_viewer(scene)
-
-    if args.capture_keyframes:
-        _reset_block(block, layout)
-        _capture_keyframes_interactive(scene, robot, block, layout, args.speed, ctx)
-        return 0
 
     failed = False
     cycle = 0

@@ -30,7 +30,7 @@ from ufactory.dynamics.analysis import build_dynamics_sample
 from ufactory.dynamics.reference import load_reference_backend
 from ufactory.dynamics.report import GenesisDynamicsSample, SafePose
 from ufactory.robots.paths import xarm6_1305_urdf
-from ufactory.dynamics.poses_config import dynamics_pose_tuples
+from ufactory.dynamics.poses import dynamics_default_configs
 from ufactory.robots.runtime import get_robot_runtime_profile
 
 _RUNTIME = get_robot_runtime_profile("xarm6")
@@ -64,7 +64,7 @@ def reference():
 
 @pytest.mark.parametrize(
     "pose_name, q",
-    [(name, np.asarray(q, dtype=np.float64)) for name, q in dynamics_pose_tuples("xarm6")[:3]],
+    [(name, np.asarray(q, dtype=np.float64)) for name, q in dynamics_default_configs("xarm6")[:3]],
 )
 def test_dryrun_layer_metrics_finite_real_urdf(pose_name, q, reference):
     gsample = _synthetic_genesis_sample(q, reference)
@@ -98,7 +98,7 @@ def test_dryrun_layer_metrics_finite_real_urdf(pose_name, q, reference):
 
 
 def test_dryrun_real_urdf_mass_matrix_is_physically_plausible(reference):
-    q = np.asarray(dynamics_pose_tuples("xarm6")[1][1], dtype=np.float64)
+    q = np.asarray(dynamics_default_configs("xarm6")[1][1], dtype=np.float64)
     mass = np.asarray(reference.mass_matrix(q), dtype=np.float64)
     assert mass.shape == (6, 6)
     assert np.allclose(mass, mass.T, atol=1e-6)

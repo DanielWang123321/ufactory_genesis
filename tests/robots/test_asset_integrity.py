@@ -43,12 +43,12 @@ def test_public_urdf_mesh_references_exist() -> None:
 
 def test_standard_g2_urdfs_share_joint_limits_and_mimic_linkage() -> None:
     from ufactory.grippers.g2 import (
+        G2_JOINT_NAMES,
         G2_LINKAGE_GEOMETRY,
         GRIPPER_G2_SIM_OPEN_DRIVE,
         GRIPPER_G2_SIM_CLOSE_DRIVE,
         GRIPPER_G2_JOINT_VELOCITY_RAD_S,
     )
-    from ufactory.simulation.g2_model import G2_JOINT_NAMES
 
     models = []
     for path in sorted((PROJECT_ROOT / "assets/urdf").rglob("*.urdf")):
@@ -77,32 +77,21 @@ def test_standard_g2_urdfs_share_joint_limits_and_mimic_linkage() -> None:
 
 
 def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
-    forbidden_markers = [
+    forbidden_markers = (
         "visual_glb_raw",
         "visual_glb_src",
         "relocalize_metrics.json",
-        "assets/urdf/bio_gripper_g2/meshes/visual/bio_gripper_g2.glb",
-        "assets/urdf/lite6_gripper/meshes/collision/gripper_lite.stl",
         "scripts/relocalize_",
         "scripts/diagnose_",
         "scripts/vendor_robot_assets.py",
-        "bio_gripper_g2_visual_link5.glb",
-        "bio_gripper_g2_visual_link6.glb",
-        "bio_gripper_g2_visual_link7.glb",
-        "bio_gripper_g2/meshes/visual/visual_glb/link5/",
-        "bio_gripper_g2/meshes/visual/visual_glb/link6/",
-        "bio_gripper_g2/meshes/visual/visual_glb/link7/",
-        "gripper_g2_static_link5.glb",
-        "gripper_g2_static_link6.glb",
-        "gripper_g2_static_link7.glb",
-        "gripper_g2/meshes/visual/visual_glb/link5/",
-        "gripper_g2/meshes/visual/visual_glb/link6/",
-        "gripper_g2/meshes/visual/visual_glb/link7/",
-    ]
-    forbidden_script_shapes = [
+        "bio_gripper_g2/meshes/visual/link",
+        "bio_gripper_g2_visual_link",
+        "gripper_g2_static_link",
+    )
+    forbidden_script_shapes = (
         ("scripts/generate_", "_combo_urdf.py"),
         ("scripts/verify_", "_assets.py"),
-    ]
+    )
     public = [str(p.relative_to(PROJECT_ROOT)) for p in _public_files()]
     leaked = [
         p

@@ -6,13 +6,13 @@ v0.2.0 中，动力学验证公开入口统一为 `ufactory.dynamics` 子包；�
 
 | 模块 | 职责 |
 | --- | --- |
-| `probe` | Genesis 场景构建；PD 持位采样（Genesis 仿真里，为维持目标关节角，PD 控制器算出的关节力矩；含 armature + frictionloss 回读）；EE z 表；pre-snap-home；plane morph；6 个去硬编码物理检查（自由落体 / 重力补偿 / PD 阶跃 / 能量 / 质量矩阵 / 物理参数）。 |
+| `probe` | Genesis 场景构建；PD 持位采样（Genesis 仿真里，为维持目标关节角，PD 控制器算出的关节力矩；含 armature + frictionloss 回读）；EE z 表；plane morph；静态力矩与路径碰撞探针。 |
 | `reference` | Pinocchio 独立 CRBA + 重力 oracle 后端；armature 对齐质量辅助函数。 |
 | `analysis` | L2a/L2b/L3a/L3b 静态分层机（重构后 L2b oracle = `pd_hold_tau vs pin_G(q_actual)`）；URDF 动力学验证；力矩对比 / 分类 / `build_dynamics_sample`。 |
 | `report` | `DynamicsRunConfig` / `GenesisDynamicsSample` / `DynamicsSample` / `ValidationStatus`；JSONL/CSV 报告写入+读取+对比；仿真/运行时常量。 |
-| `poses` | 运行时验证姿态访问；默认姿态由 `assets/configs/dynamics_validation_pose.yaml` 经 `poses_config` 展开。 |
+| `poses` | 运行时验证姿态访问；默认姿态由 `assets/configs/dynamics_validation_pose.yaml` 加载并展开。 |
 | `cli` | 4 个 CLI 入口 + sim collision 串联 + 打印辅助。 |
-| `__init__` | re-export 公开 API；`__all__` 完整。 |
+| `__init__` | 导出报告与验证状态数据模型（`__all__`）。 |
 
 ## 报告 schema v4
 
@@ -44,27 +44,36 @@ dynamics-report-compare        ufactory.dynamics.cli:cli_report_compare
 
 ```python
 from ufactory.dynamics import (
-    build_dynamics_sample, build_genesis_scene, build_static_pose_analysis,
-    cli_hardware_check, compare_report_records, GenesisDynamicsSample,
-    load_reference_backend, parse_strict_static_layers,
-    read_report_records, validate_urdf_dynamics, write_csv_report,
-    write_jsonl_report, write_torque_plot,
+    REPORT_SCHEMA_VERSION,
+    DynamicsRunConfig,
+    DynamicsSample,
+    GenesisDynamicsSample,
+    SafePose,
+    UrdfDynamicsIssue,
+    ValidationStatus,
 )
 ```
 
 或直接驱动 dry-run：
 
 ```python
-from ufactory.dynamics import cli_hardware_check
-rc = cli_hardware_check([
-    "--robot", "xarm6",
-    "--dry-run",
-    "--require-reference",
-    "--strict-static",
-    "--strict-static-layers", "l2b",
-    "--poses", "0,1,14",
-    "--z-min-mm", "0",
-])
+from ufactory.dynamics.cli import cli_hardware_check
+
+rc = cli_hardware_check(
+    [
+        "--robot",
+        "xarm6",
+        "--dry-run",
+        "--require-reference",
+        "--strict-static",
+        "--strict-static-layers",
+        "l2b",
+        "--poses",
+        "0,1,14",
+        "--z-min-mm",
+        "0",
+    ]
+)
 ```
 
 ## 测试

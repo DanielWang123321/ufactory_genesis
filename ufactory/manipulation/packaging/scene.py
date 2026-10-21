@@ -32,7 +32,6 @@ LEG_SIZE = (0.06, 0.06, None)
 
 # link_base collision mesh max XY radius ≈ 63 mm (assets/.../collision/link_base.obj)
 ROBOT_BASE_RADIUS = 0.063
-TRANSFER_CLEARANCE_ABOVE_BOX = 0.10  # cruise 100 mm above box top
 
 
 def table_top_center() -> tuple[float, float, float]:
@@ -54,22 +53,10 @@ ROBOT_BASE_YAW_DEG = 90.0
 # TCP orientation in the robot-base frame.
 HOME_RPY_DEG = (180.0, 0.0, 0.0)
 
-# The versioned task is expressed in robot-base coordinates.  The display base
-# is yawed +90 degrees, so base +X maps to world +Y.
-PACKAGING_CONFIG = load_runtime_config("xarm6", task="packaging_showcase")
-BASE_LAYOUT = packaging_layout(PACKAGING_CONFIG)
 OBJ_FRICTION_MU = OBJ_FRICTION
 FINGER_FRICTION_MU = FINGER_FRICTION
-OBJ_SPAWN_XY = (ROBOT_XY[0] - BASE_LAYOUT.object_position_m[1], ROBOT_XY[1] + BASE_LAYOUT.object_position_m[0])
 
-BOX_OUTER = (BASE_LAYOUT.box_outer_size_m[1], BASE_LAYOUT.box_outer_size_m[0], BASE_LAYOUT.box_outer_size_m[2])
-BOX_CENTER_XY = (
-    ROBOT_XY[0] - BASE_LAYOUT.box_center_xy_m[1],
-    ROBOT_XY[1] + BASE_LAYOUT.box_center_xy_m[0],
-)
-BOX_WALL = BASE_LAYOUT.box_wall_m
-
-# 黄褐色纸箱：颜色烘焙进 cardboard.jpg，image_color 保持 1.0 避免二次压暗
+# Cardboard color is baked into cardboard.jpg; keep image_color at 1.0 to avoid darkening.
 CARDBOARD_COLOR_SCALE = (1.0, 1.0, 1.0)
 
 TABLE_TOP_COLOR = (0.18, 0.38, 0.28)
@@ -77,18 +64,13 @@ TABLE_LEG_COLOR = (0.12, 0.28, 0.20)
 BLOCK_COLOR = (0.86, 0.14, 0.12)
 
 
-def box_top_z(layout: PackagingLayout) -> float:
-    """World Z of the cardboard box top rim (outer)."""
-    return layout.table_top_z + layout.box_wall + layout.box_outer[2]
-
-
 def packaging_camera(
-    layout_or_table_top_z: PackagingLayout | float,
+    layout_or_table_top_z: PackagingSceneLayout | float,
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """Viewer / headless camera aligned to long-edge robot workspace."""
     layout = (
         layout_or_table_top_z
-        if isinstance(layout_or_table_top_z, PackagingLayout)
+        if isinstance(layout_or_table_top_z, PackagingSceneLayout)
         else make_layout(float(layout_or_table_top_z))
     )
     cx = (layout.robot_xy[0] + layout.obj_spawn_xy[0] + layout.box_center_xy[0]) / 3
@@ -99,7 +81,7 @@ def packaging_camera(
 
 
 @dataclass(frozen=True)
-class PackagingLayout:
+class PackagingSceneLayout:
     table_top_z: float
     table_top_size: tuple[float, float, float]
     table_center_xy: tuple[float, float]
@@ -124,14 +106,14 @@ class PackagingLayout:
 def texture_path(name: str) -> str:
     path = TEXTURE_DIR / name
     if not path.exists():
-        raise FileNotFoundError(f"Missing texture {path}. Run: python scripts/generate_showcase_textures.py")
+        raise FileNotFoundError(f"Missing texture {path}")
     return str(path.resolve())
 
 
 def mesh_path(name: str) -> str:
     path = MESH_DIR / name
     if not path.exists():
-        raise FileNotFoundError(f"Missing mesh {path}. Run: python scripts/generate_showcase_textures.py")
+        raise FileNotFoundError(f"Missing mesh {path}")
     return str(path.resolve())
 
 
@@ -143,7 +125,6 @@ def add_textured_box(
     *,
     color_scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
     fixed: bool = True,
-    collision: bool = True,
 ) -> None:
     scene.add_entity(
         gs.morphs.Mesh(
@@ -183,9 +164,9 @@ def _base_xy_to_world(pos_xy: tuple[float, float]) -> tuple[float, float]:
     return ROBOT_XY[0] - float(pos_xy[1]), ROBOT_XY[1] + float(pos_xy[0])
 
 
-def make_layout(table_top_z: float = DEFAULT_TABLE_TOP_Z, runtime_config=None) -> PackagingLayout:
-    core = packaging_layout(runtime_config or PACKAGING_CONFIG)
-    config = runtime_config or PACKAGING_CONFIG
+def make_layout(table_top_z: float = DEFAULT_TABLE_TOP_Z, runtime_config=None) -> PackagingSceneLayout:
+    config = runtime_config or load_runtime_config("xarm6", task="packaging_showcase")
+    core = packaging_layout(config)
     obj_xy = _base_xy_to_world(core.object_position_m[:2])
     box_xy = _base_xy_to_world(core.box_center_xy_m)
     place_xy = _base_xy_to_world(core.target_position_m[:2])
@@ -194,7 +175,7 @@ def make_layout(table_top_z: float = DEFAULT_TABLE_TOP_Z, runtime_config=None) -
     box_outer = (core.box_outer_size_m[1], core.box_outer_size_m[0], core.box_outer_size_m[2])
     wall = core.box_wall_m
     inner_floor_z = table_top_z + core.box_floor_top_z_m
-    return PackagingLayout(
+    return PackagingSceneLayout(
         table_top_z=table_top_z,
         table_top_size=table_size,
         table_center_xy=table_xy,
@@ -217,7 +198,7 @@ def make_layout(table_top_z: float = DEFAULT_TABLE_TOP_Z, runtime_config=None) -
     )
 
 
-def add_table(scene: gs.Scene, layout: PackagingLayout) -> None:
+def add_table(scene: gs.Scene, layout: PackagingSceneLayout) -> None:
     top_z = layout.table_top_z
     top_sx, top_sy, top_sz = layout.table_top_size
     leg_h = top_z - top_sz
@@ -247,7 +228,7 @@ def add_table(scene: gs.Scene, layout: PackagingLayout) -> None:
         )
 
 
-def add_cardboard_box(scene: gs.Scene, layout: PackagingLayout) -> None:
+def add_cardboard_box(scene: gs.Scene, layout: PackagingSceneLayout) -> None:
     cx, cy = layout.box_center_xy
     ox, oy, oz = layout.box_outer
     t = layout.box_wall
@@ -309,7 +290,7 @@ def add_cardboard_box(scene: gs.Scene, layout: PackagingLayout) -> None:
     )
 
 
-def _add_packaging_robot(scene: gs.Scene, layout: PackagingLayout, urdf_path: str):
+def _add_packaging_robot(scene: gs.Scene, layout: PackagingSceneLayout, urdf_path: str):
     robot_morph = gs.morphs.URDF(
         file=urdf_path,
         pos=(layout.robot_xy[0], layout.robot_xy[1], layout.table_top_z),
@@ -336,9 +317,8 @@ def build_packaging_scene(
     capture_res: tuple[int, int] = (1280, 720),
     robot_urdf_path: str | None = None,
     runtime_config=None,
-    calibrated_g2: bool = True,
 ):
-    config = runtime_config or PACKAGING_CONFIG
+    config = runtime_config or load_runtime_config("xarm6", task="packaging_showcase")
     layout = make_layout(table_top_z, config)
     substeps = int(config.simulation.substeps)
     if config.gripper.adapter == "g2":
@@ -411,7 +391,7 @@ def build_packaging_scene(
     return scene, robot, block, layout
 
 
-def finalize_packaging_block(block, layout: PackagingLayout) -> None:
+def finalize_packaging_block(block, layout: PackagingSceneLayout) -> None:
     """Apply post-build contact and inertial values for deferred scene builds."""
     block.set_friction(float(OBJ_FRICTION_MU))
     if hasattr(block, "set_links_mass"):

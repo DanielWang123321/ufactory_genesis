@@ -25,8 +25,6 @@ from ufactory.trajectory.mirror_executor import (
     TrajKinematicMirror,
 )
 from ufactory.trajectory.planner import CartesianWaypoint, TrajectoryPlannerConfig, plan_mixed_waypoints
-from ufactory.trajectory.real_executor import RealExecutorConfig, replay_real
-from ufactory.trajectory.segments import build_pickplace_program
 from ufactory.trajectory.mirror_executor import (
     LITE6_MIRROR_VISUAL_GAP_SHRINK_M,
     mirror_grip_drive_for_gap_m,
@@ -97,15 +95,6 @@ def _default_mixed_waypoints() -> tuple[list[object], list[float]]:
         else:
             waypoints.append(wp)
     return waypoints, start_xyz
-
-
-def _legacy_default_program():
-    return build_pickplace_program(
-        rate=50.0,
-        speed_rad_s=0.35,
-        mvacc_rad_s2=2.0,
-        waypoints=_default_waypoints(),
-    )
 
 
 def _default_program():
@@ -187,30 +176,6 @@ def test_default_pick_place_program_uses_mixed_waypoint_planner():
         "retreat",
         "return-home",
     ]
-
-
-def test_legacy_pickplace_builder_still_matches_default_segment_shape():
-    planned = _default_program()
-    legacy = _legacy_default_program()
-
-    assert [seg.kind for seg in legacy.segments] == [seg.kind for seg in planned.segments]
-    assert [seg.label for seg in legacy.segments] == [seg.label for seg in planned.segments]
-    assert legacy.total_ticks == planned.total_ticks
-    assert legacy.robot_key is None
-
-
-def test_on_tick_count_matches_program_total_ticks(monkeypatch):
-    monkeypatch.setattr("ufactory.trajectory.real_executor.time.sleep", lambda _s: None)
-    program = _default_program()
-    tick_count = 0
-
-    def on_tick(_seg, _tick_idx) -> None:
-        nonlocal tick_count
-        tick_count += 1
-
-    cfg = RealExecutorConfig(dry_run=True, rate=50.0)
-    replay_real(program, cfg, on_tick=on_tick)
-    assert tick_count == program.total_ticks
 
 
 def test_async_mirror_bridge_on_tick_does_not_block_on_tracker():

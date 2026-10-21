@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract per-robot kinematic calibration from xArm control box.
 
-The output is the strict v0.2.5 calibration schema and is bound to the full
+The output uses the strict calibration schema and is bound to the full
 robot serial number:
   joints.joint1..N: {x, y, z, roll, pitch, yaw}  (meters, radians)
 
@@ -26,6 +26,8 @@ import struct
 import sys
 from pathlib import Path
 
+from yaml import dump
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -38,25 +40,6 @@ from ufactory.kinematics.calibration import (  # noqa: E402
     parse_sn_model_code,
     robot_name_from_firmware,
 )
-
-try:
-    from yaml import dump
-except ImportError:
-
-    def dump(data, f, indent=0, **kwargs):
-        buf = []
-        for key, val in data.items():
-            if isinstance(val, dict):
-                buf.append("{}{}:".format(" " * indent, key))
-                buf += dump(val, None, indent=indent + 2, **kwargs)
-            else:
-                buf.append("{}{}: {}".format(" " * indent, key, val))
-        if f is not None:
-            f.write("\n".join(buf))
-        return buf
-
-
-IS_PY3 = sys.version_info.major >= 3
 
 
 def _parse_robot_ipv4(value: str) -> str:
@@ -82,10 +65,7 @@ def _fetch_kinematics_bytes(robot_ip: str) -> bytes:
         sock.settimeout(10.0)
         sock.connect((robot_ip, 502))
         send_data = [0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x08]
-        if IS_PY3:
-            sock.sendall(bytes(send_data))
-        else:
-            sock.sendall("".join(map(chr, send_data)))
+        sock.sendall(bytes(send_data))
         return sock.recv(179)
 
 
@@ -152,8 +132,8 @@ def main() -> int:
         print("[Failed] recv_len={}, valid={}".format(len(recv_data), valid))
         return 1
 
-    robot_dof = recv_data[9] if IS_PY3 else ord(recv_data[9])
-    robot_type = recv_data[10] if IS_PY3 else ord(recv_data[10])
+    robot_dof = recv_data[9]
+    robot_type = recv_data[10]
     robot_name = robot_name_from_firmware(robot_dof, robot_type)
 
     print(f"robot_name     : {robot_name}")

@@ -19,7 +19,12 @@ from ufactory.config import (
     resolve_pick_place_object_spec,
 )
 from ufactory.manipulation.commands import (
+    build_manipulation_backends,
     model_and_hashes as _model_and_hashes,
+    paced_start_hold as _paced_start_hold,
+    prepare_real_gripper_sender,
+    prime_first_movej_sample,
+    print_real_execution_summary,
     write_json as _write_json,
     connect as _connect,
     read_q as _read_q,
@@ -33,13 +38,11 @@ from ufactory.manipulation.commands import (
     print_preflight_complete as _print_preflight_complete,
     print_preflight_violation_summary as _print_preflight_violation_summary,
 )
-from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.safety import validate_sdk_simulation
-from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBackend, PinocchioKinematicsBackend
-from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
+from ufactory.safety.adapters import EnvironmentObstacle
 from ufactory.safety.gate import program_sha256, sha256_file
 from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
@@ -74,13 +77,6 @@ def _json_sha256(value: Any) -> str:
 
 
 def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[Any, Any]:
-    passive = {config.gripper.drive_joint: config.gripper.open_drive} if config.gripper is not None else {}
-    kinematics = PinocchioKinematicsBackend(
-        urdf,
-        joint_names=config.robot.joint_names,
-        ee_link=config.robot.ee_link,
-        passive_joint_positions=passive,
-    )
     params = config.task.parameters
     object_size = tuple(map(float, params["object_size_m"]))
     object_position = tuple(map(float, params["fixed_object_position_m"]))
@@ -89,25 +85,16 @@ def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[
         EnvironmentObstacle("table", (1.2, 1.2, 0.05), (0.3, 0.0, -0.025)),
         EnvironmentObstacle("object", object_size, object_position),
     )
-    collision = StageAwareObjectCollisionBackend(
-        PinocchioCollisionBackend(
-            urdf,
-            joint_names=config.robot.joint_names,
-            ee_link=config.robot.ee_link,
-            passive_joint_positions=passive,
-            adjacent_link_pairs=config.robot.adjacent_collision_pairs,
-            excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
-            obstacles=obstacles,
-        ),
+    return build_manipulation_backends(
+        config,
+        urdf,
+        obstacles=obstacles,
         spawn_center_m=object_position,
         place_center_m=target_position,
         relocated_stages=OBJECT_RELOCATED_STAGES,
+        object_width_m=object_size[1],
+        calibrated_g2=calibrated_g2,
     )
-    if calibrated_g2 and config.gripper.adapter == "g2":
-        from ufactory.simulation.g2_adapter import G2ContactCollisionBackend
-
-        collision = G2ContactCollisionBackend(collision, object_width_m=object_size[1])
-    return kinematics, collision
 
 
 def _build_program(config: Any, kinematics: Any | None = None, *, q_home: np.ndarray | None = None) -> Any:
@@ -321,17 +308,7 @@ def _scene_layout_kwargs(config: Any) -> dict[str, Any]:
 
 
 def _hold_mirror_at_program_start(mirror: Any, *, hold_s: float) -> None:
-    if hold_s <= 0.0:
-        return
-    tick_s = 1.0 / float(mirror.rate)
-    steps = max(1, int(np.ceil(float(hold_s) / tick_s)))
-    next_deadline = time.monotonic()
-    for _ in range(steps):
-        mirror.hold_step()
-        next_deadline += tick_s
-        sleep_s = next_deadline - time.monotonic()
-        if sleep_s > 0.0:
-            time.sleep(sleep_s)
+    _paced_start_hold(mirror, hold_s)
 
 
 def _warm_real_visual_tracker(tracker: Any) -> None:
@@ -657,36 +634,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     bridge = AsyncMirrorBridge(tracker)
 
                 transport.authorize_motion(mode=1)
-                first_joint = None
-                for segment in approved.program.segments:
-                    if segment.kind != "movej":
-                        continue
-                    samples, _ = segment.samples(approved.program.rate)
-                    if len(samples) == 0:
-                        continue
-                    first_joint = np.asarray(samples[0], dtype=np.float64)
-                    break
-                if first_joint is not None:
-                    transport.prime_joint_stream(first_joint)
-                elif args.executor == "servo_j":
-                    raise RuntimeError("approved servo_j program has no MoveJ sample to prime MODE_SERVO")
+                prime_first_movej_sample(transport, approved.program, executor=args.executor)
                 if mirror is not None:
                     mirror.prime_to_first_arm_segment_start(approved.program)
-                gripper_adapter = create_gripper_adapter(config.gripper)
-                if gripper_adapter.capabilities.real_command:
-                    prepare_code = gripper_adapter.prepare_real(arm)
-                    if prepare_code != 0:
-                        transport.stop()
-                        raise RuntimeError(
-                            f"gripper preparation failed with SDK code {prepare_code}; controller stopped"
-                        )
-                current_drive = [config.gripper.open_drive]
-
-                def send_gripper(gap_m: float) -> int:
-                    current_drive[0] = gripper_adapter.gap_to_drive(gap_m)
-                    return gripper_adapter.send_real_gap(arm, gap_m)
-
-                gripper_sender = send_gripper if gripper_adapter.capabilities.real_command else None
+                current_drive, gripper_sender = prepare_real_gripper_sender(arm, transport, config.gripper)
                 execution = execute_real(
                     approved,
                     transport=transport,
@@ -709,18 +660,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     on_tick=bridge.on_tick if bridge is not None else None,
                     not_ready_codes=frozenset((9,)),
                 )
-                print(
-                    f"real_execution={'PASS' if execution.completed else 'FAIL'} sent_samples={execution.sent_samples}"
-                )
-                if execution.fault is not None:
-                    print(
-                        f"fault={execution.fault.fault_class}: {execution.fault.message} "
-                        f"sample_index={execution.fault.sample_index}"
-                    )
-                print(
-                    f"timing_minor_misses={execution.minor_lateness_count} "
-                    f"timing_max_lateness_ms={execution.max_lateness_ns / 1_000_000.0:.3f}"
-                )
+                print_real_execution_summary(execution)
                 if args.visual and mirror_ctx is not None and tracker is not None:
                     _hold_viewer(mirror_ctx, on_step=tracker.hold_step)
                 return 0 if execution.completed else 1

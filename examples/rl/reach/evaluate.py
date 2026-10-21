@@ -45,7 +45,6 @@ def main() -> None:
     parser.add_argument(
         "--quiet-episodes", action="store_true", help="Only print the summary; JSON retains every episode"
     )
-    parser.add_argument("--vis", action="store_true", help="Deprecated; use examples.rl.reach.visualize")
     parser.add_argument(
         "--max-mean-distance-m",
         type=float,
@@ -53,18 +52,6 @@ def main() -> None:
         help="Exit with status 1 when the mean terminal distance exceeds this value",
     )
     args = parser.parse_args()
-    if args.vis:
-        import shlex
-
-        command = ["python", "-m", "examples.rl.reach.visualize", "--checkpoint", str(args.checkpoint)]
-        for option, value in (
-            ("--recipe", args.recipe),
-            ("--runtime-config", args.runtime_config),
-            ("--robot", args.robot),
-        ):
-            if value is not None:
-                command.extend([option, str(value)])
-        parser.error("--vis moved to the real-time GLB viewer. Run: " + shlex.join(command))
     if args.episodes < 1:
         parser.error("--episodes must be positive")
     if args.num_envs < 1:

@@ -10,21 +10,8 @@ import time
 import traceback
 from typing import Any
 
+from ufactory.manipulation.commands import paced_start_hold as _paced_start_hold
 from ufactory.trajectory.segments import Program, Segment
-
-
-def _paced_start_hold(mirror: Any, hold_s: float) -> None:
-    if hold_s <= 0.0:
-        return
-    tick_s = 1.0 / float(mirror.rate)
-    steps = max(1, int(round(float(hold_s) / tick_s)))
-    deadline = time.monotonic()
-    for _ in range(steps):
-        mirror.hold_step()
-        deadline += tick_s
-        sleep_s = deadline - time.monotonic()
-        if sleep_s > 0.0:
-            time.sleep(sleep_s)
 
 
 def _packaging_mirror_worker(

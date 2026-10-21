@@ -19,7 +19,7 @@ Bio G2 的 STL collision 文件使用 `bio_gripper_g2_*.stl` 唯一文件名。�
 
 组合 URDF 和 `bio_gripper_g2_movable_visual.urdf` 中的 Bio G2 STL collision 通过非零 `<collision><origin>` 对齐 canonical 视觉 GLB。所有机型共用同一套 collision origin（视觉几何已统一）；机型差异只体现在 `bio_gripper_g2_attach` joint origin。不要把这些 collision origin 改回 `0 0 0`，否则 collision 网格会相对 GLB 错位。
 
-Genesis standalone collision 检查使用 `bio_gripper_g2_movable_visual.urdf`：文件名保留 visual 历史命名，但 `view_accessory_collision.py` 以 `vis_mode="collision"` 渲染 `<collision>` 中的 STL。实际机械臂搭配仍应优先使用 `robot_visual_glb_urdf(..., with_bio_gripper_g2=True)` 返回的组合 URDF。
+Genesis standalone 检查可使用 `bio_gripper_g2_movable_visual.urdf`。实际机械臂搭配优先使用 `robot_visual_glb_urdf(..., with_bio_gripper_g2=True)` 返回的组合 URDF。
 
 ## 目录结构
 
@@ -44,7 +44,7 @@ bio_gripper_g2/
 ```python
 from ufactory.robots.paths import (
     bio_gripper_g2_movable_visual_urdf,  # 独立（无机械臂）
-    robot_visual_glb_urdf,               # 搭配机械臂
+    robot_visual_glb_urdf,  # 搭配机械臂
 )
 
 # 1) 独立可动夹爪
@@ -55,16 +55,16 @@ urdf = robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=True, movable=Tru
 # 静态高模（不可动）：去掉 movable=True
 ```
 
-支持的 arm + movable Bio Gripper G2 collision 组合已经生成在各机械臂资产目录中：
+支持的 arm + movable Bio Gripper G2 组合已经生成在各机械臂资产目录中：
 
-| 机械臂 | 可动组合 URDF | collision viewer 命令 |
-|--------|---------------|-----------------------|
-| xArm5 | `xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf` | `python dev/ref_scripts/view_pose_collision.py --robot xarm5 --pose 4 --bio-gripper-g2 --movable --gripper-demo` |
-| xArm6 | `xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf` | `python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripper-g2 --movable --gripper-demo` |
-| xArm7 | `xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf` | `python dev/ref_scripts/view_pose_collision.py --robot xarm7 --pose 4 --bio-gripper-g2 --movable --gripper-demo` |
-| UF850 | `uf850_bio_gripper_g2_movable_visual.glb.urdf` | `python dev/ref_scripts/view_pose_collision.py --robot uf850 --pose 4 --bio-gripper-g2 --movable --gripper-demo` |
+| 机械臂 | 可动组合 URDF |
+|--------|---------------|
+| xArm5 | `xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf` |
+| xArm6 | `xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf` |
+| xArm7 | `xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf` |
+| UF850 | `uf850_bio_gripper_g2_movable_visual.glb.urdf` |
 
-这些 URDF 文件名保留 `visual.glb` 历史命名；`view_pose_collision.py` 使用 `vis_mode="collision"`，实际渲染 `<collision>` 中的 `bio_gripper_g2_*.stl`，并通过各 link 的 collision origin 对齐同一机型的 GLB 参考位置。
+这些 URDF 同时包含 `<visual>` GLB 与 `<collision>` 中的 `bio_gripper_g2_*.stl`，并通过各 link 的 collision origin 对齐同一机型的 GLB 参考位置。
 
 ## 控制（公共模块）
 
@@ -73,11 +73,11 @@ urdf = robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=True, movable=Tru
 ```python
 from ufactory.grippers.bio_g2 import BioGripperG2
 
-gripper = BioGripperG2(robot)        # robot 为加载上述任一 URDF 得到的 entity
+gripper = BioGripperG2(robot)  # robot 为加载上述任一 URDF 得到的 entity
 if gripper.found:
     gripper.setup_pd()
-    gripper.open()                   # 张开到 150 mm（OPEN_POS）
-    gripper.close()                  # 闭合到 71 mm（CLOSE_POS）
+    gripper.open()  # 张开到 150 mm（OPEN_POS）
+    gripper.close()  # 闭合到 71 mm（CLOSE_POS）
 
 # 开合循环：
 for step in range(1000):
@@ -92,20 +92,6 @@ for step in range(1000):
 python examples/visualization/view_bio_gripper_g2.py
 # 搭配机械臂（开合演示）
 python examples/visualization/view_robot.py --robot xarm6_1305 --bio-gripper-g2 --movable --gripper-demo
-```
-
-Collision 检查命令：
-
-```bash
-# 仅夹爪，STL collision 网格循环开合
-python dev/ref_scripts/view_accessory_collision.py --accessory bio-gripper-g2 --movable --gripper-demo
-
-# xArm6 + Bio Gripper G2，STL collision 网格循环开合
-python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripper-g2 --movable --gripper-demo
-
-# 固定开/合两态对比
-python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripper-g2 --movable --gripper-state open
-python dev/ref_scripts/view_pose_collision.py --robot xarm6 --pose 4 --bio-gripper-g2 --movable --gripper-state closed
 ```
 
 ## Source / License

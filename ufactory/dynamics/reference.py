@@ -39,10 +39,6 @@ class PinocchioReference:
         g = np.asarray(gravity_vector if gravity_vector is not None else DEFAULT_GRAVITY_VECTOR, dtype=np.float64)
         self.model.gravity.linear = g
 
-    @property
-    def available(self) -> bool:
-        return True
-
     def mass_matrix(self, q: Sequence[float]) -> np.ndarray:
         q_np = np.asarray(q, dtype=np.float64)
         mat = self.pin.crba(self.model, self.data, q_np)

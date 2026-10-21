@@ -9,18 +9,15 @@ import torch
 
 import genesis as gs
 from ufactory.grippers.bio_g2 import BioGripperG2
-from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile
 from ufactory.robots.registry import RobotModelSpec, joint_names
 from ufactory.simulation import forward_kinematics, make_rigid_options
 from ufactory.simulation.collision import configure_lite6_collision_filters
 from ufactory.simulation.compat import require_genesis_runtime
+from ufactory.visualization.viewer import start_deferred_viewer
 
-from ufactory.visualization.bio_gripper_g2_viewer import (
-    BIO_GRIPPER_G2_OPEN,
-    bio_gripper_g2_demo_target,
-)
 from ufactory.visualization.gripper_g2_viewer import (
     GRIPPER_OPEN,
     control_gripper_pose,
@@ -94,13 +91,6 @@ def update_tcp_marker(marker, ee_link) -> None:
     marker.set_pos(ee_link.get_pos())
 
 
-def start_deferred_viewer(scene) -> None:
-    """Open the interactive viewer after the scene has been initialized and warmed up."""
-    from ufactory.visualization.viewer import start_deferred_viewer as _start_deferred_viewer
-
-    _start_deferred_viewer(scene)
-
-
 def setup_arm_pd(robot, dof_idx: list[int], profile: RobotModelSpec) -> None:
     runtime = get_robot_runtime_profile(profile.key)
     robot.set_dofs_kp(np.array(runtime.arm.kp), dof_idx)
@@ -148,7 +138,6 @@ def run_glb_diagnose(
     from ufactory.simulation import genesis_backend_constant
 
     require_genesis_runtime(gs)
-    enable_glb_pbr_surfaces()
     gs.init(backend=genesis_backend_constant(gs, backend))
     stl_path = robot_urdf(profile.key)
     glb_path = robot_visual_glb_urdf(profile.key, with_gripper_g2=with_gripper_g2)
@@ -161,7 +150,11 @@ def run_glb_diagnose(
             rigid_options=make_rigid_options(gs),
         )
         morph = gs.morphs.URDF(file=urdf_path, pos=(0.0, 0.0, 0.0), fixed=True, requires_jac_and_IK=True)
-        robot = scene.add_entity(morph, surface=glb_view_surface()) if use_glb else scene.add_entity(morph)
+        if use_glb:
+            with glb_pbr_surfaces():
+                robot = scene.add_entity(morph, surface=glb_view_surface())
+        else:
+            robot = scene.add_entity(morph)
         configure_lite6_collision_filters(robot)
         scene.build()
         return robot, scene, _link_world_positions(robot, link_names)
@@ -238,7 +231,7 @@ def _apply_kinematic_hold(
     elif all_bio_gripper_g2_dof_idx and bio_gripper is not None:
         # Bio Gripper G2 mirrors the left finger (-1), so hold the open pose through the
         # controller rather than writing the same value to both finger DOFs.
-        bio_gripper.set_pose(BIO_GRIPPER_G2_OPEN)
+        bio_gripper.set_pose(BioGripperG2.OPEN_POS)
 
 
 def _kinematic_step(
@@ -357,7 +350,6 @@ def run_glb_viewer(
         ):
             checked(value, low, high, name)
     require_genesis_runtime(gs)
-    enable_glb_pbr_surfaces()
     gs.init(backend=genesis_backend_constant(gs, backend))
     scene = gs.Scene(
         viewer_options=gs.options.ViewerOptions(
@@ -371,15 +363,16 @@ def run_glb_viewer(
         show_viewer=False,
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
-    robot = scene.add_entity(
-        gs.morphs.URDF(
-            file=urdf_path,
-            pos=(0.0, 0.0, 0.0),
-            fixed=True,
-            requires_jac_and_IK=True,
-        ),
-        surface=glb_view_surface(),
-    )
+    with glb_pbr_surfaces():
+        robot = scene.add_entity(
+            gs.morphs.URDF(
+                file=urdf_path,
+                pos=(0.0, 0.0, 0.0),
+                fixed=True,
+                requires_jac_and_IK=True,
+            ),
+            surface=glb_view_surface(),
+        )
     tcp_marker = None
     if show_tcp and not headless:
         tcp_marker = add_tcp_marker(scene)
@@ -466,7 +459,7 @@ def run_glb_viewer(
         )
     elif gripper_demo and bio_gripper_g2_dof_idx:
         bio_gripper.setup_pd()
-        bio_gripper.set_pose(BIO_GRIPPER_G2_OPEN)
+        bio_gripper.set_pose(BioGripperG2.OPEN_POS)
 
     warmup_steps = 3 if arm_kinematic_hold or calibrated_g2 else 100
     for _ in range(warmup_steps):
@@ -550,7 +543,7 @@ def run_glb_viewer(
                 label = "closed" if grip_phase else "open"
                 print(f"  Bio Gripper G2 target: {label}")
                 last_gripper_phase = grip_phase
-            bio_gripper.control_pose(bio_gripper_g2_demo_target(step))
+            bio_gripper.control_pose(BioGripperG2.demo_target(step))
         if tcp_marker is not None and ee_link is not None:
             update_tcp_marker(tcp_marker, ee_link)
         _kinematic_step(

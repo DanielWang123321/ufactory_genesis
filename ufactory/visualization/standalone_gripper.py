@@ -11,7 +11,7 @@ import genesis as gs
 from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.simulation.collision import configure_lite6_collision_filters
-from ufactory.visualization.glb import enable_glb_pbr_surfaces, glb_view_surface
+from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 
 CAMERA_POS = (0.22, -0.28, 0.18)
 CAMERA_LOOKAT = (0.0, 0.0, 0.14)
@@ -48,7 +48,6 @@ def run_standalone_gripper_viewer(
             checked(getattr(args, name), low, high, name)
 
     require_genesis_runtime(gs)
-    enable_glb_pbr_surfaces()
     gs.init(backend=genesis_backend_constant(gs, args.backend), logging_level="error")
     scene = gs.Scene(
         show_viewer=not args.headless,
@@ -59,7 +58,8 @@ def run_standalone_gripper_viewer(
         ),
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
-    robot = scene.add_entity(gs.morphs.URDF(file=urdf_path, fixed=True), surface=glb_view_surface())
+    with glb_pbr_surfaces():
+        robot = scene.add_entity(gs.morphs.URDF(file=urdf_path, fixed=True), surface=glb_view_surface())
     configure_lite6_collision_filters(robot)
     scene.build()
     if calibrated_g2:

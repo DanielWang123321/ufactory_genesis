@@ -13,17 +13,13 @@ The official repository is [xArm-Developer/ufactory_genesis](https://github.com/
 
 ### Official repository migration
 
-1. Done: target organization is `xArm-Developer`, repository name `ufactory_genesis`.
-2. Done: repository ownership was transferred. The previous personal URL redirects to the organization repository.
-3. Update `pyproject.toml` URLs, README badges, Citation, and the CONTRIBUTING clone URL. LICENSE / authors stay with the current maintainer until a company process says otherwise.
-4. Align any PyPI project homepage with the official repository.
-5. Stop feature development on the personal 0.2 line after cutover.
+Repository ownership has been transferred to `xArm-Developer/ufactory_genesis`. The previous personal URL redirects to the organization repository, and feature development on the 0.2 line has ended.
 
 ### Current entry points
 
 Current commands, example directories and `ufactory` root exports are listed below. Later 0.x releases may rename or remove them. `ufactory.training`, `ufactory.quality`, and modules left off the list can change without a deprecation window.
 
-- Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`. `project-check` and `observe-hold-current` are maintainer tools.
+- Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`, `dynamics-report-compare`. `project-check` and `observe-hold-current` are maintainer tools.
 - Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/reach`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries. See the [examples guide](examples/README.md) for usage.
 - Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
 

@@ -38,8 +38,7 @@ from .expert import PickPlaceExpert
 from .metrics import SPAWN_X, SPAWN_Y
 
 
-def make_spawns(episodes: int, seed: int = 17000) -> np.ndarray:
-    del seed
+def make_spawns(episodes: int) -> np.ndarray:
     return np.tile(np.array([[SPAWN_X, SPAWN_Y]], dtype=np.float32), (episodes, 1))
 
 
@@ -112,7 +111,7 @@ def evaluate(
     episodes: int = 64,
     seed: int = 17000,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    obs, _ = env.set_evaluation_spawns(make_spawns(episodes, seed))
+    obs, _ = env.set_evaluation_spawns(make_spawns(episodes))
     if policy is None:
         policy = PickPlaceExpert(env)
     records: dict[int, dict[str, Any]] = {}
@@ -180,7 +179,6 @@ def main() -> None:
     parser.add_argument("--max-press-mm", type=float, default=1.0)
     parser.add_argument("--summary-json", "--out", dest="summary_json", type=Path, help="Output JSON/CSV path")
     parser.add_argument("--quiet-episodes", action="store_true")
-    parser.add_argument("--allow-physics-transfer", action="store_true")
     args = parser.parse_args()
 
     mode_count = sum(bool(x) for x in (args.expert, args.zero_policy, args.checkpoint is not None))
@@ -214,7 +212,6 @@ def main() -> None:
             expected_robot_key=runtime_config.robot.key,
             expected_runtime_config_sha256=runtime_config.sha256,
             expected_runtime_env=expected_env,
-            allow_physics_transfer=args.allow_physics_transfer,
         )
         env_cfg = deepcopy(artifact["env"])
         reward_cfg = deepcopy(artifact["reward"])

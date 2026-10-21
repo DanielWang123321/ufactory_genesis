@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ufactory.config.models import (
+    CONSTRAINT_SOLVERS,
+    CONTACT_RESOLUTIONS,
+    FRICTION_CONES,
+    validate_rigid_physics,
+)
 
 DEFAULT_CONSTRAINT_SOLVER = "newton"
 DEFAULT_FRICTION_CONE = "pyramidal"
@@ -17,35 +23,6 @@ DEFAULT_SOLVER_ITERATIONS = 100
 DEFAULT_NOSLIP_ITERATIONS = 0
 DEFAULT_CONSTRAINT_TIMECONST = 0.005
 DEFAULT_IMPRATIO = 100.0
-
-CONSTRAINT_SOLVERS = (DEFAULT_CONSTRAINT_SOLVER,)
-FRICTION_CONES = ("pyramidal", "elliptic")
-CONTACT_RESOLUTIONS = ("convex", "signorini")
-
-
-def validate_rigid_physics(
-    *,
-    constraint_solver: str,
-    friction_cone: str,
-    contact_resolution: str,
-    noslip_iterations: int,
-) -> None:
-    """Reject unsupported or internally inconsistent rigid-contact settings."""
-
-    if constraint_solver not in CONSTRAINT_SOLVERS:
-        raise ValueError(f"constraint_solver must be one of {CONSTRAINT_SOLVERS}")
-    if friction_cone not in FRICTION_CONES:
-        raise ValueError(f"friction_cone must be one of {FRICTION_CONES}")
-    if contact_resolution not in CONTACT_RESOLUTIONS:
-        raise ValueError(f"contact_resolution must be one of {CONTACT_RESOLUTIONS}")
-    if noslip_iterations < 0:
-        raise ValueError("noslip_iterations must be non-negative")
-    if friction_cone == "elliptic" and noslip_iterations:
-        raise ValueError("elliptic friction is incompatible with the noslip solver")
-    if contact_resolution == "signorini" and (
-        constraint_solver != "newton" or friction_cone != "elliptic" or noslip_iterations != 0
-    ):
-        raise ValueError("signorini contact requires Newton, elliptic friction, and noslip_iterations=0")
 
 
 def make_rigid_options(

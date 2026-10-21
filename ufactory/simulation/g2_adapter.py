@@ -14,20 +14,20 @@ import numpy as np
 import torch
 
 from ufactory.config.models import G2_PHYSICS_PROFILE
-from ufactory.grippers.g2 import gripper_g2_sim_drive_to_gap_m
+from ufactory.grippers.g2 import G2_JOINT_NAMES, gripper_g2_sim_drive_to_gap_m
 
 from ufactory.simulation.g2_controller import ControlOutput, G2Controller
-from ufactory.simulation.g2_model import G2Model, G2_JOINT_NAMES, G2_KP, G2_KV, G2_ARMATURE
+from ufactory.simulation.g2_model import G2Model, G2_KP, G2_KV, G2_ARMATURE
 
 G2_MAX_RIGID_SUBSTEP_DT_S = 0.000625
 # Genesis solver tuple:
 # (timeconst, dampratio, dmin, dmax, width, midpoint, power).
 #
-# The historical project value used dmax=0.001 and dampratio=0.1.  In Genesis
-# 1.3.3 that creates reference-acceleration coefficients several orders of
-# magnitude above the defaults and can overflow when all five mimic equalities
-# meet bilateral finger contact.  This deliberately compliant profile passed
-# the same 128-environment perturbed-contact case at both 8 and 32 substeps.
+# The historical project value used dmax=0.001 and dampratio=0.1, which creates
+# reference-acceleration coefficients several orders of magnitude above the
+# defaults and can overflow when all five mimic equalities meet bilateral finger
+# contact. This deliberately compliant profile passed the 128-environment
+# perturbed-contact case at both 8 and 32 substeps.
 G2_MIMIC_CONSTRAINT_SOL_PARAMS = (0.02, 1.0, 0.9, 0.95, 0.001, 0.5, 2.0)
 G2_MIMIC_EQUALITY_NAMES = frozenset(
     {
@@ -117,8 +117,7 @@ def validate_g2_contact_substeps(*, dt: float, substeps: int) -> float:
     """Enforce the project's conservative G2 production-step policy.
 
     A 0.625 ms rigid step is retained as an empirical safety margin for the
-    validated production profile.  It is not a claim that every Genesis 1.3.3
-    G2 model needs this step size: the mimic solver profile is the primary fix.
+    validated production profile; the mimic solver profile is the primary fix.
     """
 
     dt = float(dt)

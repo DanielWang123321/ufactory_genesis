@@ -172,7 +172,6 @@ def main() -> None:
             expected_robot_key=runtime_config.robot.key,
             expected_runtime_config_sha256=runtime_config.sha256,
             expected_runtime_env=env_cfg,
-            full_resume=True,
         )
         if int(resume_config["env"]["num_envs"]) != num_envs:
             parser.error("resume requires the original --num-envs; episodes restart from home")

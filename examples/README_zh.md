@@ -19,7 +19,6 @@ pip install -e ".[sim]"
 # 可选：
 #   pip install -e ".[sim,rl]"        # Linux/NVIDIA 到达与抓放
 #   pip install -e ".[sim,real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
-#   pip install -e ".[sim,showcase]"  # 装箱纸箱贴图（scipy）
 #   pip install -e ".[sim,dynamics]"  # 动力学参考检查
 ```
 
@@ -172,12 +171,6 @@ python examples/pick_place/run.py \
 
 
 ## 装箱展示仿真
-
-首次装箱前先生成纸箱贴图（需要 `.[showcase]`）：
-
-```bash
-python scripts/generate_showcase_textures.py
-```
 
 `examples/packaging/run.py` 委托给 `ufactory-packaging-showcase`。
 

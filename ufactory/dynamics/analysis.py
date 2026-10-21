@@ -23,6 +23,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
+from ufactory.dynamics.reference import armature_aligned_mass
 from ufactory.dynamics.report import (
     L2_ERR_LIMIT,
     POS_ERR_TOL,
@@ -30,12 +31,10 @@ from ufactory.dynamics.report import (
     SATURATION_MARGIN,
     GenesisDynamicsSample,
     DynamicsSample,
-    TorqueCompareResult,
     UrdfDynamicsIssue,
     ValidationStatus,
     _abs_err_limits,
     _effort_limits,
-    array_or_nan,
 )
 from ufactory.dynamics.poses import (
     SafePose,
@@ -309,8 +308,7 @@ def analyze_mass_matrices(
         arm_arr = np.asarray(armature, dtype=np.float64).reshape(-1)
         k = min(len(arm_arr), m_gen.shape[0])
         if k > 0:
-            m_gen = m_gen.copy()
-            m_gen[:k, :k] -= np.diag(arm_arr[:k])
+            m_gen = armature_aligned_mass(m_gen, arm_arr[:k])
             arm_note = f" armature={arm_arr[:k].tolist()}"
     diff = m_gen - m_pin
     pin_norm = float(np.linalg.norm(m_pin))
@@ -638,29 +636,6 @@ def build_dynamics_sample(
         except Exception:
             pass
     return sample
-
-
-def torque_result_from_sample(sample: DynamicsSample) -> TorqueCompareResult:
-    passed = sample.status == ValidationStatus.PASS
-    n = int(np.asarray(sample.q).reshape(-1).size)
-    tau_g = sample.pd_hold_tau if sample.pd_hold_tau is not None else array_or_nan(n)
-    tau_r = sample.tau_real if sample.tau_real is not None else array_or_nan(n)
-    abs_err = sample.abs_err if sample.abs_err is not None else array_or_nan(n)
-    rel_err = sample.rel_err if sample.rel_err is not None else array_or_nan(n)
-    return TorqueCompareResult(
-        name=sample.pose,
-        q=sample.q,
-        ee_z_mm=sample.ee_z_mm,
-        tau_genesis=tau_g,
-        tau_real=tau_r,
-        abs_err=abs_err,
-        rel_err=rel_err,
-        l2_err=float(sample.l2_err) if sample.l2_err is not None else float("nan"),
-        settled=sample.settled,
-        passed=passed,
-        skip_reason=sample.skip_reason,
-        status=sample.status,
-    )
 
 
 def validate_urdf_dynamics(urdf_path: str | Path, *, com_abs_limit_m: float = 2.0) -> list[UrdfDynamicsIssue]:

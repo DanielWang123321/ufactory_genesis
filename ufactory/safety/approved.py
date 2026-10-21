@@ -18,8 +18,8 @@ _ISSUER = object()
 class ApprovedProgram:
     """A program bound to the exact identity and assets checked by preflight.
 
-    The constructor is intentionally private.  Callers receive instances from
-    :func:`ufactory.trajectory.preflight_program` only.
+    The constructor is intentionally private. Callers receive instances from
+    :meth:`ufactory.safety.SafetyGate.preflight` or :func:`ufactory.trajectory.preflight_program` only.
     """
 
     program: Program

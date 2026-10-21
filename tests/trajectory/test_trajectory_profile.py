@@ -14,7 +14,7 @@ from ufactory.trajectory.profile import (
     linear_cartesian_samples,
     lspb_duration,
 )
-from ufactory.trajectory.segments import build_pickplace_program
+from ufactory.trajectory.segments import JointLimits, Program, make_gripper, make_movej, make_movel
 
 
 def _finite_difference_velocity(samples: np.ndarray, start: np.ndarray, rate: float) -> np.ndarray:
@@ -26,7 +26,7 @@ def test_profile_import_does_not_load_genesis():
     code = (
         "import sys; "
         "import ufactory.trajectory.profile; "
-        "from ufactory.trajectory.segments import build_pickplace_program; "
+        "import ufactory.trajectory.segments; "
         "print('genesis' in sys.modules)"
     )
     result = subprocess.run(
@@ -138,23 +138,19 @@ def test_program_segments_share_the_same_sampling_contract():
     rate = 20.0
     q0 = np.zeros(6)
     q1 = np.array([0.2, -0.1, 0.05, 0.0, 0.1, -0.05])
-    waypoints = [
-        {"type": "movej", "q_start": q0, "q_end": q1, "label": "joint"},
-        {
-            "type": "movel",
-            "pose_start": [0.30, 0.00, 0.30],
-            "pose_end": [0.30, 0.10, 0.30],
-            "label": "line",
-        },
-        {"type": "gripper", "gap_start": 0.084, "gap_end": 0.024, "duration": 1.0, "label": "grip"},
+    limits = JointLimits.from_speed_mvacc(0.5, 1.0)
+    segments = [
+        make_movej(q0, q1, rate=rate, limits=limits, label="joint"),
+        make_movel(
+            np.array([0.30, 0.00, 0.30]),
+            np.array([0.30, 0.10, 0.30]),
+            rate=rate,
+            limits=limits,
+            label="line",
+        ),
+        make_gripper(0.084, 0.024, rate=rate, duration_s=1.0, label="grip"),
     ]
-
-    program = build_pickplace_program(
-        rate=rate,
-        speed_rad_s=0.5,
-        mvacc_rad_s2=1.0,
-        waypoints=waypoints,
-    )
+    program = Program(segments=segments, rate=rate, limits=limits)
 
     assert len(program.segments) == 3
     assert program.total_ticks == sum(seg.samples_count for seg in program.segments)

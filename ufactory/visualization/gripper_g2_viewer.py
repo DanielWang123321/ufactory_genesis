@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ufactory.grippers.g2 import (
+    G2_JOINT_NAMES,
     GRIPPER_G2_SIM_OPEN_DRIVE as GRIPPER_OPEN,
     GRIPPER_G2_SIM_CLOSE_DRIVE as GRIPPER_CLOSE,
     gripper_g2_sim_drive_to_gap_m,
@@ -12,22 +13,13 @@ from ufactory.grippers.g2 import (
 
 GRIPPER_HOLD_STEPS = 200
 
-ALL_GRIPPER_JOINTS = (
-    "drive_joint",
-    "left_finger_joint",
-    "left_inner_knuckle_joint",
-    "right_outer_knuckle_joint",
-    "right_finger_joint",
-    "right_inner_knuckle_joint",
-)
-
 
 def gripper_dof_indices(robot) -> tuple[list[int], list[int]]:
     joint_map = {j.name.split("/")[-1]: j for j in robot.joints}
     if "drive_joint" not in joint_map:
         return [], []
     drive_idx = [joint_map["drive_joint"].dofs_idx_local[0]]
-    all_idx = [joint_map[n].dofs_idx_local[0] for n in ALL_GRIPPER_JOINTS if n in joint_map]
+    all_idx = [joint_map[n].dofs_idx_local[0] for n in G2_JOINT_NAMES if n in joint_map]
     return drive_idx, all_idx
 
 

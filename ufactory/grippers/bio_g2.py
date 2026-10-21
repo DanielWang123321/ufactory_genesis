@@ -28,7 +28,6 @@ OPEN_GAP = 0.150
 
 RIGHT_JOINT = "bio_gripper_g2_right_finger_joint"
 LEFT_JOINT = "bio_gripper_g2_left_finger_joint"
-_JOINT_NAMES = (RIGHT_JOINT, LEFT_JOINT)
 
 _DEFAULT_HOLD_STEPS = 200
 
@@ -59,7 +58,7 @@ class BioGripperG2:
         gripper = BioGripperG2(robot)
         if gripper.found:
             gripper.setup_pd()
-            gripper.open()
+            gripper.set_pose(BioGripperG2.OPEN_POS)
 
         # Demo loop:
         for step in range(1000):
@@ -167,16 +166,6 @@ class BioGripperG2:
         target = self._targets(active, right_value)
         self._robot.set_dofs_position(target, active, zero_velocity=False)
         self._robot.control_dofs_position(target, active)
-
-    # -- convenience --------------------------------------------------------
-
-    def open(self) -> None:
-        """Open the gripper fully (kinematic teleport)."""
-        self.set_pose(OPEN_POS)
-
-    def close(self) -> None:
-        """Close the gripper fully (kinematic teleport)."""
-        self.set_pose(CLOSE_POS)
 
     # -- internal -----------------------------------------------------------
 

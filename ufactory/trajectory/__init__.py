@@ -1,7 +1,6 @@
-"""Stable v0.2.5 trajectory application API.
+"""Trajectory planning, preflight, and execution application API.
 
-Legacy replay helpers remain implementation modules for internal migration but
-are intentionally not re-exported. Real execution requires an ApprovedProgram.
+Real execution requires an :class:`ufactory.safety.ApprovedProgram`.
 """
 
 from __future__ import annotations

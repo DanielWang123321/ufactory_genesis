@@ -28,11 +28,6 @@ LITE6_GRIPPER_SIM_CLOSED_DRIVE = 0.0
 LITE6_GRIPPER_SIM_OPEN_DRIVE = LITE6_GRIPPER_FINGER_TRAVEL_M
 LITE6_GRIPPER_DEMO_HOLD_STEPS = 200
 
-# Deprecated legacy binary-close offset retained for compatibility. The default
-# trajectory sim now uses the physical 20 mm minimum gap with rigid contact and
-# friction, without geometric weld/snap in the sim executor.
-LITE6_GRIPPER_GAP_CALIBRATION_OFFSET_M = 0.010
-
 _FINGER_MESH_DIR = Path(__file__).resolve().parents[2] / "assets" / "urdf" / "lite6_gripper" / "meshes" / "collision"
 _FINGER1_VISUAL_ORIGIN_M = np.asarray((0.0, 0.0, 0.0), dtype=np.float64)
 _FINGER2_VISUAL_ORIGIN_M = np.asarray((0.0, 0.0, 0.0), dtype=np.float64)
@@ -43,17 +38,6 @@ _FINGER2_VERTS: np.ndarray | None = None
 def clamp_lite6_gripper_gap_m(gap_m: float) -> float:
     """Clamp a two-finger gap in metres to the Lite6 gripper's physical range."""
     return max(LITE6_GRIPPER_CLOSED_GAP_M, min(LITE6_GRIPPER_OPEN_GAP_M, float(gap_m)))
-
-
-def lite6_gripper_gap_m_to_sim_drive(gap_m: float) -> float:
-    """Map a desired physical gap in metres to the Genesis ``finger_joint1`` position."""
-    span = LITE6_GRIPPER_OPEN_GAP_M - LITE6_GRIPPER_CLOSED_GAP_M
-    if span <= 0.0:
-        return LITE6_GRIPPER_SIM_CLOSED_DRIVE
-    open_fraction = (clamp_lite6_gripper_gap_m(gap_m) - LITE6_GRIPPER_CLOSED_GAP_M) / span
-    return LITE6_GRIPPER_SIM_CLOSED_DRIVE + open_fraction * (
-        LITE6_GRIPPER_SIM_OPEN_DRIVE - LITE6_GRIPPER_SIM_CLOSED_DRIVE
-    )
 
 
 def lite6_gripper_sim_drive_to_gap_m(drive: float) -> float:
@@ -104,10 +88,16 @@ def _finger_mesh_vertices() -> tuple[np.ndarray, np.ndarray]:
 
 def _link_world_vertices(link, mesh_vertices: np.ndarray) -> np.ndarray:
     pos = link.get_pos()[0].detach().cpu().numpy()
-    quat = link.get_quat()[0].detach().cpu().numpy()
-    from scipy.spatial.transform import Rotation as R
-
-    rot = R.from_quat([quat[1], quat[2], quat[3], quat[0]]).as_matrix()
+    quat = np.asarray(link.get_quat()[0].detach().cpu().numpy(), dtype=np.float64)
+    w, x, y, z = (float(v) for v in quat / np.linalg.norm(quat))
+    rot = np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - w * z), 2.0 * (x * z + w * y)],
+            [2.0 * (x * y + w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - w * x)],
+            [2.0 * (x * z - w * y), 2.0 * (y * z + w * x), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
     return mesh_vertices @ rot.T + pos
 
 
@@ -148,12 +138,6 @@ def _lite6_glb_inner_contact_geometry(ctx, obj_pos=None) -> tuple[float, float, 
     gap_neg = float(-half_y - inner_neg)
     gap_pos = float(inner_pos - half_y)
     return inner_neg, inner_pos, gap_neg, gap_pos
-
-
-def measure_lite6_glb_side_clearance_m(ctx, obj_pos=None) -> tuple[float, float]:
-    """Return per-face GLB pad-to-block side clearance (m) at the object mid-height."""
-    _, _, gap_neg, gap_pos = _lite6_glb_inner_contact_geometry(ctx, obj_pos=obj_pos)
-    return gap_neg, gap_pos
 
 
 def snap_object_to_lite6_glb_grasp(ctx) -> float:

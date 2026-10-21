@@ -53,43 +53,6 @@ DEFAULT_ROBOT_BASE_POS = (0.30, 0.00, TABLE_HEIGHT)
 DEFAULT_GRIPPER_GRASP_GAP_M = 0.022
 LITE6_DEFAULT_GRIPPER_GRASP_GAP_M = 0.020
 
-# Finger geometry constants measured/URDF-derived (same as the demo). These
-# describe the Gripper G2 pad geometry; Lite6 uses its own LITE6_* constants.
-FINGER_PAD_BELOW_FC = 0.061
-FINGER_CLOSE_DESCENT = 0.015
-GRASP_TABLE_CLEARANCE = 0.010
-
-# Lite6 parallel-jaw fingers: pad extends ~27 mm below the joint/finger-center
-# Lite6 reversed parallel-jaw finger geometry (URDF/mesh-derived). Each finger
-# is an L: a mounting boss near link6 that used to over-reach the cube, plus a
-# long fingertip plate (the large flat inner pad) that is the intended gripping
-# surface. The finger URDFs place both fingers on the raw mesh (no synthetic
-# outward offset), so the fingertip plate closes onto the 30 mm cube while the
-# boss stays clear. ``PAD_BELOW_FC`` is the fc->fingertip distance; the grasp
-# clearance keeps the fingertip plate spanning the cube's upper body with the
-# boss a few mm above the cube top.
-# fc->lowest inner-pad Z at grasp (collision STL, gripper-down); tuned so the flat
-# pad spans the 30 mm cube mid-height after typical MoveL end-side error on descend.
-LITE6_FINGER_PAD_BELOW_FC = 0.021
-LITE6_FINGER_CLOSE_DESCENT = 0.0
-# Slightly below the G2 default so the fingertip plate (not the mounting boss)
-# reaches the cube sides once descend tracking error is accounted for.
-LITE6_GRASP_TABLE_CLEARANCE = 0.006
-# Lift the Lite6 grasp slightly so the low mounting boss clears the cube top
-# and the large flat inner pad, not the stop/boss region, carries side contact.
-LITE6_GRASP_LINK6_Z_EXTRA_M = 0.015
-# Lite6 opens at the same grasp height after a short closed-gripper settle in
-# the trajectory wrapper; keep this deprecated standoff at zero so parallel-jaw
-# release does not lift the cube before opening.
-LITE6_PLACE_RELEASE_STANDOFF_M = 0.0
-
-# Empirical link6->finger-center z offset (gripper open, "down" orientation),
-# measured once per gripper family by build_scene and stable across xArm5/6/7/
-# UF850 (all Gripper G2) since the arm's ee_link and the G2 mount are identical
-# geometry. Used by real-path dry-run height estimates (no sim scene needed).
-FINGER_Z_OFFSET_G2 = 0.1011
-FINGER_Z_OFFSET_LITE6 = 0.0543
-
 RIGID_SOLVER_ITERATIONS = DEFAULT_SOLVER_ITERATIONS
 RIGID_NOSLIP_ITERATIONS = DEFAULT_NOSLIP_ITERATIONS
 RIGID_CONSTRAINT_TIMECONST = DEFAULT_CONSTRAINT_TIMECONST
@@ -97,8 +60,6 @@ RIGID_CONSTRAINT_TIMECONST = DEFAULT_CONSTRAINT_TIMECONST
 # shared pick-place runtime configuration; contact stiffness remains code policy.
 OBJ_FRICTION = 1.0
 FINGER_FRICTION = 1.2
-LITE6_OBJ_FRICTION = OBJ_FRICTION
-LITE6_FINGER_FRICTION = FINGER_FRICTION
 
 
 @dataclass
@@ -231,11 +192,6 @@ def _robot_defaults(robot_key: str) -> dict:
         "grasp_height_extra_m": gripper_profile.grasp_height_extra_m,
         "excluded_geometry_pairs": config.safety.excluded_geometry_pairs,
     }
-
-
-def default_grasp_gap_m(robot_key: str) -> float:
-    """Tuned default two-finger grasp gap (m) for ``robot_key``'s default object."""
-    return _robot_defaults(get_robot_runtime_profile(robot_key).model.key)["grasp_gap_m"]
 
 
 @dataclass

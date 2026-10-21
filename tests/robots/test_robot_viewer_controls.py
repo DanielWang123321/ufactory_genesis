@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import importlib
 import sys
 import types
@@ -141,7 +142,7 @@ def test_g2_demo_holds_arm_with_pd_and_only_drives_master(monkeypatch, tmp_path)
 
     monkeypatch.setattr(robot_viewer, "gs", fake_gs)
     monkeypatch.setattr(robot_viewer, "require_genesis_runtime", lambda _gs: None)
-    monkeypatch.setattr(robot_viewer, "enable_glb_pbr_surfaces", lambda: None)
+    monkeypatch.setattr(robot_viewer, "glb_pbr_surfaces", nullcontext)
     monkeypatch.setattr(robot_viewer, "glb_view_surface", lambda: object())
     monkeypatch.setattr(robot_viewer, "setup_arm_pd", lambda *args: arm_pd_calls.append(args))
     monkeypatch.setattr(robot_viewer, "resolve_robot_link", lambda *_args: object())

@@ -3,8 +3,8 @@ simulation:
   backend: gpu
   precision: "32"
   seed: 1
-  # Conservative g2_stable_v1_3_3 production margin at the 50 Hz control rate.
-  # The corrected compliant mimic profile is the primary numerical-stability fix.
+  # Conservative 32-substep production margin for G2 contact scenes at 50 Hz.
+  # The compliant mimic equality profile is the primary numerical-stability fix.
   substeps: 32
   constraint_solver: newton
   solver_iterations: 100

@@ -12,14 +12,18 @@ from typing import Any, Sequence
 import numpy as np
 
 from ufactory.manipulation.commands import (
+    build_packaging_backends as _backends,
     connect as _connect,
     ensure_cartesian_program_start as _ensure_cartesian_program_start,
     ensure_program_start as _ensure_program_start,
     model_and_hashes as _model_and_hashes,
+    prepare_real_gripper_sender,
+    prime_first_movej_sample,
     print_ik_compile_complete as _print_ik_compile_complete,
     print_preflight_complete as _print_preflight_complete,
     print_preflight_start as _print_preflight_start,
     print_preflight_violation_summary as _print_preflight_violation_summary,
+    print_real_execution_summary,
     print_summary as _print_summary,
     read_q as _read_q,
     sdk_sim_feedback as _sdk_sim_feedback,
@@ -27,7 +31,6 @@ from ufactory.manipulation.commands import (
     write_json as _write_json,
 )
 from ufactory.config import dump_runtime_config, load_runtime_config
-from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn
 from ufactory.manipulation.packaging.core import (
@@ -35,7 +38,6 @@ from ufactory.manipulation.packaging.core import (
     packaging_layout,
     packaging_scene_sha256,
 )
-from ufactory.manipulation.packaging.safety import build_packaging_backends as _backends
 from ufactory.robots.registry import robot_cli_choices
 from ufactory.safety import validate_sdk_simulation
 from ufactory.safety.gate import program_sha256
@@ -57,7 +59,6 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
         show_viewer=show_viewer,
         robot_urdf_path=str(urdf),
         runtime_config=config,
-        calibrated_g2=False,
     )
     standard_offset = (0.0, 0.0)
     showcase_ctx = init_showcase_robot(
@@ -90,7 +91,6 @@ def _run_sim(args: argparse.Namespace, config: Any) -> int:
         cycles=args.cycles,
         table_height=args.table_height,
         visual=args.visual,
-        capture_keyframes=args.capture_keyframes,
         csv=args.csv,
         sim_report=args.sim_report,
         report=args.report,
@@ -137,7 +137,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--speed", type=float, default=1.0, help="Simulation-only playback multiplier")
     parser.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
     parser.add_argument("--table-height", type=float, default=None)
-    parser.add_argument("--capture-keyframes", action="store_true")
     args = parser.parse_args(argv)
     g2_overrides = {
         f"simulation.g2.{name}": getattr(args, name)
@@ -149,10 +148,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.speed <= 0.0:
         parser.error("--speed must be positive")
-    if args.mode != "sim" and (
-        args.speed != 1.0 or args.cycles is not None or args.table_height is not None or args.capture_keyframes
-    ):
-        parser.error("--speed/--cycles/--table-height/--capture-keyframes are simulation-only")
+    if args.mode != "sim" and (args.speed != 1.0 or args.cycles is not None or args.table_height is not None):
+        parser.error("--speed/--cycles/--table-height are simulation-only")
     if args.mode == "real" and not args.confirm_real:
         parser.error("real packaging motion requires --confirm-real")
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
@@ -322,29 +319,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             bridge.start()
 
         transport.authorize_motion(mode=1)
-        first_joint = None
-        for segment in approved.program.segments:
-            if segment.kind == "movej":
-                samples, _ = segment.samples(approved.program.rate)
-                if len(samples):
-                    first_joint = np.asarray(samples[0], dtype=np.float64)
-                    break
-        if first_joint is not None:
-            transport.prime_joint_stream(first_joint)
-        elif args.executor == "servo_j":
-            raise RuntimeError("approved servo_j packaging program has no MoveJ sample")
-
-        gripper_adapter = create_gripper_adapter(config.gripper)
-        if gripper_adapter.capabilities.real_command:
-            code = gripper_adapter.prepare_real(arm)
-            if code != 0:
-                transport.stop()
-                raise RuntimeError(f"gripper preparation failed with SDK code {code}; controller stopped")
-        current_drive = [config.gripper.open_drive]
-
-        def send_gripper(gap_m: float) -> int:
-            current_drive[0] = gripper_adapter.gap_to_drive(gap_m)
-            return gripper_adapter.send_real_gap(arm, gap_m)
+        prime_first_movej_sample(
+            transport,
+            approved.program,
+            executor=args.executor,
+            missing_message="approved servo_j packaging program has no MoveJ sample",
+        )
+        current_drive, gripper_sender = prepare_real_gripper_sender(arm, transport, config.gripper)
 
         execution = execute_real(
             approved,
@@ -364,20 +345,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 gripper_drive=current_drive[0],
                 include_collision=False,
             ),
-            gripper_sender=send_gripper if gripper_adapter.capabilities.real_command else None,
+            gripper_sender=gripper_sender,
             on_tick=bridge.on_tick if bridge is not None else None,
             not_ready_codes=frozenset((9,)),
         )
-        print(f"real_execution={'PASS' if execution.completed else 'FAIL'} sent_samples={execution.sent_samples}")
-        if execution.fault is not None:
-            print(
-                f"fault={execution.fault.fault_class}: {execution.fault.message} "
-                f"sample_index={execution.fault.sample_index}"
-            )
-        print(
-            f"timing_minor_misses={execution.minor_lateness_count} "
-            f"timing_max_lateness_ms={execution.max_lateness_ns / 1_000_000.0:.3f}"
-        )
+        print_real_execution_summary(execution)
         if bridge is not None:
             bridge.hold_until_closed()
         return 0 if execution.completed else 1

@@ -83,10 +83,10 @@ def test_reach_task_config_is_xarm6_only_and_round_trips() -> None:
     assert robot_cfg["urdf_path"].endswith("assets/urdf/xarm6/xarm6_1305.urdf")
     assert reward_cfg["reach"] == pytest.approx(1.0)
     reach_contract = runtime_env_contract(env_cfg)
-    pick_place_contract = runtime_env_contract({"obj_size": [0.03, 0.03, 0.03]})
+    pick_place_contract = runtime_env_contract({"workspace_upper": [0.65, 0.35, 0.55]})
     assert "max_joint_delta_rad" in reach_contract
-    assert "obj_size" not in reach_contract
-    assert "obj_size" in pick_place_contract
+    assert "workspace_upper" not in reach_contract
+    assert "workspace_upper" in pick_place_contract
     assert "success_distance_m" not in pick_place_contract
 
 

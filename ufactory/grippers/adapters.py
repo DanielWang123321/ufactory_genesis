@@ -79,12 +79,17 @@ class ConfiguredGripperAdapter:
 
 class G2Adapter(ConfiguredGripperAdapter):
     def gap_to_drive(self, gap_m: float) -> float:
-        super().gap_to_drive(gap_m)  # Retain finite-value and configured-range validation.
-        return gripper_g2_gap_m_to_sim_drive(gap_m)
+        gap = self._finite(gap_m, "gap_m")
+        if not self.profile.closed_gap_m <= gap <= self.profile.open_gap_m:
+            raise ValueError(f"gap_m {gap} outside [{self.profile.closed_gap_m}, {self.profile.open_gap_m}]")
+        return gripper_g2_gap_m_to_sim_drive(gap)
 
     def drive_to_gap(self, drive: float) -> float:
-        super().drive_to_gap(drive)
-        return gripper_g2_sim_drive_to_gap_m(drive)
+        value = self._finite(drive, "drive")
+        lo, hi = sorted((self.profile.open_drive, self.profile.closed_drive))
+        if not lo <= value <= hi:
+            raise ValueError(f"drive {value} outside [{lo}, {hi}]")
+        return gripper_g2_sim_drive_to_gap_m(value)
 
     def prepare_real(self, arm: object) -> int:
         code, error = getattr(arm, "get_gripper_err_code")()

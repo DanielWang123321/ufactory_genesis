@@ -19,7 +19,6 @@ pip install -e ".[sim]"
 # Optional:
 #   pip install -e ".[sim,rl]"        # Linux/NVIDIA reach and pick-place
 #   pip install -e ".[sim,real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
-#   pip install -e ".[sim,showcase]"  # packaging box textures (scipy)
 #   pip install -e ".[sim,dynamics]"  # dynamics reference checks
 ```
 
@@ -162,12 +161,6 @@ python examples/pick_place/run.py \
 > For physical robot pick-place, see [Hardware & Real Robot](#hardware--real-robot).
 
 ## Packaging Showcase Simulation
-
-Generate box textures once before the first packaging run (requires `.[showcase]`):
-
-```bash
-python scripts/generate_showcase_textures.py
-```
 
 `examples/packaging/run.py` delegates to `ufactory-packaging-showcase`.
 

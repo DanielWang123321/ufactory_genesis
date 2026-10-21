@@ -32,19 +32,19 @@ PACKAGING_CASES = [
 ]
 
 
-def _paths(suite, name):
-    directory = Path("reports/g2") / suite
+def _paths(base_dir: Path, suite: str, name: str):
+    directory = base_dir / suite
     directory.mkdir(parents=True, exist_ok=True)
     return directory / f"{name}.csv", directory / f"{name}.json", directory / f"{name}.preflight.json"
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("robot,executor,speed,force", PICK_CASES)
-def test_pick_place_timing_matrix(robot, executor, speed, force):
-    _pick_case(robot, speed, force, executor)
+def test_pick_place_timing_matrix(robot, executor, speed, force, tmp_path):
+    _pick_case(robot, speed, force, executor, tmp_path=tmp_path)
 
 
-def _pick_case(robot, speed, force, executor, *, fault=None, monkeypatch=None):
+def _pick_case(robot, speed, force, executor, *, tmp_path: Path, fault=None, monkeypatch=None):
     import genesis as gs
     from ufactory.cli.pick_place import _backends, _build_ik_scene, _build_program
     from ufactory.config import load_runtime_config
@@ -58,7 +58,7 @@ def _pick_case(robot, speed, force, executor, *, fault=None, monkeypatch=None):
         robot, overrides={"simulation.g2.speed_percent": speed, "simulation.g2.force_percent": force}
     )
     name = f"{robot}_{executor}_s{speed}_f{force}" + (f"_{fault}" if fault else "")
-    csv, report_path, preflight_path = _paths("faults" if fault else "pick-matrix", name)
+    csv, report_path, preflight_path = _paths(tmp_path, "faults" if fault else "pick-matrix", name)
     with GenesisRuntimeManager(config.simulation):
         assert str(gs.device).startswith("cuda")
         ctx = _build_ik_scene(config, calibration=None, calibrated_g2=True)
@@ -110,13 +110,13 @@ def _pick_case(robot, speed, force, executor, *, fault=None, monkeypatch=None):
 @pytest.mark.integration
 @pytest.mark.parametrize("executor", EXECUTORS)
 @pytest.mark.parametrize("fault", ("no-contact", "blocked-release"))
-def test_pick_place_timeout_stops_following_motion(executor, fault, monkeypatch):
-    _pick_case("xarm6", 50, 50, executor, fault=fault, monkeypatch=monkeypatch)
+def test_pick_place_timeout_stops_following_motion(executor, fault, monkeypatch, tmp_path):
+    _pick_case("xarm6", 50, 50, executor, tmp_path=tmp_path, fault=fault, monkeypatch=monkeypatch)
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("robot,executor,cycles", PACKAGING_CASES)
-def test_packaging_timing_and_cycle_reset(robot, executor, cycles):
+def test_packaging_timing_and_cycle_reset(robot, executor, cycles, tmp_path):
     import genesis as gs
     from ufactory.config import load_runtime_config
     from ufactory.manipulation.packaging.scene import build_packaging_scene
@@ -136,7 +136,7 @@ def test_packaging_timing_and_cycle_reset(robot, executor, cycles):
         ctx = init_showcase_robot(arm, layout, scene, runtime_config=config)
         hold_robot_home(arm, scene, ctx, steps=SETTLE_STEPS)
         for cycle in range(cycles):
-            csv, report_path, preflight_path = _paths("pack-matrix", f"{robot}_{executor}_cycle{cycle + 1}")
+            csv, report_path, preflight_path = _paths(tmp_path, "pack-matrix", f"{robot}_{executor}_cycle{cycle + 1}")
             prepare_packaging_cycle(scene, arm, block, layout, ctx)
             report = run_pick_place_cycle(
                 scene,
@@ -217,7 +217,7 @@ def test_rl_batch_control_and_independent_reset(num_envs):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("robot", ["standalone", "xarm6"])
-def test_dynamic_demo_opens_and_closes_without_teleport(robot, monkeypatch):
+def test_dynamic_demo_opens_and_closes_without_teleport(robot, monkeypatch, tmp_path):
     import genesis as gs
     from ufactory.robots.paths import gripper_g2_movable_visual_urdf, robot_visual_glb_urdf
     from ufactory.robots.registry import get_robot_profile
@@ -239,7 +239,7 @@ def test_dynamic_demo_opens_and_closes_without_teleport(robot, monkeypatch):
                 gripper_demo=True,
             )
         assert str(gs.device).startswith("cuda")
-        directory = Path("reports/g2/viewers")
+        directory = tmp_path / "viewers"
         directory.mkdir(parents=True, exist_ok=True)
         (directory / f"{robot}.json").write_text(json.dumps(result, indent=2) + "\n")
         assert result["min_gap_mm"] <= 1

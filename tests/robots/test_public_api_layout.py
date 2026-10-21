@@ -88,6 +88,11 @@ def test_trajectory_api_does_not_export_unsafe_legacy_replay() -> None:
 def test_dynamics_api_is_report_and_validation_only() -> None:
     import ufactory.dynamics as dynamics
 
-    assert "DynamicsValidationService" in dynamics.__all__
-    for name in ("cli_hardware_check", "build_genesis_scene", "test_pd_step_response"):
+    assert "DynamicsSample" in dynamics.__all__
+    for name in (
+        "DynamicsValidationService",
+        "cli_hardware_check",
+        "build_genesis_scene",
+        "test_pd_step_response",
+    ):
         assert not hasattr(dynamics, name)

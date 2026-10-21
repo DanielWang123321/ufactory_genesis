@@ -92,7 +92,6 @@ class DynamicsRunConfig:
     genesis_backend: str | None = None
     sim_dt: float = SIM_DT
     sim_substeps: int = SIM_SUBSTEPS
-    integrator: str | None = None
     sdk_version: str | None = None
     firmware: str | None = None
     robot_sn: str | None = None
@@ -162,24 +161,6 @@ class DynamicsSample:
     n_real_samples: int = 0
     skip_reason: str = ""
     notes: list[str] = field(default_factory=list)
-
-
-@dataclass
-class TorqueCompareResult:
-    """Backward-compatible result object for the older real-robot script."""
-
-    name: str
-    q: np.ndarray
-    ee_z_mm: float
-    tau_genesis: np.ndarray
-    tau_real: np.ndarray
-    abs_err: np.ndarray
-    rel_err: np.ndarray
-    l2_err: float
-    settled: bool
-    passed: bool
-    skip_reason: str = ""
-    status: ValidationStatus = ValidationStatus.INSUFFICIENT_DATA
 
 
 def sha256_file(path: str | Path | None) -> str | None:
@@ -261,10 +242,6 @@ def array_or_nan(size: int = 6) -> np.ndarray:
     return np.full(size, np.nan, dtype=np.float64)
 
 
-def _runtime_dof(runtime: RobotRuntimeProfile) -> int:
-    return runtime.model.dof
-
-
 def _effort_limits(runtime: RobotRuntimeProfile) -> np.ndarray:
     return np.asarray(runtime.arm.effort_limits, dtype=np.float64)
 
@@ -273,13 +250,7 @@ def _abs_err_limits(runtime: RobotRuntimeProfile) -> np.ndarray:
     return np.asarray(runtime.dynamics.abs_err_limits, dtype=np.float64)
 
 
-def _array_or_nan_for_runtime(runtime: RobotRuntimeProfile) -> np.ndarray:
-    return array_or_nan(_runtime_dof(runtime))
-
-
-def _sample_dof(sample: DynamicsSample | TorqueCompareResult) -> int:
-    if isinstance(sample, TorqueCompareResult):
-        return int(np.asarray(sample.q, dtype=np.float64).reshape(-1).size)
+def _sample_dof(sample: DynamicsSample) -> int:
     arrays = [
         sample.q,
         sample.q_actual,
@@ -338,7 +309,7 @@ def _finite_or_none(value: float | None) -> float | None:
     return out if math.isfinite(out) else None
 
 
-def has_sdk_torque(sample: DynamicsSample | TorqueCompareResult) -> bool:
+def has_sdk_torque(sample: DynamicsSample) -> bool:
     tau = sample.tau_real
     if tau is None:
         return False
@@ -347,7 +318,7 @@ def has_sdk_torque(sample: DynamicsSample | TorqueCompareResult) -> bool:
 
 
 def status_reason(
-    sample: DynamicsSample | TorqueCompareResult,
+    sample: DynamicsSample,
     *,
     runtime_profile: RobotRuntimeProfile | None = None,
 ) -> str:
@@ -378,32 +349,23 @@ def status_reason(
 
 
 def joint_torque_rows(
-    sample: DynamicsSample | TorqueCompareResult,
+    sample: DynamicsSample,
     *,
     runtime_profile: RobotRuntimeProfile | None = None,
 ) -> list[dict[str, Any]]:
     n = _sample_dof(sample)
     if n <= 0:
         return []
-    if isinstance(sample, TorqueCompareResult):
-        q_cmd = _fit_float_tuple(sample.q, n)
-        q_actual = np.full(n, np.nan, dtype=np.float64)
-        genesis_tau = _fit_float_tuple(sample.tau_genesis, n)
-        sdk_mean = _fit_float_tuple(sample.tau_real, n)
-        sdk_median = sdk_std = sdk_min = sdk_max = np.full(n, np.nan, dtype=np.float64)
-        abs_err = _fit_float_tuple(sample.abs_err, n)
-        rel_err = _fit_float_tuple(sample.rel_err, n)
-    else:
-        q_cmd = _fit_float_tuple(sample.q, n)
-        q_actual = _fit_float_tuple(sample.q_actual, n)
-        genesis_tau = _fit_float_tuple(sample.pd_hold_tau, n)
-        sdk_mean = _fit_float_tuple(sample.tau_real, n)
-        sdk_median = _fit_float_tuple(sample.tau_real_median, n)
-        sdk_std = _fit_float_tuple(sample.tau_real_std, n)
-        sdk_min = _fit_float_tuple(sample.tau_real_min, n)
-        sdk_max = _fit_float_tuple(sample.tau_real_max, n)
-        abs_err = _fit_float_tuple(sample.abs_err, n)
-        rel_err = _fit_float_tuple(sample.rel_err, n)
+    q_cmd = _fit_float_tuple(sample.q, n)
+    q_actual = _fit_float_tuple(sample.q_actual, n)
+    genesis_tau = _fit_float_tuple(sample.pd_hold_tau, n)
+    sdk_mean = _fit_float_tuple(sample.tau_real, n)
+    sdk_median = _fit_float_tuple(sample.tau_real_median, n)
+    sdk_std = _fit_float_tuple(sample.tau_real_std, n)
+    sdk_min = _fit_float_tuple(sample.tau_real_min, n)
+    sdk_max = _fit_float_tuple(sample.tau_real_max, n)
+    abs_err = _fit_float_tuple(sample.abs_err, n)
+    rel_err = _fit_float_tuple(sample.rel_err, n)
 
     abs_limits = _runtime_abs_limits(runtime_profile, n)
     effort_limits = _runtime_effort_limits(runtime_profile, n)
@@ -445,23 +407,17 @@ def joint_torque_rows(
 
 
 def torque_summary(
-    sample: DynamicsSample | TorqueCompareResult,
+    sample: DynamicsSample,
     *,
     runtime_profile: RobotRuntimeProfile | None = None,
 ) -> dict[str, Any]:
     rows = joint_torque_rows(sample, runtime_profile=runtime_profile)
     finite_rows = [row for row in rows if row["abs_err_nm"] is not None]
     worst = max(finite_rows, key=lambda row: row["abs_err_nm"], default=None)
-    if isinstance(sample, TorqueCompareResult):
-        status = sample.status.value if isinstance(sample.status, ValidationStatus) else str(sample.status)
-        warnings = 0
-        n_samples = 0
-        l2_err = _finite_or_none(sample.l2_err)
-    else:
-        status = sample.status.value
-        warnings = len(sample.static_warnings)
-        n_samples = int(sample.n_real_samples)
-        l2_err = _finite_or_none(sample.l2_err)
+    status = sample.status.value
+    warnings = len(sample.static_warnings)
+    n_samples = int(sample.n_real_samples)
+    l2_err = _finite_or_none(sample.l2_err)
     summary = {
         "status": status,
         "torque_l2_err_nm": l2_err,
@@ -533,7 +489,6 @@ def make_run_config(
 ) -> DynamicsRunConfig:
     genesis_version = None
     genesis_backend = None
-    integrator = None
     try:
         import genesis as gs
 
@@ -578,7 +533,6 @@ def make_run_config(
         genesis_backend=genesis_backend,
         sim_dt=sim_dt,
         sim_substeps=sim_substeps,
-        integrator=integrator,
         sdk_version=package_version("xarm-python-sdk"),
         firmware=firmware,
         robot_sn=robot_sn,
@@ -614,7 +568,7 @@ def _csv_float(value: Any, digits: int = 6) -> str:
 
 
 def write_csv_report(
-    results: Sequence[DynamicsSample | TorqueCompareResult],
+    results: Sequence[DynamicsSample],
     path: str | Path,
     *,
     runtime_profile: RobotRuntimeProfile | None = None,
@@ -677,7 +631,7 @@ def write_csv_report(
             summary = torque_summary(result, runtime_profile=runtime_profile)
             row = [
                 REPORT_SCHEMA_VERSION,
-                result.pose if isinstance(result, DynamicsSample) else result.name,
+                result.pose,
                 f"{result.ee_z_mm:.3f}",
                 int(result.settled),
                 summary["status"],

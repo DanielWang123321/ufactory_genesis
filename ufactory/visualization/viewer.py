@@ -92,5 +92,5 @@ def start_deferred_viewer(scene, *, kinematic_mirror: bool = False) -> None:
         visualizer._rasterizer._offscreen = False
     viewer.build(scene)
     visualizer.viewer_lock = viewer.lock
-    # reset() 已由 viewer.build() → visualizer.build() 内部完成（visualizer.py L210），
-    # 延迟启动场景无需再次重置，避免窗口可见后渲染状态被清空导致黑帧闪烁。
+    # viewer.build() already resets the visualizer; avoid a redundant reset
+    # after the window becomes visible to prevent a black-frame flash.

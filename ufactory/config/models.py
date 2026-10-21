@@ -63,7 +63,6 @@ class RobotSpec:
 class ArmControlProfile:
     """Joint-space controller defaults, with explicit SI-unit field names."""
 
-    home_qpos_rad: FloatTuple
     default_qpos_rad: FloatTuple
     kp: FloatTuple
     kv: FloatTuple
@@ -73,7 +72,6 @@ class ArmControlProfile:
 
     def validate_dof(self, dof: int) -> None:
         for name in (
-            "home_qpos_rad",
             "default_qpos_rad",
             "kp",
             "kv",
@@ -223,6 +221,36 @@ class G2SimulationConfig:
                 raise ValueError(f"simulation.g2.{name} must be finite and within {low}–{high}")
 
 
+CONSTRAINT_SOLVERS = ("newton",)
+FRICTION_CONES = ("pyramidal", "elliptic")
+CONTACT_RESOLUTIONS = ("convex", "signorini")
+
+
+def validate_rigid_physics(
+    *,
+    constraint_solver: str,
+    friction_cone: str,
+    contact_resolution: str,
+    noslip_iterations: int,
+) -> None:
+    """Reject unsupported or internally inconsistent rigid-contact settings."""
+
+    if constraint_solver not in CONSTRAINT_SOLVERS:
+        raise ValueError(f"constraint_solver must be one of {CONSTRAINT_SOLVERS}")
+    if friction_cone not in FRICTION_CONES:
+        raise ValueError(f"friction_cone must be one of {FRICTION_CONES}")
+    if contact_resolution not in CONTACT_RESOLUTIONS:
+        raise ValueError(f"contact_resolution must be one of {CONTACT_RESOLUTIONS}")
+    if noslip_iterations < 0:
+        raise ValueError("noslip_iterations must be non-negative")
+    if friction_cone == "elliptic" and noslip_iterations:
+        raise ValueError("elliptic friction is incompatible with the noslip solver")
+    if contact_resolution == "signorini" and (
+        constraint_solver != "newton" or friction_cone != "elliptic" or noslip_iterations != 0
+    ):
+        raise ValueError("signorini contact requires Newton, elliptic friction, and noslip_iterations=0")
+
+
 @dataclass(frozen=True)
 class SimulationConfig:
     """Validated Genesis process and rigid-solver settings."""
@@ -250,16 +278,12 @@ class SimulationConfig:
             raise ValueError("simulation iteration counts are invalid")
         if self.constraint_time_constant_s <= 0.0:
             raise ValueError("simulation constraint time constant must be positive")
-        if self.constraint_solver != "newton":
-            raise ValueError("simulation constraint solver must be newton")
-        if self.friction_cone not in {"pyramidal", "elliptic"}:
-            raise ValueError("simulation friction cone must be pyramidal or elliptic")
-        if self.contact_resolution not in {"convex", "signorini"}:
-            raise ValueError("simulation contact resolution must be convex or signorini")
-        if self.friction_cone == "elliptic" and self.noslip_iterations:
-            raise ValueError("elliptic friction is incompatible with the noslip solver")
-        if self.contact_resolution == "signorini" and (self.friction_cone != "elliptic" or self.noslip_iterations != 0):
-            raise ValueError("signorini contact requires Newton, elliptic friction, and noslip_iterations=0")
+        validate_rigid_physics(
+            constraint_solver=self.constraint_solver,
+            friction_cone=self.friction_cone,
+            contact_resolution=self.contact_resolution,
+            noslip_iterations=self.noslip_iterations,
+        )
 
 
 @dataclass(frozen=True)

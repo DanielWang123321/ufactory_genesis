@@ -503,3 +503,34 @@ def test_stationary_seed_projection_is_bounded(offset_rad, projected):
     expected_start = solved if projected else q0
     # Row 0 is the q_start prefix, rows 1-2 are the stationary seed samples.
     assert np.allclose(timeline.q_rad[:3], expected_start, atol=0.0)
+
+
+def test_approved_program_constructor_is_private_and_hash_tamper_is_rejected():
+    from ufactory.safety import ApprovedProgram
+    from ufactory.trajectory.execution import ExecutionRejected, execute_sim
+
+    approved_gate = gate()
+    joint_program = program()
+    report = approved_gate.preflight(joint_program, executor="servo_j")
+    assert report.passed
+    approved = approved_gate.approve(joint_program, report, expected_serial_number="XI130506XXXXXX")
+    with pytest.raises(TypeError, match="only be created"):
+        ApprovedProgram(joint_program, report, "XI130506XXXXXX", _issuer=object())
+    joint_program.metadata["tampered"] = True
+    with pytest.raises(ExecutionRejected, match="changed"):
+        execute_sim(approved, lambda _: None)
+
+
+def test_cartesian_simulation_approval_does_not_weaken_hardware_evidence_gate():
+    from ufactory.trajectory.execution import execute_sim
+
+    approved_gate = gate()
+    joint_program = program()
+    report = approved_gate.preflight(joint_program, executor="servo_cartesian")
+
+    simulated = approved_gate.approve_simulation(joint_program, report)
+    assert simulated.expected_serial_number == "SIMULATED-xarm6_1305"
+    execute_sim(simulated, lambda _: None)
+
+    with pytest.raises(ValueError, match="requires passing current SDK simulation evidence"):
+        approved_gate.approve(joint_program, report, expected_serial_number="XI130506XXXXXX")
