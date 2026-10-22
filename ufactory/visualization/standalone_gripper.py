@@ -25,7 +25,8 @@ def run_standalone_gripper_viewer(
     *,
     headless_steps: int = 600,
     calibrated_g2: bool = False,
-) -> None:
+    calibrated_bio_g2: bool = False,
+) -> dict | None:
     from ufactory.simulation import genesis_backend_constant
 
     parser = argparse.ArgumentParser(description=description)
@@ -40,19 +41,36 @@ def run_standalone_gripper_viewer(
         parser.add_argument("--position-mm", type=float, default=0)
         parser.add_argument("--speed-percent", type=float, default=50)
         parser.add_argument("--force-percent", type=float, default=50)
+    elif calibrated_bio_g2:
+        parser.add_argument("--position-mm", type=float, default=71)
+        parser.add_argument("--speed-percent", type=float, default=50)
+        parser.add_argument("--speed-mm-s", type=float, default=None)
+        parser.add_argument("--force-percent", type=float, default=50)
     args = parser.parse_args()
     if calibrated_g2:
         from ufactory.simulation.g2_model import checked
 
         for name, low, high in (("position_mm", 0, 84), ("speed_percent", 0, 100), ("force_percent", 1, 100)):
             checked(getattr(args, name), low, high, name)
+    elif calibrated_bio_g2:
+        from ufactory.simulation.bio_g2_model import MAX_SPEED_MM_S, MIN_SPEED_MM_S, checked
 
+        for name, low, high in (("position_mm", 71, 150), ("speed_percent", 0, 100), ("force_percent", 1, 100)):
+            checked(getattr(args, name), low, high, name)
+        if args.speed_mm_s is not None:
+            checked(args.speed_mm_s, MIN_SPEED_MM_S, MAX_SPEED_MM_S, "speed_mm_s")
+
+    calibrated = calibrated_g2 or calibrated_bio_g2
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, args.backend), logging_level="error")
     scene = gs.Scene(
         show_viewer=not args.headless,
-        sim_options=gs.options.SimOptions(dt=0.02, substeps=32) if calibrated_g2 else gs.options.SimOptions(dt=0.01),
-        rigid_options=make_rigid_options(gs, constraint_timeconst=0.00125) if calibrated_g2 else make_rigid_options(gs),
+        sim_options=gs.options.SimOptions(dt=0.02, substeps=32) if calibrated else gs.options.SimOptions(dt=0.01),
+        rigid_options=(
+            make_rigid_options(gs, constraint_timeconst=0.00125 if calibrated_g2 else 0.002)
+            if calibrated
+            else make_rigid_options(gs)
+        ),
         viewer_options=gs.options.ViewerOptions(
             camera_pos=CAMERA_POS, camera_lookat=CAMERA_LOOKAT, camera_fov=CAMERA_FOV
         ),
@@ -64,6 +82,13 @@ def run_standalone_gripper_viewer(
     scene.build()
     if calibrated_g2:
         robot._ufactory_g2_demo_settings = (args.position_mm, args.speed_percent, args.force_percent)
+    elif calibrated_bio_g2:
+        robot._ufactory_bio_g2_demo_settings = (
+            args.position_mm,
+            args.speed_percent,
+            args.force_percent,
+            args.speed_mm_s,
+        )
 
     step_controller = controller(robot)
     gaps = []
@@ -72,7 +97,10 @@ def run_standalone_gripper_viewer(
         scene.step()
         if calibrated_g2:
             gaps.append(robot._ufactory_g2_controller.gap_mm())
+        elif calibrated_bio_g2:
+            gaps.append(robot._ufactory_bio_g2_controller.gap_mm())
         if args.headless and step + 1 >= headless_steps:
             break
-    if calibrated_g2:
+    if calibrated:
         return {"min_gap_mm": min(gaps), "max_gap_mm": max(gaps), "final_gap_mm": gaps[-1], "ticks": len(gaps)}
+    return None

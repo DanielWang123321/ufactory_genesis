@@ -1,6 +1,20 @@
 """Gripper control and command-space conversion helpers."""
 
-from ufactory.grippers.bio_g2 import BioGripperG2
+from ufactory.grippers.bio_g2 import (
+    BIO_G2_JOINT_NAMES,
+    BIO_GRIPPER_G2_CLOSED_GAP_M,
+    BIO_GRIPPER_G2_CLOSED_GAP_MM,
+    BIO_GRIPPER_G2_JOINT_VELOCITY_M_S,
+    BIO_GRIPPER_G2_OPEN_GAP_M,
+    BIO_GRIPPER_G2_OPEN_GAP_MM,
+    BIO_GRIPPER_G2_SIM_CLOSED_DRIVE,
+    BIO_GRIPPER_G2_SIM_OPEN_DRIVE,
+    BioGripperG2,
+    bio_gripper_g2_gap_m_to_sdk_pos_mm,
+    bio_gripper_g2_gap_m_to_sim_drive,
+    bio_gripper_g2_sim_drive_to_gap_m,
+    clamp_bio_gripper_g2_gap_m,
+)
 from ufactory.grippers.g2 import (
     G2_JOINT_NAMES,
     GRIPPER_G2_CLOSED_GAP_MM,
@@ -14,6 +28,7 @@ from ufactory.grippers.g2 import (
     gripper_g2_sim_drive_to_gap_m,
 )
 from ufactory.grippers.adapters import (
+    BioG2Adapter,
     ConfiguredGripperAdapter,
     G2Adapter,
     GripperAdapter,
@@ -23,7 +38,20 @@ from ufactory.grippers.adapters import (
 )
 
 __all__ = [
+    "BIO_G2_JOINT_NAMES",
+    "BIO_GRIPPER_G2_CLOSED_GAP_M",
+    "BIO_GRIPPER_G2_CLOSED_GAP_MM",
+    "BIO_GRIPPER_G2_JOINT_VELOCITY_M_S",
+    "BIO_GRIPPER_G2_OPEN_GAP_M",
+    "BIO_GRIPPER_G2_OPEN_GAP_MM",
+    "BIO_GRIPPER_G2_SIM_CLOSED_DRIVE",
+    "BIO_GRIPPER_G2_SIM_OPEN_DRIVE",
+    "BioG2Adapter",
     "BioGripperG2",
+    "bio_gripper_g2_gap_m_to_sdk_pos_mm",
+    "bio_gripper_g2_gap_m_to_sim_drive",
+    "bio_gripper_g2_sim_drive_to_gap_m",
+    "clamp_bio_gripper_g2_gap_m",
     "G2_JOINT_NAMES",
     "GRIPPER_G2_CLOSED_GAP_MM",
     "GRIPPER_G2_OPEN_GAP_M",

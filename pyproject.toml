@@ -100,6 +100,7 @@ omit = [
     "ufactory/manipulation/packaging/simulation.py",
     "ufactory/robots/paths.py",
     "ufactory/robots/runtime.py",
+    "ufactory/trajectory/bio_g2_replay.py",
     "ufactory/trajectory/g2_replay.py",
     "ufactory/trajectory/ik.py",
     "ufactory/trajectory/mirror_executor.py",

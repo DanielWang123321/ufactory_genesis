@@ -85,6 +85,7 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable
 
 # Bio Gripper G2 / Lite6 grippers
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
+python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
 python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
@@ -125,6 +126,7 @@ dynamics-sim-check --robot xarm6 --random-count 5
 | Flag | Values / notes |
 |------|----------------|
 | `--robot` | Required: `xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
+| `--gripper` | Optional: `default` / `g2` / `bio_gripper_g2` / `lite6` (`bio_gripper_g2` runs the SBS 96-well microplate simulation on `xarm6`) |
 | `--mode` | Required for simulation: `sim` (Genesis physics), `dry-run` (offline trajectory and collision preflight) |
 | `--executor` | Required: `servo_j` or `servo_cartesian` |
 | `--backend` | Optional: `cpu` / `gpu`; overrides `simulation.backend` (use `cpu` without a Genesis-supported GPU) |
@@ -145,6 +147,10 @@ python examples/pick_place/run.py \
 # Genesis simulation with viewer
 python examples/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
+
+# xArm6 + Bio Gripper G2 SBS 96-well microplate pick-and-place
+python examples/pick_place/run.py \
+  --robot xarm6 --gripper bio_gripper_g2 --mode sim --executor servo_j --visual
 
 # CPU-only / unsupported GPU
 python examples/pick_place/run.py \

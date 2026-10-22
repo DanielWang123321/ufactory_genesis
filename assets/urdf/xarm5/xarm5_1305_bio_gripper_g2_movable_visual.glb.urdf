@@ -263,9 +263,9 @@
   </joint>
   <link name="bio_gripper_g2_base_link">
     <inertial>
-      <origin rpy="0 0 0" xyz="0.016179 -2.3911E-05 0.023897" />
-      <mass value="0.38837" />
-      <inertia ixx="0.00088398" ixy="4.8665E-08" ixz="5.6276E-06" iyy="0.00018256" iyz="4.0828E-08" izz="0.00094673" />
+      <origin rpy="0 0 0" xyz="-0.006296 -0.000853911 0.019201" />
+      <mass value="0.765827" />
+      <inertia ixx="0.0017431206103973" ixy="9.59625381852357e-08" ixz="1.10970672945902e-05" iyy="0.000359990156603239" iyz="8.05087539099313e-08" izz="0.00186685736722713" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -273,29 +273,35 @@
         <mesh filename="../bio_gripper_g2/meshes/visual/visual_glb/bio_gripper_g2_base.glb" />
       </geometry>
     </visual>
-    <collision>
-      <origin xyz="-0.022475 -0.000830 -0.004696" rpy="0 0 0" />
+    <collision name="bio_gripper_g2_base_link_convex_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_link_base.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_base_link_convex_0.stl" />
       </geometry>
     </collision>
   </link>
   <link name="bio_gripper_g2_left_finger">
     <inertial>
-      <origin rpy="0 0 0" xyz="0.021846 -0.0276 0.011911" />
+      <origin rpy="0 0 0" xyz="0.008976 -0.02730000121 0.009692" />
       <mass value="0.012105" />
       <inertia ixx="3.7322E-06" ixy="4.1705E-06" ixz="-4.0142E-06" iyy="1.744E-05" iyz="1.2237E-06" izz="1.7775E-05" />
     </inertial>
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0 0.00695659220219 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="../bio_gripper_g2/meshes/visual/visual_glb/bio_gripper_g2_left_finger.glb" />
       </geometry>
     </visual>
-    <collision>
-      <origin xyz="-0.012870 -0.011316 -0.002219" rpy="0 0 0" />
+    <collision name="bio_gripper_g2_left_finger_convex_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_left_finger.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_left_finger_convex_0.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_left_finger_convex_1.stl" />
       </geometry>
     </collision>
   </link>
@@ -304,25 +310,32 @@
     <parent link="bio_gripper_g2_base_link" />
     <child link="bio_gripper_g2_left_finger" />
     <axis xyz="0 1 0" />
-    <limit effort="2.0" lower="-0.0395" upper="0.0" velocity="0.1" />
+    <limit effort="40" lower="-0.0395" upper="0.0" velocity="0.333333333333333" />
     <mimic joint="bio_gripper_g2_right_finger_joint" multiplier="-1" offset="0" />
+    <dynamics damping="0" friction="0" />
   </joint>
   <link name="bio_gripper_g2_right_finger">
     <inertial>
-      <origin rpy="0 0 0" xyz="0.02037 0.027565 0.010274" />
+      <origin rpy="0 0 0" xyz="0.00658 0.02726500121 0.009235" />
       <mass value="0.012068" />
       <inertia ixx="4.1413E-06" ixy="-3.9682E-06" ixz="-4.5734E-06" iyy="1.6115E-05" iyz="-1.6711E-06" izz="1.6032E-05" />
     </inertial>
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0 -0.00811730325222 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="../bio_gripper_g2/meshes/visual/visual_glb/bio_gripper_g2_right_finger.glb" />
       </geometry>
     </visual>
-    <collision>
-      <origin xyz="-0.013790 0.011745 -0.001039" rpy="0 0 0" />
+    <collision name="bio_gripper_g2_right_finger_convex_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="../bio_gripper_g2/meshes/visual/bio_gripper_g2_right_finger.stl" />
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_right_finger_convex_0.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_right_finger_convex_1.stl" />
       </geometry>
     </collision>
   </link>
@@ -331,7 +344,8 @@
     <parent link="bio_gripper_g2_base_link" />
     <child link="bio_gripper_g2_right_finger" />
     <axis xyz="0 1 0" />
-    <limit effort="2.0" lower="0" upper="0.0395" velocity="0.1" />
+    <limit effort="40" lower="0" upper="0.0395" velocity="0.333333333333333" />
+    <dynamics damping="0" friction="0" />
   </joint>
   <link name="bio_gripper_g2_tcp_link" />
   <joint name="bio_gripper_g2_tcp_joint" type="fixed">

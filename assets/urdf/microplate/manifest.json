@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/ramonaoptics/labware",
+  "commit": "b2de87e717584b2e27f436ee03c17b827085e87b",
+  "license": "BSD-3-Clause",
+  "files": {
+    "SBS_96_well_plate.json": {
+      "url": "https://raw.githubusercontent.com/ramonaoptics/labware/b2de87e717584b2e27f436ee03c17b827085e87b/labware/definitions/SBS_96_well_plate.json",
+      "sha256": "59f4df89f9289f69d995ca0e15ac11ce3144fa6c2644298253ec1ab17fce70d0"
+    },
+    "LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/ramonaoptics/labware/b2de87e717584b2e27f436ee03c17b827085e87b/LICENSE.txt",
+      "sha256": "af39e37385b43fcba5ee6167eecfc38ad429312df6aa13886adcef0f4a383914"
+    },
+    "README.md": {
+      "url": "https://raw.githubusercontent.com/ramonaoptics/labware/b2de87e717584b2e27f436ee03c17b827085e87b/README.md",
+      "sha256": "cc23378b5a774bf0fba2476d48e345cf45ea45c2c5c2a1c004b45e4077c2f138"
+    }
+  }
+}
+

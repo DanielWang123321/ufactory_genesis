@@ -26,6 +26,12 @@ Visual and collision meshes for accessories follow the same upstream family
 where noted in each `assets/urdf/<name>/README.md`. Combo URDFs, movable
 visual variants, and compressed GLBs are maintained in this repository.
 
+### SBS 96-well microplate (`assets/urdf/microplate/`)
+
+- **Upstream:** [ramonaoptics/labware](https://github.com/ramonaoptics/labware/tree/b2de87e717584b2e27f436ee03c17b827085e87b) (`b2de87e`).
+- **License:** BSD-3-Clause (`Copyright (c) 2026, Ramona Optics Inc.`; full text in `assets/urdf/microplate/LICENSE.txt`).
+- **This repository's modifications:** Generated `sbs_96_well.glb`, `sbs_96_well_convex.stl`, and `sbs_96_well.urdf` from `SBS_96_well_plate.json` for Genesis contact simulation.
+
 ## Trademarks
 
 xArm, UF850, Lite6, UFACTORY, and related names are trademarks of their

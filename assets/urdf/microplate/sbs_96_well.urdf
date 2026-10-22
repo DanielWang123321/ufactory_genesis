@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="sbs_96_well">
+  <link name="microplate">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.1" />
+      <inertia ixx="6.260627416666667e-05" iyy="0.00013773783416666668" izz="0.0001969120666666667" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="sbs_96_well.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="sbs_96_well_convex.stl" />
+      </geometry>
+    </collision>
+  </link>
+</robot>

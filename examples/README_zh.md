@@ -85,6 +85,7 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable
 
 # Bio Gripper G2 / Lite6 夹爪
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
+python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
 python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
@@ -132,6 +133,7 @@ dynamics-sim-check --robot xarm6 --random-count 5
 | 参数               | 取值 / 说明                                                          |
 | ---------------- | ---------------------------------------------------------------- |
 | `--robot`        | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6`               |
+| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6`（`bio_gripper_g2` 用于 `xarm6` 微孔板抓放仿真） |
 | `--mode`         | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检）                    |
 | `--executor`     | 必选：`servo_j` 或 `servo_cartesian`                                 |
 | `--backend`      | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
@@ -153,6 +155,10 @@ python examples/pick_place/run.py \
 # Genesis 仿真并打开查看器
 python examples/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
+
+# xArm6 + Bio Gripper G2 SBS 96 孔微孔板抓放仿真
+python examples/pick_place/run.py \
+  --robot xarm6 --gripper bio_gripper_g2 --mode sim --executor servo_j --visual
 
 # 仅 CPU / 不支持的显卡
 python examples/pick_place/run.py \

@@ -1,0 +1,38 @@
+{
+    "$schema": "https://raw.githubusercontent.com/ramonaoptics/labware/main/labware/labware.v1.schema.json",
+    "name": "SBS 96 well",
+    "number_of_wells": 96,
+    "manufacturer": "ANSI, SLAS",
+    "author": "ANSI, SLAS",
+    "last_updated": "2011-10-13T00:00:00Z",
+    "part_number": "0000",
+    "web_reference": "https://www.slas.org/SLAS/assets/File/public/standards/ANSI_SLAS_4-2004_WellPositions.pdf",
+
+    "outer_plate_dimensions": {
+        "length": 0.12776,
+        "width": 0.08548,
+        "height": 0.01435
+    },
+
+    "well_dimensions": {
+        "pitch": 0.009,
+        "rows": 8,
+        "columns": 12,
+        "shape": "circle",
+        "diameter": 0.0064,
+        "depth": 0.0107,
+
+        "bottom_shape": "u"
+    },
+
+    "alignment_reference": {
+        "origin_reference": "A1 well center",
+        "offset_from_left_edge": 0.01438,
+        "offset_from_top_edge": 0.01124,
+        "z_reference": "top surface of plate"
+    },
+
+
+
+    "notes": "Dimensions are in meters per ANSI/SLAS 1-2004 standard. Use 'well_pitch' and origin reference to compute all well centers."
+}

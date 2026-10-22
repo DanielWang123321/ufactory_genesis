@@ -154,3 +154,56 @@ def test_lite6_runtime_config_and_drive_setup_match_calibrated_pneumatic_dynamic
     assert list(robot.set_dofs_force_range.call_args.args[2]) == [6]
     robot.control_dofs_force.assert_called_once()
     assert list(robot.control_dofs_force.call_args.args[1]) == [7]
+
+
+def test_bio_g2_adapter_mapping_and_sdk_contract():
+    from ufactory.config.models import GripperProfile
+    from ufactory.grippers.bio_g2 import (
+        BIO_GRIPPER_G2_CLOSED_GAP_M,
+        BIO_GRIPPER_G2_OPEN_GAP_M,
+        BIO_GRIPPER_G2_SIM_CLOSED_DRIVE,
+        BIO_GRIPPER_G2_SIM_OPEN_DRIVE,
+        bio_gripper_g2_gap_m_to_sim_drive,
+    )
+
+    profile = GripperProfile(
+        adapter="bio_g2",
+        drive_joint="bio_gripper_g2_right_finger_joint",
+        all_joint_names=("bio_gripper_g2_right_finger_joint", "bio_gripper_g2_left_finger_joint"),
+        finger_link_names=("bio_gripper_g2_left_finger", "bio_gripper_g2_right_finger"),
+        open_drive=BIO_GRIPPER_G2_SIM_OPEN_DRIVE,
+        closed_drive=BIO_GRIPPER_G2_SIM_CLOSED_DRIVE,
+        open_gap_m=BIO_GRIPPER_G2_OPEN_GAP_M,
+        closed_gap_m=BIO_GRIPPER_G2_CLOSED_GAP_M,
+        kp=16000.0,
+        kv=40.0,
+        force_lower_n=-40.0,
+        force_upper_n=40.0,
+        damping=0.0,
+        frictionloss=0.0,
+        real_command=True,
+        feedback=True,
+        closed_loop=True,
+        allowed_contact_links=frozenset({"bio_gripper_g2_left_finger", "bio_gripper_g2_right_finger"}),
+        tool_tip_offset_z_m=0.128,
+        finger_pad_below_center_m=0.0,
+        finger_close_descent_m=0.0,
+        grasp_table_clearance_m=0.01,
+        grasp_height_extra_m=0.0,
+    )
+    adapter = create_gripper_adapter(profile)
+    arm = MagicMock()
+    arm.get_bio_gripper_error.return_value = (0, 0)
+    arm.set_bio_gripper_enable.return_value = 0
+    arm.set_bio_gripper_g2_position.return_value = 0
+    assert adapter.prepare_real(arm) == 0
+    for gap in (0.071, 0.08548, 0.110, 0.150):
+        q = adapter.gap_to_drive(gap)
+        assert q == pytest.approx(bio_gripper_g2_gap_m_to_sim_drive(gap), abs=1e-14)
+        assert adapter.drive_to_gap(q) == pytest.approx(gap, abs=1e-12)
+        assert adapter.send_real_gap(arm, gap) == 0
+        arm.set_bio_gripper_g2_position.assert_called_with(pos=gap * 1000.0, wait=False)
+
+    arm.get_bio_gripper_error.return_value = (0, 3)
+    with pytest.raises(RuntimeError, match="recover manually"):
+        adapter.prepare_real(arm)

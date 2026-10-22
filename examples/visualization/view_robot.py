@@ -43,8 +43,9 @@ def main() -> None:
         help="Cycle gripper open/close (requires --movable with a gripper flag)",
     )
     parser.add_argument("--headless", action="store_true")
-    parser.add_argument("--position-mm", type=float, default=0)
+    parser.add_argument("--position-mm", type=float, default=None)
     parser.add_argument("--speed-percent", type=float, default=50)
+    parser.add_argument("--speed-mm-s", type=float, default=None)
     parser.add_argument("--force-percent", type=float, default=50)
     parser.add_argument("--diagnose", action="store_true", help="Headless STL/GLB link-pose diagnostic")
     parser.add_argument(
@@ -113,6 +114,7 @@ def main() -> None:
         gripper_demo=args.gripper_demo,
         position_mm=args.position_mm,
         speed_percent=args.speed_percent,
+        speed_mm_s=args.speed_mm_s,
         force_percent=args.force_percent,
         show_tcp=args.show_tcp,
         show_base_axes=args.show_base_axes,

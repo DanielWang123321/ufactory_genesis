@@ -355,6 +355,12 @@ def _hold_viewer(ctx: Any, on_step: Any = None) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ufactory-pick-place")
     parser.add_argument("--robot", required=True, choices=("xarm5", "xarm6", "xarm7", "uf850", "lite6"))
+    parser.add_argument(
+        "--gripper",
+        choices=("default", "g2", "bio_gripper_g2", "lite6"),
+        default="default",
+        help="Select end-effector variant (use bio_gripper_g2 for SBS 96-well microplate pick-and-place on xarm6)",
+    )
     parser.add_argument("--mode", required=True, choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", required=True, choices=("servo_j", "servo_cartesian"))
     parser.add_argument("--config", type=Path)
@@ -373,6 +379,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--sim-report", type=Path, help="Simulation execution report")
     parser.add_argument("--position-mm", type=float)
     parser.add_argument("--speed-percent", type=float)
+    parser.add_argument("--speed-mm-s", type=float)
+    parser.add_argument("--transport-speed-mm-s", type=float)
+    parser.add_argument("--substeps", type=int, choices=(8, 32))
     parser.add_argument("--force-percent", type=float)
     parser.add_argument(
         "--visual",
@@ -390,6 +399,65 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--visual-start-hold-s must be non-negative")
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
+
+    if args.gripper == "bio_gripper_g2":
+        if args.robot != "xarm6":
+            parser.error("--gripper bio_gripper_g2 is currently supported with --robot xarm6")
+        if args.mode != "sim":
+            parser.error("--gripper bio_gripper_g2 currently requires --mode sim")
+        if args.speed_mm_s is not None and args.speed_percent is not None:
+            parser.error("Provide at most one of --speed-mm-s or --speed-percent")
+        from ufactory.simulation.bio_g2_model import (
+            MAX_SPEED_MM_S,
+            MIN_SPEED_MM_S,
+            bio_g2_speed_mm_s_from_percent,
+            bounded,
+            finger_force_n,
+        )
+        from ufactory.trajectory.bio_g2_replay import (
+            DEFAULT_PICK_PLACE_SPEED_MM_S,
+            DEFAULT_SUBSTEPS,
+            DEFAULT_TRANSPORT_SPEED_MM_S,
+            run_bio_g2_pick_place,
+        )
+
+        try:
+            if args.speed_mm_s is not None:
+                speed_mm_s = bounded(args.speed_mm_s, MIN_SPEED_MM_S, MAX_SPEED_MM_S, "speed_mm_s")
+            elif args.speed_percent is not None:
+                if args.speed_percent <= 0:
+                    raise ValueError("automatic Bio Gripper G2 manipulation requires --speed-percent > 0")
+                speed_mm_s = bio_g2_speed_mm_s_from_percent(args.speed_percent)
+            else:
+                speed_mm_s = DEFAULT_PICK_PLACE_SPEED_MM_S
+            force_percent = 50.0 if args.force_percent is None else float(args.force_percent)
+            finger_force_n(force_percent)
+            transport_speed_mm_s = (
+                DEFAULT_TRANSPORT_SPEED_MM_S if args.transport_speed_mm_s is None else float(args.transport_speed_mm_s)
+            )
+            if not np.isfinite(transport_speed_mm_s) or transport_speed_mm_s <= 0:
+                raise ValueError("transport_speed_mm_s must be finite and positive")
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        summary = run_bio_g2_pick_place(
+            backend=args.backend or "gpu",
+            headless=not bool(args.visual),
+            speed_mm_s=speed_mm_s,
+            transport_speed_mm_s=transport_speed_mm_s,
+            substeps=DEFAULT_SUBSTEPS if args.substeps is None else int(args.substeps),
+            force_percent=force_percent,
+            csv_path=args.csv,
+            summary_path=args.sim_report or args.report,
+        )
+        metrics = summary["metrics"]
+        if "place_xy_error_mm" in metrics and "home_return_error_mm" in metrics:
+            print(
+                f"place_error_mm={metrics['place_xy_error_mm']:.3f} "
+                f"home_drift_mm={metrics['home_return_error_mm']:.3f} "
+                f"completed={summary['passed']}"
+            )
+        return 0 if summary["passed"] else 1
 
     g2_overrides = {
         f"simulation.g2.{name}": getattr(args, name)

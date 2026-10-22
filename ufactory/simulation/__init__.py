@@ -6,6 +6,11 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 from ufactory.config.models import G2_PHYSICS_PROFILE
+from ufactory.simulation.bio_g2_model import (
+    BIO_G2_PHYSICS_PROFILE,
+    BioGripperG2Model,
+    bio_g2_physics_summary,
+)
 from ufactory.simulation.g2_model import G2Model, g2_physics_summary
 from ufactory.simulation.physics import (
     DEFAULT_CONSTRAINT_SOLVER,
@@ -31,6 +36,14 @@ from ufactory.simulation.runtime import (
 # Torch-dependent exports are loaded on first access so that importing this
 # package (e.g. for ``physics`` or ``runtime``) works without the ``sim`` extra.
 _LAZY_EXPORTS = {
+    "BioG2ControlOutput": "ufactory.simulation.bio_g2_controller",
+    "BioGripperG2Controller": "ufactory.simulation.bio_g2_controller",
+    "BioG2GenesisAdapter": "ufactory.simulation.bio_g2_adapter",
+    "BioG2GenesisController": "ufactory.simulation.bio_g2_adapter",
+    "BIO_G2_CONTACT_SOL_PARAMS": "ufactory.simulation.bio_g2_adapter",
+    "BIO_G2_MIMIC_SOL_PARAMS": "ufactory.simulation.bio_g2_adapter",
+    "configure_bio_g2_drive": "ufactory.simulation.bio_g2_adapter",
+    "configure_bio_g2_mimic_constraints": "ufactory.simulation.bio_g2_adapter",
     "ControlOutput": "ufactory.simulation.g2_controller",
     "G2Controller": "ufactory.simulation.g2_controller",
     "G2_MAX_RIGID_SUBSTEP_DT_S": "ufactory.simulation.g2_adapter",
@@ -68,6 +81,14 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "BACKEND_INIT_HINT",
+    "BIO_G2_CONTACT_SOL_PARAMS",
+    "BIO_G2_MIMIC_SOL_PARAMS",
+    "BIO_G2_PHYSICS_PROFILE",
+    "BioG2ControlOutput",
+    "BioG2GenesisAdapter",
+    "BioG2GenesisController",
+    "BioGripperG2Controller",
+    "BioGripperG2Model",
     "DEFAULT_CONSTRAINT_SOLVER",
     "DEFAULT_CONSTRAINT_TIMECONST",
     "DEFAULT_CONTACT_RESOLUTION",
@@ -83,6 +104,9 @@ __all__ = [
     "ControlOutput",
     "GenesisRuntimeError",
     "GenesisRuntimeManager",
+    "bio_g2_physics_summary",
+    "configure_bio_g2_drive",
+    "configure_bio_g2_mimic_constraints",
     "configure_g2_mimic_constraints",
     "g2_physics_summary",
     "forward_kinematics",

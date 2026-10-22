@@ -122,6 +122,16 @@ def gripper_g2_movable_visual_urdf() -> str:
     return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "gripper_g2_movable_visual.urdf")
 
 
+def bio_gripper_g2_urdf() -> str:
+    """Standalone Bio Gripper G2 URDF (no arm)."""
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2.urdf")
+
+
 def bio_gripper_g2_movable_visual_urdf() -> str:
     """Standalone Bio Gripper G2 movable visual URDF (no arm)."""
     return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf")
+
+
+def microplate_sbs_96_well_urdf() -> str:
+    """SBS 96-well microplate URDF for Bio Gripper G2 pick-and-place."""
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "microplate" / "sbs_96_well.urdf")

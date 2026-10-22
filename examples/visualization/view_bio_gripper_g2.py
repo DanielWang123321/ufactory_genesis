@@ -13,9 +13,12 @@ def _controller(robot):
     return lambda step: gripper.control_pose(gripper.demo_target(step))
 
 
-def main() -> None:
-    run_standalone_gripper_viewer(
-        "Bio Gripper G2 open/close demo (standalone)", bio_gripper_g2_movable_visual_urdf(), _controller
+def main() -> dict | None:
+    return run_standalone_gripper_viewer(
+        "Bio Gripper G2 open/close demo (standalone)",
+        bio_gripper_g2_movable_visual_urdf(),
+        _controller,
+        calibrated_bio_g2=True,
     )
 
 

@@ -174,14 +174,15 @@ _BIO_GRIPPER_G2_LINKS = (
     "bio_gripper_g2_right_finger",
 )
 
-# Canonical Bio G2 visual GLBs are shared across arms; collision origins are unified.
+# Calibrated Bio Gripper G2 convex collision STLs are already expressed in each link frame (origin 0 0 0).
 _BIO_GRIPPER_G2_COLLISION_ORIGINS = {
-    "bio_gripper_g2_base_link": (-0.022475, -0.00083, -0.004696),
-    "bio_gripper_g2_left_finger": (-0.01287, -0.011316, -0.002219),
-    "bio_gripper_g2_right_finger": (-0.01379, 0.011745, -0.001039),
+    "bio_gripper_g2_base_link": (0.0, 0.0, 0.0),
+    "bio_gripper_g2_left_finger": (0.0, 0.0, 0.0),
+    "bio_gripper_g2_right_finger": (0.0, 0.0, 0.0),
 }
 
 _BIO_GRIPPER_G2_COLLISION_ORIGIN_URDFS = (
+    PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2.urdf",
     PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
     PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_visual.glb.urdf",
     PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
@@ -510,33 +511,46 @@ def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> Non
     bad: list[str] = []
     for urdf in _BIO_GRIPPER_G2_MOVABLE_COLLISION_ALIGNMENT_URDFS:
         root = ET.parse(urdf).getroot()
+        masses = []
         for link in root.findall("link"):
             link_name = link.get("name") or ""
             if link_name not in _BIO_GRIPPER_G2_LINKS:
                 continue
+            mass_node = link.find("inertial/mass")
+            if mass_node is not None:
+                masses.append(float(mass_node.get("value")))
             visual_mesh = link.find("./visual/geometry/mesh")
-            collision = link.find("collision")
-            collision_mesh = collision.find("./geometry/mesh") if collision is not None else None
-            collision_origin = collision.find("origin") if collision is not None else None
-            if visual_mesh is None or collision_mesh is None:
+            visual_origin = link.find("./visual/origin")
+            collisions = link.findall("collision")
+            if visual_mesh is None or not collisions:
                 bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} missing visual/collision mesh")
                 continue
             visual_vertices = _mesh_vertices((urdf.parent / (visual_mesh.get("filename") or "")).resolve(), trimesh)
-            collision_vertices = _mesh_vertices(
-                (urdf.parent / (collision_mesh.get("filename") or "")).resolve(),
-                trimesh,
-            )
-            visual_center = (visual_vertices.min(axis=0) + visual_vertices.max(axis=0)) / 2.0
-            collision_center = (collision_vertices.min(axis=0) + collision_vertices.max(axis=0)) / 2.0
-            collision_center += np.asarray(
-                _xyz_tuple(collision_origin.get("xyz") if collision_origin is not None else None)
-            )
-            delta_mm = float(np.linalg.norm((collision_center - visual_center) * 1000.0))
-            if delta_mm > 1.0:
-                bad.append(
-                    f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} collision bbox center is "
-                    f"{delta_mm:.3f} mm from visual GLB center"
-                )
+            visual_vertices += np.asarray(_xyz_tuple(visual_origin.get("xyz") if visual_origin is not None else None))
+            collision_chunks = []
+            for coll in collisions:
+                c_mesh = coll.find("./geometry/mesh")
+                c_origin = coll.find("origin")
+                if c_mesh is None:
+                    continue
+                c_verts = _mesh_vertices((urdf.parent / (c_mesh.get("filename") or "")).resolve(), trimesh)
+                c_verts += np.asarray(_xyz_tuple(c_origin.get("xyz") if c_origin is not None else None))
+                collision_chunks.append(c_verts)
+            collision_vertices = np.vstack(collision_chunks)
+            if link_name in ("bio_gripper_g2_left_finger", "bio_gripper_g2_right_finger"):
+                # Verify that the inner gripping plane of the fingertip (X > 0.031 m in finger frame)
+                # matches between visual GLB and convex collision mesh at +/-35.5 mm (71 mm closed gap).
+                vis_tip = visual_vertices[visual_vertices[:, 0] > 0.031]
+                col_tip = collision_vertices[collision_vertices[:, 0] > 0.031]
+                vis_inner_y = float(vis_tip[:, 1].max() if "left" in link_name else vis_tip[:, 1].min())
+                col_inner_y = float(col_tip[:, 1].max() if "left" in link_name else col_tip[:, 1].min())
+                if abs(vis_inner_y - col_inner_y) * 1000.0 > 0.01:
+                    bad.append(
+                        f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} inner gripping plane mismatch "
+                        f"vis={vis_inner_y:.6f} col={col_inner_y:.6f}"
+                    )
+        if abs(sum(masses) - 0.79) > 1e-6:
+            bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: Bio Gripper G2 total mass {sum(masses)} != 0.79 kg")
     assert bad == []
 
 

@@ -230,3 +230,43 @@ def test_lite6_viewer_gripper_demo_uses_reversed_open_close_semantics():
     robot.calls.clear()
     lite6_demo.control_lite6_gripper_pose(robot, [6], [6, 7], LITE6_GRIPPER_SIM_CLOSED_DRIVE)
     assert robot.calls == [("control_position", (6,), None)]
+
+
+def test_bio_g2_demo_holds_arm_with_pd_and_drives_only_right_finger(monkeypatch, tmp_path):
+    robot_viewer = _load_robot_viewer(monkeypatch)
+    robot = _FakeRobot()
+    robot.joints = [
+        *[_FakeJoint(f"joint{i}", i - 1) for i in range(1, 7)],
+        _FakeJoint("bio_gripper_g2_right_finger_joint", 6),
+        _FakeJoint("bio_gripper_g2_left_finger_joint", 7),
+    ]
+    scene = _FakeScene(robot)
+    fake_gs = _FakeGenesis(scene)
+    arm_pd_calls = []
+
+    monkeypatch.setattr(robot_viewer, "gs", fake_gs)
+    monkeypatch.setattr(robot_viewer, "require_genesis_runtime", lambda _gs: None)
+    monkeypatch.setattr(robot_viewer, "glb_pbr_surfaces", nullcontext)
+    monkeypatch.setattr(robot_viewer, "glb_view_surface", lambda: object())
+    monkeypatch.setattr(robot_viewer, "setup_arm_pd", lambda *args: arm_pd_calls.append(args))
+    monkeypatch.setattr(robot_viewer, "resolve_robot_link", lambda *_args: object())
+    monkeypatch.setattr("ufactory.kinematics.genesis.solve_link6_ik", lambda *_args, **_kwargs: [0.0] * 6)
+    model = tmp_path / "fake_bio_g2.urdf"
+    model.write_text('<robot><joint name="bio_gripper_g2_right_finger_joint"/></robot>')
+
+    result = robot_viewer.run_glb_viewer(
+        get_robot_profile("xarm6_1305"),
+        str(model),
+        headless=True,
+        pd_demo=False,
+        gripper_demo=True,
+        headless_steps=2,
+    )
+
+    assert result is not None and result["ticks"] == 2
+    assert len(arm_pd_calls) == 1
+    assert ("kp", (6,), None) in robot.calls
+    assert ("kp", (7,), None) in robot.calls
+    assert ("control_force", (7,), None) in robot.calls
+    assert ("control_position", (6,), None) in robot.calls
+    assert ("control_position", (6, 7), None) not in robot.calls

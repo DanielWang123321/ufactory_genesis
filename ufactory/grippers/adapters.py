@@ -7,6 +7,7 @@ import math
 from typing import Protocol, runtime_checkable
 
 from ufactory.config.models import GripperProfile
+from ufactory.grippers.bio_g2 import bio_gripper_g2_gap_m_to_sim_drive, bio_gripper_g2_sim_drive_to_gap_m
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive, gripper_g2_sim_drive_to_gap_m
 
 
@@ -131,7 +132,36 @@ class Lite6Adapter(ConfiguredGripperAdapter):
         return int(getattr(arm, method_name)(sync=False))
 
 
-_ADAPTERS = {"g2": G2Adapter, "lite6": Lite6Adapter}
+class BioG2Adapter(ConfiguredGripperAdapter):
+    def gap_to_drive(self, gap_m: float) -> float:
+        gap = self._finite(gap_m, "gap_m")
+        if not self.profile.closed_gap_m <= gap <= self.profile.open_gap_m:
+            raise ValueError(f"gap_m {gap} outside [{self.profile.closed_gap_m}, {self.profile.open_gap_m}]")
+        return bio_gripper_g2_gap_m_to_sim_drive(gap)
+
+    def drive_to_gap(self, drive: float) -> float:
+        value = self._finite(drive, "drive")
+        lo, hi = sorted((self.profile.open_drive, self.profile.closed_drive))
+        if not lo <= value <= hi:
+            raise ValueError(f"drive {value} outside [{lo}, {hi}]")
+        return bio_gripper_g2_sim_drive_to_gap_m(value)
+
+    def prepare_real(self, arm: object) -> int:
+        code, error = getattr(arm, "get_bio_gripper_error")()
+        if int(code) != 0:
+            return int(code)
+        if int(error) != 0:
+            raise RuntimeError(f"Bio Gripper G2 has error {error}; recover manually before real motion")
+        return int(getattr(arm, "set_bio_gripper_enable")(True))
+
+    def send_real_gap(self, arm: object, gap_m: float) -> int:
+        if not self.capabilities.real_command:
+            raise RuntimeError("real Bio Gripper G2 commands are not enabled for this robot profile")
+        method = getattr(arm, "set_bio_gripper_g2_position")
+        return int(method(pos=self._finite(gap_m, "gap_m") * 1000.0, wait=False))
+
+
+_ADAPTERS = {"g2": G2Adapter, "bio_g2": BioG2Adapter, "lite6": Lite6Adapter}
 
 
 def create_gripper_adapter(profile: GripperProfile) -> GripperAdapter:
