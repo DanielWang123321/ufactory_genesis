@@ -67,6 +67,9 @@ class _FakeRobot:
     def control_dofs_position(self, values, dof_idx):
         self.calls.append(("control_position", tuple(dof_idx), None))
 
+    def control_dofs_force(self, values, dof_idx):
+        self.calls.append(("control_force", tuple(dof_idx), None))
+
 
 class _FakeScene:
     def __init__(self, robot: _FakeRobot):
@@ -216,3 +219,14 @@ def test_lite6_viewer_gripper_demo_uses_reversed_open_close_semantics():
     assert lite6_demo.LITE6_GRIPPER_OPEN == LITE6_GRIPPER_SIM_OPEN_DRIVE
     assert lite6_demo.lite6_gripper_demo_target(0) == LITE6_GRIPPER_SIM_OPEN_DRIVE
     assert lite6_demo.lite6_gripper_demo_target(lite6_demo.LITE6_GRIPPER_HOLD_STEPS) == LITE6_GRIPPER_SIM_CLOSED_DRIVE
+
+    robot = _FakeRobot()
+    lite6_demo.setup_lite6_gripper_pd(robot, [6], [6, 7])
+    assert ("kp", (6,), None) in robot.calls
+    assert ("kv", (6,), None) in robot.calls
+    assert ("force_range", (6,), None) in robot.calls
+    assert ("control_force", (7,), None) in robot.calls
+
+    robot.calls.clear()
+    lite6_demo.control_lite6_gripper_pose(robot, [6], [6, 7], LITE6_GRIPPER_SIM_CLOSED_DRIVE)
+    assert robot.calls == [("control_position", (6,), None)]

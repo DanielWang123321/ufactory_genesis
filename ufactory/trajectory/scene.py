@@ -484,6 +484,20 @@ def build_scene(
         from ufactory.simulation.g2_adapter import configure_g2_drive
 
         configure_g2_drive(robot, damping=gripper.damping, frictionloss=gripper.frictionloss)
+    elif gripper.family == "lite6":
+        from ufactory.grippers.lite6 import configure_lite6_gripper_drive
+
+        configure_lite6_gripper_drive(
+            robot,
+            gripper_dof_idx,
+            all_gripper_dof_idx,
+            kp=gripper.kp,
+            kv=gripper.kv,
+            force_lower_n=gripper.force_lower,
+            force_upper_n=gripper.force_upper,
+            damping=gripper.damping,
+            frictionloss=gripper.frictionloss,
+        )
 
     dq = xyz_to_quat(
         torch.tensor([GRIPPER_DOWN_RPY_RAD], device=gs.device, dtype=gs.tc_float),

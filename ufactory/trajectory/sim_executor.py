@@ -17,16 +17,16 @@ import torch
 
 import genesis as gs
 
+from ufactory.grippers.lite6 import LITE6_GRIPPER_HOLD_BIAS_GAP_M
 from ufactory.trajectory.mirror_executor import resolve_tick_arm_q, resolve_tick_grip_drive
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
 
 # Legacy hold bias in physical gap units, normalized by each gripper's travel.
 DEFAULT_GRIPPER_HOLD_BIAS_GAP_M = 0.0069
-# Lite6: small flat pad + unified cube μ=1.0 / pad μ=1.2 need a slightly larger
-# post-contact hold bias than the prior 0.8 mm (tuned for μ=5.0) so friction
-# can carry the 17 g cube through lift without raising material friction again.
-LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M = 0.0020
+# Lite6 uses a binary pneumatic actuator without position feedback: full-stroke
+# bias keeps driving toward the closed limit while force_range (±3 N) clamps load.
+LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M = LITE6_GRIPPER_HOLD_BIAS_GAP_M
 DEFAULT_GRASP_WELD_ATTACH_DIST_M = 0.08
 # Final metrics are observations, not extra trajectory commands.  Two physics
 # ticks let the last already-issued PD target take effect before measuring,
@@ -77,7 +77,7 @@ def replay_sim(
     ctx: TrajSceneContext,
     *,
     gripper_holds_after_grasp: bool = True,
-    gripper_hold_bias_gap_m: float = DEFAULT_GRIPPER_HOLD_BIAS_GAP_M,
+    gripper_hold_bias_gap_m: float | None = None,
     stabilize_grasp_weld: bool = False,
     grasp_weld_attach_dist_m: float = DEFAULT_GRASP_WELD_ATTACH_DIST_M,
     final_metric_settle_s: float = DEFAULT_FINAL_METRIC_SETTLE_S,
@@ -140,6 +140,12 @@ def replay_sim(
     report = SimReport(total_duration=program.total_duration, total_ticks=program.total_ticks)
 
     gripper = ctx.gripper
+    if gripper_hold_bias_gap_m is None:
+        gripper_hold_bias_gap_m = (
+            LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M
+            if getattr(gripper, "family", "") == "lite6"
+            else DEFAULT_GRIPPER_HOLD_BIAS_GAP_M
+        )
     current_grip_drive = drive_for_gap_m(gripper.open_gap_m, gripper)
     last_q_arm = ctx.home_qpos[arm_idx].astype(np.float64).copy() if len(ctx.home_qpos) else None
     grasp_welded = False

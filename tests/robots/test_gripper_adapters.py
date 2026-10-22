@@ -16,9 +16,14 @@ from ufactory.grippers.g2 import (
 from ufactory.grippers.lite6 import (
     LITE6_GRIPPER_CLOSED_GAP_M,
     LITE6_GRIPPER_DEMO_HOLD_STEPS,
+    LITE6_GRIPPER_DRIVE_LIMIT_N,
+    LITE6_GRIPPER_HOLD_BIAS_GAP_M,
+    LITE6_GRIPPER_KP,
+    LITE6_GRIPPER_KV,
     LITE6_GRIPPER_OPEN_GAP_M,
     LITE6_GRIPPER_SIM_CLOSED_DRIVE,
     LITE6_GRIPPER_SIM_OPEN_DRIVE,
+    configure_lite6_gripper_drive,
     lite6_gripper_demo_drive,
     lite6_gripper_demo_label,
     lite6_gripper_sim_drive_to_gap_m,
@@ -127,3 +132,25 @@ def test_lite6_collision_demo_labels_snap_at_hold_boundary():
     assert lite6_gripper_demo_label(LITE6_GRIPPER_DEMO_HOLD_STEPS - 1) == "open"
     assert lite6_gripper_demo_label(LITE6_GRIPPER_DEMO_HOLD_STEPS) == "closed"
     assert lite6_gripper_demo_label(2 * LITE6_GRIPPER_DEMO_HOLD_STEPS - 1) == "closed"
+
+
+def test_lite6_runtime_config_and_drive_setup_match_calibrated_pneumatic_dynamics():
+    config = load_runtime_config("lite6")
+    assert list(config.arm.kv) == pytest.approx([300.0, 300.0, 200.0, 4.0, 8.0, 4.0])
+    assert config.gripper is not None
+    assert config.gripper.kp == pytest.approx(LITE6_GRIPPER_KP)
+    assert config.gripper.kv == pytest.approx(LITE6_GRIPPER_KV)
+    assert config.gripper.force_lower_n == pytest.approx(-LITE6_GRIPPER_DRIVE_LIMIT_N)
+    assert config.gripper.force_upper_n == pytest.approx(LITE6_GRIPPER_DRIVE_LIMIT_N)
+    assert LITE6_GRIPPER_HOLD_BIAS_GAP_M == pytest.approx(0.018)
+
+    robot = MagicMock()
+    configure_lite6_gripper_drive(robot, [6], [6, 7])
+    robot.set_dofs_kp.assert_called_once()
+    assert list(robot.set_dofs_kp.call_args.args[1]) == [6]
+    robot.set_dofs_kv.assert_called_once()
+    assert list(robot.set_dofs_kv.call_args.args[1]) == [6]
+    robot.set_dofs_force_range.assert_called_once()
+    assert list(robot.set_dofs_force_range.call_args.args[2]) == [6]
+    robot.control_dofs_force.assert_called_once()
+    assert list(robot.control_dofs_force.call_args.args[1]) == [7]

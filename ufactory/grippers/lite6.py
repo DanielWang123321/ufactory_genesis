@@ -28,6 +28,13 @@ LITE6_GRIPPER_SIM_CLOSED_DRIVE = 0.0
 LITE6_GRIPPER_SIM_OPEN_DRIVE = LITE6_GRIPPER_FINGER_TRAVEL_M
 LITE6_GRIPPER_DEMO_HOLD_STEPS = 200
 
+LITE6_GRIPPER_KP = 700.0
+LITE6_GRIPPER_KV = 20.0
+LITE6_GRIPPER_DRIVE_LIMIT_N = 3.0
+LITE6_GRIPPER_DAMPING = 0.05
+LITE6_GRIPPER_FRICTIONLOSS = 0.0
+LITE6_GRIPPER_HOLD_BIAS_GAP_M = 0.018
+
 _FINGER_MESH_DIR = Path(__file__).resolve().parents[2] / "assets" / "urdf" / "lite6_gripper" / "meshes" / "collision"
 _FINGER1_VISUAL_ORIGIN_M = np.asarray((0.0, 0.0, 0.0), dtype=np.float64)
 _FINGER2_VISUAL_ORIGIN_M = np.asarray((0.0, 0.0, 0.0), dtype=np.float64)
@@ -62,6 +69,37 @@ def lite6_gripper_demo_label(step: int, *, hold_steps: int = LITE6_GRIPPER_DEMO_
     return (
         "closed" if lite6_gripper_demo_drive(step, hold_steps=hold_steps) == LITE6_GRIPPER_SIM_CLOSED_DRIVE else "open"
     )
+
+
+def configure_lite6_gripper_drive(
+    robot,
+    gripper_dof_idx: list[int],
+    all_gripper_dof_idx: list[int],
+    *,
+    kp: float = LITE6_GRIPPER_KP,
+    kv: float = LITE6_GRIPPER_KV,
+    force_lower_n: float = -LITE6_GRIPPER_DRIVE_LIMIT_N,
+    force_upper_n: float = LITE6_GRIPPER_DRIVE_LIMIT_N,
+    damping: float = LITE6_GRIPPER_DAMPING,
+    frictionloss: float = LITE6_GRIPPER_FRICTIONLOSS,
+) -> None:
+    """Configure master ``finger_joint1`` PD drive and passive ``finger_joint2`` mimic mode."""
+    pd_idx = list(gripper_dof_idx or all_gripper_dof_idx)
+    damp_idx = list(all_gripper_dof_idx or gripper_dof_idx)
+    if pd_idx:
+        robot.set_dofs_kp(np.full(len(pd_idx), float(kp)), pd_idx)
+        robot.set_dofs_kv(np.full(len(pd_idx), float(kv)), pd_idx)
+        robot.set_dofs_force_range(
+            np.full(len(pd_idx), float(force_lower_n)),
+            np.full(len(pd_idx), float(force_upper_n)),
+            pd_idx,
+        )
+    if damp_idx:
+        robot.set_dofs_damping(np.full(len(damp_idx), float(damping)), damp_idx)
+        robot.set_dofs_frictionloss(np.full(len(damp_idx), float(frictionloss)), damp_idx)
+    passive_idx = [idx for idx in damp_idx if idx not in pd_idx]
+    if passive_idx and callable(getattr(robot, "control_dofs_force", None)):
+        robot.control_dofs_force(np.zeros((1, len(passive_idx))), passive_idx)
 
 
 def _finger_mesh_vertices() -> tuple[np.ndarray, np.ndarray]:

@@ -14,7 +14,7 @@ robot:
 arm:
   default_qpos_rad: [0.0, -0.6, 0.0, 0.0, 0.6, 0.0]
   kp: [3000.0, 3000.0, 2000.0, 40.0, 80.0, 40.0]
-  kv: [300.0, 300.0, 200.0, 8.0, 16.0, 8.0]
+  kv: [300.0, 300.0, 200.0, 4.0, 8.0, 4.0]
   force_lower_nm: [-81.6, -81.6, -30.6, -1.364505, -3.274812, -1.364505]
   force_upper_nm: [81.6, 81.6, 30.6, 1.364505, 3.274812, 1.364505]
   effort_limits_nm: [81.6, 81.6, 30.6, 1.364505, 3.274812, 1.364505]
@@ -27,10 +27,10 @@ gripper:
   closed_drive: 0.0
   open_gap_m: 0.038
   closed_gap_m: 0.020
-  kp: 500.0
-  kv: 50.0
-  force_lower_n: -20.0
-  force_upper_n: 20.0
+  kp: 700.0
+  kv: 20.0
+  force_lower_n: -3.0
+  force_upper_n: 3.0
   damping: 0.05
   frictionloss: 0.0
   real_command: true

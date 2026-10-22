@@ -175,6 +175,20 @@ def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None, ca
         from ufactory.simulation.g2_adapter import configure_g2_drive
 
         configure_g2_drive(robot, damping=gripper.damping, frictionloss=gripper.frictionloss)
+    elif gripper.adapter == "lite6":
+        from ufactory.grippers.lite6 import configure_lite6_gripper_drive
+
+        configure_lite6_gripper_drive(
+            robot,
+            gripper_dof_idx,
+            all_gripper_dof_idx,
+            kp=gripper.kp,
+            kv=gripper.kv,
+            force_lower_n=gripper.force_lower_n,
+            force_upper_n=gripper.force_upper_n,
+            damping=gripper.damping,
+            frictionloss=gripper.frictionloss,
+        )
     down_quat = _world_down_quat()
 
     return ik_link, left_finger, right_finger, arm_dof_idx, gripper_dof_idx, all_gripper_dof_idx, down_quat

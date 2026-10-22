@@ -29,7 +29,7 @@
   "schema_version": 1,
   "sha256": {
     "assets/configs/runtime/motion/default.yaml": "ce961bb044f0c95a803fac693bffb7c75b3e78df61ce90e4ab2644e79be73f03",
-    "assets/configs/runtime/robots/lite6.yaml": "1a16fbb1cd29ac56aacaec082427041f1ddcdbe16fa693484719d9c38f4fd53d",
+    "assets/configs/runtime/robots/lite6.yaml": "9c7b4c93ceb3ebf297ec65388671d1bc7618b180690cd49123e9c8b233075810",
     "assets/configs/runtime/robots/uf850.yaml": "2eb842702fc5fa208087d02cc8d641059c181c5df3c844c5342a71a8114dbf6a",
     "assets/configs/runtime/robots/xarm5_1305.yaml": "d6184ea7d52f4abebcdba3e04778f727bef1dbe6f70c81c541010cdf6adf6a2a",
     "assets/configs/runtime/robots/xarm6_1305.yaml": "181f3df3aa4bc1ca0f3cc657abbdd34aaaa41ae62dfbdc71cfcc536527352ff6",
