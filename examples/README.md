@@ -2,8 +2,6 @@
 
 [中文](README_zh.md)
 
-v0.3.2 organizes public examples by task. Shared implementations live in `ufactory`; entry modules parse user-facing arguments and start the requested workflow.
-
 ## Prerequisites
 
 Validated with Python 3.12/3.13 and Genesis World 1.4.4; the minimum Genesis version is 1.4.2. Versions 1.4.2 and 1.4.3 warn once; newer versions must pass the hook checks. See the [version policy](../ROADMAP.md).
@@ -49,11 +47,11 @@ Public directories in this release:
 
 | Directory | Purpose |
 |---|---|
-| `visualization/` | GLB robot and gripper viewers |
-| `kinematics/` | FK/IK / robot verification wrappers |
-| `pick_place/` | Multi-robot pick-place entry + optional overlay |
-| `packaging/` | Multi-robot packaging showcase entry + optional overlay |
-| `rl/` | Bare-arm Reach → tabletop Pick & Place → box packing (planned); Linux/NVIDIA |
+| `visualization/` | GLB robot and gripper viewers; see [Visualization](#visualization) |
+| `kinematics/` | FK/IK / robot verification wrappers; see [Kinematics & Dynamics Simulation](#kinematics--dynamics-simulation) |
+| `pick_place/` | Multi-robot pick-place entry + optional overlay; see [pick-place guide](pick_place/README.md) |
+| `packaging/` | Multi-robot packaging showcase entry + optional overlay; see [packaging guide](packaging/README.md) |
+| `rl/` | Bare-arm Reach → tabletop Pick & Place → box packing (planned); Linux/NVIDIA; see [RL index](rl/README.md) |
 
 See the [RL index](rl/README.md) for the learning sequence and training/inference guides.
 
@@ -61,10 +59,10 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 
 | Robot | Available end effectors |
 |---|---|
-| `xarm5` | Gripper G2, Bio Gripper G2 |
-| `xarm6` | Gripper G2, Bio Gripper G2 |
-| `xarm7` | Gripper G2, Bio Gripper G2 |
-| `uf850` | Gripper G2, Bio Gripper G2 |
+| `xarm5` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
+| `xarm6` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
+| `xarm7` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
+| `uf850` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
 | `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper |
 
 All five families support simulation and offline preflight. Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; see [Hardware & Real Robot](#hardware--real-robot).
@@ -74,33 +72,46 @@ G2 simulations use `g2_calibrated_v1`. The [pick-place RL guide](rl/pick_place/R
 ## Visualization
 
 ```bash
-# Bare arm
+# xArm6 bare arm static view
 python examples/visualization/view_robot.py --robot xarm6
 
-# Gripper G2 (static combo)
+# xArm6 + Gripper G2 static view
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 
-# Movable fingers + open/close demo
+# xArm6 + Gripper G2 open/close demo
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo
 
-# Bio Gripper G2 / Lite6 grippers
+# UF850 + Bio Gripper G2 static view
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
+
+# xArm6 + Bio Gripper G2 open/close demo
 python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
+
+# xArm6 + Vacuum Gripper static view
+python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
+
+# Lite6 + Lite6 Gripper open/close demo
 python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
+
+# Lite6 + Lite6 Vacuum Gripper static view
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
-# Standalone gripper viewers
+# Gripper G2 standalone viewer and open/close demo
 python examples/visualization/view_gripper_g2.py
+
+# Bio Gripper G2 standalone viewer and open/close demo
 python examples/visualization/view_bio_gripper_g2.py
+
+# Lite6 Gripper standalone viewer and open/close demo
 python examples/visualization/view_lite6_gripper.py
 ```
 
 | Flag | Meaning |
 |------|---------|
 | `--robot` | Required profile key |
-| `--gripper-g2` / `--bio-gripper-g2` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
+| `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
 | `--movable` | Per-link movable gripper meshes (requires a supported gripper flag) |
-| `--gripper-demo` | Cycle open/close (requires `--movable`) |
+| `--gripper-demo` | Cycle open/close with a 0.5 s hold after reaching each endpoint (requires `--movable`) |
 | `--pd` | Smooth joint-motion demo (~0.873 rad/s), visual only |
 | `--show-tcp` | Red flange TCP marker (hidden by default) |
 | `--diagnose` | Headless STL/GLB link-pose diagnostic |
@@ -110,10 +121,10 @@ python examples/visualization/view_lite6_gripper.py
 ## Kinematics & Dynamics Simulation
 
 ```bash
-# Offline robot / asset sanity (no controller)
+# xArm6 offline URDF, FK, and PD control sanity check (no controller)
 python examples/kinematics/verify_robot.py --robot xarm6
 
-# Dynamics simulation check
+# xArm6 dynamics simulation check (default poses + 5 random poses)
 dynamics-sim-check --robot xarm6 --random-count 5
 ```
 
@@ -121,96 +132,27 @@ dynamics-sim-check --robot xarm6 --random-count 5
 
 ## Pick-place
 
-`examples/pick_place/run.py` delegates to the stable `ufactory-pick-place` console command. Both forms accept the same flags.
-
-| Flag | Values / notes |
-|------|----------------|
-| `--robot` | Required: `xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
-| `--gripper` | Optional: `default` / `g2` / `bio_gripper_g2` / `lite6` (`bio_gripper_g2` runs the SBS 96-well microplate simulation on `xarm6`) |
-| `--mode` | Required for simulation: `sim` (Genesis physics), `dry-run` (offline trajectory and collision preflight) |
-| `--executor` | Required: `servo_j` or `servo_cartesian` |
-| `--backend` | Optional: `cpu` / `gpu`; overrides `simulation.backend` (use `cpu` without a Genesis-supported GPU) |
-| `--visual` | Optional: open the Genesis viewer in `sim` mode |
-| `--config` | Optional strict partial overlay YAML |
-| `--print-config` | Print resolved runtime YAML and exit |
-| `--report` | Optional report output path |
+Multi-robot pick-place in Genesis physics simulation or offline preflight. Flags, more commands, and the configuration overlay are in the [pick-place guide](pick_place/README.md).
 
 ```bash
-# Resolve configuration only
-python examples/pick_place/run.py \
-  --robot xarm6 --mode dry-run --executor servo_j --print-config
-
-# Offline predictive preflight
+# xArm6 + Gripper G2: offline trajectory and collision preflight (servo_j)
 python examples/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j
 
-# Genesis simulation with viewer
+# Lite6 + Lite6 Gripper: pick-place physics simulation with viewer (servo_cartesian)
 python examples/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
-
-# xArm6 + Bio Gripper G2 SBS 96-well microplate pick-and-place
-python examples/pick_place/run.py \
-  --robot xarm6 --gripper bio_gripper_g2 --mode sim --executor servo_j --visual
-
-# CPU-only / unsupported GPU
-python examples/pick_place/run.py \
-  --robot lite6 --mode sim --executor servo_cartesian --backend cpu
-
-# Optional overlay (only listed fields override assets/configs/runtime)
-python examples/pick_place/run.py \
-  --robot xarm6 --mode dry-run --executor servo_j \
-  --config examples/pick_place/runtime.example.yaml
 ```
-
-`runtime.example.yaml` is a strict partial overlay. Omitted robot, geometry, motion, safety, and simulation values continue to resolve from `assets/configs/runtime`.
-
-> For physical robot pick-place, see [Hardware & Real Robot](#hardware--real-robot).
 
 ## Packaging Showcase Simulation
 
-`examples/packaging/run.py` delegates to `ufactory-packaging-showcase`.
-
-The cube is released 50 mm above the box rim and falls naturally. GPU regressions
-allow rebound and require its final collision bounds to remain inside the box
-(1 mm contact tolerance), rather than within 25 mm of the target center.
-Grasp, transport, release and return-home checks remain in place.
-
-| Flag | Values / notes |
-|------|----------------|
-| `--robot` | Default `xarm6`; all five families supported in sim / dry-run |
-| `--mode` | Required for simulation: `sim` (default), `dry-run` (offline preflight) |
-| `--executor` | Default `servo_j`; also `servo_cartesian` |
-| `--backend` | Optional: `cpu` / `gpu`; same meaning as pick-place |
-| `--cycles N` | Exact simulation cycle count (default 1) |
-| `--speed` | Simulation playback multiplier (`>1` is faster) |
-| `--table-height` | Simulation display height only; base-frame geometry unchanged |
-| `--visual` | Optional: hold the final viewer frame |
-| `--config` / `--print-config` / `--report` | Same roles as pick-place |
+Multi-robot box packing with trajectory control. Flags and more commands are in the [packaging guide](packaging/README.md).
 
 ```bash
-# One simulation cycle
+# xArm6 + Gripper G2: 1-cycle packaging physics simulation with viewer (servo_j)
 python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --visual
-
-# CPU-only / unsupported GPU
-python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j --backend cpu
-
-# Three-cycle regression
-python examples/packaging/run.py \
-  --robot lite6 --mode sim --executor servo_j --cycles 3
-
-# Offline preflight
-python examples/packaging/run.py \
-  --robot xarm7 --mode dry-run --executor servo_j
-
-# Optional overlay
-python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j \
-  --config examples/packaging/runtime.example.yaml
 ```
-
-> For physical robot packaging, see [Hardware & Real Robot](#hardware--real-robot).
 
 ## Reinforcement Learning
 
@@ -235,14 +177,16 @@ See the [RL index](rl/README.md) for training and inference. The packaging showc
 Connects to a physical controller over the network for validation without commanding joint motion:
 
 ```bash
-# Compare Genesis URDF FK/IK against the xArm SDK (requires network + IP)
+# xArm6: compare Genesis URDF FK against physical controller SDK
 python examples/kinematics/verify_fk.py --robot xarm6 --ip <ip>
+
+# Lite6: compare Genesis URDF IK against physical controller SDK
 python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
 
-# Collision detection check against controller pose (no motion commanded)
+# xArm6: self-collision check across preset test poses in controller simulation mode (joints do not move)
 dynamics-sim-collision-check --robot xarm6 --ip <ip>
 
-# Controller-internal simulation (sdk-sim: validates controller logic, joints do not move)
+# Lite6 + Lite6 Gripper: packaging controller-internal simulation (sdk-sim, joints do not move)
 python examples/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
@@ -253,15 +197,15 @@ python examples/packaging/run.py \
 Sends actual trajectory and servo setpoints to physical hardware:
 
 ```bash
-# Dynamics hardware identification & torque verification (requires confirmation gate)
+# xArm6: move physical robot to validation poses and compare joint torques (requires --confirm-real)
 dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
 
-# Real pick-place motion (exact calibration + confirmation gate required)
+# xArm6 + Gripper G2: real pick-place motion (requires per-unit calibration + --confirm-real)
 XARM_IP=<ip> python examples/pick_place/run.py \
   --robot xarm6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 
-# Real packaging motion (currently enabled for xArm6 + G2 and Lite6 + Gripper)
+# Lite6 + Lite6 Gripper: real packaging motion (enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; requires per-unit calibration + --confirm-real)
 XARM_IP=<ip> python examples/packaging/run.py \
   --robot lite6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real

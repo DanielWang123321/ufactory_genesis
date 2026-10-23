@@ -24,6 +24,7 @@ from ufactory.manipulation.commands import (
     print_preflight_start as _print_preflight_start,
     print_preflight_violation_summary as _print_preflight_violation_summary,
     print_real_execution_summary,
+    print_sdk_sim_failures,
     print_summary as _print_summary,
     read_q as _read_q,
     sdk_sim_feedback as _sdk_sim_feedback,
@@ -32,7 +33,7 @@ from ufactory.manipulation.commands import (
 )
 from ufactory.config import dump_runtime_config, load_runtime_config
 from ufactory.hardware import XArmTransport
-from ufactory.kinematics import get_robot_sn
+from ufactory.kinematics import get_robot_sn, read_tcp_offset
 from ufactory.manipulation.packaging.core import (
     build_packaging_program,
     packaging_layout,
@@ -241,7 +242,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         assert arm is not None and serial is not None
         layout = packaging_layout(config)
-        transport = XArmTransport(arm, robot_key=config.robot.key, serial_number=serial)
+        # Read once so SDK simulation and real execution share the same TCP conversion.
+        tcp_offset = read_tcp_offset(arm)
+        print(f"[hardware] controller tcp_offset={tcp_offset.tolist()} (xyz mm, rpy rad)", flush=True)
+        transport = XArmTransport(arm, robot_key=config.robot.key, serial_number=serial, tcp_offset=tcp_offset)
         shadow = None
         stages = None
         if args.mode == "sdk-sim":
@@ -267,7 +271,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.executor == "servo_cartesian" or args.mode == "sdk-sim":
             if shadow is None or stages is None:
                 shadow, stages = gate.shadow_joint_stream(program)
-            firmware = _sdk_sim_feedback(arm, program, config, start_q)
+            firmware = _sdk_sim_feedback(arm, program, config, start_q, tcp_offset=tcp_offset)
             evidence = validate_sdk_simulation(
                 robot_key=config.robot.key,
                 serial_number=serial,
@@ -285,6 +289,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_json(evidence_path, asdict(evidence))
             print(f"sdk_sim={'PASS' if evidence.passed else 'FAIL'}")
             if not evidence.passed:
+                print_sdk_sim_failures(evidence, evidence_path)
                 return 1
             if args.mode == "sdk-sim":
                 return 0

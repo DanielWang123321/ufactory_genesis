@@ -99,7 +99,17 @@ def run_standalone_gripper_viewer(
             gaps.append(robot._ufactory_g2_controller.gap_mm())
         elif calibrated_bio_g2:
             gaps.append(robot._ufactory_bio_g2_controller.gap_mm())
-        if args.headless and step + 1 >= headless_steps:
+        demo_cycle = (
+            getattr(robot, "_ufactory_g2_demo_cycle", None)
+            or getattr(robot, "_ufactory_bio_g2_demo_cycle", None)
+            or getattr(robot, "_ufactory_lite6_demo_cycle", None)
+        )
+        if demo_cycle is not None:
+            demo_cycle.on_step_completed(robot)
+        if args.headless and (
+            step + 1 >= headless_steps
+            or (headless_steps == 600 and demo_cycle is not None and demo_cycle.completed_cycles >= 1)
+        ):
             break
     if calibrated:
         return {"min_gap_mm": min(gaps), "max_gap_mm": max(gaps), "final_gap_mm": gaps[-1], "ticks": len(gaps)}

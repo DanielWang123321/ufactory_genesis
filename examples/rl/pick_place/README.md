@@ -2,7 +2,7 @@
 
 Move a 30 mm cube from `(300, 0) mm` to `(300, 300) mm` in simulation. Train an end-to-end policy from scratch with pure PPO. Every episode starts at EE `(300, 0, 300) mm` with a 50 mm gripper gap.
 
-[中文说明](README_cn.md) · [RL examples](../README.md) · [Previous: Reach](../reach/README.md)
+[中文说明](README_zh.md) · [RL examples](../README.md) · [Previous: Reach](../reach/README.md)
 
 Environment **v3** uses 70 observations and four actions `Δx, Δy, Δz, Δgap`, a downward gripper orientation, a 20 ms control period, 32 physics substeps, and an 8 s episode limit. Cartesian increments are at most 5 mm per step; gap increments are at most 3 mm. Commands accumulate; zero actions hold the commands. All channels remain available throughout the episode, subject to workspace bounds, URDF joint limits, IK checks, and a 25 mm setpoint leash. Gripper dynamics use the calibrated [G2Controller](../../../ufactory/simulation/g2_controller.py).
 

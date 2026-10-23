@@ -99,7 +99,7 @@ def configure_lite6_gripper_drive(
         robot.set_dofs_frictionloss(np.full(len(damp_idx), float(frictionloss)), damp_idx)
     passive_idx = [idx for idx in damp_idx if idx not in pd_idx]
     if passive_idx and callable(getattr(robot, "control_dofs_force", None)):
-        robot.control_dofs_force(np.zeros((1, len(passive_idx))), passive_idx)
+        robot.control_dofs_force(np.zeros(len(passive_idx)), passive_idx)
 
 
 def _finger_mesh_vertices() -> tuple[np.ndarray, np.ndarray]:

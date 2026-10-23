@@ -18,10 +18,17 @@ def transport_phases():
 @pytest.fixture
 def ik_sim():
     sim = object.__new__(pick_place.XArm6BioG2PickPlaceSimulation)
+    sim.frames = pick_place.BioG2TaskFrames.load()
+    sim.runtime = sim.frames.runtime
+    sim.arm_joint_names = sim.runtime.arm.joint_names
+    sim.flange_link = object()
+    sim.measured_pose = lambda: {"flange_position_error_mm": 0, "flange_rotation_error_rad": 0}
     sim.arm_dof_idx = list(range(6))
+    sim.arm_limits = pick_place.arm_joint_limits()
+    sim.executor = "servo_j"
     sim.transport_speed_mm_s = pick_place.DEFAULT_TRANSPORT_SPEED_MM_S
 
-    def solve(grasp_xyz, seed_q=None):
+    def solve(grasp_xyz, seed_q=None, grasp_quat=None):
         xyz = np.asarray(grasp_xyz)
         return np.r_[xyz, xyz * 0.5]
 
@@ -31,7 +38,7 @@ def ik_sim():
 
 @pytest.mark.parametrize("substeps", [8, 32])
 def test_scene_is_hidden_even_for_visual_run(monkeypatch, substeps):
-    import genesis as gs
+    gs = pytest.importorskip("genesis")
 
     class SceneRequested(Exception):
         pass
@@ -65,7 +72,8 @@ def test_prepare_resets_exact_home_before_opening_viewer(ik_sim):
 
     def reset(home, initial_gap_mm):
         events.append("reset_and_warmup")
-        np.testing.assert_array_equal(home, ik_sim.solve_arm_ik(pick_place.HOME_GRASP_POS))
+        home_tcp = ik_sim.frames.flange_to_tcp_pose(ik_sim.frames.home_flange(pick_place.ROBOT_BASE_POS))
+        np.testing.assert_array_equal(home, ik_sim.solve_arm_ik(home_tcp[:3, 3]))
         assert initial_gap_mm == 150.0
 
     ik_sim.compile_trajectory = compile_hidden
@@ -73,7 +81,8 @@ def test_prepare_resets_exact_home_before_opening_viewer(ik_sim):
     ik_sim.start_viewer = lambda: events.append("present_initial_frame")
     ticks = ik_sim.prepare(pick_place.default_phases())
     assert events == ["compile", "reset_and_warmup", "present_initial_frame"]
-    assert np.linalg.norm(ticks[0]["target_arm_q"] - ik_sim.home_arm_q) > 1e-6
+    assert ticks[0]["phase"] == "enter_task"
+    np.testing.assert_allclose(ik_sim.joint_targets[0][0], ik_sim.home_arm_q, atol=1e-8)
 
 
 def test_reset_warms_up_without_visual_updates(ik_sim):
@@ -99,7 +108,17 @@ def test_reset_warms_up_without_visual_updates(ik_sim):
     ik_sim.controller = SimpleNamespace(reset=record("gripper_reset"), apply=record("gripper_apply"))
     ik_sim.control_arm = record("compensated_arm_hold")
     home = ik_sim.solve_arm_ik(pick_place.HOME_GRASP_POS)
+    ik_sim.last_arm_q = np.full(6, 1.0)
+    stale_stream = ik_sim._new_joint_stream(np.ones(6))
+    stale_stream.pending_tick = {"phase": "transit"}
+    stale_stream.pending_q = np.ones(6)
+    ik_sim._joint_stream = stale_stream
     ik_sim.reset(home)
+    assert ik_sim._joint_stream is not stale_stream
+    assert ik_sim._joint_stream.pending_tick is None
+    assert ik_sim._joint_stream.pending_q is None
+    np.testing.assert_array_equal(ik_sim.last_arm_q, home)
+    np.testing.assert_array_equal(ik_sim._joint_stream.previous_q, home)
     np.testing.assert_array_equal(next(c[1][0] for c in calls if c[0] == "arm_position"), home)
     steps = [c for c in calls if c[0] == "step"]
     assert len(steps) == 10
@@ -198,11 +217,12 @@ def test_transport_duration_and_nonzero_phase_boundary_velocities(ik_sim):
     timing = pick_place.transport_timing(phases, 250)
     assert len(transport) * pick_place.DT == pytest.approx(timing["duration_s"])
     assert len(transport) * pick_place.DT == pytest.approx(sum(p.duration_s for p in phases))
-    np.testing.assert_array_equal(transport[0]["target_arm_dq"], 0)
-    np.testing.assert_array_equal(transport[-1]["target_arm_dq"], 0)
+    velocities = [ik_sim.joint_targets[t["target_index"]][1] for t in transport]
+    np.testing.assert_array_equal(velocities[0], 0)
+    np.testing.assert_array_equal(velocities[-1], 0)
     for idx in (i for i in range(1, len(transport)) if transport[i]["phase"] != transport[i - 1]["phase"]):
         assert transport[idx]["phase_step"] == 0
-        before, after = transport[idx - 1]["target_arm_dq"], transport[idx]["target_arm_dq"]
+        before, after = velocities[idx - 1], velocities[idx]
         assert np.linalg.norm(before) > 0.05
         assert np.linalg.norm(after) > 0.05
         assert np.dot(before, after) > 0
@@ -257,6 +277,10 @@ def run_rows():
                     "right_gap_mm": 32.26,
                     "gap_difference_mm": 0.0,
                     "ee_error_mm": 0.0,
+                    "flange_error_mm": 0.0,
+                    "flange_rotation_error_rad": 0.0,
+                    "robot_table_contacts": 0,
+                    "robot_nest_contacts": 0,
                     "relative_x_mm": 0.0,
                     "relative_y_mm": 0.0,
                     "relative_z_mm": 0.0,
@@ -269,6 +293,43 @@ def test_slip_ignores_normal_vertical_path_motion(run_rows):
     evaluation = pick_place.evaluate_run(run_rows, force_percent=50)
     assert evaluation["passed"]
     assert evaluation["metrics"]["transport_vertical_slip_mm"] == pytest.approx(0)
+
+
+def test_home_guard_keeps_minimum_hold_and_requires_consecutive_finite_pose_samples():
+    guard = pick_place.HomePoseGuard()
+    good = {"flange_error_mm": 0.4, "flange_rotation_error_rad": 0.0008}
+    for _ in range(14):
+        guard.update(good)
+    assert not guard.ready
+    guard.update(good)
+    assert guard.ready
+    for bad in (0.5001, float("nan")):
+        guard.update(good | {"flange_error_mm": bad})
+        assert not guard.ready
+        for _ in range(2):
+            guard.update(good)
+            assert not guard.ready
+        guard.update(good)
+        assert guard.ready
+
+
+def test_home_guard_timeout_records_pose_error():
+    guard = pick_place.HomePoseGuard()
+    for _ in range(round(pick_place.HOME_SETTLE_TIMEOUT_S / pick_place.DT)):
+        guard.update({"flange_error_mm": 0.8, "flange_rotation_error_rad": 0.002})
+    with pytest.raises(pick_place.HomePoseError, match="timeout after 2.00s.*position=0.800000mm"):
+        guard.require_ready()
+
+
+def test_return_acceptance_uses_flange_instead_of_task_tcp(run_rows):
+    run_rows[-1]["grasp_x_mm"] = 999.0
+    assert pick_place.evaluate_run(run_rows, 50)["passed"]
+    run_rows[-1]["flange_error_mm"] = 0.5001
+    result = pick_place.evaluate_run(run_rows, 50)
+    assert not result["checks"]["return_flange_position_le_0_5mm"]
+    run_rows[-1]["flange_error_mm"] = 0
+    run_rows[-1]["flange_rotation_error_rad"] = 0.001001
+    assert not pick_place.evaluate_run(run_rows, 50)["checks"]["return_flange_rotation_le_1e_3rad"]
 
 
 @pytest.mark.parametrize("phase", pick_place.TRANSPORT_PHASE_NAMES)
@@ -406,17 +467,41 @@ def test_closing_push_and_3d_relative_motion_are_measured(run_rows):
     assert result["metrics"]["transport_relative_displacement_3d_mm"] == pytest.approx(2)
 
 
+def test_steady_transport_force_excludes_supported_grip_and_rounded_corners(run_rows):
+    transit = next(r for r in run_rows if r["phase"] == "transit")
+    run_rows.remove(transit)
+    for idx in range(10):
+        run_rows.insert(
+            -1,
+            transit
+            | {
+                "left_normal_n": 12.1 if idx < 5 else 20,
+                "right_normal_n": 11.7 if idx < 5 else 4,
+                "target_tcp_velocity_z_mm_s": 0 if idx < 5 else 10,
+                "target_speed_mm_s": 250,
+            },
+        )
+    result = pick_place.evaluate_run(run_rows, 50)
+    assert result["metrics"]["transport_steady_sample_count"] == 5
+    assert result["metrics"]["transport_steady_left_normal_n"] == pytest.approx(12.1)
+    assert result["metrics"]["transport_steady_right_normal_n"] == pytest.approx(11.7)
+
+
 @pytest.mark.parametrize(
     "error",
     [np.zeros(6), np.array([1.1e-5, 0, 0, 0, 0, 0]), np.array([0, 0, 0, 0, 0, 1.1e-4])],
 )
-def test_ik_tolerances_and_error_validation(error):
-    sim = object.__new__(pick_place.XArm6BioG2PickPlaceSimulation)
+def test_ik_tolerances_and_error_validation(error, ik_sim):
+    sim = ik_sim
+    del sim.solve_arm_ik
     sim.arm_dof_idx = list(range(6))
     sim.adapter = SimpleNamespace(indices=[6, 7])
     sim.controller = SimpleNamespace(reference_q_m=0.02)
     sim.gripper_base_link = object()
     sim.last_arm_q = np.zeros(6)
+    sim.arm_limits = pick_place.arm_joint_limits()
+    sim.ik_total_ms = 0.0
+    sim.ik_calls = 0
     sim.max_ik_position_error_m = sim.max_ik_rotation_error_rad = 0.0
 
     def solve(**kwargs):
@@ -433,9 +518,9 @@ def test_ik_tolerances_and_error_validation(error):
         np.testing.assert_array_equal(sim.solve_arm_ik(pick_place.HOME_GRASP_POS), 0.0)
 
 
-def test_gravity_is_applied_as_position_bias_at_measured_configuration():
+def test_gravity_is_applied_as_position_bias_at_measured_configuration(ik_sim):
     calls = []
-    sim = object.__new__(pick_place.XArm6BioG2PickPlaceSimulation)
+    sim = ik_sim
     sim.arm_dof_idx = list(range(6))
     measured = np.arange(8) * 0.01
     sim.adapter = SimpleNamespace(indices=[7, 6], positions=lambda: measured)
@@ -501,6 +586,13 @@ def test_substep_comparison_enforces_position_and_force_thresholds(position_delt
         },
     }
     assert pick_place.compare_substeps(first, second)["passed"] is passed
+    first["metrics"].update(transport_steady_left_normal_n=12.0, transport_steady_right_normal_n=11.8)
+    second["metrics"].update(transport_steady_left_normal_n=12.0 + force_delta, transport_steady_right_normal_n=11.8)
+    second["metrics"]["grip_steady_left_normal_n"] += 10
+    comparison = pick_place.compare_substeps(first, second)
+    assert comparison["passed"] is passed
+    assert comparison["force_comparison_phase"] == "transit"
+    assert comparison["grip_force_difference_left_right_n"][0] == pytest.approx(10 + force_delta)
 
 
 def test_joint_sample_is_reused_only_within_same_physics_step():

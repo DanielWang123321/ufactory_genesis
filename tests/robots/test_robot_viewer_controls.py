@@ -68,6 +68,9 @@ class _FakeRobot:
         self.calls.append(("control_position", tuple(dof_idx), None))
 
     def control_dofs_force(self, values, dof_idx):
+        import numpy as np
+
+        assert np.asarray(values).ndim == 1
         self.calls.append(("control_force", tuple(dof_idx), None))
 
 
@@ -228,8 +231,48 @@ def test_lite6_viewer_gripper_demo_uses_reversed_open_close_semantics():
     assert ("control_force", (7,), None) in robot.calls
 
     robot.calls.clear()
+    lite6_demo.set_lite6_gripper_pose(robot, [6], [6, 7], LITE6_GRIPPER_SIM_OPEN_DRIVE)
+    assert ("set_position", (6, 7), None) in robot.calls
+    assert ("control_position", (6,), None) in robot.calls
+    assert ("control_force", (7,), None) in robot.calls
+
+    robot.calls.clear()
     lite6_demo.control_lite6_gripper_pose(robot, [6], [6, 7], LITE6_GRIPPER_SIM_CLOSED_DRIVE)
     assert robot.calls == [("control_position", (6,), None)]
+
+
+def test_lite6_gripper_demo_runs_in_headless_viewer(monkeypatch, tmp_path):
+    robot_viewer = _load_robot_viewer(monkeypatch)
+    robot = _FakeRobot()
+    robot.joints = [
+        *[_FakeJoint(f"joint{i}", i - 1) for i in range(1, 7)],
+        _FakeJoint("finger_joint1", 6),
+        _FakeJoint("finger_joint2", 7),
+    ]
+    scene = _FakeScene(robot)
+    fake_gs = _FakeGenesis(scene)
+
+    monkeypatch.setattr(robot_viewer, "gs", fake_gs)
+    monkeypatch.setattr(robot_viewer, "require_genesis_runtime", lambda _gs: None)
+    monkeypatch.setattr(robot_viewer, "glb_pbr_surfaces", nullcontext)
+    monkeypatch.setattr(robot_viewer, "glb_view_surface", lambda: object())
+    monkeypatch.setattr(robot_viewer, "configure_lite6_collision_filters", lambda _robot: None)
+    model = tmp_path / "fake_lite6_gripper.urdf"
+    model.write_text('<robot><joint name="finger_joint1"/></robot>')
+
+    robot_viewer.run_glb_viewer(
+        get_robot_profile("lite6"),
+        str(model),
+        headless=True,
+        pd_demo=False,
+        gripper_demo=True,
+        headless_steps=2,
+    )
+
+    assert ("kp", (6,), None) in robot.calls
+    assert ("control_force", (7,), None) in robot.calls
+    assert ("control_position", (6,), None) in robot.calls
+    assert scene.step_count == 5
 
 
 def test_bio_g2_demo_holds_arm_with_pd_and_drives_only_right_finger(monkeypatch, tmp_path):
@@ -270,3 +313,109 @@ def test_bio_g2_demo_holds_arm_with_pd_and_drives_only_right_finger(monkeypatch,
     assert ("control_force", (7,), None) in robot.calls
     assert ("control_position", (6,), None) in robot.calls
     assert ("control_position", (6, 7), None) not in robot.calls
+
+
+def test_g2_demo_cycle_starts_closing_and_waits_half_second_after_arrival():
+    from ufactory.visualization.gripper_g2_viewer import (
+        GRIPPER_CLOSE,
+        GRIPPER_OPEN,
+        step_gripper_demo_target,
+        get_g2_demo_cycle,
+    )
+
+    state = {"gap_mm": 84.0, "ref_mm": 84.0}
+    robot = types.SimpleNamespace(
+        _ufactory_g2_demo_settings=(0.0, 50.0, 50.0),
+        _ufactory_g2_controller=types.SimpleNamespace(
+            gap_mm=lambda: state["gap_mm"],
+            controller=types.SimpleNamespace(reference_gap_mm=[state["ref_mm"]]),
+        ),
+    )
+    cycle = get_g2_demo_cycle(robot, dt=0.02)
+    assert cycle.hold_steps_required == 25
+
+    # Step 0 starts closing immediately without waiting 200 open steps.
+    drive, label = step_gripper_demo_target(robot, dt=0.02)
+    assert (drive, label) == (GRIPPER_CLOSE, "closed")
+
+    # While moving toward 0 mm, hold_steps stays at 0.
+    for gap in (60.0, 30.0, 5.0):
+        state["gap_mm"] = gap
+        state["ref_mm"] = gap
+        robot._ufactory_g2_controller.controller.reference_gap_mm = [gap]
+        cycle.on_step_completed(robot)
+        drive, label = step_gripper_demo_target(robot, dt=0.02)
+        assert (drive, label) == (GRIPPER_CLOSE, "closed")
+        assert cycle.hold_steps == 0
+
+    # Arrive at closed target (<= 1.0 mm) and hold for 25 steps (0.5 s at dt=0.02s).
+    state["gap_mm"] = 0.2
+    robot._ufactory_g2_controller.controller.reference_gap_mm = [0.0]
+    for expected_hold in range(1, 25):
+        cycle.on_step_completed(robot)
+        assert cycle.hold_steps == expected_hold
+        drive, label = step_gripper_demo_target(robot, dt=0.02)
+        assert (drive, label) == (GRIPPER_CLOSE, "closed")
+
+    # On the 25th arrived step, phase switches to "open".
+    cycle.on_step_completed(robot)
+    drive, label = step_gripper_demo_target(robot, dt=0.02)
+    assert (drive, label) == (GRIPPER_OPEN, "open")
+    assert cycle.completed_cycles == 0
+
+    # Arrive at open target (84 mm) and hold for 25 steps -> completes 1 full cycle.
+    state["gap_mm"] = 83.8
+    robot._ufactory_g2_controller.controller.reference_gap_mm = [84.0]
+    for _ in range(24):
+        cycle.on_step_completed(robot)
+        step_gripper_demo_target(robot, dt=0.02)
+    assert cycle.completed_cycles == 0
+    cycle.on_step_completed(robot)
+    assert cycle.completed_cycles == 1
+    drive, label = step_gripper_demo_target(robot, dt=0.02)
+    assert (drive, label) == (GRIPPER_CLOSE, "closed")
+
+
+def test_bio_g2_and_lite6_demo_cycles_wait_half_second_after_arrival():
+    from ufactory.grippers.bio_g2 import BioGripperG2
+    from ufactory.visualization.lite6_gripper_viewer import (
+        LITE6_GRIPPER_CLOSE,
+        LITE6_GRIPPER_OPEN,
+        get_lite6_gripper_demo_cycle,
+        step_lite6_gripper_demo_target,
+    )
+
+    # Bio Gripper G2 (dt=0.02s -> 25 hold steps for 0.5s)
+    bio_state = {"gap_mm": 150.0, "ref_mm": 150.0}
+    bio_robot = _FakeRobot()
+    bio_robot.joints = [
+        _FakeJoint("bio_gripper_g2_right_finger_joint", 6),
+        _FakeJoint("bio_gripper_g2_left_finger_joint", 7),
+    ]
+    bio_robot._ufactory_bio_g2_demo_settings = (71.0, 50.0, 50.0, None)
+    bio_robot._ufactory_bio_g2_controller = types.SimpleNamespace(
+        gap_mm=lambda: bio_state["gap_mm"],
+        telemetry=lambda: {"reference_gap_mm": bio_state["ref_mm"]},
+    )
+    bio = BioGripperG2(bio_robot)
+    assert bio.step_demo_target() == (BioGripperG2.CLOSE_POS, "closed")
+    bio_state["gap_mm"] = 71.2
+    bio_state["ref_mm"] = 71.0
+    for _ in range(25):
+        bio.on_step_completed(bio_robot)
+        if bio.demo_phase == "closed":
+            bio.step_demo_target()
+    assert bio.step_demo_target() == (BioGripperG2.OPEN_POS, "open")
+
+    # Lite6 Gripper (dt=0.01s -> 50 hold steps for 0.5s)
+    lite6_pos = [LITE6_GRIPPER_OPEN]
+    lite6_robot = types.SimpleNamespace(get_dofs_position=lambda _idx: [lite6_pos[0]])
+    lite6_cycle = get_lite6_gripper_demo_cycle(lite6_robot, [6], dt=0.01)
+    assert lite6_cycle.hold_steps_required == 50
+    assert step_lite6_gripper_demo_target(lite6_robot, [6], dt=0.01) == (LITE6_GRIPPER_CLOSE, "closed")
+    lite6_pos[0] = 0.0001
+    for _ in range(50):
+        lite6_cycle.on_step_completed(lite6_robot)
+        if lite6_cycle.phase == "closed":
+            step_lite6_gripper_demo_target(lite6_robot, [6], dt=0.01)
+    assert step_lite6_gripper_demo_target(lite6_robot, [6], dt=0.01) == (LITE6_GRIPPER_OPEN, "open")

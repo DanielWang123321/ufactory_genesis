@@ -49,6 +49,7 @@ def test_gravity_sign_for_analytic_pendulum(tmp_path):
 @pytest.mark.parametrize("offset_mm", [0, 1.445, -2.0, 35.0])
 @pytest.mark.parametrize("down", [False, True])
 def test_signed_gaps_use_collision_planes_and_world_poses(offset_mm, down):
+    pytest.importorskip("trimesh")
     planes = collision_gripping_planes(pick_place.COMBO_MODEL_PATH)
     rotation = axis_rotation([1, 0, 0], np.pi if down else 0)
     quat = [0.0, 1.0, 0.0, 0.0] if down else [1.0, 0.0, 0.0, 0.0]

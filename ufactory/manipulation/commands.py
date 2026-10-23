@@ -17,6 +17,7 @@ from ufactory.hardware import XArmTransport
 from ufactory.hardware.xarm import wait_for_servo_motion_ready
 from ufactory.kinematics import build_calibrated_urdf, load_kinematics_calibration
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
+from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, read_tcp_offset
 from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBackend, PinocchioKinematicsBackend
 from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 from ufactory.safety.gate import sha256_file
@@ -151,6 +152,20 @@ def print_real_execution_summary(execution: Any) -> None:
     )
 
 
+def print_sdk_sim_failures(evidence: Any, evidence_path: Path | None) -> None:
+    """Print every SDK simulation failure reason so ``sdk_sim=FAIL`` is actionable."""
+
+    print(
+        f"sdk_sim_failures={len(evidence.failures)} max_joint_error_rad={float(evidence.max_joint_error_rad):.6g} "
+        f"max_ee_error_m={float(evidence.max_ee_error_m):.6g}",
+        file=sys.stderr,
+    )
+    for failure in evidence.failures:
+        print(f"  {failure}", file=sys.stderr)
+    if evidence_path is not None:
+        print(f"  evidence: {evidence_path}", file=sys.stderr)
+
+
 def model_and_hashes(config: Any, calibration_path: Path | None, serial_number: str | None) -> tuple[Path, str, str]:
     store = RepositoryAssetStore.discover()
     base = store.require(Path(config.robot.assets_dir) / config.robot.urdf)
@@ -245,14 +260,19 @@ def ensure_cartesian_program_start(
     mvacc_mm_s2: float = 500.0,
     tolerance_mm: float = 2.0,
 ) -> None:
-    """Require the arm at Cartesian home (gripper-down); optionally preposition with set_position."""
+    """Require the arm at Cartesian home (gripper-down); optionally preposition with set_position.
+
+    ``xyz_m`` is the flange position; it is compared with the controller TCP
+    feedback after applying ``transport.tcp_offset``.
+    """
 
     code, reported = transport.arm.get_position(is_radian=True)
     target = np.asarray(xyz_m, dtype=np.float64).reshape(3)
     if int(code) != 0:
         raise RuntimeError(f"invalid Cartesian feedback before program start (SDK code={code})")
+    expected_tcp = np.asarray(transport.flange_to_command_pose(target)[:3], dtype=np.float64)
     reported_arr = np.asarray(reported, dtype=np.float64).reshape(-1)
-    xyz_err = float(np.linalg.norm(reported_arr[:3] - target * 1000.0))
+    xyz_err = float(np.linalg.norm(reported_arr[:3] - expected_tcp))
     if xyz_err <= tolerance_mm:
         print(f"  [preposition] already at Cartesian home xyz_err={xyz_err:.2f}mm")
         return
@@ -270,18 +290,31 @@ def ensure_cartesian_program_start(
     print(f"  [preposition] mode=0 Cartesian home reached xyz_err={xyz_err:.2f}mm rpy_err={rpy_err:.4f}rad")
 
 
-def sdk_sim_feedback(arm: Any, program: Any, config: Any, expected_start_q: np.ndarray) -> np.ndarray:
+def sdk_sim_feedback(
+    arm: Any,
+    program: Any,
+    config: Any,
+    expected_start_q: np.ndarray,
+    *,
+    tcp_offset: Sequence[float] | np.ndarray | None = None,
+) -> np.ndarray:
     """Replay against the controller's virtual robot from the approved start.
 
     The virtual preposition happens only after SDK simulation mode is enabled.
     This keeps ``sdk-sim`` independent of the physical arm pose and prevents a
     validation-only command from moving the real robot. The controller is
     always returned to non-simulation mode, including on replay failures.
+
+    MoveL samples are flange poses; they are converted to the controller TCP
+    frame with ``tcp_offset`` (read from the controller when omitted).
     """
 
     target = np.asarray(expected_start_q, dtype=np.float64).reshape(-1)
     if target.shape != (config.robot.dof,) or not np.all(np.isfinite(target)):
         raise ValueError(f"SDK simulation start must contain {config.robot.dof} finite joint values")
+    offset = read_tcp_offset(arm) if tcp_offset is None else np.asarray(tcp_offset, dtype=np.float64).reshape(-1)
+    if offset.shape != (6,) or not np.all(np.isfinite(offset)):
+        raise ValueError("tcp_offset must contain 6 finite values")
 
     def require_ok(label: str, code: int) -> None:
         if int(code) != 0:
@@ -324,6 +357,7 @@ def sdk_sim_feedback(arm: Any, program: Any, config: Any, expected_start_q: np.n
         require_ok("set_state", arm.set_state(0))
         wait_for_servo_motion_ready(arm)
         print(f"  [sdk-sim] virtual start reached max_err={start_error:.4f}rad; physical arm was not prepositioned")
+        print(f"  [sdk-sim] tcp_offset={offset.tolist()} (flange targets converted to TCP)")
         rows = [virtual_start]
         orientation = GRIPPER_DOWN_RPY_RAD
         dt = 1.0 / program.rate
@@ -333,7 +367,8 @@ def sdk_sim_feedback(arm: Any, program: Any, config: Any, expected_start_q: np.n
                 if segment.kind == "movej":
                     code = arm.set_servo_angle_j(angles=target.tolist(), speed=0, mvacc=0, mvtime=0, is_radian=True)
                 elif segment.kind == "movel":
-                    pose = [*(target * 1000.0).tolist(), *orientation]
+                    flange_pose = [*(target * 1000.0).tolist(), *orientation]
+                    pose = pose_flange_to_tcp(flange_pose, offset).tolist()
                     code = arm.set_servo_cartesian(mvpose=pose, speed=0, mvacc=0, mvtime=0, is_radian=True)
                 else:
                     code = 0

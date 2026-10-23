@@ -275,6 +275,37 @@ def _sdk_path_z_reasons(
     return reasons
 
 
+def _check_controller_tcp_offset_z(
+    session,
+    safe_poses: Sequence[SafePose],
+    home_qpos: Sequence[float],
+) -> list[str]:
+    tcp_offset = list(getattr(session.arm, "tcp_offset", None) or [])
+    if not any(abs(float(v)) > 1e-6 for v in tcp_offset):
+        return []
+    reasons: list[str] = []
+    seen: set[str] = set()
+    check_targets = [("home", np.asarray(home_qpos, dtype=np.float64)), *((p.name, p.q) for p in safe_poses)]
+    for name, q in check_targets:
+        q_arr = np.asarray(q, dtype=np.float64)
+        key = ",".join(f"{float(v):.6f}" for v in q_arr)
+        if key in seen:
+            continue
+        seen.add(key)
+        code, sdk_pose = session.arm.get_forward_kinematics(
+            angles=q_arr.tolist(),
+            input_is_radian=True,
+            return_is_radian=True,
+        )
+        if code != 0:
+            reasons.append(f"{name}: SDK FK failed (code={code})")
+            continue
+        z_mm = float(sdk_pose[2])
+        if z_mm <= 0.0:
+            reasons.append(f"{name}: EE z {z_mm:.2f} mm <= 0.00 mm")
+    return reasons
+
+
 def _hardware_path_reasons_by_waypoint(
     *,
     session,
@@ -490,6 +521,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
     genesis_data = _run_genesis_samples(scene, robot, dof_idx, safe_poses, reference, runtime)
 
     session: RealRobotSession | None = None
+    motion_started = False
     results: list[DynamicsSample] = []
     run_config = make_run_config(
         robot_key=runtime.model.key,
@@ -528,6 +560,20 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                 )
         else:
             session = RealRobotSession(args.ip, dof=runtime.model.dof, home_qpos=runtime.arm.home_qpos)
+            offset_z_issues = _check_controller_tcp_offset_z(session, safe_poses, runtime.arm.home_qpos)
+            if offset_z_issues:
+                session.print_config()
+                print(
+                    "\n[FAIL] Controller has non-zero tcp_offset and failed EE z > 0 precheck; "
+                    "real robot will not move:"
+                )
+                for issue in offset_z_issues[:5]:
+                    print(f"  - {issue}")
+                print(
+                    "[HINT] Remove the end-effector and clear controller tcp_offset "
+                    "before running dynamics-hardware-check."
+                )
+                return 1
             session.configure_for_dynamics()
             session.print_config()
             run_config = make_run_config(
@@ -638,6 +684,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
 
                     print(f"  Moving to [{pose.name}] repeat {repeat_i + 1}/{args.repeats} ...")
                     try:
+                        motion_started = True
                         real = session.sample_at_hold(
                             pose.q,
                             speed_rad_s=args.speed,
@@ -688,7 +735,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                     results.append(sample)
 
     finally:
-        if session is not None and not args.hold_current_only:
+        if session is not None and not args.hold_current_only and motion_started:
             try:
                 print("\n--- Returning to home ---")
                 session.return_home(
@@ -697,6 +744,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                 )
             except Exception as exc:
                 print(f"[WARN] return_home failed: {exc}")
+        if session is not None:
             session.disconnect()
 
     print_compare_table(results, runtime_profile=runtime)

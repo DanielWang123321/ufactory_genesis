@@ -153,6 +153,7 @@ def test_lite6_runtime_config_and_drive_setup_match_calibrated_pneumatic_dynamic
     robot.set_dofs_force_range.assert_called_once()
     assert list(robot.set_dofs_force_range.call_args.args[2]) == [6]
     robot.control_dofs_force.assert_called_once()
+    assert list(robot.control_dofs_force.call_args.args[0].shape) == [1]
     assert list(robot.control_dofs_force.call_args.args[1]) == [7]
 
 

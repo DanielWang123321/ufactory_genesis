@@ -1,6 +1,6 @@
 # ufactory_genesis
 
-![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-0.3.2-orange) ![Genesis](https://img.shields.io/badge/genesis-1.4.4-lightgrey) ![CI](https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-0.3.3-orange) ![Genesis](https://img.shields.io/badge/genesis-1.4.4-lightgrey) ![CI](https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg)
 
 基于 Genesis 的 UFACTORY 机械臂仿真与强化学习示例。
 
@@ -14,8 +14,8 @@
 
 - [机械臂与夹爪可视化](examples/README_zh.md#可视化)：GLB 模型、可动手指与夹爪开合演示。
 - [运动学与接触仿真](examples/README_zh.md#运动学与动力学仿真)：FK/IK 校验与物理仿真检查。
-- [轨迹控制抓放](examples/README_zh.md#抓放仿真)：抓取、搬运并放置物体。
-- [装箱仿真](examples/README_zh.md#装箱展示仿真)：通过 YAML 配置轨迹，模拟装箱与接触过程。
+- [轨迹控制抓放](examples/pick_place/README_zh.md)：抓取、搬运并放置物体。
+- [装箱仿真](examples/packaging/README_zh.md)：通过 YAML 配置轨迹，模拟装箱与接触过程。
 
 安装方式与完整运行指令见[示例指南](examples/README_zh.md)。
 
@@ -23,10 +23,10 @@
 
 [![Reach 评估演示](https://i.ytimg.com/vi/FRZopwFl-aM/maxresdefault.jpg)](https://www.bilibili.com/video/BV12rpk69ENc/)
 
-在 Linux/NVIDIA GPU 上进行仿真训练与推理。学习顺序及各任务指南见 [RL 索引](examples/rl/README_cn.md)。
+在 Linux/NVIDIA GPU 上进行仿真训练与推理。学习顺序及各任务指南见 [RL 索引](examples/rl/README_zh.md)。
 
-1. **[Reach：目标到达](examples/rl/reach/README_cn.md)**：让未安装夹爪的 xArm6 末端到达目标点，成功距离严格小于 **5 mm**。支持单臂、四臂 GLB 实时推理，仓库不附带 Reach 权重。
-2. **[Pick & Place：桌面抓放](examples/rl/pick_place/README_cn.md)**：xArm6 + Gripper G2 抓取方块并搬运到桌面目标位置。采用固定 `+Y` 布局，以纯 PPO 从零训练策略。
+1. **[Reach：目标到达](examples/rl/reach/README_zh.md)**：让未安装夹爪的 xArm6 末端到达目标点，成功距离严格小于 **5 mm**。支持单臂、四臂 GLB 实时推理，仓库不附带 Reach 权重。
+2. **[Pick & Place：桌面抓放](examples/rl/pick_place/README_zh.md)**：xArm6 + Gripper G2 抓取方块并搬运到桌面目标位置。采用固定 `+Y` 布局，以纯 PPO 从零训练策略。
 
 
 

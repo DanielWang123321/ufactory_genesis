@@ -20,7 +20,7 @@ pure original MIT-only content.
   - Shared `visual_glb/` layouts and link-canonical gripper visuals.
   - Runtime manifests, overlays, and integrity budgets used by tests.
 
-### End-effectors (Gripper G2, Bio Gripper G2, Lite6 Gripper, Lite6 Vacuum)
+### End-effectors (Gripper G2, Bio Gripper G2, Vacuum Gripper, Lite6 Gripper, Lite6 Vacuum)
 
 Visual and collision meshes for accessories follow the same upstream family
 where noted in each `assets/urdf/<name>/README.md`. Combo URDFs, movable

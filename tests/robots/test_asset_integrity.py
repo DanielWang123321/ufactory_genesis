@@ -113,6 +113,7 @@ _REGISTERED_ARM_URDFS: dict[str, tuple[int, str, tuple[str, ...]]] = {
             "xarm5_1305_g2_movable_visual.urdf",
             "xarm5_1305_bio_gripper_g2_visual.glb.urdf",
             "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
+            "xarm5_1305_vacuum_gripper_visual.glb.urdf",
         ),
     ),
     "xarm6": (
@@ -125,6 +126,7 @@ _REGISTERED_ARM_URDFS: dict[str, tuple[int, str, tuple[str, ...]]] = {
             "xarm6_1305_g2_movable_visual.urdf",
             "xarm6_1305_bio_gripper_g2_visual.glb.urdf",
             "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
+            "xarm6_1305_vacuum_gripper_visual.glb.urdf",
             "xarm6_with_gripper.urdf",
         ),
     ),
@@ -138,6 +140,7 @@ _REGISTERED_ARM_URDFS: dict[str, tuple[int, str, tuple[str, ...]]] = {
             "xarm7_1305_g2_movable_visual.urdf",
             "xarm7_1305_bio_gripper_g2_visual.glb.urdf",
             "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
+            "xarm7_1305_vacuum_gripper_visual.glb.urdf",
         ),
     ),
     "lite6": (
@@ -164,6 +167,7 @@ _REGISTERED_ARM_URDFS: dict[str, tuple[int, str, tuple[str, ...]]] = {
             "uf850_g2_movable_visual.urdf",
             "uf850_bio_gripper_g2_visual.glb.urdf",
             "uf850_bio_gripper_g2_movable_visual.glb.urdf",
+            "uf850_vacuum_gripper_visual.glb.urdf",
         ),
     ),
 }
@@ -623,6 +627,18 @@ def test_lite6_vacuum_gripper_visual_glb_budget() -> None:
     assert "lite6_vacuum_gripper_visual_link6.glb" in names
 
 
+def test_vacuum_gripper_visual_glb_budget() -> None:
+    """xArm/UF850 vacuum gripper visual GLB (native Draco) must stay under 1 MiB."""
+    package_dir = PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper"
+    visual_dir = package_dir / "meshes" / "visual"
+    glbs = sorted(visual_dir.rglob("*.glb"))
+    assert glbs, "expected xArm/UF850 vacuum gripper visual GLBs"
+    glb_total = sum(path.stat().st_size for path in glbs)
+    assert glb_total < 1_000_000, f"Vacuum gripper visual GLBs total {glb_total} bytes; expected < 1 MB"
+    names = {path.name for path in glbs}
+    assert names == {"vacuum_gripper.glb"}
+
+
 @pytest.mark.parametrize(
     ("arm", "visual_glb_dir", "budget", "expected_names"),
     [
@@ -717,8 +733,14 @@ def test_accessory_collision_meshes_are_stl_files() -> None:
         PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
         PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
         PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper_collision.urdf",
+        PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper.urdf",
+        PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper_stl.urdf",
+        PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_vacuum_gripper_visual.glb.urdf",
         PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_g2_movable_visual.urdf",
         PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
+        PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_vacuum_gripper_visual.glb.urdf",
+        PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_vacuum_gripper_visual.glb.urdf",
+        PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_vacuum_gripper_visual.glb.urdf",
         PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_gripper_reversed_movable_visual.glb.urdf",
         PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_vacuum_gripper_visual.glb.urdf",
     )
@@ -1086,3 +1108,53 @@ def test_no_collision_obj_meshes_in_public_assets() -> None:
         p.relative_to(PROJECT_ROOT) for p in _public_files() if "collision" in str(p) and p.suffix == ".obj"
     )
     assert obj_files == []
+
+
+def test_vacuum_gripper_static_urdfs_and_parameters() -> None:
+    expected_inertia = {
+        "ixx": 0.00047106,
+        "ixy": 3.9292e-7,
+        "ixz": 2.6537e-6,
+        "iyy": 0.00033072,
+        "iyz": -1.0975e-5,
+        "izz": 0.00025642,
+    }
+    cases = (
+        (PROJECT_ROOT / "assets/urdf/vacuum_gripper/vacuum_gripper.urdf", "vacuum_mount", 0),
+        (PROJECT_ROOT / "assets/urdf/vacuum_gripper/vacuum_gripper_stl.urdf", "vacuum_mount", 0),
+        (PROJECT_ROOT / "assets/urdf/xarm5/xarm5_1305_vacuum_gripper_visual.glb.urdf", "link5", 5),
+        (PROJECT_ROOT / "assets/urdf/xarm6/xarm6_1305_vacuum_gripper_visual.glb.urdf", "link6", 6),
+        (PROJECT_ROOT / "assets/urdf/xarm7/xarm7_1305_vacuum_gripper_visual.glb.urdf", "link7", 7),
+        (PROJECT_ROOT / "assets/urdf/uf850/uf850_vacuum_gripper_visual.glb.urdf", "link6", 6),
+    )
+    for urdf, expected_parent, expected_dof in cases:
+        root = ET.parse(urdf).getroot()
+        assert len(_non_fixed_joint_names(urdf)) == expected_dof
+
+        tool_link = root.find("./link[@name='xarm_vacuum_gripper_link']")
+        assert tool_link is not None, urdf
+        mass = float(tool_link.find("./inertial/mass").attrib["value"])
+        assert mass == pytest.approx(0.61), urdf
+        com = _rounded_xyz(tool_link.find("./inertial/origin").attrib["xyz"])
+        assert com == (0.0, 0.0, 0.053), urdf
+        inertia = {k: float(v) for k, v in tool_link.find("./inertial/inertia").attrib.items()}
+        for key, expected_val in expected_inertia.items():
+            assert inertia[key] == pytest.approx(expected_val), (urdf, key)
+
+        collisions = tool_link.findall("collision")
+        assert len(collisions) == 33, urdf
+        hull_names = [Path(c.find("./geometry/mesh").attrib["filename"]).name for c in collisions]
+        assert len(set(hull_names)) == 33, urdf
+        assert hull_names[0] == "hull_000_flange.stl"
+        assert hull_names[-1] == "hull_032_cup_05.stl"
+
+        fix_joint = root.find("./joint[@name='vacuum_gripper_fix']")
+        assert fix_joint is not None and fix_joint.attrib["type"] == "fixed", urdf
+        assert fix_joint.find("parent").attrib["link"] == expected_parent
+        assert fix_joint.find("child").attrib["link"] == "xarm_vacuum_gripper_link"
+
+        tcp_joint = root.find("./joint[@name='vacuum_joint_tcp']")
+        assert tcp_joint is not None and tcp_joint.attrib["type"] == "fixed", urdf
+        assert tcp_joint.find("parent").attrib["link"] == "xarm_vacuum_gripper_link"
+        assert tcp_joint.find("child").attrib["link"] == "vacuum_tcp"
+        assert _rounded_xyz(tcp_joint.find("origin").attrib["xyz"]) == (0.0, 0.0, 0.126), urdf

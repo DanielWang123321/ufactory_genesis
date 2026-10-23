@@ -4,7 +4,7 @@ Training and realtime visualization share state initialization, action execution
 
 The xArm 6 runs without a gripper in simulation; no Reach weights are bundled. Success requires a distance strictly below **5 mm**; the default training seed is 7. Run the commands below from the repository root.
 
-[中文说明](README_cn.md) · [RL examples](../README.md) · [Next: 2. Pick & Place](../pick_place/README.md)
+[中文说明](README_zh.md) · [RL examples](../README.md) · [Next: 2. Pick & Place](../pick_place/README.md)
 
 The environment has 24 observations, six actions, a 20 ms control period and a 5 s episode limit. Targets span x 0.15–0.55 m, y −0.30–0.30 m and z 0.05–0.50 m.
 

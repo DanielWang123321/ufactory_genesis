@@ -1,6 +1,6 @@
 # xArm6 1305 Assets
 
-公开树仅维护 **1305** 变体：动力学 URDF `xarm6_1305.urdf`（及 G2 / bio_gripper / GLB 组合变体）。另保留 `xarm6_with_gripper.urdf` 供轨迹场景 `visual_model='stl'` 几何对齐检查。
+公开树仅维护 **1305** 变体：动力学 URDF `xarm6_1305.urdf`（及 G2 / bio_gripper / vacuum_gripper / GLB 组合变体）。另保留 `xarm6_with_gripper.urdf` 供轨迹场景 `visual_model='stl'` 几何对齐检查。
 
 ## 碰撞网格
 

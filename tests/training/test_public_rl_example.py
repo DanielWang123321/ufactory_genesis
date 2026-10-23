@@ -106,7 +106,7 @@ def test_training_provenance_sources_exist() -> None:
 
 
 def test_no_legacy_checkpoint_or_random_start_contract_is_published() -> None:
-    for readme in (EXAMPLE / "README.md", EXAMPLE / "README_cn.md"):
+    for readme in (EXAMPLE / "README.md", EXAMPLE / "README_zh.md"):
         text = readme.read_text(encoding="utf-8")
         assert "model_199" not in text
         assert "model_299_g2stable" not in text

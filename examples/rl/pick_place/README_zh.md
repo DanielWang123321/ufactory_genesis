@@ -2,7 +2,7 @@
 
 在仿真中将 30 mm 方块从 `(300, 0) mm` 搬到 `(300, 300) mm`。采用端到端 PPO，从零训练，每回合均从末端 `(300, 0, 300) mm` 和 50 mm 开度开始。
 
-[English](README.md) · [RL 示例](../README_cn.md) · [前一例：Reach](../reach/README_cn.md)
+[English](README.md) · [RL 示例](../README_zh.md) · [前一例：Reach](../reach/README_zh.md)
 
 环境版本为 **3**：70 维观测、4 维动作 `Δx, Δy, Δz, Δgap`，固定夹爪朝下，控制周期 20 ms、32 个物理子步，回合最长 8 s。XYZ 每步最大增量 5 mm，开度每步最大增量 3 mm；命令持续积分，零动作保持命令。四个通道始终有效，仅保留工作空间、URDF 关节限位、IK 检查和 25 mm 设定点距离限制。夹爪使用标定版 [G2Controller](../../../ufactory/simulation/g2_controller.py)。
 

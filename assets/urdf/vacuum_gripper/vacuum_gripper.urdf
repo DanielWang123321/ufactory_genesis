@@ -1,0 +1,226 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="vacuum_gripper">
+  <link name="vacuum_mount" />
+  <link name="xarm_vacuum_gripper_link">
+    <inertial>
+      <origin xyz="0.0 0.0 0.053" rpy="0 0 0" />
+      <mass value="0.61" />
+      <inertia ixx="0.00047106" ixy="3.9292e-07" ixz="2.6537e-06" iyy="0.00033072" iyz="-1.0975e-05" izz="0.00025642" />
+    </inertial>
+    <visual name="vacuum_visual">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/visual/vacuum_gripper.glb" />
+      </geometry>
+    </visual>
+    <collision name="vacuum_hull_000">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_000_flange.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_001">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_001_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_002">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_002_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_003">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_003_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_004">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_004_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_005">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_005_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_006">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_006_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_007">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_007_cover.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_008">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_008_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_009">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_009_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_010">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_010_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_011">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_011_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_012">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_012_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_013">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_013_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_014">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_014_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_015">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_015_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_016">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_016_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_017">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_017_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_018">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_018_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_019">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_019_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_020">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_020_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_021">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_021_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_022">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_022_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_023">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_023_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_024">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_024_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_025">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_025_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_026">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_026_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_027">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_027_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_028">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_028_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_029">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_029_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_030">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_030_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_031">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_031_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_032">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/collision/convex/hull_032_cup_05.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="vacuum_gripper_fix" type="fixed">
+    <parent link="vacuum_mount" />
+    <child link="xarm_vacuum_gripper_link" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link name="vacuum_tcp" />
+  <joint name="vacuum_joint_tcp" type="fixed">
+    <parent link="xarm_vacuum_gripper_link" />
+    <child link="vacuum_tcp" />
+    <origin xyz="0.0 0.0 0.126" rpy="0 0 0" />
+  </joint>
+</robot>

@@ -25,6 +25,7 @@ from ufactory.manipulation.commands import (
     prepare_real_gripper_sender,
     prime_first_movej_sample,
     print_real_execution_summary,
+    print_sdk_sim_failures,
     write_json as _write_json,
     connect as _connect,
     read_q as _read_q,
@@ -39,7 +40,7 @@ from ufactory.manipulation.commands import (
     print_preflight_violation_summary as _print_preflight_violation_summary,
 )
 from ufactory.hardware import XArmTransport
-from ufactory.kinematics import get_robot_sn
+from ufactory.kinematics import get_robot_sn, read_tcp_offset
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.safety import validate_sdk_simulation
 from ufactory.safety.adapters import EnvironmentObstacle
@@ -359,10 +360,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--gripper",
         choices=("default", "g2", "bio_gripper_g2", "lite6"),
         default="default",
-        help="Select end-effector variant (use bio_gripper_g2 for SBS 96-well microplate pick-and-place on xarm6)",
+        help="Select end-effector variant (bio_gripper_g2 supports xarm5/6/7 and uf850 microplate simulation)",
     )
     parser.add_argument("--mode", required=True, choices=("sim", "dry-run", "sdk-sim", "real"))
-    parser.add_argument("--executor", required=True, choices=("servo_j", "servo_cartesian"))
+    parser.add_argument("--executor", choices=("servo_j", "servo_cartesian"))
     parser.add_argument("--config", type=Path)
     parser.add_argument(
         "--backend",
@@ -401,8 +402,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--visual is only supported with --mode sim or --mode real")
 
     if args.gripper == "bio_gripper_g2":
-        if args.robot != "xarm6":
-            parser.error("--gripper bio_gripper_g2 is currently supported with --robot xarm6")
+        if args.robot not in {"xarm5", "xarm6", "xarm7", "uf850"}:
+            parser.error("--gripper bio_gripper_g2 requires --robot xarm5, xarm6, xarm7 or uf850")
         if args.mode != "sim":
             parser.error("--gripper bio_gripper_g2 currently requires --mode sim")
         if args.speed_mm_s is not None and args.speed_percent is not None:
@@ -441,8 +442,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error(str(exc))
 
         summary = run_bio_g2_pick_place(
+            robot=args.robot,
             backend=args.backend or "gpu",
             headless=not bool(args.visual),
+            executor=args.executor or "servo_cartesian",
             speed_mm_s=speed_mm_s,
             transport_speed_mm_s=transport_speed_mm_s,
             substeps=DEFAULT_SUBSTEPS if args.substeps is None else int(args.substeps),
@@ -459,6 +462,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return 0 if summary["passed"] else 1
 
+    if args.executor is None:
+        parser.error("--executor is required for this gripper")
     g2_overrides = {
         f"simulation.g2.{name}": getattr(args, name)
         for name in ("position_mm", "speed_percent", "force_percent")
@@ -594,7 +599,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             assert arm is not None and serial is not None
             home_xyz = _home_xyz_m(config)
-            transport = XArmTransport(arm, robot_key=config.robot.key, serial_number=serial)
+            # Read once so SDK simulation and real execution share the same TCP conversion.
+            tcp_offset = read_tcp_offset(arm)
+            print(f"[hardware] controller tcp_offset={tcp_offset.tolist()} (xyz mm, rpy rad)", flush=True)
+            transport = XArmTransport(arm, robot_key=config.robot.key, serial_number=serial, tcp_offset=tcp_offset)
             shadow = None
             stages = None
             if args.mode == "sdk-sim":
@@ -624,7 +632,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.executor == "servo_cartesian" or args.mode == "sdk-sim":
                 if shadow is None or stages is None:
                     shadow, stages = gate.shadow_joint_stream(program)
-                firmware = _sdk_sim_feedback(arm, program, config, start_q)
+                firmware = _sdk_sim_feedback(arm, program, config, start_q, tcp_offset=tcp_offset)
                 evidence = validate_sdk_simulation(
                     robot_key=config.robot.key,
                     serial_number=serial,
@@ -642,6 +650,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _write_json(evidence_path, asdict(evidence))
                 print(f"sdk_sim={'PASS' if evidence.passed else 'FAIL'}")
                 if not evidence.passed:
+                    print_sdk_sim_failures(evidence, evidence_path)
                     return 1
                 if args.mode == "sdk-sim":
                     return 0

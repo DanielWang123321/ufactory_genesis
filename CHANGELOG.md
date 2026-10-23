@@ -5,6 +5,26 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] — 2026-10-23
+
+### Added
+
+- Added calibrated Bio Gripper G2 dynamics (`0.79 kg` total mass and link inertias, 5 watertight convex collision meshes, virtual-work drive conversion `F_drive = 2 * F_finger`, and a ramp-limited conditional-integral controller with `41.67–333.33 mm/s` per-finger speed and `40 N` drive limit), the SBS 96-well microplate asset (`assets/urdf/microplate/`, BSD-3-Clause attribution in `NOTICE`), and multi-robot microplate pick-and-place simulation (`xarm5`, `xarm6`, `xarm7`, `uf850`) supporting both `servo_cartesian` (default) and `servo_j` with a shared flange home pose and 0.4 s quintic/SLERP transitions.
+- Added static Vacuum Gripper assets for the xArm series (`xarm5`, `xarm6`, `xarm7`) and `uf850` under `assets/urdf/vacuum_gripper/` (`0.61 kg` mass, CoM `[0, 0, 0.053] m`, TCP `[0, 0, 0.126] m`, Draco visual GLB, and 33 region-split watertight convex collision hulls), combo URDFs (`*_vacuum_gripper_visual.glb.urdf`), `vacuum_gripper_urdf()`, `robot_visual_glb_urdf(..., with_vacuum_gripper=True)`, and `view_robot.py --vacuum-gripper`.
+- Added dedicated bilingual task guides under `examples/pick_place/` (`README.md`, `README_zh.md`) and `examples/packaging/` (`README.md`, `README_zh.md`).
+
+### Changed
+
+- Updated Lite6 Gripper pneumatic binary open/close dynamics and runtime configuration (`arm.kv: [300.0, 300.0, 200.0, 4.0, 8.0, 4.0]`, gripper `kp: 700.0, kv: 20.0, force_lower_n: -3.0, force_upper_n: 3.0`), driving only the active `finger_joint1` via `configure_lite6_gripper_drive` while `finger_joint2` follows passively, and setting `LITE6_GRIPPER_CONTACT_HOLD_BIAS_GAP_M = 0.018 m`.
+- Updated gripper open/close viewer demos (`view_robot.py --gripper-demo`, `view_gripper_g2.py`, `view_bio_gripper_g2.py`, `view_lite6_gripper.py`) to close immediately on start and hold for 0.5 s after reaching each endpoint before toggling, and removed the hardcoded `1280x720` viewer resolution in `bio_g2_replay.py`.
+- Standardized all Chinese documentation filenames to `README_zh.md` (`README_zh.md`, `examples/rl/**/README_zh.md`) and streamlined the top-level `examples/README*.md` guides.
+
+### Fixed
+
+- Fixed 7 kinematics and trajectory replay bugs: `matrix_to_rpy` gimbal-lock sign at `+π/2`, `preposition_cartesian` RPY `±π` wrap-around via `wrap_rpy_diff_rad`, `solve_link6_ik` world-frame naming and 2.0 mm FK residual check, `SafetyGate._build_timeline` `movel` sample-index offset after failed segments, `retime_ik_joint_stream` unconstrained `v_max <= 0` handling and `1_000_000` sample cap, `run_ik_validation` solver signature and multi-DOF `arm_dof_idx` slicing, and `mirror_executor` / `sim_executor` / `g2_replay` chained `init_qpos` seeding.
+- Fixed 1D force-control tensor shapes in `configure_lite6_gripper_drive` and `set_lite6_gripper_pose` for single-environment viewers, and enabled headless open/close demo cycling for non-calibrated grippers in `robot_viewer.py`.
+- Fixed `RealRobotSession.configure_for_dynamics` (`set_gravity_direction` state reset before `set_tcp_load`, plus `wait_for_simulation_robot` polling before `motion_enable` in `dynamics-sim-collision-check`), added a controller `tcp_offset` `z > 0` precheck in `dynamics-hardware-check` that aborts before any hardware configuration or motion when an attached tool would collide with the mounting surface, and added flange-to-TCP `tcp_offset` conversion in `XArmTransport` / `sdk_sim_feedback` for `sdk-sim` and real `servo_cartesian` execution.
+
 ## [0.3.2] — 2026-10-21
 
 ### Changed

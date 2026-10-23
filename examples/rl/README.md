@@ -8,6 +8,6 @@ Policy weights and checkpoints are not bundled or committed. Train policies loca
 2. **[Pick & Place — tabletop](pick_place/README.md)**: use xArm6 + Gripper G2 to grasp, lift and transfer a cube, then set it down and release it at a tabletop target. The current example uses a fixed layout; the guide covers training and inference.
 3. **Box packing — planned**: place an object inside a box, adding box geometry and contact constraints. The RL environment and training/inference entries remain to be implemented.
 
-The existing [packaging showcase](../README.md#packaging-showcase-simulation) uses trajectory control.
+The existing [packaging showcase](../packaging/README.md) uses trajectory control.
 
-[中文说明](README_cn.md)
+[中文说明](README_zh.md)

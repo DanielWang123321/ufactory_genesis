@@ -1,10 +1,11 @@
-"""xArm6 + Bio Gripper G2 SBS 96-well microplate pick-and-place simulation and evaluation."""
+"""Multi-arm Bio Gripper G2 SBS 96-well microplate pick-and-place simulation."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 from dataclasses import asdict, dataclass, replace
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -26,7 +27,7 @@ from ufactory.simulation.bio_g2_adapter import (
     URDFGravity,
     base_link_xyz_to_grasp_xyz,
     collision_gripping_planes,
-    grasp_xyz_to_base_link_xyz,
+    grasp_xyz_to_base_link_xyz as grasp_xyz_to_base_link_xyz,
     quaternion_rotation,
     signed_plate_gaps_mm,
     to_numpy as numpy,
@@ -50,6 +51,18 @@ from ufactory.simulation.bio_g2_model import (
     finger_force_n,
     sha256,
 )
+from ufactory.trajectory.bio_g2_frames import (
+    BioG2TaskFrames,
+    HOME_POSITION_TOL_MM,
+    HOME_ROTATION_TOL_RAD,
+    SUPPORTED_ROBOTS,
+    TRANSITION_DURATION_S,
+    pose_components,
+    pose_matrix,
+    pose_report,
+    quaternion_slerp,
+    rotation_error_rad,
+)
 
 COMBO_MODEL_PATH = Path(robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=True, movable=True))
 STANDALONE_BIO_G2_PATH = Path(bio_gripper_g2_urdf())
@@ -59,11 +72,12 @@ GLB_FINGER_VISUAL_Y_OFFSET_M = {
     "bio_gripper_g2_right_finger": -0.008117303252220154,
 }
 
-ARM_JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
-XARM6_KP = (3000.0, 3000.0, 2000.0, 2000.0, 1000.0, 1000.0)
-XARM6_KV = (300.0, 300.0, 200.0, 200.0, 100.0, 100.0)
-XARM6_EFFORT_LIMITS = (179.4445, 179.4445, 92.0, 81.558, 30.6, 30.6)
-XARM6_DEFAULT_QPOS = (0.0, -0.5, 0.0, 0.0, 0.5, 0.0)
+# Compatibility exports for the original xArm6 example.
+_XARM6_RUNTIME = BioG2TaskFrames.load().runtime
+ARM_JOINT_NAMES = _XARM6_RUNTIME.arm.joint_names
+XARM6_KP, XARM6_KV = _XARM6_RUNTIME.arm.kp, _XARM6_RUNTIME.arm.kv
+XARM6_EFFORT_LIMITS = _XARM6_RUNTIME.arm.effort_limits
+XARM6_DEFAULT_QPOS = _XARM6_RUNTIME.arm.default_qpos
 
 # Scene & workstation geometry (meters).
 TABLE_TOP_Z = 0.40
@@ -76,7 +90,8 @@ REAGENT_KIT_REST_Z = NEST_TOP_Z + REAGENT_KIT_SIZE_M[2] / 2.0
 
 PICK_XY = (0.38, -0.12)
 PLACE_XY = (0.38, 0.12)
-HOME_GRASP_POS = (0.36, 0.0, 0.548)
+TASK_START_TCP_WORLD_M = (0.36, 0.0, 0.548)
+HOME_GRASP_POS = TASK_START_TCP_WORLD_M  # Legacy name: this is the public task start, not flange home.
 TRANSPORT_Z = 0.523
 TRANSPORT_PHASE_NAMES = ("lift", "transit", "place_descend")
 RETURN_PHASE_NAMES = ("retreat_up", "return_home")
@@ -90,16 +105,19 @@ CONSTRAINT_TOLERANCE = 1e-6
 CONSTRAINT_ITERATIONS = 100
 IK_POS_TOL_M = 1e-5
 IK_ROT_TOL_RAD = 1e-4
-ALIGN_TIMEOUT_S = 0.40
+ALIGN_TIMEOUT_S = 2.0
 ALIGN_GAP_DIFFERENCE_MM = 0.20
 ALIGN_EE_ERROR_MM = 0.50
 ALIGN_STABLE_STEPS = 3
+HOME_SETTLE_MIN_S = 0.30
+HOME_SETTLE_TIMEOUT_S = 2.0
 GRIP_TIMEOUT_S = 1.60
 GRIP_HOLD_DURATION_S = 0.10
 GRIP_HOLD_STEPS = round(GRIP_HOLD_DURATION_S / DT)
 GRIP_FORCE_THRESHOLD_RATIO = 0.80
 GRIP_STEADY_SPEED_TOL_MM_S = 5.0
 PICK_PLACE_MIMIC_SOL_PARAMS = [0.005, *MIMIC_SOL_PARAMS[1:]]
+EXECUTORS = ("servo_j", "servo_cartesian")
 
 
 @dataclass(frozen=True)
@@ -111,9 +129,10 @@ class PhaseSpec:
     gripper_target_mm: float | None = None
 
 
-def build_xarm6_combo_model() -> dict:
-    """Return provenance metadata for the public xArm6 + Bio Gripper G2 movable GLB URDF."""
-    root = ET.parse(COMBO_MODEL_PATH).getroot()
+def build_combo_model(robot: str = "xarm6") -> dict:
+    """Return provenance metadata for the selected movable GLB URDF."""
+    frames = BioG2TaskFrames.load(robot)
+    root = ET.parse(frames.urdf_path).getroot()
     arm_masses = {}
     gripper_masses = {}
     for link in root.findall("link"):
@@ -129,9 +148,9 @@ def build_xarm6_combo_model() -> dict:
     attach_joint = root.find("joint[@name='bio_gripper_g2_attach']")
     attach_origin = attach_joint.find("origin") if attach_joint is not None else None
     return {
-        "xarm6_bio_glb_urdf_sha256": sha256(COMBO_MODEL_PATH),
+        "robot": frames.runtime.model.key,
         "gripper_dynamics_urdf_sha256": sha256(STANDALONE_BIO_G2_PATH),
-        "combo_urdf_sha256": sha256(COMBO_MODEL_PATH),
+        "combo_urdf_sha256": sha256(frames.urdf_path),
         "visual_format": "glb",
         "arm_mass_kg": sum(arm_masses.values()),
         "gripper_mass_kg": sum(gripper_masses.values()),
@@ -140,6 +159,12 @@ def build_xarm6_combo_model() -> dict:
         "attach_origin_rpy": attach_origin.get("rpy") if attach_origin is not None else "0 0 0",
         "glb_finger_visual_y_offset_m": GLB_FINGER_VISUAL_Y_OFFSET_M,
     }
+
+
+def build_xarm6_combo_model() -> dict:
+    """Compatibility entry for the original xArm6 model metadata."""
+    manifest = build_combo_model("xarm6")
+    return manifest | {"xarm6_bio_glb_urdf_sha256": manifest["combo_urdf_sha256"]}
 
 
 def smooth_step(alpha: float) -> float:
@@ -280,7 +305,7 @@ def default_phases(transport_speed_mm_s: float = DEFAULT_TRANSPORT_SPEED_MM_S) -
         PhaseSpec("release", 0.46, place_grasp, place_grasp, gripper_target_mm=150.0),
         PhaseSpec("retreat_up", 0.70, place_grasp, place_retreat, gripper_target_mm=None),
         PhaseSpec("return_home", 0.90, place_retreat, HOME_GRASP_POS, gripper_target_mm=None),
-        PhaseSpec("home_settle", 0.30, HOME_GRASP_POS, HOME_GRASP_POS, gripper_target_mm=None),
+        PhaseSpec("home_settle", HOME_SETTLE_TIMEOUT_S, HOME_GRASP_POS, HOME_GRASP_POS, gripper_target_mm=None),
     )
     block = tuple(p for p in phases if p.name in TRANSPORT_PHASE_NAMES)
     timing = transport_timing(block, transport_speed_mm_s)
@@ -297,12 +322,245 @@ def default_phases(transport_speed_mm_s: float = DEFAULT_TRANSPORT_SPEED_MM_S) -
     return tuple(resolved)
 
 
+def sample_cartesian_trajectory(
+    phases: tuple[PhaseSpec, ...], transport_speed_mm_s: float = DEFAULT_TRANSPORT_SPEED_MM_S
+) -> list[dict]:
+    """Sample shared world grasp targets; transport remains a single continuous motion block."""
+    ticks: list[dict] = []
+    phase_idx = 0
+    while phase_idx < len(phases):
+        block = phases[phase_idx : phase_idx + 1]
+        if block[0].name == "lift":
+            block = phases[phase_idx : phase_idx + 3]
+            if tuple(phase.name for phase in block) != TRANSPORT_PHASE_NAMES:
+                raise ValueError("Transport requires lift, transit, place_descend in sequence")
+        labels = [(phase, idx) for phase in block for idx in range(max(1, round(phase.duration_s / DT)))]
+        progress = np.array([smooth_step((idx + 1) / len(labels)) for idx in range(len(labels))])
+        start_xyz = np.asarray(block[0].start_grasp_xyz, dtype=np.float64)
+        end_xyz = np.asarray(block[-1].end_grasp_xyz, dtype=np.float64)
+        timing = None
+        if len(block) == 3:
+            timing = transport_timing(block, transport_speed_mm_s)
+            progress = timing["progress"]
+            counts = [0, 0, 0]
+            labels = []
+            for label in timing["labels"]:
+                labels.append((block[label], counts[label]))
+                counts[label] += 1
+            xyz_block = sample_transport_path(block, progress)
+        else:
+            if block[0].name in RETURN_PHASE_NAMES:
+                timing = line_timing(float(np.linalg.norm(end_xyz - start_xyz)), transport_speed_mm_s)
+                progress = timing["progress"]
+                labels = [(block[0], idx) for idx in range(len(progress))]
+            xyz_block = start_xyz + progress[:, None] * (end_xyz - start_xyz)
+        stationary = float(np.linalg.norm(end_xyz - start_xyz)) < 1e-9
+        velocity = np.zeros_like(xyz_block)
+        if not stationary and len(labels) > 1:
+            velocity = np.gradient(np.vstack((start_xyz, xyz_block)), DT, axis=0)[1:]
+            velocity[[0, -1]] = 0.0
+        for idx, (phase, phase_step) in enumerate(labels):
+            ticks.append(
+                {
+                    "phase": phase.name,
+                    "phase_step": phase_step,
+                    "motion_block": phase_idx,
+                    "block_step": idx,
+                    "block_steps": len(labels),
+                    "stationary": stationary,
+                    "target_grasp_xyz": xyz_block[idx],
+                    "target_grasp_quat_wxyz": DOWN_QUAT_WXYZ.copy(),
+                    "target_grasp_velocity_m_s": velocity[idx],
+                    "gripper_target_mm": phase.gripper_target_mm if phase_step == 0 else None,
+                    "target_speed_mm_s": float(timing["speeds_m_s"][idx] * 1000)
+                    if timing is not None
+                    else float(np.linalg.norm(velocity[idx]) * 1000),
+                }
+            )
+        phase_idx += len(block)
+    return ticks
+
+
+def sample_task_trajectory(
+    frames: BioG2TaskFrames,
+    phases: tuple[PhaseSpec, ...],
+    transport_speed_mm_s: float = DEFAULT_TRANSPORT_SPEED_MM_S,
+) -> list[dict]:
+    """Wrap the shared TCP task with smooth home transitions and final flange settling."""
+    home_tcp = frames.flange_to_tcp_pose(frames.home_flange(ROBOT_BASE_POS))
+    home_xyz, home_quat = pose_components(home_tcp)
+    task_xyz, task_quat = np.asarray(TASK_START_TCP_WORLD_M), DOWN_QUAT_WXYZ
+    public = sample_cartesian_trajectory(tuple(p for p in phases if p.name != "home_settle"), transport_speed_mm_s)
+
+    def transition(name, start_xyz, end_xyz, start_quat, end_quat, block):
+        count = round(TRANSITION_DURATION_S / DT)
+        result = []
+        for idx in range(count):
+            alpha = (idx + 1) / count
+            u = smooth_step(alpha)
+            xyz = start_xyz + u * (end_xyz - start_xyz)
+            velocity = (30 * alpha**2 * (1 - alpha) ** 2 / TRANSITION_DURATION_S) * (end_xyz - start_xyz)
+            result.append(
+                {
+                    "phase": name,
+                    "phase_step": idx,
+                    "motion_block": block,
+                    "block_step": idx,
+                    "block_steps": count,
+                    "stationary": False,
+                    "target_grasp_xyz": xyz,
+                    "target_grasp_quat_wxyz": quaternion_slerp(start_quat, end_quat, u),
+                    "target_grasp_velocity_m_s": velocity,
+                    "gripper_target_mm": None,
+                    "target_speed_mm_s": float(np.linalg.norm(velocity) * 1000),
+                }
+            )
+        return result
+
+    ticks = transition("enter_task", home_xyz, task_xyz, home_quat, task_quat, 0)
+    for tick in public:
+        ticks.append(tick | {"motion_block": tick["motion_block"] + 1})
+    block = max(t["motion_block"] for t in ticks) + 1
+    ticks.extend(transition("return_flange", task_xyz, home_xyz, task_quat, home_quat, block))
+    settle = next((p.duration_s for p in phases if p.name == "home_settle"), HOME_SETTLE_TIMEOUT_S)
+    count = max(1, round(settle / DT))
+    for idx in range(count):
+        ticks.append(
+            {
+                "phase": "home_settle",
+                "phase_step": idx,
+                "motion_block": block + 1,
+                "block_step": idx,
+                "block_steps": count,
+                "stationary": True,
+                "target_grasp_xyz": home_xyz.copy(),
+                "target_grasp_quat_wxyz": home_quat.copy(),
+                "target_grasp_velocity_m_s": np.zeros(3),
+                "gripper_target_mm": None,
+                "target_speed_mm_s": 0.0,
+            }
+        )
+    for idx, tick in enumerate(ticks):
+        tick["target_index"] = idx
+    return ticks
+
+
+def arm_joint_limits(robot: str = "xarm6") -> np.ndarray:
+    """Read lower/upper position and velocity limits in arm DOF order from the task URDF."""
+    frames = BioG2TaskFrames.load(robot)
+    root = ET.parse(frames.urdf_path).getroot()
+    return np.array(
+        [
+            [float(root.find(f"joint[@name='{name}']/limit").get(key)) for key in ("lower", "upper", "velocity")]
+            for name in frames.runtime.arm.joint_names
+        ],
+        dtype=np.float64,
+    )
+
+
+class IKExecutionError(RuntimeError):
+    """An IK failure with the exact failed sample, including a lookahead sample."""
+
+    def __init__(self, tick: dict, reason: str, *, lookahead: bool = False) -> None:
+        target = finite_values(tick["target_grasp_xyz"])
+        self.report = {
+            "phase": tick["phase"],
+            "phase_step": tick.get("phase_step", 0),
+            "target_grasp_xyz_m": target,
+            "target_grasp_quaternion_wxyz": finite_values(tick.get("target_grasp_quat_wxyz", DOWN_QUAT_WXYZ)),
+            "target_frame": "world",
+            "lookahead": lookahead,
+            "reason": reason,
+        }
+        super().__init__(f"IK failed: phase={tick['phase']} target={target}: {reason}")
+
+
+class _JointTargetStream:
+    """Continuously seed IK and retain one future target for centered velocity feedforward."""
+
+    def __init__(self, solve, home_q: np.ndarray, velocity_limits: np.ndarray) -> None:
+        self.solve = solve
+        self.previous_q = np.asarray(home_q, dtype=np.float64).copy()
+        self.velocity_limits = np.asarray(velocity_limits)
+        self.pending_tick: dict | None = None
+        self.pending_q: np.ndarray | None = None
+
+    def _solve(self, tick: dict, seed: np.ndarray, *, lookahead: bool = False) -> np.ndarray:
+        try:
+            q = self.solve(
+                tick["target_grasp_xyz"], seed_q=seed, grasp_quat=tick.get("target_grasp_quat_wxyz", DOWN_QUAT_WXYZ)
+            )
+            speed = np.abs(q - seed) / DT
+            if np.any(speed > self.velocity_limits + 1e-9):
+                idx = int(np.argmax(speed - self.velocity_limits))
+                raise ValueError(
+                    f"joint{idx + 1} target velocity {speed[idx]:.6g}rad/s "
+                    f"exceeds URDF limit {self.velocity_limits[idx]:.6g}rad/s"
+                )
+            return q
+        except Exception as error:
+            raise IKExecutionError(tick, str(error), lookahead=lookahead) from error
+
+    def targets(self, tick: dict, next_tick: dict | None) -> tuple[np.ndarray, np.ndarray]:
+        if tick["stationary"]:
+            self.pending_tick = self.pending_q = None
+            return self.previous_q.copy(), np.zeros_like(self.previous_q)
+        q = self.pending_q if self.pending_tick is tick else self._solve(tick, self.previous_q)
+        self.pending_tick = self.pending_q = None
+        dq = np.zeros_like(q)
+        if tick["block_step"] < tick["block_steps"] - 1:
+            if next_tick is None or next_tick["motion_block"] != tick["motion_block"]:
+                raise ValueError("Missing next sample in motion block")
+            next_q = self._solve(next_tick, q, lookahead=True)
+            self.pending_tick, self.pending_q = next_tick, next_q
+            if tick["block_step"] > 0:
+                dq = (next_q - self.previous_q) / (2.0 * DT)
+        self.previous_q = q.copy()
+        return q, dq
+
+
 class AlignmentError(RuntimeError):
     pass
 
 
 class GripTimeoutError(RuntimeError):
     pass
+
+
+class HomePoseError(RuntimeError):
+    pass
+
+
+class HomePoseGuard:
+    """Keep holding at least 0.3 s and require three consecutive in-tolerance flange samples."""
+
+    def __init__(self) -> None:
+        self.samples = self.stable_steps = 0
+        self.last_row = None
+
+    @property
+    def ready(self) -> bool:
+        return self.samples >= round(HOME_SETTLE_MIN_S / DT) and self.stable_steps >= ALIGN_STABLE_STEPS
+
+    def update(self, row: dict) -> None:
+        self.samples += 1
+        self.last_row = row
+        position, rotation = row["flange_error_mm"], row["flange_rotation_error_rad"]
+        valid = (
+            np.all(np.isfinite([position, rotation]))
+            and position <= HOME_POSITION_TOL_MM
+            and rotation <= HOME_ROTATION_TOL_RAD
+        )
+        self.stable_steps = self.stable_steps + 1 if valid else 0
+
+    def require_ready(self) -> None:
+        if not self.ready:
+            row = self.last_row or {}
+            raise HomePoseError(
+                f"home_settle timeout after {self.samples * DT:.2f}s: "
+                f"position={row.get('flange_error_mm', float('nan')):.6f}mm, "
+                f"rotation={row.get('flange_rotation_error_rad', float('nan')):.6g}rad"
+            )
 
 
 class AlignmentGuard:
@@ -407,8 +665,8 @@ class PickPlaceAdapter(GenesisAdapter):
         return float(q[self.right]), float(self._v[0]), float(q[self.left]), float(self._v[1])
 
 
-class XArm6BioG2PickPlaceSimulation:
-    """Full physics simulation of xArm6 + Bio Gripper G2 picking and placing an SBS 96-well microplate."""
+class BioG2PickPlaceSimulation:
+    """Shared physics task for xArm5/6/7 and UF850 with Bio Gripper G2."""
 
     def __init__(
         self,
@@ -417,6 +675,8 @@ class XArm6BioG2PickPlaceSimulation:
         parameters: ServoParameters = ServoParameters(),
         substeps: int = DEFAULT_SUBSTEPS,
         transport_speed_mm_s: float = DEFAULT_TRANSPORT_SPEED_MM_S,
+        executor: str = "servo_cartesian",
+        robot: str = "xarm6",
     ) -> None:
         import importlib.metadata
         import genesis as gs
@@ -427,8 +687,13 @@ class XArm6BioG2PickPlaceSimulation:
             raise ValueError("backend must be cpu or gpu")
         if substeps not in (8, 32):
             raise ValueError("substeps must be 8 or 32")
+        if executor not in EXECUTORS:
+            raise ValueError(f"executor must be one of {EXECUTORS}")
         if not math.isfinite(transport_speed_mm_s) or transport_speed_mm_s <= 0:
             raise ValueError("transport_speed_mm_s must be finite and positive")
+        self.frames = BioG2TaskFrames.load(robot)
+        self.runtime = self.frames.runtime
+        self.arm_joint_names = self.runtime.arm.joint_names
         if not PLATE_URDF.exists():
             build_microplate()
 
@@ -447,9 +712,17 @@ class XArm6BioG2PickPlaceSimulation:
             raise RuntimeError("This simulation requires Genesis precision=64")
 
         self.gs, self.backend, self.headless, self.parameters = gs, backend, headless, parameters
+        self.executor = executor
         self.substeps, self.transport_speed_mm_s = substeps, transport_speed_mm_s
-        self.gravity = URDFGravity(COMBO_MODEL_PATH, ARM_JOINT_NAMES)
-        self.gripping_planes = collision_gripping_planes(COMBO_MODEL_PATH)
+        self.arm_limits = arm_joint_limits(robot)
+        self.ik_total_ms = 0.0
+        self.ik_calls = 0
+        self.gravity = URDFGravity(self.frames.urdf_path, self.arm_joint_names)
+        self.gripping_planes = collision_gripping_planes(self.frames.urdf_path)
+        self.initial_pose = None
+        self.cartesian_targets = []
+        self.joint_targets = []
+        self.joint_rows = []
         self.max_ik_position_error_m = self.max_ik_rotation_error_rad = 0.0
         self.scene = gs.Scene(
             sim_options=gs.options.SimOptions(dt=DT, substeps=substeps, gravity=(0.0, 0.0, -9.81)),
@@ -466,7 +739,6 @@ class XArm6BioG2PickPlaceSimulation:
                 camera_pos=(0.95, -0.75, 0.92),
                 camera_lookat=(0.28, 0.0, TABLE_TOP_Z + 0.08),
                 camera_fov=40,
-                res=(1280, 720),
                 refresh_rate=30,
                 realtime_factor=None,
             ),
@@ -516,7 +788,7 @@ class XArm6BioG2PickPlaceSimulation:
             )
             self.robot = self.scene.add_entity(
                 gs.morphs.URDF(
-                    file=str(COMBO_MODEL_PATH),
+                    file=str(self.frames.urdf_path),
                     pos=ROBOT_BASE_POS,
                     fixed=True,
                     default_armature=None,
@@ -537,12 +809,12 @@ class XArm6BioG2PickPlaceSimulation:
 
         self.scene.build()
 
-        self.arm_dof_idx = [self.robot.get_joint(name).dofs_idx_local[0] for name in ARM_JOINT_NAMES]
-        self.robot.set_dofs_kp(XARM6_KP, self.arm_dof_idx)
-        self.robot.set_dofs_kv(XARM6_KV, self.arm_dof_idx)
+        self.arm_dof_idx = [self.robot.get_joint(name).dofs_idx_local[0] for name in self.arm_joint_names]
+        self.robot.set_dofs_kp(self.runtime.arm.kp, self.arm_dof_idx)
+        self.robot.set_dofs_kv(self.runtime.arm.kv, self.arm_dof_idx)
         self.robot.set_dofs_force_range(
-            [-limit for limit in XARM6_EFFORT_LIMITS],
-            list(XARM6_EFFORT_LIMITS),
+            self.runtime.arm.force_lower,
+            self.runtime.arm.force_upper,
             self.arm_dof_idx,
         )
         self.robot.set_dofs_armature([0.0] * len(self.arm_dof_idx), self.arm_dof_idx)
@@ -550,6 +822,7 @@ class XArm6BioG2PickPlaceSimulation:
         self.adapter = PickPlaceAdapter(self.robot, self.scene, parameters)
         self.controller = GripperController(self.adapter, parameters)
         self.gripper_base_link = self.robot.get_link("bio_gripper_g2_base_link")
+        self.flange_link = self.robot.get_link(self.runtime.arm.ee_link)
         self.left_link = self.robot.get_link("bio_gripper_g2_left_finger")
         self.right_link = self.robot.get_link("bio_gripper_g2_right_finger")
         self.gripper_link_indices = [
@@ -558,25 +831,50 @@ class XArm6BioG2PickPlaceSimulation:
         self.gripper_poses()
         self.kit_link_idx = self.reagent_kit.links[0].idx
         self.nest_link_ids = {self.pick_nest.links[0].idx, self.place_nest.links[0].idx}
+        self.table_link_ids = {self.table.links[0].idx}
+        self.base_link_idx = self.robot.get_link("link_base").idx
         self.time_s = 0.0
-        self.last_arm_q = np.asarray(XARM6_DEFAULT_QPOS, dtype=np.float64)
+        self.last_arm_q = self.frames.ik_seed.copy()
 
     def solve_arm_ik(
-        self, grasp_xyz: tuple[float, float, float] | np.ndarray, seed_q: np.ndarray | None = None
+        self,
+        grasp_xyz: tuple[float, float, float] | np.ndarray,
+        seed_q: np.ndarray | None = None,
+        grasp_quat=DOWN_QUAT_WXYZ,
     ) -> np.ndarray:
-        """Solve 6-DOF arm joint positions for the desired world grasp-center position."""
-        target_base_xyz = grasp_xyz_to_base_link_xyz(grasp_xyz)
+        """Convert the complete world TCP target and solve on the configured flange link."""
+        started = time.perf_counter()
+        try:
+            return self._solve_arm_ik(grasp_xyz, seed_q, grasp_quat)
+        finally:
+            self.ik_total_ms += (time.perf_counter() - started) * 1000.0
+            self.ik_calls += 1
+
+    def _solve_arm_ik(self, grasp_xyz, seed_q, grasp_quat) -> np.ndarray:
+        grasp_xyz = np.asarray(grasp_xyz, dtype=np.float64)
+        arm_seed = np.asarray(self.last_arm_q if seed_q is None else seed_q, dtype=np.float64)
+        if grasp_xyz.shape != (3,) or not np.all(np.isfinite(grasp_xyz)):
+            raise ValueError("IK failed: grasp target must contain three finite coordinates")
+        if arm_seed.shape != (len(self.arm_dof_idx),) or not np.all(np.isfinite(arm_seed)):
+            raise ValueError(f"IK failed: arm seed must contain {len(self.arm_dof_idx)} finite joint positions")
+        try:
+            target_flange = self.frames.tcp_to_flange(pose_matrix(grasp_xyz, grasp_quat))
+        except ValueError as error:
+            raise ValueError(f"IK failed: {error}") from error
+        target_flange_xyz, target_flange_quat = pose_components(target_flange)
         init_qpos = np.zeros(self.robot.n_dofs, dtype=np.float64)
-        arm_seed = self.last_arm_q if seed_q is None else np.asarray(seed_q, dtype=np.float64)
         init_qpos[self.arm_dof_idx] = arm_seed
         q_right = self.controller.reference_q_m
+        if not math.isfinite(q_right):
+            raise ValueError("IK failed: gripper seed is not finite")
         init_qpos[self.adapter.indices] = [q_right, -q_right]
         q_result, pose_error = self.robot.inverse_kinematics(
-            link=self.gripper_base_link,
-            pos=target_base_xyz,
-            quat=DOWN_QUAT_WXYZ,
+            link=self.flange_link,
+            pos=target_flange_xyz,
+            quat=target_flange_quat,
             init_qpos=init_qpos,
             dofs_idx_local=self.arm_dof_idx,
+            respect_joint_limit=True,
             max_samples=20,
             max_solver_iters=50,
             damping=0.01,
@@ -585,7 +883,9 @@ class XArm6BioG2PickPlaceSimulation:
             return_error=True,
         )
         q_full = numpy(q_result).reshape(-1)
-        error = numpy(pose_error).reshape(6)
+        error = numpy(pose_error).reshape(-1)
+        if q_full.size != self.robot.n_dofs or error.size != 6:
+            raise ValueError("IK failed: unexpected joint or pose error shape")
         position_error, rotation_error = np.linalg.norm(error[:3]), np.linalg.norm(error[3:])
         if (
             not np.all(np.isfinite(q_full))
@@ -594,83 +894,51 @@ class XArm6BioG2PickPlaceSimulation:
             or rotation_error > IK_ROT_TOL_RAD
         ):
             raise RuntimeError(f"IK failed: position={position_error * 1000:.6f}mm, rotation={rotation_error:.6g}rad")
+        arm_q = q_full[self.arm_dof_idx].astype(np.float64).copy()
+        outside = (arm_q < self.arm_limits[:, 0]) | (arm_q > self.arm_limits[:, 1])
+        if np.any(outside):
+            idx = int(np.flatnonzero(outside)[0])
+            raise ValueError(f"IK failed: {self.arm_joint_names[idx]} position {arm_q[idx]:.6g}rad exceeds URDF limits")
         self.max_ik_position_error_m = max(self.max_ik_position_error_m, float(position_error))
         self.max_ik_rotation_error_rad = max(self.max_ik_rotation_error_rad, float(rotation_error))
-        arm_q = q_full[self.arm_dof_idx].astype(np.float64).copy()
         self.last_arm_q = arm_q
         return arm_q
 
+    def _solve_home(self) -> None:
+        xyz, quat = pose_components(self.frames.flange_to_tcp_pose(self.frames.home_flange(ROBOT_BASE_POS)))
+        tick = {"phase": "home", "target_grasp_xyz": xyz, "target_grasp_quat_wxyz": quat}
+        try:
+            self.home_arm_q = self.solve_arm_ik(xyz, seed_q=self.frames.ik_seed, grasp_quat=quat).copy()
+        except Exception as error:
+            raise IKExecutionError(tick, str(error)) from error
+
+    def _new_joint_stream(self, home_q) -> _JointTargetStream:
+        return _JointTargetStream(self.solve_arm_ik, home_q, self.arm_limits[:, 2])
+
     def compile_trajectory(self, phases: tuple[PhaseSpec, ...]) -> list[dict]:
-        """Compile joint streams, treating the three transport phases as one motion."""
-        ticks: list[dict] = []
-        self.home_arm_q = self.solve_arm_ik(
-            HOME_GRASP_POS, seed_q=np.asarray(XARM6_DEFAULT_QPOS, dtype=np.float64)
-        ).copy()
-        q_prev = self.home_arm_q.copy()
-        phase_idx = 0
-        while phase_idx < len(phases):
-            block = phases[phase_idx : phase_idx + 1]
-            if block[0].name == "lift":
-                block = phases[phase_idx : phase_idx + 3]
-                if tuple(phase.name for phase in block) != TRANSPORT_PHASE_NAMES:
-                    raise ValueError("Transport requires lift, transit, place_descend in sequence")
-            labels = [(phase, idx) for phase in block for idx in range(max(1, int(round(phase.duration_s / DT))))]
-            n_steps = len(labels)
-            progress = np.array([smooth_step((idx + 1) / n_steps) for idx in range(n_steps)])
-            start_xyz = np.asarray(block[0].start_grasp_xyz, dtype=np.float64)
-            end_xyz = np.asarray(block[-1].end_grasp_xyz, dtype=np.float64)
-            timing = None
-            if len(block) == 3:
-                timing = transport_timing(block, self.transport_speed_mm_s)
-                progress = timing["progress"]
-                counts = [0, 0, 0]
-                labels = []
-                for label in timing["labels"]:
-                    labels.append((block[label], counts[label]))
-                    counts[label] += 1
-                n_steps = len(labels)
-                xyz_block = sample_transport_path(block, progress)
-            elif block[0].name in RETURN_PHASE_NAMES:
-                seg_len = float(np.linalg.norm(end_xyz - start_xyz))
-                timing = line_timing(seg_len, self.transport_speed_mm_s)
-                progress = timing["progress"]
-                labels = [(block[0], idx) for idx in range(len(progress))]
-                n_steps = len(labels)
-                xyz_block = start_xyz + progress[:, None] * (end_xyz - start_xyz)
-            else:
-                xyz_block = start_xyz + progress[:, None] * (end_xyz - start_xyz)
-            stationary = float(np.linalg.norm(end_xyz - start_xyz)) < 1e-9
-            q_start = q_prev.copy()
-            q_block = np.empty((n_steps, len(self.arm_dof_idx)), dtype=np.float64)
-            for idx, xyz in enumerate(xyz_block):
-                if not stationary:
-                    q_prev = self.solve_arm_ik(xyz, seed_q=q_prev)
-                q_block[idx] = q_prev
-            if stationary or n_steps == 1:
-                dq_block = np.zeros_like(q_block)
-            else:
-                dq_block = np.gradient(np.vstack((q_start, q_block)), DT, axis=0)[1:]
-                dq_block[0] = 0.0
-                dq_block[-1] = 0.0
-            for idx, (phase, phase_step) in enumerate(labels):
-                ticks.append(
-                    {
-                        "phase": phase.name,
-                        "phase_step": phase_step,
-                        "target_grasp_xyz": xyz_block[idx],
-                        "target_arm_q": q_block[idx],
-                        "target_arm_dq": dq_block[idx],
-                        "gripper_target_mm": phase.gripper_target_mm if phase_step == 0 else None,
-                        "target_speed_mm_s": float(timing["speeds_m_s"][idx] * 1000) if timing is not None else 0.0,
-                    }
-                )
-            phase_idx += len(block)
+        """Compile all joint targets before physics execution for servo_j."""
+        ticks = sample_task_trajectory(self.frames, phases, self.transport_speed_mm_s)
+        self.cartesian_targets = ticks
+        self._solve_home()
+        stream = self._new_joint_stream(self.home_arm_q)
+        self.joint_targets = []
+        for idx, tick in enumerate(ticks):
+            next_tick = ticks[idx + 1] if idx + 1 < len(ticks) else None
+            self.joint_targets.append(stream.targets(tick, next_tick))
         return ticks
 
     def prepare(self, phases: tuple[PhaseSpec, ...]) -> list[dict]:
-        """Compile, reset to exact home and warm up before opening any window."""
-        ticks = self.compile_trajectory(phases)
+        """Prepare the chosen executor, then reset and warm up before opening any window."""
+        if self.executor == "servo_j":
+            ticks = self.compile_trajectory(phases)
+        else:
+            ticks = sample_task_trajectory(self.frames, phases, self.transport_speed_mm_s)
+            self.cartesian_targets = ticks
+            self._solve_home()
+        self.cartesian_targets = ticks
         self.reset(self.home_arm_q, initial_gap_mm=150.0)
+        self.initial_pose = self.measured_pose()
+        self.require_home_pose(self.initial_pose, "initial")
         self.start_viewer()
         return ticks
 
@@ -693,6 +961,8 @@ class XArm6BioG2PickPlaceSimulation:
             time.sleep(0.01)
 
     def reset(self, home_arm_q: np.ndarray, initial_gap_mm: float = 150.0) -> None:
+        self.last_arm_q = np.asarray(home_arm_q, dtype=np.float64).copy()
+        self._joint_stream = self._new_joint_stream(home_arm_q)
         self.scene.reset()
         for entity in (self.robot, self.reagent_kit):
             for geom in entity.geoms:
@@ -703,6 +973,7 @@ class XArm6BioG2PickPlaceSimulation:
         self.robot.set_dofs_position(home_arm_q, self.arm_dof_idx)
         self.robot.set_dofs_velocity(np.zeros(len(self.arm_dof_idx), dtype=np.float64), self.arm_dof_idx)
         self.controller.reset(initial_gap_mm)
+        self.joint_rows = []
         self.time_s = 0.0
         for _ in range(10):
             self.control_arm(home_arm_q, np.zeros(len(self.arm_dof_idx)))
@@ -711,10 +982,10 @@ class XArm6BioG2PickPlaceSimulation:
 
     def control_arm(self, target_q, target_dq):
         actual = self.adapter.positions()
-        positions = dict(zip(ARM_JOINT_NAMES, actual[self.arm_dof_idx]))
+        positions = dict(zip(self.arm_joint_names, actual[self.arm_dof_idx]))
         positions.update(zip((RIGHT, LEFT), actual[self.adapter.indices]))
         torque, _ = self.gravity.compute(positions)
-        reference = np.asarray(target_q) + torque / np.asarray(XARM6_KP)
+        reference = np.asarray(target_q) + torque / np.asarray(self.runtime.arm.kp)
         self.robot.control_dofs_position_velocity(reference, target_dq, self.arm_dof_idx)
         return torque
 
@@ -722,6 +993,36 @@ class XArm6BioG2PickPlaceSimulation:
         positions = numpy(self.robot.get_links_pos(self.gripper_link_indices)).reshape(3, 3)
         quaternions = numpy(self.robot.get_links_quat(self.gripper_link_indices)).reshape(3, 4)
         return positions, quaternions
+
+    def measured_pose(self) -> dict:
+        flange = pose_matrix(
+            numpy(self.flange_link.get_pos()).reshape(3), numpy(self.flange_link.get_quat()).reshape(4)
+        )
+        positions, quaternions = self.gripper_poses()
+        tcp = pose_matrix(base_link_xyz_to_grasp_xyz(positions[0], quaternions[0]), quaternions[0])
+        target = self.frames.home_flange(ROBOT_BASE_POS)
+        base_flange = flange.copy()
+        base_flange[:3, 3] -= ROBOT_BASE_POS
+        return {
+            "flange_world": pose_report(flange, "world"),
+            "flange_base": pose_report(base_flange, "robot_base"),
+            "tcp_world": pose_report(tcp, "world"),
+            "flange_position_error_mm": float(np.linalg.norm(flange[:3, 3] - target[:3, 3]) * 1000),
+            "flange_rotation_error_rad": rotation_error_rad(pose_components(flange)[1], pose_components(target)[1]),
+        }
+
+    @staticmethod
+    def require_home_pose(pose: dict, stage: str) -> None:
+        if (
+            not np.all(np.isfinite([pose["flange_position_error_mm"], pose["flange_rotation_error_rad"]]))
+            or pose["flange_position_error_mm"] > HOME_POSITION_TOL_MM
+            or pose["flange_rotation_error_rad"] > HOME_ROTATION_TOL_RAD
+        ):
+            raise HomePoseError(
+                f"{stage} flange outside tolerance: "
+                f"position={pose['flange_position_error_mm']:.6f}mm, "
+                f"rotation={pose['flange_rotation_error_rad']:.6g}rad"
+            )
 
     def contact_telemetry(self, base_quat) -> tuple[float, float, int]:
         """Read bilateral finger-kit normal forces and finger-nest contact count in one call."""
@@ -750,10 +1051,25 @@ class XArm6BioG2PickPlaceSimulation:
                 for a, b in zip(la, lb)
             )
         )
+        self.last_environment_contacts = {
+            "robot_table_contacts": sum(
+                (int(a) in self.table_link_ids and int(b) != self.base_link_idx)
+                or (int(b) in self.table_link_ids and int(a) != self.base_link_idx)
+                for a, b in zip(la, lb)
+            ),
+            "robot_nest_contacts": sum(
+                int(a) in self.nest_link_ids or int(b) in self.nest_link_ids for a, b in zip(la, lb)
+            ),
+        }
         return forces[0], forces[1], nest_contacts
 
-    def step(self, tick: dict, speed_mm_s: float, force_percent: float) -> dict:
+    def step(self, tick: dict, speed_mm_s: float, force_percent: float, *, next_tick: dict | None = None) -> dict:
         compute_started = time.perf_counter()
+        ik_started_ms, ik_started_calls = self.ik_total_ms, self.ik_calls
+        if self.executor == "servo_cartesian":
+            target_q, target_dq = self._joint_stream.targets(tick, next_tick)
+        else:
+            target_q, target_dq = self.joint_targets[tick["target_index"]]
         if tick["gripper_target_mm"] is not None:
             target_mm = float(tick["gripper_target_mm"])
             if target_mm > self.controller.position_mm:
@@ -770,7 +1086,7 @@ class XArm6BioG2PickPlaceSimulation:
                     speed_mm_s=speed_mm_s,
                     force_percent=force_percent,
                 )
-        gravity_torque = self.control_arm(tick["target_arm_q"], tick["target_arm_dq"])
+        gravity_torque = self.control_arm(target_q, target_dq)
         self.controller.apply(DT)
         self.scene.step(update_visualizer=False)
         self.time_s += DT
@@ -784,6 +1100,11 @@ class XArm6BioG2PickPlaceSimulation:
         actual_grasp = base_link_xyz_to_grasp_xyz(base_pos, base_quat)
         target_grasp = np.asarray(tick["target_grasp_xyz"], dtype=np.float64)
         ee_error_mm = float(np.linalg.norm(actual_grasp - target_grasp) * 1000.0)
+        ee_rotation_error_rad = float(rotation_error_rad(base_quat, tick["target_grasp_quat_wxyz"]))
+        target_flange = self.frames.tcp_to_flange(pose_matrix(target_grasp, tick["target_grasp_quat_wxyz"]))
+        flange_xyz = numpy(self.flange_link.get_pos()).reshape(3)
+        flange_quat = numpy(self.flange_link.get_quat()).reshape(4)
+        target_flange_xyz, target_flange_quat = pose_components(target_flange)
         kit_quat = numpy(self.reagent_kit.get_quat()).reshape(4)
         finger_poses = list(zip(gripper_positions[1:], gripper_quaternions[1:]))
         left_gap, right_gap = signed_plate_gaps_mm(
@@ -797,6 +1118,13 @@ class XArm6BioG2PickPlaceSimulation:
 
         row.update(
             time_s=round(self.time_s, 6),
+            executor=self.executor,
+            robot=self.runtime.model.key,
+            target_index=tick["target_index"],
+            tcp_frame="world",
+            flange_frame="robot_base",
+            ik_ms=self.ik_total_ms - ik_started_ms,
+            ik_solve_count=self.ik_calls - ik_started_calls,
             phase=tick["phase"],
             left_normal_n=left_n,
             right_normal_n=right_n,
@@ -809,6 +1137,9 @@ class XArm6BioG2PickPlaceSimulation:
             grasp_y_mm=float(actual_grasp[1] * 1000.0),
             grasp_z_mm=float(actual_grasp[2] * 1000.0),
             ee_error_mm=ee_error_mm,
+            ee_rotation_error_rad=ee_rotation_error_rad,
+            flange_error_mm=float(np.linalg.norm(flange_xyz - target_flange_xyz) * 1000),
+            flange_rotation_error_rad=rotation_error_rad(flange_quat, target_flange_quat),
             left_gap_mm=float(left_gap),
             right_gap_mm=float(right_gap),
             gap_difference_mm=float(abs(left_gap - right_gap)),
@@ -822,22 +1153,52 @@ class XArm6BioG2PickPlaceSimulation:
             nest_finger_contacts=nest_contacts,
             position_resets=self.adapter.position_resets,
         )
+        row.update(self.last_environment_contacts)
+        for idx, axis in enumerate("xyz"):
+            row[f"flange_{axis}_mm"] = float((flange_xyz[idx] - ROBOT_BASE_POS[idx]) * 1000)
+            row[f"target_flange_{axis}_mm"] = float((target_flange_xyz[idx] - ROBOT_BASE_POS[idx]) * 1000)
+            row[f"target_tcp_velocity_{axis}_mm_s"] = float(tick["target_grasp_velocity_m_s"][idx] * 1000)
+        for idx, component in enumerate("wxyz"):
+            for prefix, quat in (
+                ("flange", flange_quat),
+                ("target_flange", target_flange_quat),
+                ("tcp", base_quat),
+                ("target_tcp", tick["target_grasp_quat_wxyz"]),
+            ):
+                row[f"{prefix}_q{component}"] = float(quat[idx])
+        actual_q = self.adapter.positions()
+        joint_row = {"target_index": tick["target_index"], "phase": tick["phase"], "time_s": self.time_s}
+        for idx, name in enumerate(self.arm_joint_names):
+            joint_row[f"target_{name}_rad"] = float(target_q[idx])
+            joint_row[f"target_{name}_rad_s"] = float(target_dq[idx])
+            joint_row[f"actual_{name}_rad"] = float(actual_q[self.arm_dof_idx[idx]])
+        joint_row["right_finger_m"], joint_row["left_finger_m"] = map(float, actual_q[self.adapter.indices])
+        self.joint_rows.append(joint_row)
         row.update({f"gravity_joint{idx + 1}_nm": float(value) for idx, value in enumerate(gravity_torque)})
         if not self.headless:
             self.scene.visualizer.viewer.update()
         row["compute_ms"] = (time.perf_counter() - compute_started) * 1000.0
+        row["step_over_20ms"] = row["compute_ms"] > DT * 1000.0
         return row
 
 
-XArm6PickPlaceSimulation = XArm6BioG2PickPlaceSimulation
+# Preserve the original Python entry names.
+XArm6BioG2PickPlaceSimulation = BioG2PickPlaceSimulation
+XArm6PickPlaceSimulation = BioG2PickPlaceSimulation
 
 
 def execute_trajectory(sim, ticks, speed_mm_s: float, force_percent: float):
     """Enforce alignment before closing, sustain contact force before lifting, and pace playback."""
     guard = AlignmentGuard()
     grip_guard = GripForceGuard(finger_force_n(force_percent))
+    home_guard = HomePoseGuard()
+    saw_home_settle = False
     next_frame_s = time.perf_counter()
-    for tick in ticks:
+    for idx, tick in enumerate(ticks):
+        if tick["phase"] == "home_settle":
+            saw_home_settle = True
+            if home_guard.ready:
+                continue
         if tick["phase"] == "grasp_align" and guard.ready:
             continue
         if tick["phase"] == "grip":
@@ -846,11 +1207,14 @@ def execute_trajectory(sim, ticks, speed_mm_s: float, force_percent: float):
                 continue
         if tick["phase"] == "lift":
             grip_guard.require_ready()
-        row = sim.step(tick, speed_mm_s=speed_mm_s, force_percent=force_percent)
+        next_tick = ticks[idx + 1] if idx + 1 < len(ticks) else None
+        row = sim.step(tick, speed_mm_s=speed_mm_s, force_percent=force_percent, next_tick=next_tick)
         if tick["phase"] == "grasp_align":
             guard.update(row)
         elif tick["phase"] == "grip" and "left_normal_n" in row and "right_normal_n" in row:
             grip_guard.update(row)
+        elif tick["phase"] == "home_settle":
+            home_guard.update(row)
         yield row
         if not sim.headless:
             next_frame_s += DT
@@ -861,6 +1225,8 @@ def execute_trajectory(sim, ticks, speed_mm_s: float, force_percent: float):
             else:
                 next_frame_s = now
     guard.require_ready()
+    if saw_home_settle:
+        home_guard.require_ready()
 
 
 def evaluate_run(rows: list[dict], force_percent: float) -> dict:
@@ -914,14 +1280,29 @@ def evaluate_run(rows: list[dict], force_percent: float) -> dict:
             retreat_rows[-1]["grasp_y_mm"] - PLACE_XY[1] * 1000.0,
         )
     )
-    home_return_error_mm = float(
-        np.linalg.norm(
-            np.array([final_row["grasp_x_mm"], final_row["grasp_y_mm"], final_row["grasp_z_mm"]])
-            - np.asarray(HOME_GRASP_POS) * 1000.0
-        )
-    )
+    home_return_error_mm = final_row["flange_error_mm"]
+    home_rotation_error_rad = final_row["flange_rotation_error_rad"]
     total_nest_contacts = sum(int(r["nest_finger_contacts"]) for r in rows)
     resets_during_motion = final_row["position_resets"] - rows[0]["position_resets"]
+    # The plate is supported during grip, so nest friction can redistribute the
+    # two finger forces. Compare steady force only on the straight, level transit
+    # segment, where the grasp carries the plate and the commanded speed is constant.
+    cruise_speed = max((r.get("target_speed_mm_s", 0.0) for r in transit_rows), default=0.0)
+    steady_transport = [
+        r
+        for r in transit_rows
+        if "target_tcp_velocity_z_mm_s" in r
+        and abs(r["target_tcp_velocity_z_mm_s"]) <= 1e-3
+        and cruise_speed > 0
+        and abs(r["target_speed_mm_s"] - cruise_speed) <= 1e-6
+    ]
+    steady_force_metrics = {}
+    if len(steady_transport) >= GRIP_HOLD_STEPS:
+        steady_force_metrics = {
+            f"transport_steady_{side}_normal_n": float(np.mean([r[f"{side}_normal_n"] for r in steady_transport]))
+            for side in ("left", "right")
+        }
+        steady_force_metrics["transport_steady_sample_count"] = len(steady_transport)
 
     checks = {
         "preclose_alignment": alignment_passed,
@@ -934,14 +1315,18 @@ def evaluate_run(rows: list[dict], force_percent: float) -> dict:
         "immediate_release_response": release_first_step_gain_mm >= 0.5,
         "clean_release": post_release_force_n <= 0.05 and release_rows[-1]["gap_mm"] >= 145.0,
         "vertical_retreat_before_home": retreat_z_gain_mm >= 70.0 and retreat_xy_drift_mm <= 5.0,
-        "return_home_le_5mm": home_return_error_mm <= 5.0,
+        "return_flange_position_le_0_5mm": home_return_error_mm <= HOME_POSITION_TOL_MM,
+        "return_flange_rotation_le_1e_3rad": home_rotation_error_rad <= HOME_ROTATION_TOL_RAD,
         "zero_nest_finger_contacts": total_nest_contacts == 0,
+        "zero_robot_table_contacts": sum(r["robot_table_contacts"] for r in rows) == 0,
+        "zero_robot_nest_contacts": sum(r["robot_nest_contacts"] for r in rows) == 0,
         "no_joint_teleport_during_motion": resets_during_motion == 0,
     }
     return {
         "passed": all(checks.values()),
         "checks": checks,
         "metrics": {
+            **steady_force_metrics,
             "expected_single_finger_force_n": expected_force_n,
             "grip_steady_left_normal_n": mean_left_n,
             "grip_steady_right_normal_n": mean_right_n,
@@ -965,6 +1350,8 @@ def evaluate_run(rows: list[dict], force_percent: float) -> dict:
             "retreat_z_gain_mm": retreat_z_gain_mm,
             "retreat_xy_drift_mm": retreat_xy_drift_mm,
             "home_return_error_mm": home_return_error_mm,
+            "home_return_rotation_error_rad": home_rotation_error_rad,
+            "home_settle_duration_s": sum(r["phase"] == "home_settle" for r in rows) * DT,
             "total_nest_finger_contacts": total_nest_contacts,
             "sample_count": len(rows),
         },
@@ -975,6 +1362,10 @@ def compare_substeps(first: dict, second: dict) -> dict:
     """Check numerical agreement of complete runs at 8 and 32 substeps."""
     if {first["substeps"], second["substeps"]} != {8, 32}:
         raise ValueError("Comparison requires substeps 8 and 32")
+    if first.get("executor", "servo_j") != second.get("executor", "servo_j"):
+        raise ValueError("Comparison settings differ: executor")
+    if first.get("robot", "xarm6_1305") != second.get("robot", "xarm6_1305"):
+        raise ValueError("Comparison settings differ: robot")
     for key in ("backend", "speed_mm_s", "transport_speed_mm_s", "force_percent"):
         if first[key] != second[key]:
             raise ValueError(f"Comparison settings differ: {key}")
@@ -982,8 +1373,13 @@ def compare_substeps(first: dict, second: dict) -> dict:
         raise ValueError("Comparison microplate assets differ")
     a, b = first["metrics"], second["metrics"]
     position_difference = float(np.linalg.norm(np.asarray(a["final_kit_xyz_mm"]) - b["final_kit_xyz_mm"]))
+    force_prefix = (
+        "transport_steady"
+        if all(f"transport_steady_{side}_normal_n" in metrics for metrics in (a, b) for side in ("left", "right"))
+        else "grip_steady"
+    )
     force_difference = [
-        abs(a[f"grip_steady_{side}_normal_n"] - b[f"grip_steady_{side}_normal_n"]) for side in ("left", "right")
+        abs(a[f"{force_prefix}_{side}_normal_n"] - b[f"{force_prefix}_{side}_normal_n"]) for side in ("left", "right")
     ]
     checks = {
         "both_complete_runs_pass": first["passed"] and second["passed"],
@@ -994,13 +1390,82 @@ def compare_substeps(first: dict, second: dict) -> dict:
         "passed": all(checks.values()),
         "checks": checks,
         "position_difference_mm": position_difference,
+        "force_comparison_phase": "transit" if force_prefix == "transport_steady" else "grip",
         "force_difference_left_right_n": force_difference,
+        "grip_force_difference_left_right_n": [
+            abs(a[f"grip_steady_{side}_normal_n"] - b[f"grip_steady_{side}_normal_n"]) for side in ("left", "right")
+        ],
     }
+
+
+def finite_values(values) -> list[float | None]:
+    return [float(value) if np.isfinite(value) else None for value in np.asarray(values).flat]
+
+
+def save_trajectory_artifacts(sim: BioG2PickPlaceSimulation, base_path: Path) -> dict:
+    """Save Cartesian targets independently from executor-specific joint targets and observations."""
+    base_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path = base_path.with_suffix(".targets.json")
+    joint_path = base_path.with_suffix(".joints.json")
+    samples, public = [], []
+    for tick in sim.cartesian_targets:
+        flange_report = None
+        try:
+            tcp = pose_matrix(tick["target_grasp_xyz"], tick["target_grasp_quat_wxyz"])
+            tcp_report = pose_report(tcp, "world")
+            flange = sim.frames.tcp_to_flange(tcp)
+            flange[:3, 3] -= ROBOT_BASE_POS
+            flange_report = pose_report(flange, "robot_base")
+        except ValueError as error:
+            tcp_report = {
+                "frame": "world",
+                "xyz_mm": finite_values(np.asarray(tick["target_grasp_xyz"]) * 1000),
+                "quaternion_wxyz": finite_values(tick["target_grasp_quat_wxyz"]),
+                "invalid_pose": str(error),
+            }
+        common = {
+            "phase": tick["phase"],
+            "phase_step": tick["phase_step"],
+            "tcp": tcp_report,
+            "tcp_velocity_m_s": tick["target_grasp_velocity_m_s"].tolist(),
+            "speed_mm_s": tick["target_speed_mm_s"],
+            "gripper_target_mm": tick["gripper_target_mm"],
+        }
+        samples.append(common | {"target_index": tick["target_index"], "flange": flange_report})
+        if tick["phase"] not in {"enter_task", "return_flange", "home_settle"}:
+            public.append(common)
+    public_hash = hashlib.sha256(json.dumps(public, sort_keys=True).encode()).hexdigest()
+    target_path.write_text(
+        json.dumps(
+            {"robot": sim.runtime.model.key, "dt_s": DT, "public_tcp_sha256": public_hash, "samples": samples}, indent=2
+        )
+        + "\n"
+    )
+    joint_path.write_text(
+        json.dumps(
+            {
+                "robot": sim.runtime.model.key,
+                "executor": sim.executor,
+                "joint_names": sim.arm_joint_names,
+                "initial_arm_q_rad": sim.home_arm_q.tolist() if hasattr(sim, "home_arm_q") else None,
+                "compiled": [
+                    {"target_index": idx, "q_rad": q.tolist(), "dq_rad_s": dq.tolist()}
+                    for idx, (q, dq) in enumerate(sim.joint_targets)
+                ],
+                "executed": sim.joint_rows,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    return {"cartesian_targets": str(target_path), "joint_targets": str(joint_path), "public_tcp_sha256": public_hash}
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("gpu", "cpu"), default="gpu")
+    parser.add_argument("--robot", choices=SUPPORTED_ROBOTS, default="xarm6")
+    parser.add_argument("--executor", choices=EXECUTORS, default="servo_cartesian")
     parser.add_argument("--headless", action="store_true", help="Run without opening the interactive viewer window")
     parser.add_argument("--speed-mm-s", type=float, default=DEFAULT_PICK_PLACE_SPEED_MM_S)
     parser.add_argument("--speed-percent", type=float, default=None)
@@ -1024,7 +1489,9 @@ def parse_args(argv=None):
 def run_bio_g2_pick_place(
     *,
     backend: str = "gpu",
+    robot: str = "xarm6",
     headless: bool = True,
+    executor: str = "servo_cartesian",
     speed_mm_s: float = DEFAULT_PICK_PLACE_SPEED_MM_S,
     transport_speed_mm_s: float = DEFAULT_TRANSPORT_SPEED_MM_S,
     substeps: int = DEFAULT_SUBSTEPS,
@@ -1032,28 +1499,36 @@ def run_bio_g2_pick_place(
     csv_path: Path | None = None,
     summary_path: Path | None = None,
 ) -> dict:
-    """Execute the calibrated xArm6 + Bio Gripper G2 SBS 96-well microplate pick-and-place task."""
+    """Execute the shared Bio G2 task from and back to the common base-frame flange pose."""
     bounded(speed_mm_s, MIN_SPEED_MM_S, MAX_SPEED_MM_S, "speed_mm_s")
+    if executor not in EXECUTORS:
+        raise ValueError(f"executor must be one of {EXECUTORS}")
     if not math.isfinite(transport_speed_mm_s) or transport_speed_mm_s <= 0:
         raise ValueError("transport_speed_mm_s must be finite and positive")
     finger_force_n(force_percent)
 
     started = time.perf_counter()
-    manifest = build_xarm6_combo_model()
+    frames = BioG2TaskFrames.load(robot)
+    manifest = build_combo_model(robot)
     plate_manifest = build_microplate()
-    sim = XArm6BioG2PickPlaceSimulation(
+    sim = BioG2PickPlaceSimulation(
+        robot=robot,
         backend=backend,
         headless=headless,
+        executor=executor,
         substeps=substeps,
         transport_speed_mm_s=transport_speed_mm_s,
     )
     phases = default_phases(transport_speed_mm_s)
-    ticks = sim.prepare(phases)
 
     rows: list[dict] = []
     last_phase = None
-    loop_started = time.perf_counter()
+    loop_started = None
     failure = None
+    failure_details = None
+    failed_check = None
+    preparation_ik_ms = 0.0
+    preparation_ik_calls = 0
     stream = None
     if csv_path is not None:
         csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1061,6 +1536,11 @@ def run_bio_g2_pick_place(
     try:
         writer = None
         try:
+            try:
+                ticks = sim.prepare(phases)
+            finally:
+                preparation_ik_ms, preparation_ik_calls = sim.ik_total_ms, sim.ik_calls
+            loop_started = time.perf_counter()
             for row in execute_trajectory(sim, ticks, speed_mm_s, force_percent):
                 if stream is not None:
                     if writer is None:
@@ -1077,27 +1557,65 @@ def run_bio_g2_pick_place(
                         f"normal L/R={row['left_normal_n']:5.2f}/{row['right_normal_n']:5.2f}N",
                         flush=True,
                     )
-        except (AlignmentError, GripTimeoutError) as error:
+        except (IKExecutionError, AlignmentError, GripTimeoutError, HomePoseError) as error:
             failure = str(error)
+            failed_check = (
+                "ik_solution_valid"
+                if isinstance(error, IKExecutionError)
+                else "preclose_alignment"
+                if isinstance(error, AlignmentError)
+                else "home_flange_pose_valid"
+                if isinstance(error, HomePoseError)
+                else "grip_force_hold"
+            )
+            failure_details = {
+                "type": type(error).__name__,
+                "stage": "preparation" if loop_started is None else "execution",
+                **(error.report if isinstance(error, IKExecutionError) else {"reason": str(error)}),
+            }
             print(f"FAIL {failure}", flush=True)
     finally:
         if stream is not None:
             stream.close()
 
-    loop_wall_s = time.perf_counter() - loop_started
+    loop_wall_s = time.perf_counter() - loop_started if loop_started is not None else 0.0
     evaluation = (
         evaluate_run(rows, force_percent=force_percent)
         if failure is None
         else {
             "passed": False,
-            "checks": {"preclose_alignment": False},
+            "checks": {failed_check: False},
             "metrics": {"sample_count": len(rows)},
         }
     )
+    if failure is None:
+        evaluation["checks"].update(
+            {
+                "initial_flange_position_le_0_5mm": sim.initial_pose["flange_position_error_mm"]
+                <= HOME_POSITION_TOL_MM,
+                "initial_flange_rotation_le_1e_3rad": sim.initial_pose["flange_rotation_error_rad"]
+                <= HOME_ROTATION_TOL_RAD,
+            }
+        )
+        evaluation["passed"] = all(evaluation["checks"].values())
+        if not evaluation["passed"]:
+            failed = [name for name, passed in evaluation["checks"].items() if not passed]
+            failure = f"Physical acceptance failed: {', '.join(failed)}"
+            failure_details = {"type": "AcceptanceError", "stage": "evaluation", "failed_checks": failed}
     summary = {
         "passed": evaluation["passed"],
         "backend": backend,
         "headless": headless,
+        "executor": sim.executor,
+        "robot": frames.runtime.model.key,
+        "flange_link": frames.runtime.arm.ee_link,
+        "home_flange_target": pose_report(frames.home_flange(), "robot_base"),
+        "task_start_tcp_target": pose_report(pose_matrix(TASK_START_TCP_WORLD_M, DOWN_QUAT_WXYZ), "world"),
+        "home_tcp_target": pose_report(frames.flange_to_tcp_pose(frames.home_flange(ROBOT_BASE_POS)), "world"),
+        "robot_base_world_xyz_m": list(ROBOT_BASE_POS),
+        "flange_to_tcp": pose_report(frames.flange_to_tcp, "flange"),
+        "initial_pose": sim.initial_pose,
+        "final_pose": sim.measured_pose() if sim.initial_pose is not None else None,
         "speed_mm_s": speed_mm_s,
         "transport_speed_mm_s": transport_speed_mm_s,
         "substeps": substeps,
@@ -1113,8 +1631,20 @@ def run_bio_g2_pick_place(
         "loop_wall_s": loop_wall_s,
         "ms_per_step": (loop_wall_s * 1000.0) / max(len(rows), 1),
         "compute_ms_per_step": float(np.mean([r["compute_ms"] for r in rows])) if rows else None,
+        "max_compute_ms": max((r["compute_ms"] for r in rows), default=None),
+        "steps_over_20ms": sum(r["compute_ms"] > DT * 1000.0 for r in rows),
+        "preparation_ik_ms": preparation_ik_ms,
+        "preparation_ik_calls": preparation_ik_calls,
+        "runtime_ik_total_ms": sim.ik_total_ms - preparation_ik_ms,
+        "runtime_ik_calls": sim.ik_calls - preparation_ik_calls,
+        "ik_ms_per_step": float(np.mean([r["ik_ms"] for r in rows])) if rows else None,
+        "max_ik_ms": max((r["ik_ms"] for r in rows), default=None),
+        "max_ee_error_mm": max((r["ee_error_mm"] for r in rows), default=None),
+        "rms_ee_error_mm": float(np.sqrt(np.mean([r["ee_error_mm"] ** 2 for r in rows]))) if rows else None,
+        "max_ee_rotation_error_rad": max((r["ee_rotation_error_rad"] for r in rows), default=None),
         "realtime_factor": len(rows) * DT / max(loop_wall_s, 1e-9),
         "failure": failure,
+        "failure_details": failure_details,
         "combo_model": manifest,
         "microplate": plate_manifest,
         "max_ik_position_error_mm": sim.max_ik_position_error_m * 1000.0,
@@ -1123,6 +1653,9 @@ def run_bio_g2_pick_place(
         "checks": evaluation["checks"],
         "metrics": evaluation["metrics"],
     }
+    artifact_base = summary_path or csv_path
+    if artifact_base is not None:
+        summary["trajectory_files"] = save_trajectory_artifacts(sim, artifact_base)
     if summary_path is not None:
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

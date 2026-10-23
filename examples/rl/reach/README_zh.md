@@ -4,7 +4,7 @@
 
 使用未安装夹爪的 xArm 6，仅在仿真中运行，仓库不附带模型权重。成功条件为末端距离严格小于 **5 mm**，默认训练种子 7。在项目根目录运行以下指令。
 
-[English](README.md) · [RL 示例顺序](../README_cn.md) · [下一步：2. Pick & Place](../pick_place/README_cn.md)
+[English](README.md) · [RL 示例顺序](../README_zh.md) · [下一步：2. Pick & Place](../pick_place/README_zh.md)
 
 24 维观测、6 维动作，控制周期 20 ms，每回合最长 5 s。目标范围为 x 0.15–0.55 m、y -0.30–0.30 m、z 0.05–0.50 m。
 

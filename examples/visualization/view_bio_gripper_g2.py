@@ -10,7 +10,7 @@ from ufactory.visualization.standalone_gripper import run_standalone_gripper_vie
 def _controller(robot):
     gripper = BioGripperG2(robot)
     gripper.setup_pd()
-    return lambda step: gripper.control_pose(gripper.demo_target(step))
+    return lambda _step: gripper.control_pose(gripper.step_demo_target()[0])
 
 
 def main() -> dict | None:

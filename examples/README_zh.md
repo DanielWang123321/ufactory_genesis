@@ -2,8 +2,6 @@
 
 [English](README.md)
 
-v0.3.2 按任务组织公开示例。共享实现位于 `ufactory`，入口模块负责解析用户参数并启动对应流程。
-
 ## 前置条件
 
 已验证 Python 3.12/3.13、Genesis World 1.4.4，Genesis 最低版本为 1.4.2。1.4.2 和 1.4.3 会警告一次；更高版本须通过接口检查。详见[版本策略](../ROADMAP.md)。
@@ -46,52 +44,64 @@ python examples/visualization/view_robot.py --robot xarm6
 本版公开目录：
 
 
-| 目录               | 用途                                      |
-| ---------------- | --------------------------------------- |
-| `visualization/` | GLB 机型与夹爪查看器                            |
-| `kinematics/`    | FK/IK / 机型校验包装                          |
-| `pick_place/`    | 多机型抓放入口与可选覆盖配置                          |
-| `packaging/`     | 多机型装箱展示入口与可选覆盖配置                        |
-| `rl/`            | 裸臂 Reach → 桌面 Pick & Place → 装箱（待实现）；Linux/NVIDIA |
+| 目录 | 用途 |
+|---|---|
+| `visualization/` | GLB 机型与夹爪查看器，见[可视化](#可视化) |
+| `kinematics/` | FK/IK / 机型校验包装，见[运动学与动力学仿真](#运动学与动力学仿真) |
+| `pick_place/` | 多机型抓放入口与可选覆盖配置，见[抓放指南](pick_place/README_zh.md) |
+| `packaging/` | 多机型装箱展示入口与可选覆盖配置，见[装箱指南](packaging/README_zh.md) |
+| `rl/` | 裸臂 Reach → 桌面 Pick & Place → 装箱（待实现）；Linux/NVIDIA，见 [RL 索引](rl/README_zh.md) |
 
-
-学习顺序及训练、推理指南见 [RL 索引](rl/README_cn.md)。
+学习顺序及训练、推理指南见 [RL 索引](rl/README_zh.md)。
 
 ## 支持机型与末端
 
 | 机械臂 | 可用末端 |
 |---|---|
-| `xarm5` | Gripper G2、Bio Gripper G2 |
-| `xarm6` | Gripper G2、Bio Gripper G2 |
-| `xarm7` | Gripper G2、Bio Gripper G2 |
-| `uf850` | Gripper G2、Bio Gripper G2 |
+| `xarm5` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
+| `xarm6` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
+| `xarm7` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
+| `uf850` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
 | `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper |
 
 五类机型均支持仿真与离线预检。真机装箱启用 xArm6 + Gripper G2、Lite6 + Lite6 Gripper，详见[真机操作与硬件校验](#真机操作与硬件校验)。
 
-G2 仿真使用 `g2_calibrated_v1`。策略训练与当前 v3 检查点契约见 [抓放 RL 指南](rl/pick_place/README_cn.md)。
+G2 仿真使用 `g2_calibrated_v1`。策略训练与当前 v3 检查点契约见 [抓放 RL 指南](rl/pick_place/README_zh.md)。
 
 ## 可视化
 
 ```bash
-# 裸臂
+# xArm6 裸臂静态查看
 python examples/visualization/view_robot.py --robot xarm6
 
-# Gripper G2（静态组合）
+# xArm6 + Gripper G2 静态查看
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 
-# 可动手指 + 开合演示
+# xArm6 + Gripper G2 开合演示
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo
 
-# Bio Gripper G2 / Lite6 夹爪
+# UF850 + Bio Gripper G2 静态查看
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
+
+# xArm6 + Bio Gripper G2 开合演示
 python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
+
+# xArm6 + Vacuum Gripper 静态查看
+python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
+
+# Lite6 + Lite6 Gripper 开合演示
 python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
+
+# Lite6 + Lite6 Vacuum Gripper 静态查看
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
-# 独立夹爪查看器
+# Gripper G2 独立查看与开合演示
 python examples/visualization/view_gripper_g2.py
+
+# Bio Gripper G2 独立查看与开合演示
 python examples/visualization/view_bio_gripper_g2.py
+
+# Lite6 Gripper 独立查看与开合演示
 python examples/visualization/view_lite6_gripper.py
 ```
 
@@ -99,9 +109,9 @@ python examples/visualization/view_lite6_gripper.py
 | 参数                                                                                 | 说明                                    |
 | ---------------------------------------------------------------------------------- | ------------------------------------- |
 | `--robot`                                                                          | 必选机型 key                              |
-| `--gripper-g2` / `--bio-gripper-g2` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
+| `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
 | `--movable`                                                                        | 按连杆可动夹爪网格（需配合受支持的夹爪标志）                |
-| `--gripper-demo`                                                                   | 循环开合（需要 `--movable`）                  |
+| `--gripper-demo`                                                                   | 循环开合，到位后保持 0.5 s 切换（需要 `--movable`）   |
 | `--pd`                                                                             | 平滑关节运动演示（约 0.873 rad/s），仅视觉           |
 | `--show-tcp`                                                                       | 法兰 TCP 红色标记（默认隐藏）                     |
 | `--diagnose`                                                                       | 无窗口 STL/GLB 连杆位姿诊断                    |
@@ -114,10 +124,10 @@ python examples/visualization/view_lite6_gripper.py
 ## 运动学与动力学仿真
 
 ```bash
-# 离线机型/资产自检（不连控制器）
+# xArm6 离线 URDF 模型、FK 与 PD 控制自检（不连控制器）
 python examples/kinematics/verify_robot.py --robot xarm6
 
-# 动力学仿真自检
+# xArm6 动力学仿真校验（默认姿态 + 5 组随机姿态）
 dynamics-sim-check --robot xarm6 --random-count 5
 ```
 
@@ -127,111 +137,37 @@ dynamics-sim-check --robot xarm6 --random-count 5
 
 ## 抓放仿真
 
-`examples/pick_place/run.py` 委托给稳定的 `ufactory-pick-place` 控制台命令，两者接受相同参数。
-
-
-| 参数               | 取值 / 说明                                                          |
-| ---------------- | ---------------------------------------------------------------- |
-| `--robot`        | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6`               |
-| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6`（`bio_gripper_g2` 用于 `xarm6` 微孔板抓放仿真） |
-| `--mode`         | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检）                    |
-| `--executor`     | 必选：`servo_j` 或 `servo_cartesian`                                 |
-| `--backend`      | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
-| `--visual`       | 可选：`sim` 模式下强制打开 Genesis 查看器视窗                                   |
-| `--config`       | 可选：严格的局部覆盖 YAML 路径                                               |
-| `--print-config` | 可选：打印解析后的运行时 YAML 后退出                                            |
-| `--report`       | 可选：报告输出路径                                                        |
-
+多机型抓放的 Genesis 物理仿真与离线预检。参数、更多指令及覆盖配置见[抓放指南](pick_place/README_zh.md)。
 
 ```bash
-# 仅解析配置
-python examples/pick_place/run.py \
-  --robot xarm6 --mode dry-run --executor servo_j --print-config
-
-# 离线预测预检
+# xArm6 + Gripper G2：抓放离线轨迹与碰撞预检（servo_j）
 python examples/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j
 
-# Genesis 仿真并打开查看器
+# Lite6 + Lite6 Gripper：抓放物理仿真并打开查看器（servo_cartesian）
 python examples/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
-
-# xArm6 + Bio Gripper G2 SBS 96 孔微孔板抓放仿真
-python examples/pick_place/run.py \
-  --robot xarm6 --gripper bio_gripper_g2 --mode sim --executor servo_j --visual
-
-# 仅 CPU / 不支持的显卡
-python examples/pick_place/run.py \
-  --robot lite6 --mode sim --executor servo_cartesian --backend cpu
-
-# 可选局部覆盖（仅写出的字段覆盖 assets/configs/runtime）
-python examples/pick_place/run.py \
-  --robot xarm6 --mode dry-run --executor servo_j \
-  --config examples/pick_place/runtime.example.yaml
 ```
-
-`runtime.example.yaml` 是严格的局部覆盖文件；未写出的机器人、几何、运动、安全和仿真值仍由 `assets/configs/runtime` 解析。
-
-> 真实机械臂抓放部署请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
-
-
 
 ## 装箱展示仿真
 
-`examples/packaging/run.py` 委托给 `ufactory-packaging-showcase`。
-
-方块在箱口上方 50 mm 释放后自然下落。GPU 回归允许弹跳，以最终碰撞包围盒位于箱内为准（接触容差 1 mm），不再要求落点距目标中心小于 25 mm；保留抓取、搬运、释放与回零检查。
-
-
-| 参数                                         | 取值 / 说明                            |
-| ------------------------------------------ | ---------------------------------- |
-| `--robot`                                  | 默认 `xarm6`；五机型均支持 sim / dry-run    |
-| `--mode`                                   | 仿真必选：`sim`（默认）、`dry-run`（离线预检）     |
-| `--executor`                               | 默认 `servo_j`；也可选 `servo_cartesian` |
-| `--backend`                                | 可选：`cpu` / `gpu`；含义与抓放相同           |
-| `--cycles N`                               | 精确仿真轮数（默认 1）                       |
-| `--speed`                                  | 仿真播放倍率（`>1` 更快）                    |
-| `--table-height`                           | 仅覆盖仿真展示高度，不改变基座系几何                 |
-| `--visual`                                 | 可选：保持最终查看器画面                       |
-| `--config` / `--print-config` / `--report` | 含义与抓放相同                            |
-
+多机型轨迹控制装箱。参数及更多指令见[装箱指南](packaging/README_zh.md)。
 
 ```bash
-# 一轮仿真结束后退出
+# xArm6 + Gripper G2：单轮装箱物理仿真并打开查看器（servo_j）
 python examples/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --visual
-
-# 仅 CPU / 不支持的显卡
-python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j --backend cpu
-
-# 三轮回归
-python examples/packaging/run.py \
-  --robot lite6 --mode sim --executor servo_j --cycles 3
-
-# 离线预检
-python examples/packaging/run.py \
-  --robot xarm7 --mode dry-run --executor servo_j
-
-# 可选局部覆盖
-python examples/packaging/run.py \
-  --robot xarm6 --mode sim --executor servo_j \
-  --config examples/packaging/runtime.example.yaml
 ```
-
-> 真实机械臂装箱操作请参见 [真机操作与硬件校验](#真机操作与硬件校验)。
-
-
 
 ## 强化学习
 
 Linux/NVIDIA 上的仿真示例按以下顺序运行：
 
-1. [Reach](rl/reach/README_cn.md)：xArm 6 裸臂到达，成功阈值为 5 mm。
-2. [Pick & Place](rl/pick_place/README_cn.md)：xArm6 + Gripper G2 将方块搬运到桌面目标位置。
+1. [Reach](rl/reach/README_zh.md)：xArm 6 裸臂到达，成功阈值为 5 mm。
+2. [Pick & Place](rl/pick_place/README_zh.md)：xArm6 + Gripper G2 将方块搬运到桌面目标位置。
 3. 装箱：将物体放入箱内，RL 示例待实现。
 
-训练、推理指令见 [RL 索引](rl/README_cn.md)。上面的装箱展示采用轨迹控制。
+训练、推理指令见 [RL 索引](rl/README_zh.md)。上面的装箱展示采用轨迹控制。
 
 ## 真机操作与硬件校验
 
@@ -249,14 +185,16 @@ Linux/NVIDIA 上的仿真示例按以下顺序运行：
 通过网络读取控制器数据或进行计算对比，真实关节不会产生位移：
 
 ```bash
-# Genesis URDF 与 xArm SDK 的 FK/IK 对比（需要网络与 IP）
+# xArm6：Genesis URDF 与真实控制器 SDK 正运动学（FK）对比
 python examples/kinematics/verify_fk.py --robot xarm6 --ip <ip>
+
+# Lite6：Genesis URDF 与真实控制器 SDK 逆运动学（IK）对比
 python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
 
-# 动力学碰撞检测自检（不驱动机械臂）
+# xArm6：在控制器虚拟仿真模式下，对预设测试点位进行自碰撞检查（真实关节不动作）
 dynamics-sim-collision-check --robot xarm6 --ip <ip>
 
-# 控制器虚拟仿真（sdk-sim：连接真实控制器但仅在控制器内部仿真，关节不动作）
+# Lite6 + Lite6 Gripper：装箱控制器内部虚拟仿真（sdk-sim，真实关节不动作）
 python examples/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
@@ -269,15 +207,15 @@ python examples/packaging/run.py \
 实际下发目标位姿与轨迹控制指令至真实机械臂：
 
 ```bash
-# 动力学硬件实测检查（需要显式确认开关）
+# xArm6：驱动真机运动至验证姿态并对比关节力矩（需 --confirm-real）
 dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
 
-# 抓放真机运动（必须精确标定 + 显式确认门）
+# xArm6 + Gripper G2：抓放真机物理运动（需实机标定文件与 --confirm-real）
 XARM_IP=<ip> python examples/pick_place/run.py \
   --robot xarm6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 
-# 装箱真机运动（当前仅支持 xArm6 + G2、Lite6 + 夹爪；必须精确标定 + 显式确认门）
+# Lite6 + Lite6 Gripper：装箱真机物理运动（当前仅支持 xArm6 + Gripper G2、Lite6 + Lite6 Gripper；需实机标定文件与 --confirm-real）
 XARM_IP=<ip> python examples/packaging/run.py \
   --robot lite6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real

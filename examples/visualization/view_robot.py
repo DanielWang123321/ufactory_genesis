@@ -33,6 +33,11 @@ def main() -> None:
         help="Load Gripper G2 visual combo URDF",
     )
     parser.add_argument(
+        "--vacuum-gripper",
+        action="store_true",
+        help="Load xArm/UF850 vacuum gripper static visual combo URDF",
+    )
+    parser.add_argument(
         "--movable",
         action="store_true",
         help="Per-link GLBs for gripper open/close (requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2)",
@@ -40,7 +45,7 @@ def main() -> None:
     parser.add_argument(
         "--gripper-demo",
         action="store_true",
-        help="Cycle gripper open/close (requires --movable with a gripper flag)",
+        help="Cycle gripper open/close with a 0.5 s hold at each endpoint (requires --movable)",
     )
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--position-mm", type=float, default=None)
@@ -75,6 +80,7 @@ def main() -> None:
     accessory_flags = (
         args.bio_gripper_g2,
         args.gripper_g2,
+        args.vacuum_gripper,
         args.lite6_gripper,
         args.lite6_vacuum_gripper,
     )
@@ -88,6 +94,8 @@ def main() -> None:
         parser.error(f"{args.robot} does not support Bio Gripper G2")
     if args.gripper_g2 and not profile.supports_gripper_g2:
         parser.error(f"{args.robot} does not support Gripper G2")
+    if args.vacuum_gripper and not profile.supports_vacuum_gripper:
+        parser.error(f"{args.robot} does not support Vacuum Gripper")
     if args.lite6_gripper and not profile.supports_lite6_gripper:
         parser.error(f"{args.robot} does not support Lite6 Gripper")
     if args.lite6_vacuum_gripper and not profile.supports_lite6_vacuum_gripper:
@@ -101,6 +109,7 @@ def main() -> None:
         args.robot,
         with_bio_gripper_g2=args.bio_gripper_g2,
         with_gripper_g2=args.gripper_g2,
+        with_vacuum_gripper=args.vacuum_gripper,
         with_lite6_gripper=args.lite6_gripper,
         with_lite6_vacuum_gripper=args.lite6_vacuum_gripper,
         movable=args.movable,

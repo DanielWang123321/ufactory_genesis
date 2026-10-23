@@ -27,6 +27,8 @@ class RobotModelSpec:
     supports_gripper_g2: bool = True
     gripper_g2_visual_urdf: str = ""
     gripper_g2_movable_visual_urdf: str = ""
+    supports_vacuum_gripper: bool = True
+    vacuum_gripper_visual_urdf: str = ""
     supports_lite6_gripper: bool = False
     lite6_gripper_visual_urdf: str = ""
     lite6_gripper_movable_visual_urdf: str = ""
@@ -57,6 +59,7 @@ def _xarm_profile(dof: int) -> RobotModelSpec:
         bio_gripper_g2_movable_visual_urdf=f"{key}_bio_gripper_g2_movable_visual.glb.urdf",
         gripper_g2_visual_urdf=f"{key}_g2_visual.urdf",
         gripper_g2_movable_visual_urdf=f"{key}_g2_movable_visual.urdf",
+        vacuum_gripper_visual_urdf=f"{key}_vacuum_gripper_visual.glb.urdf",
     )
 
 
@@ -78,6 +81,8 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         supports_gripper_g2=False,
         gripper_g2_visual_urdf="",
         gripper_g2_movable_visual_urdf="",
+        supports_vacuum_gripper=False,
+        vacuum_gripper_visual_urdf="",
         supports_lite6_gripper=True,
         lite6_gripper_visual_urdf="lite6_gripper_visual.glb.urdf",
         lite6_gripper_movable_visual_urdf="lite6_gripper_movable_visual.glb.urdf",
@@ -100,6 +105,7 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         bio_gripper_g2_movable_visual_urdf="uf850_bio_gripper_g2_movable_visual.glb.urdf",
         gripper_g2_visual_urdf="uf850_g2_visual.urdf",
         gripper_g2_movable_visual_urdf="uf850_g2_movable_visual.urdf",
+        vacuum_gripper_visual_urdf="uf850_vacuum_gripper_visual.glb.urdf",
     ),
     "xarm6_1305": _xarm_profile(6),
 }

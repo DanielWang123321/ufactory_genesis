@@ -72,11 +72,12 @@ class _FakeArm:
 
 
 class _FakeSdkSimArm(_FakeArm):
-    def __init__(self, physical_q: np.ndarray):
+    def __init__(self, physical_q: np.ndarray, *, tcp_offset=(0.0, 0.0, 172.0, 0.0, 0.0, 0.0)):
         super().__init__(physical_q)
         self.physical_q = np.asarray(physical_q, dtype=np.float64).copy()
         self.virtual_q = self.physical_q.copy()
         self.simulation_enabled = False
+        self.tcp_offset = list(tcp_offset)
 
     @property
     def is_simulation_robot(self):
@@ -101,6 +102,11 @@ class _FakeSdkSimArm(_FakeArm):
         assert self.simulation_enabled
         self.calls.append(("set_servo_angle_j", list(angles)))
         self.virtual_q = np.asarray(angles, dtype=np.float64)
+        return 0
+
+    def set_servo_cartesian(self, mvpose, speed, mvacc, mvtime, is_radian=True):
+        assert self.simulation_enabled
+        self.calls.append(("set_servo_cartesian", list(mvpose)))
         return 0
 
     def set_state(self, state):
@@ -269,3 +275,125 @@ def test_sdk_sim_feedback_disables_simulation_after_replay_failure(monkeypatch):
 
     assert not arm.simulation_enabled
     assert ("set_simulation_robot", False) in arm.calls
+
+
+G2_TCP_OFFSET = (0.0, 0.0, 172.0, 0.0, 0.0, 0.0)
+
+
+class _RecordingCartesianArm(_FakeArm):
+    def set_servo_cartesian(self, mvpose, speed, mvacc, mvtime, is_radian=True):
+        self.calls.append(("set_servo_cartesian", list(mvpose)))
+        return 0
+
+
+def test_send_cartesian_target_zero_offset_is_unchanged():
+    arm = _RecordingCartesianArm(np.zeros(6))
+    transport = XArmTransport(arm, robot_key="xarm6_1305", serial_number="XI130506XXXXXX")
+    assert transport.send_cartesian_target(np.asarray([0.30, 0.05, 0.25])) == 0
+    sent = arm.calls[-1][1]
+    assert sent[:3] == pytest.approx([300.0, 50.0, 250.0])
+    assert abs(sent[3]) == pytest.approx(np.pi)
+    assert sent[4:] == pytest.approx([0.0, 0.0], abs=1e-12)
+
+
+def test_send_cartesian_target_applies_tcp_offset_gripper_down():
+    arm = _RecordingCartesianArm(np.zeros(6))
+    transport = XArmTransport(
+        arm,
+        robot_key="xarm6_1305",
+        serial_number="XI130506XXXXXX",
+        tcp_offset=G2_TCP_OFFSET,
+    )
+    transport.send_cartesian_target(np.asarray([0.30, 0.05, 0.25]))
+    sent = arm.calls[-1][1]
+    # Gripper-down flips the tool z axis, so the TCP is 172 mm below the flange.
+    assert sent[:3] == pytest.approx([300.0, 50.0, 250.0 - 172.0])
+    assert abs(sent[3]) == pytest.approx(np.pi)
+
+
+def test_send_cartesian_target_matches_pose_flange_to_tcp_with_rotated_offset():
+    from ufactory.kinematics.tcp_offset import pose_flange_to_tcp
+
+    offset = (10.0, -5.0, 120.0, 0.0, 0.0, np.pi / 2.0)
+    rpy = (np.pi, 0.1, -0.3)
+    arm = _RecordingCartesianArm(np.zeros(6))
+    transport = XArmTransport(arm, robot_key="xarm6_1305", serial_number="XI130506XXXXXX", tcp_offset=offset)
+    transport.send_cartesian_target(np.asarray([0.30, 0.05, 0.25, *rpy]))
+    expected = pose_flange_to_tcp([300.0, 50.0, 250.0, *rpy], offset)
+    assert arm.calls[-1][1] == pytest.approx(expected.tolist())
+
+
+def test_transport_rejects_invalid_tcp_offset():
+    with pytest.raises(ValueError, match="tcp_offset"):
+        XArmTransport(_FakeArm(np.zeros(6)), robot_key="xarm6_1305", serial_number="X" * 14, tcp_offset=[0.0, 1.0])
+
+
+def test_preposition_cartesian_commands_and_checks_tcp_pose():
+    arm = _FakeArm(np.zeros(6), xyz_mm=np.asarray([100.0, 50.0, 80.0]))
+    transport = XArmTransport(
+        arm,
+        robot_key="xarm6_1305",
+        serial_number="XI130506XXXXXX",
+        tcp_offset=G2_TCP_OFFSET,
+    )
+    xyz_err, rpy_err = transport.preposition_cartesian(np.asarray([0.30, 0.00, 0.30]))
+    assert xyz_err == pytest.approx(0.0, abs=1e-9)
+    assert rpy_err == pytest.approx(0.0, abs=1e-9)
+    assert np.allclose(arm.xyz_mm, [300.0, 0.0, 300.0 - 172.0])
+
+
+def test_ensure_cartesian_program_start_compares_tcp_feedback():
+    # Controller reports the TCP pose; the flange is at z=300 mm when TCP z=128 mm.
+    arm = _FakeArm(np.zeros(6), xyz_mm=np.asarray([300.0, 0.0, 128.0]))
+    transport = XArmTransport(
+        arm,
+        robot_key="xarm6_1305",
+        serial_number="XI130506XXXXXX",
+        tcp_offset=G2_TCP_OFFSET,
+    )
+    _ensure_cartesian_program_start(transport, np.asarray([0.30, 0.00, 0.30]), allow_preposition=False)
+    assert not any(call[0] == "set_position" for call in arm.calls)
+
+
+def _movel_program(start_q: np.ndarray, xyz_m: np.ndarray) -> Program:
+    movej = Segment(
+        kind="movej",
+        duration=0.02,
+        v_max=1.0,
+        a_max=2.0,
+        label="start",
+        q_start=start_q,
+        q_end=start_q,
+        q_samples=start_q[None, :],
+        samples_count=1,
+    )
+    movel = Segment(
+        kind="movel",
+        duration=0.02,
+        v_max=0.1,
+        a_max=1.0,
+        label="line",
+        pose_start=xyz_m,
+        pose_end=xyz_m,
+    )
+    return Program([movej, movel], rate=50.0, robot_key="xarm6_1305")
+
+
+@pytest.mark.parametrize("explicit_offset", [True, False])
+def test_sdk_sim_feedback_converts_movel_targets_to_tcp(monkeypatch, explicit_offset):
+    monkeypatch.setattr("ufactory.manipulation.commands.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("ufactory.kinematics.tcp_offset.time.sleep", lambda _seconds: None)
+    start = np.asarray([0.0, -0.5, 0.0, 0.0, 0.5, 0.0])
+    xyz = np.asarray([0.30, 0.05, 0.25])
+    program = _movel_program(start, xyz)
+    arm = _FakeSdkSimArm(start, tcp_offset=G2_TCP_OFFSET)
+    kwargs = {"tcp_offset": np.asarray(G2_TCP_OFFSET)} if explicit_offset else {}
+
+    _sdk_sim_feedback(arm, program, load_runtime_config("xarm6"), start, **kwargs)
+
+    cartesian = [call[1] for call in arm.calls if call[0] == "set_servo_cartesian"]
+    assert cartesian
+    for pose in cartesian:
+        assert pose[:3] == pytest.approx([300.0, 50.0, 250.0 - 172.0])
+        assert abs(pose[3]) == pytest.approx(np.pi)
+    assert not arm.simulation_enabled

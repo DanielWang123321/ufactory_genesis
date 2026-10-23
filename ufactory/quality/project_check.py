@@ -31,7 +31,7 @@ ROBOT_KEYS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850", "lite6")
 # Evidence from an earlier commit may be reused when HEAD only touches these paths.
 EVIDENCE_CARRY_PATH_PREFIXES = (
     "README.md",
-    "README.zh.md",
+    "README_zh.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
@@ -39,7 +39,8 @@ EVIDENCE_CARRY_PATH_PREFIXES = (
     "LICENSE",
     "docs/",
     "examples/README",
-    "examples/README_cn.md",
+    "examples/pick_place/README",
+    "examples/packaging/README",
 )
 
 FAST_CHECK_NAMES = (

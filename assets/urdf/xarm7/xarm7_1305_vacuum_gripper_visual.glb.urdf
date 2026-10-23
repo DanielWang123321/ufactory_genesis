@@ -1,0 +1,567 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="xarm7_1305_vacuum_gripper_visual.glb">
+  <material name="Black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="Red">
+    <color rgba="0.8 0.0 0.0 1.0" />
+  </material>
+  <material name="White">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="Silver">
+    <color rgba="0.753 0.753 0.753 1.0" />
+  </material>
+  <link name="world" />
+  <joint name="world_joint" type="fixed">
+    <parent link="world" />
+    <child link="link_base" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link name="link_base">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.021131 -0.0016302 0.056488" />
+      <mass value="0.88556" />
+      <inertia ixx="0.0030595" ixy="0.00012259" ixz="-0.00062705" iyy="0.0037783" iyz="0.00027023" izz="0.0020125" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link_base.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link_base_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link_base_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link_base_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link_base_col_01.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0002 0.02905 -0.01233" />
+      <mass value="2.382" />
+      <inertia ixx="0.0056905" ixy="-1.579e-05" ixz="5.125e-06" iyy="0.0049566" iyz="-0.000873378" izz="0.003316654" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link1.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link1_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link1_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link1_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link1_col_01.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint1" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.267" />
+    <parent link="link_base" />
+    <child link="link1" />
+    <axis xyz="0 0 1" />
+    <limit effort="179.4445" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="10" friction="1" />
+  </joint>
+  <link name="link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00022 -0.12856 0.01735" />
+      <mass value="1.869" />
+      <inertia ixx="0.0095989" ixy="1.541e-06" ixz="5.56e-06" iyy="0.00382472" iyz="-0.00317156" izz="0.007565669" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link2.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link2_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link2_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link2_col_04.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint2" type="revolute">
+    <origin rpy="-1.5708 0 0" xyz="0 0 0" />
+    <parent link="link1" />
+    <child link="link2" />
+    <axis xyz="0 0 1" />
+    <limit effort="179.4445" lower="-2.059" upper="2.0944" velocity="3.14" />
+    <dynamics damping="10" friction="1" />
+  </joint>
+  <link name="link3">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0466 -0.02463 -0.00768" />
+      <mass value="1.6383" />
+      <inertia ixx="0.00310955" ixy="0.00030837" ixz="-0.00058453" iyy="0.00264483" iyz="0.000338893" izz="0.0026624" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link3.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link3_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link3_col_03.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint3" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0 -0.293 0" />
+    <parent link="link2" />
+    <child link="link3" />
+    <axis xyz="0 0 1" />
+    <limit effort="92.0" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link4">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.07047 -0.11575 0.012" />
+      <mass value="1.7269" />
+      <inertia ixx="0.005889" ixy="0.00137112" ixz="0.00088143" iyy="0.00359703" iyz="-0.001762155" izz="0.00543244" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link4.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link4_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link4_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link4_col_04.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint4" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0.0525 0 0" />
+    <parent link="link3" />
+    <child link="link4" />
+    <axis xyz="0 0 1" />
+    <limit effort="92.0" lower="-0.19198" upper="3.927" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link5">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.00032 0.01604 -0.026" />
+      <mass value="1.3203" />
+      <inertia ixx="0.00534665" ixy="1.5117e-05" ixz="-3.69e-07" iyy="0.0049779" iyz="-0.00022132" izz="0.0013624" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link5.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link5_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link5_col_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link5_col_04.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint5" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0.0775 -0.3425 0" />
+    <parent link="link4" />
+    <child link="link5" />
+    <axis xyz="0 0 1" />
+    <limit effort="81.558" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link6">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.06469 0.03278 0.02141" />
+      <mass value="1.325" />
+      <inertia ixx="0.0014745" ixy="-0.000488" ixz="0.0002953" iyy="0.0019037" iyz="0.00014749" izz="0.0023652" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link6.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision name="link6_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link6_col_00.stl" />
+      </geometry>
+    </collision>
+    <collision name="link6_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link6_col_01.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint6" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0 0 0" />
+    <parent link="link5" />
+    <child link="link6" />
+    <axis xyz="0 0 1" />
+    <limit effort="30.6" lower="-1.69297" upper="3.141592653589793" velocity="3.14" />
+    <dynamics damping="2" friction="1" />
+  </joint>
+  <link name="link7">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 -0.00677 -0.01098" />
+      <mass value="0.17" />
+      <inertia ixx="9.3e-05" ixy="-0.0" ixz="-0.0" iyy="5.87e-05" iyz="-3.6e-06" izz="0.000132" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/visual_glb/link7.glb" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="Silver" />
+    </visual>
+    <collision name="link7_col_0">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/xarm7_1305/collision/xarm7_link7_col_00.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="joint7" type="revolute">
+    <origin rpy="-1.5708 0 0" xyz="0.076 0.097 0" />
+    <parent link="link6" />
+    <child link="link7" />
+    <axis xyz="0 0 1" />
+    <limit effort="30.6" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="2" friction="1" />
+  </joint>
+  <link name="xarm_vacuum_gripper_link">
+    <inertial>
+      <origin xyz="0.0 0.0 0.053" rpy="0 0 0" />
+      <mass value="0.61" />
+      <inertia ixx="0.00047106" ixy="3.9292e-07" ixz="2.6537e-06" iyy="0.00033072" iyz="-1.0975e-05" izz="0.00025642" />
+    </inertial>
+    <visual name="vacuum_visual">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/visual/vacuum_gripper.glb" />
+      </geometry>
+    </visual>
+    <collision name="vacuum_hull_000">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_000_flange.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_001">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_001_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_002">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_002_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_003">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_003_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_004">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_004_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_005">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_005_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_006">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_006_body.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_007">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_007_cover.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_008">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_008_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_009">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_009_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_010">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_010_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_011">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_011_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_012">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_012_cup_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_013">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_013_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_014">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_014_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_015">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_015_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_016">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_016_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_017">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_017_cup_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_018">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_018_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_019">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_019_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_020">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_020_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_021">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_021_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_022">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_022_cup_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_023">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_023_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_024">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_024_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_025">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_025_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_026">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_026_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_027">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_027_cup_04.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_028">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_028_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_029">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_029_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_030">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_030_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_031">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_031_cup_05.stl" />
+      </geometry>
+    </collision>
+    <collision name="vacuum_hull_032">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../vacuum_gripper/meshes/collision/convex/hull_032_cup_05.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="vacuum_gripper_fix" type="fixed">
+    <parent link="link7" />
+    <child link="xarm_vacuum_gripper_link" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </joint>
+  <link name="vacuum_tcp" />
+  <joint name="vacuum_joint_tcp" type="fixed">
+    <parent link="xarm_vacuum_gripper_link" />
+    <child link="vacuum_tcp" />
+    <origin xyz="0.0 0.0 0.126" rpy="0 0 0" />
+  </joint>
+</robot>

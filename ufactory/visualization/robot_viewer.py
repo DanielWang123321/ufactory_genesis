@@ -21,18 +21,20 @@ from ufactory.visualization.viewer import start_deferred_viewer
 from ufactory.visualization.gripper_g2_viewer import (
     GRIPPER_OPEN,
     control_gripper_pose,
-    gripper_demo_target,
+    get_g2_demo_cycle,
     gripper_dof_indices,
     set_gripper_pose,
     setup_gripper_pd,
+    step_gripper_demo_target,
 )
 from ufactory.visualization.lite6_gripper_viewer import (
     LITE6_GRIPPER_OPEN,
     control_lite6_gripper_pose,
-    lite6_gripper_demo_target,
+    get_lite6_gripper_demo_cycle,
     lite6_gripper_dof_indices,
     set_lite6_gripper_pose,
     setup_lite6_gripper_pd,
+    step_lite6_gripper_demo_target,
 )
 
 TCP_MARKER_RADIUS = 0.008
@@ -516,7 +518,7 @@ def run_glb_viewer(
             bio_gripper=bio_gripper,
         )
 
-    if headless and not calibrated_dynamic:
+    if headless and not calibrated_dynamic and not gripper_demo:
         return None
     if not headless:
         start_deferred_viewer(scene)
@@ -531,9 +533,11 @@ def run_glb_viewer(
     joint_demo = _ArmJointDemo(_demo_poses(profile), len(arm_dof_idx)) if pd_demo and arm_dof_idx else None
     demo_done_announced = False
     step = 0
-    last_gripper_phase = -1
+    last_gripper_phase: str | None = None
     g2_gaps = []
+    step_dt = 0.02 if calibrated_dynamic else 0.01
     while True:
+        tick_start = time.perf_counter()
         arm_target = None
         if joint_demo is not None and not joint_demo.finished:
             _, q, _ = joint_demo.step()
@@ -547,37 +551,38 @@ def run_glb_viewer(
             arm_target = joint_demo.current
         elif pd_demo and arm_dof_idx:
             robot.control_dofs_position(home[: len(arm_dof_idx)], arm_dof_idx)
+        active_cycle = None
         if gripper_demo and gripper_dof_idx:
-            grip_phase = (step // 200) % 2
-            if grip_phase != last_gripper_phase:
-                label = "closed" if grip_phase else "open"
+            active_cycle = get_g2_demo_cycle(robot, dt=step_dt)
+            target_drive, label = step_gripper_demo_target(robot, dt=step_dt)
+            if label != last_gripper_phase:
                 print(f"  Gripper target: {label}")
-                last_gripper_phase = grip_phase
+                last_gripper_phase = label
             control_gripper_pose(
                 robot,
                 gripper_dof_idx,
                 all_gripper_dof_idx,
-                gripper_demo_target(step),
+                target_drive,
             )
         elif gripper_demo and lite6_gripper_dof_idx:
-            grip_phase = (step // 200) % 2
-            if grip_phase != last_gripper_phase:
-                label = "closed" if grip_phase else "open"
+            active_cycle = get_lite6_gripper_demo_cycle(robot, lite6_gripper_dof_idx, dt=step_dt)
+            target_drive, label = step_lite6_gripper_demo_target(robot, lite6_gripper_dof_idx, dt=step_dt)
+            if label != last_gripper_phase:
                 print(f"  Lite6 gripper target: {label}")
-                last_gripper_phase = grip_phase
+                last_gripper_phase = label
             control_lite6_gripper_pose(
                 robot,
                 lite6_gripper_dof_idx,
                 all_lite6_gripper_dof_idx,
-                lite6_gripper_demo_target(step),
+                target_drive,
             )
         elif gripper_demo and bio_gripper_g2_dof_idx:
-            grip_phase = (step // 200) % 2
-            if grip_phase != last_gripper_phase:
-                label = "closed" if grip_phase else "open"
+            active_cycle = bio_gripper
+            target_drive, label = bio_gripper.step_demo_target()
+            if label != last_gripper_phase:
                 print(f"  Bio Gripper G2 target: {label}")
-                last_gripper_phase = grip_phase
-            bio_gripper.control_pose(BioGripperG2.demo_target(step))
+                last_gripper_phase = label
+            bio_gripper.control_pose(target_drive)
         if tcp_marker is not None and ee_link is not None:
             update_tcp_marker(tcp_marker, ee_link)
         _kinematic_step(
@@ -598,10 +603,17 @@ def run_glb_viewer(
             g2_gaps.append(robot._ufactory_g2_controller.gap_mm())
         elif calibrated_bio_g2:
             g2_gaps.append(bio_gripper.gap_mm())
-        if headless and step >= headless_steps:
+        if active_cycle is not None:
+            active_cycle.on_step_completed(robot)
+        if headless and (
+            step >= headless_steps
+            or (headless_steps == 600 and active_cycle is not None and active_cycle.completed_cycles >= 1)
+        ):
             break
         if not headless:
-            time.sleep(0.02 if calibrated_dynamic else 0.01)
+            elapsed = time.perf_counter() - tick_start
+            if elapsed < step_dt:
+                time.sleep(step_dt - elapsed)
     if calibrated_dynamic:
         return {"min_gap_mm": min(g2_gaps), "max_gap_mm": max(g2_gaps), "final_gap_mm": g2_gaps[-1], "ticks": step}
     return None

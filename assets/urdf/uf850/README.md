@@ -1,6 +1,6 @@
 # UF850 Assets
 
-动力学 URDF：`uf850.urdf`（及 G2 / bio_gripper / GLB 组合变体）。
+动力学 URDF：`uf850.urdf`（及 G2 / bio_gripper / vacuum_gripper / GLB 组合变体）。
 
 ## 碰撞与视觉
 

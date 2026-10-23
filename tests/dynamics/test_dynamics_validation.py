@@ -422,3 +422,73 @@ def test_run_sim_collision_chain_records_failure_and_recovers(monkeypatch):
     assert not results[1].passed
     assert results[1].error_code == 22
     assert results[2].passed
+
+
+def test_check_controller_tcp_offset_z_blocks_nonzero_offset_below_table():
+    from ufactory.dynamics.cli import _check_controller_tcp_offset_z
+
+    session = object.__new__(RealRobotSession)
+    arm = MagicMock()
+    arm.tcp_offset = [0.0, 0.0, 172.0, 0.0, 0.0, 0.0]
+
+    def fk(angles, input_is_radian=True, return_is_radian=True):
+        del input_is_radian, return_is_radian
+        if np.allclose(angles, np.zeros(6)):
+            return 0, [207.0, 0.0, -58.5, 3.14, 0.0, 0.0]
+        return 0, [300.0, 0.0, 200.0, 3.14, 0.0, 0.0]
+
+    arm.get_forward_kinematics.side_effect = fk
+    session.arm = arm
+
+    poses = [
+        SafePose("0", np.array([0.5, -0.5, 0.0, 0.0, 0.0, 0.0]), 200.0),
+        SafePose("9", np.zeros(6), 113.5),
+    ]
+    reasons = _check_controller_tcp_offset_z(session, poses, np.zeros(6))
+    assert reasons == ["home: EE z -58.50 mm <= 0.00 mm"]
+
+    arm.tcp_offset = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    assert _check_controller_tcp_offset_z(session, poses, np.zeros(6)) == []
+
+
+def test_cli_hardware_check_aborts_before_motion_when_tcp_offset_fails_z_precheck(monkeypatch, capsys):
+    from ufactory.dynamics import cli as dyn_cli
+
+    monkeypatch.setattr(
+        "ufactory.kinematics.calibration.resolve_kinematics_suffix_from_ip",
+        lambda *args, **kwargs: (None, "XI130505L56A01"),
+    )
+    monkeypatch.setattr(
+        "ufactory.kinematics.calibration.prepare_robot_model_for_verification",
+        lambda *args, **kwargs: (xarm6_1305_urdf(), None),
+    )
+    monkeypatch.setattr(dyn_cli, "validate_urdf_dynamics", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        dyn_cli, "build_genesis_scene", lambda *args, **kwargs: ("scene", "robot", "ee", [0, 1, 2, 3, 4, 5])
+    )
+    monkeypatch.setattr(dyn_cli, "compute_ee_z_table_from_sim", lambda *args, **kwargs: {"0": 200.0, "9": 113.5})
+    monkeypatch.setattr(dyn_cli, "load_reference_backend", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        dyn_cli,
+        "_run_genesis_samples",
+        lambda *args, **kwargs: {
+            "0": MagicMock(q_actual=np.zeros(6)),
+            "9": MagicMock(q_actual=np.zeros(6)),
+        },
+    )
+
+    fake_session = MagicMock()
+    fake_session.arm.tcp_offset = [0.0, 0.0, 172.0, 0.0, 0.0, 0.0]
+    fake_session.arm.get_forward_kinematics.return_value = (0, [207.0, 0.0, -58.5, 3.14, 0.0, 0.0])
+    monkeypatch.setattr("ufactory.hardware.session.RealRobotSession", lambda *args, **kwargs: fake_session)
+
+    rc = dyn_cli.cli_hardware_check(["--robot", "xarm6", "--ip", "192.168.1.60", "--confirm-real", "--poses", "0,9"])
+    out = capsys.readouterr().out
+
+    assert rc == 1
+    assert "Controller has non-zero tcp_offset and failed EE z > 0 precheck" in out
+    assert "home: EE z -58.50 mm <= 0.00 mm" in out
+    fake_session.configure_for_dynamics.assert_not_called()
+    fake_session.sample_at_hold.assert_not_called()
+    fake_session.return_home.assert_not_called()
+    fake_session.disconnect.assert_called_once()

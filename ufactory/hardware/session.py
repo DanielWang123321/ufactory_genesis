@@ -29,6 +29,13 @@ MOVE_STRATEGIES = (MOVE_STRATEGY_AXIS_SEQUENTIAL, MOVE_STRATEGY_DIRECT)
 VEL_TOL_RAD_S = 0.01
 SETTLE_TIMEOUT_S = 5.0
 SETTLE_POLL_S = 0.1
+SIMULATION_SWITCH_TIMEOUT_S = 10.0
+
+
+def _check_config_code(label: str, code) -> None:
+    """Raise when a controller configuration command is rejected."""
+    if code is not None and int(code) != 0:
+        raise RuntimeError(f"{label} failed with code {code}")
 
 
 @dataclass
@@ -168,17 +175,46 @@ class RealRobotSession:
         self._motion_mode = MODE_POSITION
         self.ensure_ready(MODE_POSITION)
         arm = self.arm
-        arm.set_gravity_direction(DEFAULT_GRAVITY_DIRECTION)
-        code = arm.set_tcp_load(0, [0, 0, 0])
-        if code != 0:
-            print(f"[WARN] set_tcp_load(0) returned code={code} (tcp_load may already be zero)")
-        arm.set_report_tau_or_i(0)
+        _check_config_code("set_gravity_direction", arm.set_gravity_direction(DEFAULT_GRAVITY_DIRECTION))
+        # The controller leaves the ready state (state=5) after a gravity-direction change;
+        # set_tcp_load is rejected with code=9 unless the controller is re-enabled first.
+        self.ensure_ready(MODE_POSITION)
+        _check_config_code("set_tcp_load(0)", arm.set_tcp_load(0, [0, 0, 0]))
+        _check_config_code("set_report_tau_or_i(0)", arm.set_report_tau_or_i(0))
 
-    def configure_for_simulation_collision_check(self) -> None:
+    def configure_for_simulation_collision_check(
+        self,
+        *,
+        simulation_timeout_s: float = SIMULATION_SWITCH_TIMEOUT_S,
+    ) -> None:
         """Dynamics setup plus xArm simulation mode and self-collision detection."""
         self.configure_for_dynamics()
-        self.arm.set_simulation_robot(on_off=True)
-        self.arm.set_self_collision_detection(True)
+        arm = self.arm
+        _check_config_code("set_simulation_robot(True)", arm.set_simulation_robot(on_off=True))
+        self.wait_for_simulation_robot(True, timeout_s=simulation_timeout_s)
+        _check_config_code("set_self_collision_detection(True)", arm.set_self_collision_detection(True))
+
+    def wait_for_simulation_robot(
+        self,
+        enabled: bool,
+        *,
+        timeout_s: float = SIMULATION_SWITCH_TIMEOUT_S,
+        poll_s: float = SETTLE_POLL_S,
+    ) -> None:
+        """Wait until the report stream confirms the simulation-robot switch.
+
+        The controller does not answer commands for several seconds while switching
+        simulation mode on; commands sent in that window time out with code=3.
+        """
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while bool(getattr(self.arm, "is_simulation_robot", False)) != bool(enabled):
+            if time.monotonic() >= deadline:
+                self.arm.set_state(4)
+                raise RuntimeError(
+                    f"simulation robot did not switch to {bool(enabled)} within {timeout_s:.1f} s; "
+                    "controller stopped, no motion was sent"
+                )
+            time.sleep(poll_s)
 
     def print_config(self) -> None:
         arm = self.arm

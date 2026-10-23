@@ -1,6 +1,6 @@
 # xArm5 1305 Assets
 
-动力学 URDF：`xarm5_1305.urdf`（及 G2 / bio_gripper / GLB 组合变体）。
+动力学 URDF：`xarm5_1305.urdf`（及 G2 / bio_gripper / vacuum_gripper / GLB 组合变体）。
 
 ## 碰撞网格
 

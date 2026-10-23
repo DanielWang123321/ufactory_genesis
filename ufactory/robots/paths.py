@@ -57,6 +57,7 @@ def robot_visual_glb_urdf(
     *,
     with_bio_gripper_g2: bool = False,
     with_gripper_g2: bool = False,
+    with_vacuum_gripper: bool = False,
     with_lite6_gripper: bool = False,
     with_lite6_vacuum_gripper: bool = False,
     movable: bool = False,
@@ -65,13 +66,14 @@ def robot_visual_glb_urdf(
     accessory_flags = (
         with_bio_gripper_g2,
         with_gripper_g2,
+        with_vacuum_gripper,
         with_lite6_gripper,
         with_lite6_vacuum_gripper,
     )
     if sum(accessory_flags) > 1:
         raise ValueError(
-            "with_bio_gripper_g2, with_gripper_g2, with_lite6_gripper, "
-            "and with_lite6_vacuum_gripper are mutually exclusive"
+            "with_bio_gripper_g2, with_gripper_g2, with_vacuum_gripper, "
+            "with_lite6_gripper, and with_lite6_vacuum_gripper are mutually exclusive"
         )
     if movable and not (with_gripper_g2 or with_lite6_gripper or with_bio_gripper_g2):
         raise ValueError(
@@ -95,6 +97,10 @@ def robot_visual_glb_urdf(
                 raise ValueError(f"Robot {robot_key} has no Bio Gripper G2 movable visual URDF")
             return _urdf_path(profile.assets_dir, profile.bio_gripper_g2_movable_visual_urdf)
         return _urdf_path(profile.assets_dir, profile.bio_gripper_g2_visual_urdf)
+    if with_vacuum_gripper:
+        if not profile.supports_vacuum_gripper or not profile.vacuum_gripper_visual_urdf:
+            raise ValueError(f"Robot {robot_key} does not support Vacuum Gripper visual URDF")
+        return _urdf_path(profile.assets_dir, profile.vacuum_gripper_visual_urdf)
     if with_lite6_gripper:
         if not profile.supports_lite6_gripper:
             raise ValueError(f"Robot {robot_key} does not support Lite6 Gripper")
@@ -130,6 +136,11 @@ def bio_gripper_g2_urdf() -> str:
 def bio_gripper_g2_movable_visual_urdf() -> str:
     """Standalone Bio Gripper G2 movable visual URDF (no arm)."""
     return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf")
+
+
+def vacuum_gripper_urdf() -> str:
+    """Standalone xArm / UF850 vacuum gripper URDF (no arm)."""
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper.urdf")
 
 
 def microplate_sbs_96_well_urdf() -> str:

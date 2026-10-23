@@ -137,20 +137,88 @@ def test_move_error_reports_waypoint_target_and_status(monkeypatch):
     assert exc_info.value.code == 9
 
 
-def test_configure_for_simulation_collision_check(monkeypatch):
-    monkeypatch.setattr("ufactory.hardware.xarm.time.sleep", lambda _: None)
+def _make_config_arm(*, simulation_switches: bool = True):
     arm = _make_mock_arm(np.zeros(6))
+    arm.is_simulation_robot = False
     arm.set_gravity_direction = MagicMock(return_value=0)
     arm.set_tcp_load = MagicMock(return_value=0)
     arm.set_report_tau_or_i = MagicMock(return_value=0)
-    arm.set_simulation_robot = MagicMock(return_value=0)
     arm.set_self_collision_detection = MagicMock(return_value=0)
+
+    def set_simulation_robot(*, on_off):
+        if simulation_switches:
+            arm.is_simulation_robot = bool(on_off)
+        return 0
+
+    arm.set_simulation_robot = MagicMock(side_effect=set_simulation_robot)
+    return arm
+
+
+def test_configure_for_simulation_collision_check(monkeypatch):
+    monkeypatch.setattr("ufactory.hardware.xarm.time.sleep", lambda _: None)
+    arm = _make_config_arm()
     session = _make_session(arm)
 
     session.configure_for_simulation_collision_check()
 
     arm.set_simulation_robot.assert_called_once_with(on_off=True)
     arm.set_self_collision_detection.assert_called_once_with(True)
+
+
+def test_configure_for_dynamics_reenables_before_set_tcp_load():
+    arm = _make_config_arm()
+    session = _make_session(arm)
+
+    session.configure_for_dynamics()
+
+    names = [c[0] for c in arm.method_calls]
+    i_gravity = names.index("set_gravity_direction")
+    i_tcp_load = names.index("set_tcp_load")
+    assert "set_state" in names[i_gravity:i_tcp_load]
+    arm.set_tcp_load.assert_called_once_with(0, [0, 0, 0])
+
+
+def test_configure_for_dynamics_raises_when_set_tcp_load_rejected():
+    arm = _make_config_arm()
+    arm.set_tcp_load.return_value = 9
+    session = _make_session(arm)
+
+    with pytest.raises(RuntimeError, match=r"set_tcp_load\(0\) failed with code 9"):
+        session.configure_for_dynamics()
+
+
+def test_simulation_switch_waits_for_report_before_next_command(monkeypatch):
+    monkeypatch.setattr("ufactory.hardware.xarm.time.sleep", lambda _: None)
+    arm = _make_config_arm(simulation_switches=False)
+    polls = {"n": 0}
+
+    def fake_sleep(_dt):
+        polls["n"] += 1
+        if polls["n"] == 3:
+            arm.is_simulation_robot = True
+
+    monkeypatch.setattr("ufactory.hardware.session.time.sleep", fake_sleep)
+    session = _make_session(arm)
+
+    session.configure_for_simulation_collision_check()
+
+    assert polls["n"] == 3
+    arm.set_self_collision_detection.assert_called_once_with(True)
+
+
+def test_simulation_switch_timeout_stops_without_motion(monkeypatch):
+    clock = {"t": 0.0}
+    monkeypatch.setattr("ufactory.hardware.session.time.monotonic", lambda: clock["t"])
+    monkeypatch.setattr("ufactory.hardware.session.time.sleep", lambda dt: clock.__setitem__("t", clock["t"] + dt))
+    arm = _make_config_arm(simulation_switches=False)
+    session = _make_session(arm)
+
+    with pytest.raises(RuntimeError, match="simulation robot did not switch"):
+        session.configure_for_simulation_collision_check(simulation_timeout_s=1.0)
+
+    arm.set_state.assert_called_with(4)
+    arm.set_self_collision_detection.assert_not_called()
+    arm.set_servo_angle.assert_not_called()
 
 
 def test_direct_move_default_speed_is_40_deg_s_equivalent(monkeypatch):

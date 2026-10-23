@@ -43,6 +43,8 @@ BIO_GRIPPER_G2_SIM_CLOSED_DRIVE = CLOSE_POS
 BIO_GRIPPER_G2_SIM_OPEN_DRIVE = OPEN_POS
 
 _DEFAULT_HOLD_STEPS = 200
+BIO_GRIPPER_G2_DEMO_HOLD_S = 0.5
+BIO_GRIPPER_G2_ARRIVAL_TOL_MM = 1.0
 
 
 def clamp_bio_gripper_g2_gap_m(gap_m: float) -> float:
@@ -88,13 +90,28 @@ class BioGripperG2:
     CLOSED_GAP = CLOSED_GAP
     OPEN_GAP = OPEN_GAP
 
-    def __init__(self, robot):
+    def __init__(
+        self,
+        robot,
+        *,
+        demo_dt: float = 0.02,
+        demo_hold_s: float = BIO_GRIPPER_G2_DEMO_HOLD_S,
+        arrival_tol_mm: float = BIO_GRIPPER_G2_ARRIVAL_TOL_MM,
+    ):
         """Discover Bio Gripper G2 joints on *robot*."""
         self._robot = robot
         joint_map = {j.name.split("/")[-1]: j for j in getattr(robot, "joints", ())}
         self._right_joint = joint_map.get(RIGHT_JOINT)
         self._left_joint = joint_map.get(LEFT_JOINT)
         self._controller = None
+        self.demo_dt = float(demo_dt)
+        self.demo_hold_s = float(demo_hold_s)
+        self.arrival_tol_mm = float(arrival_tol_mm)
+        self.demo_hold_steps_required = max(1, int(round(self.demo_hold_s / self.demo_dt)))
+        self.demo_phase: str = "closed"
+        self.demo_hold_steps: int = 0
+        self.completed_cycles: int = 0
+        self._pending_observation: bool = False
 
     # -- discovery ----------------------------------------------------------
 
@@ -125,6 +142,52 @@ class BioGripperG2:
         phase = (step // hold_steps) % 2
         return CLOSE_POS if phase else OPEN_POS
 
+    def step_demo_target(self) -> tuple[float, str]:
+        """Return ``(target_drive, phase_label)`` for the arrival-confirmed 0.5 s hold demo cycle."""
+        if self._pending_observation:
+            self.on_step_completed(self._robot)
+        self._pending_observation = True
+        target = CLOSE_POS if self.demo_phase == "closed" else OPEN_POS
+        return target, self.demo_phase
+
+    def on_step_completed(self, _robot=None) -> None:
+        if not self._pending_observation:
+            return
+        self._pending_observation = False
+        if self._is_at_demo_target():
+            self.demo_hold_steps += 1
+            if self.demo_hold_steps >= self.demo_hold_steps_required:
+                self.demo_hold_steps = 0
+                if self.demo_phase == "open":
+                    self.completed_cycles += 1
+                    self.demo_phase = "closed"
+                else:
+                    self.demo_phase = "open"
+        else:
+            self.demo_hold_steps = 0
+
+    def _is_at_demo_target(self) -> bool:
+        settings = getattr(
+            self._robot,
+            "_ufactory_bio_g2_demo_settings",
+            (BIO_GRIPPER_G2_CLOSED_GAP_MM, 50.0, 50.0, None),
+        )
+        closed_gap_mm = float(settings[0])
+        speed_percent = float(settings[1])
+        speed_mm_s = settings[3] if len(settings) >= 4 else None
+        if speed_mm_s is None and speed_percent <= 0.0:
+            return False
+        target_gap_mm = closed_gap_mm if self.demo_phase == "closed" else BIO_GRIPPER_G2_OPEN_GAP_MM
+        controller = self._controller or getattr(self._robot, "_ufactory_bio_g2_controller", None)
+        if controller is None:
+            return True
+        if hasattr(controller, "telemetry"):
+            telemetry = controller.telemetry()
+            ref_gap_mm = float(telemetry.get("reference_gap_mm", target_gap_mm))
+            if abs(ref_gap_mm - target_gap_mm) > 1e-4:
+                return False
+        return abs(self.gap_mm() - target_gap_mm) <= self.arrival_tol_mm
+
     # -- PD & calibrated servo control --------------------------------------
 
     def setup_pd(self) -> None:
@@ -139,6 +202,7 @@ class BioGripperG2:
         configure_bio_g2_mimic_constraints(self._robot)
         self._controller = BioG2GenesisController(self._robot, initial_position_mm=BIO_GRIPPER_G2_OPEN_GAP_MM)
         self._robot._ufactory_bio_g2_controller = self._controller
+        self._robot._ufactory_bio_g2_demo_cycle = self
         self.set_pose(OPEN_POS)
 
     def set_pose(self, right_value: float) -> None:

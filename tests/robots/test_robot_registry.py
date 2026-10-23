@@ -11,6 +11,7 @@ from ufactory.robots.paths import (
     lite6_gripper_movable_visual_urdf,
     robot_urdf,
     robot_visual_glb_urdf,
+    vacuum_gripper_urdf,
     xarm5_urdf,
     xarm6_urdf,
     xarm7_urdf,
@@ -111,3 +112,29 @@ def test_lite6_movable_gripper_defaults_to_reversed_assets() -> None:
                 assert box is not None
                 actual.append((collision.find("origin").get("xyz"), box.get("size")))
             assert actual == boxes
+
+
+def test_vacuum_gripper_urdf_resolution() -> None:
+    standalone = Path(vacuum_gripper_urdf())
+    assert standalone.name == "vacuum_gripper.urdf"
+    assert standalone.is_file()
+
+    expected = {
+        "xarm5": "xarm5_1305_vacuum_gripper_visual.glb.urdf",
+        "xarm6": "xarm6_1305_vacuum_gripper_visual.glb.urdf",
+        "xarm7": "xarm7_1305_vacuum_gripper_visual.glb.urdf",
+        "uf850": "uf850_vacuum_gripper_visual.glb.urdf",
+    }
+    for robot, filename in expected.items():
+        combo = Path(robot_visual_glb_urdf(robot, with_vacuum_gripper=True))
+        assert combo.name == filename
+        assert combo.is_file()
+
+    with pytest.raises(ValueError, match="does not support Vacuum Gripper"):
+        robot_visual_glb_urdf("lite6", with_vacuum_gripper=True)
+
+    with pytest.raises(ValueError, match="movable=True requires"):
+        robot_visual_glb_urdf("xarm6", with_vacuum_gripper=True, movable=True)
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        robot_visual_glb_urdf("xarm6", with_gripper_g2=True, with_vacuum_gripper=True)

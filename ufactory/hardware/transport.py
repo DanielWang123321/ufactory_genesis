@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -15,11 +16,18 @@ from ufactory.hardware.xarm import (
     wait_for_servo_motion_ready,
 )
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD, wrap_rpy_diff_rad
+from ufactory.kinematics.tcp_offset import pose_flange_to_tcp
 from ufactory.safety.interfaces import ArmState
 
 
 class XArmTransport:
-    """Thin SDK adapter; it never clears errors, warnings, or resumes itself."""
+    """Thin SDK adapter; it never clears errors, warnings, or resumes itself.
+
+    Program Cartesian targets are flange (``link6``) poses. The controller
+    interprets ``set_servo_cartesian``/``set_position``/``get_position`` in its
+    TCP frame, so every Cartesian command is converted with the controller
+    ``tcp_offset`` (``T_tcp = T_flange @ T_offset``) before it is sent.
+    """
 
     def __init__(
         self,
@@ -30,6 +38,7 @@ class XArmTransport:
         cartesian_orientation_rpy_rad: tuple[float, float, float] = GRIPPER_DOWN_RPY_RAD,
         speed: float = 0.0,
         acceleration: float = 0.0,
+        tcp_offset: Sequence[float] | np.ndarray | None = None,
     ) -> None:
         self.arm = arm
         self.robot_key = robot_key
@@ -37,6 +46,25 @@ class XArmTransport:
         self.cartesian_orientation_rpy_rad = tuple(map(float, cartesian_orientation_rpy_rad))
         self.speed = float(speed)
         self.acceleration = float(acceleration)
+        offset = np.zeros(6, dtype=np.float64) if tcp_offset is None else np.asarray(tcp_offset, dtype=np.float64)
+        offset = offset.reshape(-1)
+        if offset.shape != (6,) or not np.all(np.isfinite(offset)):
+            raise ValueError("tcp_offset must contain 6 finite values [x_mm, y_mm, z_mm, roll, pitch, yaw]")
+        self.tcp_offset = offset
+
+    def flange_to_command_pose(
+        self,
+        xyz_m: np.ndarray,
+        rpy_rad: Sequence[float] | None = None,
+    ) -> list[float]:
+        """Convert a flange pose (xyz in m) to the controller TCP pose ``[mm, mm, mm, rad, rad, rad]``."""
+
+        xyz = np.asarray(xyz_m, dtype=np.float64).reshape(-1)
+        if xyz.shape != (3,) or not np.all(np.isfinite(xyz)):
+            raise ValueError("flange position must contain 3 finite values")
+        rpy = self.cartesian_orientation_rpy_rad if rpy_rad is None else tuple(map(float, rpy_rad))
+        flange = [*(xyz * 1000.0).tolist(), *rpy]
+        return pose_flange_to_tcp(flange, self.tcp_offset).tolist()
 
     def read_state(self) -> ArmState:
         code, angles = self.arm.get_servo_angle(is_radian=True)
@@ -76,10 +104,9 @@ class XArmTransport:
     def send_cartesian_target(self, pose: np.ndarray) -> int:
         target = np.asarray(pose, dtype=np.float64).reshape(-1)
         if target.size == 3:
-            xyz_mm = (target * 1000.0).tolist()
-            command = [*xyz_mm, *self.cartesian_orientation_rpy_rad]
+            command = self.flange_to_command_pose(target)
         elif target.size == 6:
-            command = [*(target[:3] * 1000.0).tolist(), *target[3:].tolist()]
+            command = self.flange_to_command_pose(target[:3], target[3:])
         else:
             raise ValueError("Cartesian target must contain xyz or xyz+rpy")
         return int(
@@ -182,13 +209,15 @@ class XArmTransport:
     ) -> tuple[float, float]:
         """Move to a known Cartesian start with MODE_POSITION ``set_position``.
 
+        ``xyz_m``/``rpy_rad`` describe the flange pose; the command and the
+        feedback comparison use the controller TCP pose.
         Returns ``(xyz_err_mm, rpy_err_rad)`` after the blocking move.
         """
 
         target = np.asarray(xyz_m, dtype=np.float64).reshape(-1)
         if target.shape != (3,) or not np.all(np.isfinite(target)):
             raise ValueError("preposition Cartesian target must be finite xyz")
-        orientation = self.cartesian_orientation_rpy_rad if rpy_rad is None else tuple(map(float, rpy_rad))
+        pose = self.flange_to_command_pose(target, rpy_rad)
         self.leave_software_stop()
         state = self.read_state()
         if state.error_code != 0:
@@ -196,7 +225,6 @@ class XArmTransport:
         if int(getattr(self.arm, "warn_code", 0)) != 0:
             raise RuntimeError("active controller warning must be inspected manually before preposition")
         prepare_arm_for_motion(self.arm, mode=MODE_POSITION)
-        pose = [*(target * 1000.0).tolist(), *orientation]
         code = self.arm.set_position(
             *pose,
             speed=float(speed_mm_s),
@@ -215,10 +243,8 @@ class XArmTransport:
         if reported_arr.size < 6 or not np.all(np.isfinite(reported_arr[:6])):
             self.stop()
             raise RuntimeError("preposition Cartesian feedback was invalid; controller was stopped")
-        xyz_err = float(np.linalg.norm(reported_arr[:3] - target * 1000.0))
-        rpy_err = float(
-            np.linalg.norm(wrap_rpy_diff_rad(reported_arr[3:6] - np.asarray(orientation, dtype=np.float64)))
-        )
+        xyz_err = float(np.linalg.norm(reported_arr[:3] - np.asarray(pose[:3], dtype=np.float64)))
+        rpy_err = float(np.linalg.norm(wrap_rpy_diff_rad(reported_arr[3:6] - np.asarray(pose[3:6], dtype=np.float64))))
         if xyz_err > float(tolerance_mm):
             self.stop()
             raise RuntimeError(
