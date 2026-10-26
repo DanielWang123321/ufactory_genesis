@@ -173,6 +173,57 @@ def test_support_field_patch_matches_installed_genesis(monkeypatch):
     assert compat.patch_support_field_direction_cell(support_field) is False
 
 
+def test_mesh_decimate_patch_skips_simplify_when_process_drops_faces_below_target():
+    import numpy as np
+
+    class _FakeTrimesh:
+        def __init__(self, n_faces: int, n_after_process: int) -> None:
+            self.vertices = np.zeros((10, 3))
+            self.faces = np.zeros((n_faces, 3), dtype=int)
+            self._n_after = n_after_process
+            self.process_calls = 0
+
+        def process(self, validate: bool = False) -> None:
+            assert validate is True
+            self.process_calls += 1
+            self.faces = np.zeros((self._n_after, 3), dtype=int)
+
+    class _FakeMesh:
+        def __init__(self, tmesh: _FakeTrimesh) -> None:
+            self._mesh = tmesh
+            self.simplify_called = False
+            self.visuals_cleared = False
+
+        def clear_visuals(self) -> None:
+            self.visuals_cleared = True
+
+        def decimate(self, decimate_face_num: int, decimate_aggressiveness: int) -> None:
+            if self._mesh.vertices.shape[0] > 3 and len(self._mesh.faces) > decimate_face_num:
+                self._mesh.process(validate=True)
+                if len(self._mesh.faces) <= decimate_face_num:
+                    raise ValueError(f"target_count must be less than the number of faces {len(self._mesh.faces)}")
+                self.simplify_called = True
+            self.clear_visuals()
+
+    assert compat.patch_mesh_decimate(_FakeMesh) is True
+    assert compat.patch_mesh_decimate(_FakeMesh) is False
+
+    # Case 1: 504 faces drop to 499 after process(validate=True) -> skips simplify, clears visuals, does not raise.
+    m1 = _FakeMesh(_FakeTrimesh(504, 499))
+    m1.decimate(500, 2)
+    assert len(m1._mesh.faces) == 499
+    assert m1._mesh.process_calls == 1
+    assert m1.simplify_called is False
+    assert m1.visuals_cleared is True
+
+    # Case 2: 504 faces drop to 503 after process(validate=True) -> still simplifies.
+    m2 = _FakeMesh(_FakeTrimesh(504, 503))
+    m2.decimate(500, 2)
+    assert len(m2._mesh.faces) == 503
+    assert m2.simplify_called is True
+    assert m2.visuals_cleared is True
+
+
 def _parse_mesh_glb(path, group_by_material, scale, is_mesh_zup, surface):
     return path, group_by_material, scale, is_mesh_zup, surface
 

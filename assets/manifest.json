@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.3.3",
+  "manifest_version": "0.3.4",
   "required_paths": [
     "assets/configs/runtime/motion/default.yaml",
     "assets/configs/runtime/safety/default.yaml",
@@ -37,7 +37,7 @@
     "assets/configs/runtime/safety/default.yaml": "081ab8646ebfa46e8535ae4c07cd25be0e7122d569cad77c1a08858978f0f451",
     "assets/configs/runtime/safety/robots/lite6.yaml": "1deb54fc773c4d2449ec1b61485e435ecf4ddc369f9ba553d2eb92872af709c5",
     "assets/configs/runtime/simulation/default.yaml": "cd9190764697a78c5a2e736e19448b70a823b875fa546ce48edf7f85dc72e61a",
-    "assets/configs/runtime/tasks/packaging_showcase.yaml": "20424d5cb58cb0272492ca12009fb617e9bccb6be24698eca853680af7da9e32",
+    "assets/configs/runtime/tasks/packaging_showcase.yaml": "164aff6a872a60bd241a7edb2b807371b26616a3c154f6ea672e37e7b57f203a",
     "assets/configs/runtime/tasks/pick_place.yaml": "269ae8ad342132a7907609d8fff7b4147f6399727bf60266a9483729a8958f9e",
     "assets/configs/runtime/tasks/reach.yaml": "15fce661d05c20b2e179eb54f5e585d6bcdbee70a0a0df0893c07c5fc934cd82",
     "assets/configs/runtime/tasks/robots/lite6_packaging_showcase.yaml": "6c3b455f0a6f43186376a72caa605b65b426f993b8a5b1cebdc79f1925aff5b7",

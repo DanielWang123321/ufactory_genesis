@@ -19,7 +19,7 @@ task:
     simulation_grasp_center_compensation_xy_m: [0.0025, 0.0000]
     simulation_arm_kp_scale: 1.5
     simulation_release_duration_s: 0.020
-    # Genesis 1.4.4 at 32 substeps releases cleanly with the one-tick full-open
+    # Genesis 1.4.4/1.4.5 at 32 substeps releases cleanly with the one-tick full-open
     # target. A gradual preload-relax phase lets gravity start the drop before
     # the G2 fingers have opened by the required 3 mm clearance.
     simulation_pre_release_relax_gap_m: 0.029

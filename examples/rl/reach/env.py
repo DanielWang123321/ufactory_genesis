@@ -100,7 +100,7 @@ class XArm6ReachEnv:
             ),
             show_viewer=show_viewer,
         )
-        # Genesis 1.4.4 hold at the default pose stays within a few milliradians
+        # Genesis 1.4.4/1.4.5 hold at the default pose stays within a few milliradians
         # with a colliding ground plane, so the plane keeps collision.
         self.scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
         self.robot = self.scene.add_entity(

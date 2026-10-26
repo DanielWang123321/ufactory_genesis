@@ -8,9 +8,13 @@ on:
 
 jobs:
   fast:
-    name: project-check fast (CPU)
+    name: project-check fast (CPU, py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install package (dev only; no Genesis / Torch)
@@ -33,5 +37,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: project-check-fast
+          name: project-check-fast-py${{ matrix.python-version }}
           path: reports/project-check/ci_fast.json

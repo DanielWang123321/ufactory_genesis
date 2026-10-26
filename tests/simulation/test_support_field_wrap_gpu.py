@@ -74,9 +74,13 @@ _SCRIPT = textwrap.dedent(
 )
 
 
-def test_direction_cell_wraps_azimuth_near_minus_pi():
+def test_direction_cell_wraps_azimuth_near_minus_pi(tmp_path: Path) -> None:
+    # Write to a file: Python 3.12 does not populate linecache for ``python -c``,
+    # and ``@qd.kernel`` requires ``inspect.getsourcelines`` to locate source.
+    script_path = tmp_path / "support_field_wrap_probe.py"
+    script_path.write_text(_SCRIPT, encoding="utf-8")
     result = subprocess.run(
-        [sys.executable, "-c", _SCRIPT],
+        [sys.executable, str(script_path)],
         cwd=Path(__file__).resolve().parents[2],
         capture_output=True,
         text=True,

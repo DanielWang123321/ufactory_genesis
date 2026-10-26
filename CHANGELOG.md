@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-10-26
+
 ### Changed
 
 - Set the Genesis World reference baseline to **1.4.5** (minimum stays **1.4.2**; 1.4.2 to 1.4.4 emit one unvalidated-baseline warning). The lock file pins Genesis 1.4.5, trimesh 5.2.0, and zstandard 0.25.0.
@@ -16,11 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bio Gripper G2 microplate simulation now uses the shared `require_genesis_runtime` check instead of requiring exactly `genesis-world==1.4.4`.
 - Documented why `torch==2.10.0` is pinned (validated baseline; last PyPI default CUDA 12.x build) and how to install another build of the same version (`+cu126`, `+cu130`, `+cpu`) before `.[sim]`.
 - `project-check` lock audit also ignores `PYSEC-2025-194`, the alias of the already ignored `CVE-2025-3000` (torch 2.10.0, `torch.jit.script`, not used).
+- GitHub Actions CI (`project-check fast`) now runs across a Python `3.12` and `3.13` matrix.
+- Rechecked three Genesis 1.4.4 behavior notes under 1.4.5 and updated them to `1.4.4/1.4.5`: Reach default-pose hold error (max 4.5 mrad), packaging showcase one-tick G2 release (`test_packaging_physics_grasp_and_drop_regression` passes), and xArm 5 pose `[90, -90, -60, 160, -90]°` (no false self-collision, J4 not saturated).
 
 ### Fixed
 
 - `packaging` moved from the `[sim]` extra to the core dependencies. `ufactory.simulation.compat` imports it at module level, so `dynamics-hardware-check`, `dynamics-sim-check`, and `ufactory.visualization` failed with `ModuleNotFoundError` in a clean environment installed with only `.[real]` or no extras.
 - Worked around a Genesis 1.4.5 SupportField regression (commit `375fd7eb`): for directions with azimuth just above -π the cell index underflows to -1 and reads the previous geom's support table or the wrong chart, producing false penetrations (the Bio G2 microplate was launched off the nest during reset). `require_genesis_runtime` replaces `_func_direction_cell` with a copy that restores the lower-bound wrap, only when the installed source matches the known 1.4.5 implementation; 1.4.4 and older are untouched.
+- Worked around a Genesis `Mesh.decimate` ordering bug (`patch_mesh_decimate` in `ufactory.simulation.compat`): `Mesh.decimate` checked `len(faces) > decimate_face_num` before calling `process(validate=True)`, so when degenerate-face removal dropped a mesh from just above 500 faces to below 500 (e.g. `vacuum_gripper` `hull_012_cup_01.stl` going from 504 to 499 faces with SciPy 1.18.1), `fast_simplification.simplify` raised `ValueError: target_count must be less than the number of faces`.
+- `tests/simulation/test_support_field_wrap_gpu.py` now writes its subprocess probe script to a temporary `.py` file instead of passing `-c`, because Python 3.12 does not populate `linecache` for `<string>` and `@qd.kernel` requires `inspect.getsourcelines`.
 
 ### Removed
 

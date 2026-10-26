@@ -150,6 +150,7 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
     )
     if getattr(gs_module, "__name__", None) == "genesis":
         patch_support_field_direction_cell()
+        patch_mesh_decimate(getattr(gs_module, "Mesh", None))
     return gs_module
 
 
@@ -157,6 +158,42 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
 # (Genesis 1.4.5, commit 375fd7eb). Only these exact implementations are replaced.
 _DIRECTION_CELL_UNDERFLOW_SHA256 = frozenset({"42e904138606e51fd8b66fbc707f63e1ced0b623b3ec4d94f63d64d2b5effabd"})
 _SUPPORT_FIELD_PATCH_LOCK = threading.Lock()
+_MESH_DECIMATE_PATCH_ATTR = "_ufactory_decimate_post_process_patched"
+
+
+def patch_mesh_decimate(mesh_cls: Any | None = None) -> bool:
+    """Ensure ``Mesh.decimate`` rechecks the face count after ``process(validate=True)``.
+
+    Genesis 1.4.2-1.4.5 checks ``len(self._mesh.faces) > decimate_face_num`` before calling
+    ``self._mesh.process(validate=True)``. When ``process(validate=True)`` drops degenerate faces and brings the face
+    count to or below ``decimate_face_num`` (e.g. ``hull_012_cup_01.stl`` from 504 to 499 faces under SciPy 1.18.1),
+    ``fast_simplification.simplify`` raises ``ValueError: ``target_count`` must be less than the number of faces``.
+    Running ``process(validate=True)`` before delegating lets the existing guard inside ``Mesh.decimate`` skip
+    ``fast_simplification.simplify`` when the cleaned mesh already satisfies ``decimate_face_num``, while still running
+    ``clear_visuals()`` and the ``@mutates_tmesh`` cache release.
+    """
+
+    with _SUPPORT_FIELD_PATCH_LOCK:
+        if mesh_cls is None:
+            try:
+                from genesis.engine.mesh import Mesh as mesh_cls
+            except ImportError:
+                return False
+        if mesh_cls is None:
+            return False
+        original = getattr(mesh_cls, "decimate", None)
+        if not callable(original) or getattr(original, _MESH_DECIMATE_PATCH_ATTR, False):
+            return False
+
+        def _decimate_with_post_process_guard(self: Any, decimate_face_num: int, decimate_aggressiveness: int) -> Any:
+            tmesh = getattr(self, "_mesh", None)
+            if tmesh is not None and tmesh.vertices.shape[0] > 3 and len(tmesh.faces) > decimate_face_num:
+                tmesh.process(validate=True)
+            return original(self, decimate_face_num, decimate_aggressiveness)
+
+        setattr(_decimate_with_post_process_guard, _MESH_DECIMATE_PATCH_ATTR, True)
+        mesh_cls.decimate = _decimate_with_post_process_guard
+        return True
 
 
 def _direction_cell_lacks_lower_wrap(source: str) -> bool:
