@@ -4,7 +4,7 @@
 
 ## 前置条件
 
-已验证 Python 3.12/3.13、Genesis World 1.4.4，Genesis 最低版本为 1.4.2。1.4.2 和 1.4.3 会警告一次；更高版本须通过接口检查。详见[版本策略](../ROADMAP.md)。
+已验证 Python 3.12/3.13、Genesis World 1.4.5，Genesis 最低版本为 1.4.2。1.4.2～1.4.4 会警告一次；1.4.5 同时为最高版本，更高版本会被拒绝。详见[版本策略](../ROADMAP.md)。
 
 1. 克隆本仓库，并在**仓库根目录**运行命令。
 2. 使用 editable install（仅支持源码树；不支持 wheel/sdist）：
@@ -18,7 +18,14 @@ pip install -e ".[sim]"
 #   pip install -e ".[sim,rl]"        # Linux/NVIDIA 到达与抓放
 #   pip install -e ".[sim,real]"      # xArm SDK + Pinocchio/Coal（dry-run / sdk-sim / real 安全预检）
 #   pip install -e ".[sim,dynamics]"  # 动力学参考检查
+
+# 默认：PyPI 上的 torch 2.10.0（CUDA 12.8）。已验证构建：2.10.0+cu128。
+# 需要其他构建时，先安装同版本 torch（cu126、cu130、cpu 未验证）：
+#   pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126   # 或 cu130 / cpu
+#   pip install -e ".[sim]"
 ```
+
+`[sim]` 固定 `torch==2.10.0`；需要其他 torch 版本的包（如 lerobot）请使用独立虚拟环境。
 
 3. 运行依赖 Genesis 的流程前，设置可写的 Numba 缓存目录：
 
@@ -31,7 +38,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 ```
 
 4. 支持的 `--robot`：`xarm5`、`xarm6`、`xarm7`、`uf850`、`lite6`。
-5. **Windows / 无可用 GPU：** 先装 CPU 版 PyTorch，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。强化学习需要 Linux/NVIDIA GPU。
+5. **Windows / 无可用 GPU：** 先从 CPU 索引（`--index-url https://download.pytorch.org/whl/cpu`）安装 `torch==2.10.0`，再 `pip install -e ".[sim]"`。可视化、抓放、装箱命令加 `--backend cpu`（有显卡但不被 Genesis 支持时，不要依赖 GPU 自动回退）。强化学习需要 Linux/NVIDIA GPU。
 6. **Windows 下查看器无报错退出：** 若 `view_robot.py` 在 `Building visualizer...` 之后无窗口直接回到提示符：
 
 ```powershell

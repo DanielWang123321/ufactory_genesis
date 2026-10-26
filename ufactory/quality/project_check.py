@@ -58,6 +58,7 @@ FAST_CHECK_NAMES = (
 PIP_AUDIT_IGNORED_VULNS = (
     "PYSEC-2026-139",  # torch 2.10.0
     "CVE-2025-3000",  # torch 2.10.0
+    "PYSEC-2025-194",  # torch 2.10.0; alias of CVE-2025-3000 (torch.jit.script, not used)
     "PYSEC-2026-165",
     "PYSEC-2026-2249",
     "PYSEC-2026-2250",

@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-Validated with Python 3.12/3.13 and Genesis World 1.4.4; the minimum Genesis version is 1.4.2. Versions 1.4.2 and 1.4.3 warn once; newer versions must pass the hook checks. See the [version policy](../ROADMAP.md).
+Validated with Python 3.12/3.13 and Genesis World 1.4.5; the minimum Genesis version is 1.4.2. Versions 1.4.2 to 1.4.4 warn once; 1.4.5 is also the maximum, and newer versions are rejected. See the [version policy](../ROADMAP.md).
 
 1. Clone this repository and run commands from the repository root.
 2. Editable install (source-only; wheels/sdists are unsupported):
@@ -18,7 +18,14 @@ pip install -e ".[sim]"
 #   pip install -e ".[sim,rl]"        # Linux/NVIDIA reach and pick-place
 #   pip install -e ".[sim,real]"      # xArm SDK + Pinocchio/Coal for dry-run/sdk-sim/real safety
 #   pip install -e ".[sim,dynamics]"  # dynamics reference checks
+
+# Default: PyPI build of torch 2.10.0 (CUDA 12.8). Validated build: 2.10.0+cu128.
+# For another build, install the same torch version first (not validated: cu126, cu130, cpu):
+#   pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126   # or cu130 / cpu
+#   pip install -e ".[sim]"
 ```
+
+`[sim]` pins `torch==2.10.0`; use a separate virtual environment for packages that require another torch version (for example lerobot).
 
 3. Set a writable Numba cache directory before Genesis-backed runs:
 
@@ -32,7 +39,7 @@ export NUMBA_CACHE_DIR=~/.cache/numba
 
 4. Supported `--robot` keys: `xarm5`, `xarm6`, `xarm7`, `uf850`, `lite6`.
 
-5. **Windows / no supported GPU:** install the CPU PyTorch wheel first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). RL requires Linux/NVIDIA GPUs.
+5. **Windows / no supported GPU:** install `torch==2.10.0` from the CPU index (`--index-url https://download.pytorch.org/whl/cpu`) first, then `pip install -e ".[sim]"`. Pass `--backend cpu` on visualization, pick-place, and packaging commands (do not rely on GPU auto-fallback when an unsupported card still enumerates under CUDA). RL requires Linux/NVIDIA GPUs.
 
 6. **Windows, viewer exits with no error:** if `view_robot.py` returns to the prompt with no window after `Building visualizer...`:
 

@@ -1,15 +1,21 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.4.2 remains the minimum. Genesis 1.4.4 is the reference baseline with
-maintainer simulation checks. 1.4.2 and 1.4.3 still run and emit one warning;
-their contact results are not part of that verification.
+Genesis 1.4.2 remains the minimum and 1.4.5 is the maximum; newer releases are
+rejected until verified (keep ``MAX_GENESIS_VERSION`` in sync with the ``[sim]``
+extra). Genesis 1.4.5 is the reference baseline with maintainer simulation
+checks. 1.4.2 to 1.4.4 still run and emit one warning;
+their contact results are not part of that verification. On 1.4.5 the
+SupportField azimuth index underflow is patched at runtime (see
+``patch_support_field_direction_cell``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from importlib import metadata
 import inspect
+import textwrap
 import threading
 from types import ModuleType
 from typing import Any, Callable
@@ -19,7 +25,8 @@ from packaging.version import InvalidVersion, Version
 
 
 MIN_GENESIS_VERSION = Version("1.4.2")
-VALIDATED_GENESIS_VERSION = Version("1.4.4")  # reference / pinned baseline alias
+VALIDATED_GENESIS_VERSION = Version("1.4.5")  # reference / pinned baseline alias
+MAX_GENESIS_VERSION = Version("1.4.5")  # keep in sync with the [sim] extra upper bound
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -37,13 +44,13 @@ class DeferredViewerAPI:
 
 
 def require_genesis_version() -> Version:
-    """Return the installed Genesis version after enforcing the minimum."""
+    """Return the installed Genesis version after enforcing the minimum and maximum."""
 
     try:
         raw_version = metadata.version("genesis-world")
     except metadata.PackageNotFoundError as exc:
         raise GenesisCompatibilityError(
-            f"Genesis is not installed; install genesis-world>={MIN_GENESIS_VERSION}."
+            f"Genesis is not installed; install genesis-world>={MIN_GENESIS_VERSION},<={MAX_GENESIS_VERSION}."
         ) from exc
     try:
         version = Version(raw_version)
@@ -51,6 +58,11 @@ def require_genesis_version() -> Version:
         raise GenesisCompatibilityError(f"Cannot parse installed Genesis version: {raw_version!r}.") from exc
     if version < MIN_GENESIS_VERSION:
         raise GenesisCompatibilityError(f"Genesis>={MIN_GENESIS_VERSION} is required; found {raw_version}.")
+    if version > MAX_GENESIS_VERSION:
+        raise GenesisCompatibilityError(
+            f"Genesis<={MAX_GENESIS_VERSION} is required; found {raw_version}. "
+            "Newer releases are not verified by this project."
+        )
     if version != VALIDATED_GENESIS_VERSION:
         _warn_unvalidated_version(version)
     return version
@@ -136,7 +148,61 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
         },
         "RigidEntity.inverse_kinematics",
     )
+    if getattr(gs_module, "__name__", None) == "genesis":
+        patch_support_field_direction_cell()
     return gs_module
+
+
+# Dedented source of SupportField._func_direction_cell releases that carry the azimuth index underflow
+# (Genesis 1.4.5, commit 375fd7eb). Only these exact implementations are replaced.
+_DIRECTION_CELL_UNDERFLOW_SHA256 = frozenset({"42e904138606e51fd8b66fbc707f63e1ced0b623b3ec4d94f63d64d2b5effabd"})
+_SUPPORT_FIELD_PATCH_LOCK = threading.Lock()
+
+
+def _direction_cell_lacks_lower_wrap(source: str) -> bool:
+    return "if i >= support_res:" in source and "if i < 0:" not in source
+
+
+def patch_support_field_direction_cell(support_field: ModuleType | Any | None = None) -> bool:
+    """Restore the lower-bound wrap of the SupportField azimuth index.
+
+    Genesis 1.4.5 replaced ``% support_res`` with an upper-bound check only. For a direction whose azimuth is just
+    above -pi, rounding yields index -1 and the lookup reads the previous geom's support table, or the wrong chart of
+    the same geom, which can create false penetrations. Genesis 1.4.4 and older are unaffected and left untouched.
+
+    Must run before the first scene build compiles the collision kernels. Returns True when this call patched.
+    """
+
+    with _SUPPORT_FIELD_PATCH_LOCK:
+        if support_field is None:
+            try:
+                from genesis.engine.solvers.rigid.collider import support_field
+            except ImportError:
+                return False
+        current = getattr(support_field, "_func_direction_cell", None)
+        if current is None:
+            return False
+        try:
+            source = textwrap.dedent(inspect.getsource(current))
+        except (OSError, TypeError) as exc:
+            raise GenesisCompatibilityError("Cannot inspect Genesis SupportField._func_direction_cell source.") from exc
+        if not _direction_cell_lacks_lower_wrap(source):
+            return False
+        if hashlib.sha256(source.encode()).hexdigest() not in _DIRECTION_CELL_UNDERFLOW_SHA256:
+            raise GenesisCompatibilityError(
+                "Genesis SupportField._func_direction_cell lacks the lower-bound azimuth wrap, but its implementation "
+                "is not a known release; the compatibility patch cannot be applied safely."
+            )
+        support_field._func_direction_cell = _build_direction_cell_wrap_fix()
+        return True
+
+
+def _build_direction_cell_wrap_fix() -> Callable[..., Any]:
+    # Kept in its own module: Quadrants resolves type annotations at decoration time, which postponed annotations
+    # (``from __future__ import annotations`` here) would break.
+    from ufactory.simulation._support_field_fix import func_direction_cell
+
+    return func_direction_cell
 
 
 def require_genesis_capabilities(

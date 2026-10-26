@@ -17,6 +17,7 @@ maintainers = [
 keywords = ["ufactory", "xarm", "genesis", "simulation", "robotics", "urdf", "robot-learning"]
 dependencies = [
     "numpy",
+    "packaging>=24",
     "pyyaml",
 ]
 classifiers = [
@@ -55,13 +56,15 @@ real = [
     "coal==3.0.3",
 ]
 sim = [
-    "genesis-world>=1.4.2",
-    "packaging>=24",
+    "genesis-world>=1.4.2,<=1.4.5",
+    # Validated baseline. Last release whose PyPI default build is CUDA 12.x (driver >= 570);
+    # local builds such as 2.10.0+cu126 / +cu130 / +cpu also satisfy this pin.
     "torch==2.10.0",
     "trimesh>=4.8.2",
 ]
 rl = [
-    "rsl-rl-lib>=5.4.2",
+    "rsl-rl-lib>=5.4.2,<6",
+    "tensordict>=0.7.0",
     "tensorboard",
 ]
 [project.scripts]

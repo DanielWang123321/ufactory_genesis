@@ -1,7 +1,11 @@
-"""Version and private-hook contract tests for the Genesis 1.4.4 baseline."""
+"""Version and private-hook contract tests for the Genesis 1.4.5 baseline."""
 
 from __future__ import annotations
 
+import hashlib
+import inspect
+import math
+import textwrap
 from types import SimpleNamespace
 import warnings
 
@@ -23,7 +27,7 @@ def test_version_below_minimum_is_rejected(monkeypatch):
 
 
 def test_validated_version_is_accepted_without_warning(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -38,21 +42,48 @@ def test_older_version_is_rejected(monkeypatch):
         compat.require_genesis_version()
 
 
-@pytest.mark.parametrize("version", ["1.4.2", "1.4.3"])
+@pytest.mark.parametrize("version", ["1.4.2", "1.4.3", "1.4.4"])
 def test_unvalidated_supported_version_warns_only_once(monkeypatch, version: str):
     monkeypatch.setattr(compat.metadata, "version", lambda _name: version)
 
-    with pytest.warns(RuntimeWarning, match="only 1.4.4 is the project's reference baseline") as caught:
+    with pytest.warns(RuntimeWarning, match="only 1.4.5 is the project's reference baseline") as caught:
         compat.require_genesis_version()
         compat.require_genesis_version()
     assert len(caught) == 1
 
 
-def test_newer_version_with_complete_capabilities_passes_and_warns(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+@pytest.mark.parametrize("version", ["1.4.5.post1", "1.4.6.dev0", "1.4.6", "1.5.0"])
+def test_version_above_maximum_is_rejected(monkeypatch, version: str):
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: version)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(compat.GenesisCompatibilityError, match=r"Genesis<=1\.4\.5 is required"):
+            compat.require_genesis_version()
+    assert caught == []
+
+
+def test_maximum_matches_sim_extra_upper_bound():
+    import tomllib
+    from pathlib import Path
+
+    from packaging.requirements import Requirement
+
+    pyproject = tomllib.loads((Path(__file__).resolve().parents[2] / "pyproject.toml").read_text(encoding="utf-8"))
+    (genesis,) = [
+        Requirement(r) for r in pyproject["project"]["optional-dependencies"]["sim"] if r.startswith("genesis")
+    ]
+    assert genesis.specifier.contains(compat.MAX_GENESIS_VERSION)
+    assert genesis.specifier.contains(compat.MIN_GENESIS_VERSION)
+    assert not genesis.specifier.contains("1.4.5.post1")
+    assert not genesis.specifier.contains("1.4.1")
+
+
+def test_unvalidated_version_with_complete_capabilities_passes_and_warns(monkeypatch):
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
     gs = pytest.importorskip("genesis")
 
-    with pytest.warns(RuntimeWarning, match="only 1.4.4 is the project's reference baseline") as caught:
+    with pytest.warns(RuntimeWarning, match="only 1.4.5 is the project's reference baseline") as caught:
         assert compat.require_genesis_capabilities(gs, pbr=True, deferred_viewer=True) is gs
     assert len(caught) == 1
 
@@ -62,6 +93,84 @@ def test_invalid_version_is_rejected(monkeypatch):
 
     with pytest.raises(compat.GenesisCompatibilityError, match="Cannot parse"):
         compat.require_genesis_version()
+
+
+# Stand-ins for SupportField._func_direction_cell: only their source text matters to the patch.
+def _direction_cell_modulo_wrap(theta, support_res):  # Genesis 1.4.4 style
+    i = int(math.floor((theta + math.pi) / math.pi / 2 * support_res)) % support_res
+    return i
+
+
+def _direction_cell_upper_wrap_only(theta, support_res):  # Genesis 1.4.5 style
+    i = int(math.floor((theta + math.pi) / math.pi / 2 * support_res))
+    if i >= support_res:
+        i = i - support_res
+    return i
+
+
+def _direction_cell_both_wraps(theta, support_res):  # patched
+    i = int(math.floor((theta + math.pi) / math.pi / 2 * support_res))
+    if i >= support_res:
+        i = i - support_res
+    if i < 0:
+        i = i + support_res
+    return i
+
+
+def _source_sha256(function) -> str:
+    return hashlib.sha256(textwrap.dedent(inspect.getsource(function)).encode()).hexdigest()
+
+
+def test_support_field_patch_skips_modulo_wrap():
+    module = SimpleNamespace(_func_direction_cell=_direction_cell_modulo_wrap)
+
+    assert compat.patch_support_field_direction_cell(module) is False
+    assert module._func_direction_cell is _direction_cell_modulo_wrap
+
+
+def test_support_field_patch_skips_missing_function():
+    assert compat.patch_support_field_direction_cell(SimpleNamespace()) is False
+
+
+def test_support_field_patch_replaces_known_underflow_once(monkeypatch):
+    monkeypatch.setattr(
+        compat, "_DIRECTION_CELL_UNDERFLOW_SHA256", frozenset({_source_sha256(_direction_cell_upper_wrap_only)})
+    )
+    monkeypatch.setattr(compat, "_build_direction_cell_wrap_fix", lambda: _direction_cell_both_wraps)
+    module = SimpleNamespace(_func_direction_cell=_direction_cell_upper_wrap_only)
+
+    assert compat.patch_support_field_direction_cell(module) is True
+    assert module._func_direction_cell is _direction_cell_both_wraps
+    assert compat.patch_support_field_direction_cell(module) is False
+    assert module._func_direction_cell(-math.pi - 1e-12, 120) == 119
+
+
+def test_support_field_patch_rejects_unknown_underflow_implementation():
+    module = SimpleNamespace(_func_direction_cell=_direction_cell_upper_wrap_only)
+
+    with pytest.raises(compat.GenesisCompatibilityError, match="not a known release"):
+        compat.patch_support_field_direction_cell(module)
+    assert module._func_direction_cell is _direction_cell_upper_wrap_only
+
+
+def test_support_field_patch_matches_installed_genesis(monkeypatch):
+    pytest.importorskip("genesis")
+    support_field = pytest.importorskip("genesis.engine.solvers.rigid.collider.support_field")
+    original = getattr(support_field, "_func_direction_cell", None)
+    if original is None:
+        pytest.skip("installed Genesis has no SupportField._func_direction_cell")
+    monkeypatch.setattr(support_field, "_func_direction_cell", original)
+    source = textwrap.dedent(inspect.getsource(original))
+    if not compat._direction_cell_lacks_lower_wrap(source):
+        assert compat.patch_support_field_direction_cell(support_field) is False
+        return
+
+    assert hashlib.sha256(source.encode()).hexdigest() in compat._DIRECTION_CELL_UNDERFLOW_SHA256
+    assert compat.patch_support_field_direction_cell(support_field) is True
+    from ufactory.simulation._support_field_fix import func_direction_cell
+
+    assert support_field._func_direction_cell is func_direction_cell
+    assert compat.patch_support_field_direction_cell(support_field) is False
 
 
 def _parse_mesh_glb(path, group_by_material, scale, is_mesh_zup, surface):
@@ -101,7 +210,7 @@ class _CompatibleMesh:
 
 
 def test_pbr_hook_contract_accepts_required_signatures(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
     gs = SimpleNamespace(Mesh=_CompatibleMesh)
     gltf = SimpleNamespace(parse_mesh_glb=_parse_mesh_glb)
     mesh = SimpleNamespace(surface_uvs_to_trimesh_visual=_surface_uvs_to_trimesh_visual)
@@ -110,7 +219,7 @@ def test_pbr_hook_contract_accepts_required_signatures(monkeypatch):
 
 
 def test_pbr_hook_contract_rejects_changed_signature_before_patch(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
     gs = SimpleNamespace(Mesh=_CompatibleMesh)
     gltf = SimpleNamespace(parse_mesh_glb=lambda path: path)
     mesh = SimpleNamespace(surface_uvs_to_trimesh_visual=_surface_uvs_to_trimesh_visual)
@@ -121,7 +230,7 @@ def test_pbr_hook_contract_rejects_changed_signature_before_patch(monkeypatch):
 
 
 def test_present_hold_hook_contract_accepts_required_methods(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
 
     class _Viewer:
         def _render(self, camera_node=None, renderer=None, normal=False):
@@ -150,7 +259,7 @@ def test_present_hold_hook_contract_accepts_required_methods(monkeypatch):
 
 
 def test_present_hold_hook_contract_rejects_missing_refresh(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
 
     class _Viewer:
         def _render(self, camera_node=None, renderer=None, normal=False):
@@ -177,7 +286,7 @@ def test_present_hold_hook_contract_rejects_missing_refresh(monkeypatch):
 
 
 def test_viewer_contract_rejects_missing_private_registry(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
 
     with pytest.raises(compat.GenesisCompatibilityError, match="_scene_registry"):
         compat.load_deferred_viewer_api(SimpleNamespace())
@@ -210,8 +319,10 @@ def test_installed_genesis_matches_runtime_and_hook_contracts():
         version = compat.require_genesis_version()
     except compat.GenesisCompatibilityError as exc:
         pytest.skip(f"genesis-world metadata unavailable: {exc}")
-    if str(version) != "1.4.4":
-        pytest.skip("the full installed-contract assertion targets the reference 1.4.4 baseline")
+    if version != compat.VALIDATED_GENESIS_VERSION:
+        pytest.skip(
+            f"the full installed-contract assertion targets the reference {compat.VALIDATED_GENESIS_VERSION} baseline"
+        )
 
     assert compat.require_genesis_runtime(gs) is gs
     compat.require_pbr_hooks(gs, gltf_utils, mesh_utils)

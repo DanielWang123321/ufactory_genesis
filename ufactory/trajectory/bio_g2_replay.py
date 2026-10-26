@@ -678,11 +678,11 @@ class BioG2PickPlaceSimulation:
         executor: str = "servo_cartesian",
         robot: str = "xarm6",
     ) -> None:
-        import importlib.metadata
         import genesis as gs
 
-        if importlib.metadata.version("genesis-world") != "1.4.4":
-            raise RuntimeError("This simulation requires genesis-world==1.4.4")
+        from ufactory.simulation.compat import require_genesis_runtime
+
+        require_genesis_runtime(gs)
         if backend not in ("cpu", "gpu"):
             raise ValueError("backend must be cpu or gpu")
         if substeps not in (8, 32):

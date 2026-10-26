@@ -5,6 +5,27 @@ All notable changes to genesis-ufactory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Set the Genesis World reference baseline to **1.4.5** (minimum stays **1.4.2**; 1.4.2 to 1.4.4 emit one unvalidated-baseline warning). The lock file pins Genesis 1.4.5, trimesh 5.2.0, and zstandard 0.25.0.
+- Capped Genesis World at **1.4.5**: the `[sim]` extra requires `genesis-world>=1.4.2,<=1.4.5`, and `require_genesis_version` rejects newer releases (including post and dev builds) with `GenesisCompatibilityError` instead of warning.
+- The `[sim]` extra keeps `trimesh>=4.8.2`, matching the minimum supported Genesis 1.4.2; Genesis 1.4.5 itself requires `trimesh>=5.0.0`.
+- The `[rl]` extra now requires `rsl-rl-lib>=5.4.2,<6` and declares `tensordict>=0.7.0`, which `examples/rl` imports directly.
+- Bio Gripper G2 microplate simulation now uses the shared `require_genesis_runtime` check instead of requiring exactly `genesis-world==1.4.4`.
+- Documented why `torch==2.10.0` is pinned (validated baseline; last PyPI default CUDA 12.x build) and how to install another build of the same version (`+cu126`, `+cu130`, `+cpu`) before `.[sim]`.
+- `project-check` lock audit also ignores `PYSEC-2025-194`, the alias of the already ignored `CVE-2025-3000` (torch 2.10.0, `torch.jit.script`, not used).
+
+### Fixed
+
+- `packaging` moved from the `[sim]` extra to the core dependencies. `ufactory.simulation.compat` imports it at module level, so `dynamics-hardware-check`, `dynamics-sim-check`, and `ufactory.visualization` failed with `ModuleNotFoundError` in a clean environment installed with only `.[real]` or no extras.
+- Worked around a Genesis 1.4.5 SupportField regression (commit `375fd7eb`): for directions with azimuth just above -π the cell index underflows to -1 and reads the previous geom's support table or the wrong chart, producing false penetrations (the Bio G2 microplate was launched off the nest during reset). `require_genesis_runtime` replaces `_func_direction_cell` with a copy that restores the lower-bound wrap, only when the installed source matches the known 1.4.5 implementation; 1.4.4 and older are untouched.
+
+### Removed
+
+- Removed `requirements.txt`; `pyproject.toml` extras (`pip install -e ".[sim]"`) are the only dependency declaration.
+
 ## [0.3.3] — 2026-10-23
 
 ### Added
