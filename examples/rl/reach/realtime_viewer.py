@@ -11,6 +11,7 @@ import numpy as np
 import torch
 
 import genesis as gs
+from ufactory.simulation.compat import load_deferred_viewer_api
 from ufactory.visualization.render_patch import install_present_hold, should_present_frame
 from ufactory.visualization.viewer import prime_visual_states
 
@@ -112,6 +113,15 @@ def start_viewer(env):
     scene = env.scene
     visualizer = scene.visualizer
     options = scene.options.viewer.model_copy(deep=True)
+    if options.res is None:
+        viewer_api = load_deferred_viewer_api(gs)
+        try:
+            screen_height, _screen_width, screen_scale = gs.utils.try_get_display_size()
+        except Exception as exc:
+            gs.raise_exception_from("No display detected. Use `show_viewer=False` for headless mode.", exc)
+        viewer_height = (screen_height * screen_scale) * viewer_api.default_height_ratio
+        viewer_width = viewer_height / viewer_api.default_aspect_ratio
+        options.res = (int(viewer_width), int(viewer_height))
     # Fit all displayed environments, including the workspace around each base.
     span = np.ptp(scene.envs_offset, axis=0)
     radius = float(np.linalg.norm((span[:2] + 1.5) / 2.0))

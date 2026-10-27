@@ -1,6 +1,6 @@
 schema_version: 1
 environment:
-  num_envs: 16384
+  num_envs: 4096
   genesis_performance_mode: true
   randomize_initial_episode_length: true
 reward:

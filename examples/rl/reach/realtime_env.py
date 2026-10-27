@@ -13,11 +13,11 @@ import torch
 from tensordict import TensorDict
 
 import genesis as gs
-from .env import XArm6ReachEnv
+from .env import ReachEnv
 from ufactory.simulation import make_rigid_options
 
 
-class RealtimeReachEnv(XArm6ReachEnv):
+class RealtimeReachEnv(ReachEnv):
     def __init__(
         self, env_cfg: dict, reward_cfg: dict, robot_cfg: dict, *, success_hold_s: float = 1.0, robot_surface=None
     ) -> None:
@@ -50,7 +50,6 @@ class RealtimeReachEnv(XArm6ReachEnv):
             ),
             vis_options=gs.options.VisOptions(rendered_envs_idx=list(range(self.num_envs))),
             viewer_options=gs.options.ViewerOptions(
-                res=(1280, 720),
                 run_in_thread=False,
                 refresh_rate=60,
                 realtime_factor=None,

@@ -180,3 +180,30 @@ def test_training_success_is_strictly_below_5mm():
     env.target_pos[:] = torch.tensor([[0.0049, 0, 0], [0.005, 0, 0], [0.0051, 0, 0]])
     _, _, done, _ = env.step(torch.zeros(3, 6))
     assert done.tolist() == [True, False, False]
+
+
+@pytest.mark.parametrize(("dof", "obs"), [(5, 21), (6, 24), (7, 27)])
+def test_init_config_accepts_5_6_7_dof_and_rejects_mismatch(monkeypatch, dof: int, obs: int) -> None:
+    monkeypatch.setattr(gs, "device", torch.device("cpu"), raising=False)
+    env = object.__new__(XArm6ReachEnv)
+    env_cfg = {
+        "num_envs": 2,
+        "num_obs": obs,
+        "num_actions": dof,
+        "env_version": 2,
+        "ctrl_dt": 0.02,
+        "episode_length_s": 5.0,
+        "action_scale": 0.05,
+        "action_clip": 1.0,
+        "max_joint_delta_rad": 0.01,
+        "success_distance_m": 0.005,
+        "target_pos_lower": [0.15, -0.20, 0.05],
+        "target_pos_upper": [0.35, 0.20, 0.35],
+    }
+    reward_cfg = {"reach": 1.0, "action_penalty": 0.001, "success": 2.0}
+    robot_cfg = {"joint_names": [f"joint{i}" for i in range(1, dof + 1)]}
+    env._init_config(env_cfg, reward_cfg, robot_cfg)
+    assert env.num_obs == obs and env.num_actions == dof
+    bad_cfg = dict(env_cfg, num_obs=24 if obs != 24 else 18)
+    with pytest.raises(ValueError, match=f"retrain the policy with {obs} observations"):
+        env._init_config(bad_cfg, reward_cfg, robot_cfg)

@@ -165,7 +165,7 @@ python examples/packaging/run.py \
 
 The Linux/NVIDIA simulation examples follow this order:
 
-1. [Reach](rl/reach/README.md): bare-arm xArm 6, with a 5 mm success threshold.
+1. [Reach](rl/reach/README.md): multi-robot (`xarm5`, `xarm6`, `xarm7`, `uf850`, `lite6`) bare-arm reaching, with a 5 mm success threshold.
 2. [Pick & Place](rl/pick_place/README.md): xArm6 + Gripper G2 transfers a cube to a tabletop target.
 3. Box packing: place an object inside a box; the RL example is planned.
 

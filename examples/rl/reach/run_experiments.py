@@ -14,7 +14,7 @@ import sys
 import time
 
 from ufactory.config import load_runtime_config
-from ufactory.training import build_reach_task_configs, load_training_recipe
+from ufactory.training import REACH_RL_ROBOTS, build_reach_task_configs, load_training_recipe
 
 from .runtime import DEFAULT_RECIPE, OUTPUT_ROOT, ROOT, configure_runtime
 
@@ -64,6 +64,7 @@ def run(output: Path, name: str, arguments: list[str], *, allowed: tuple[int, ..
             next_sample = 0.0
             while process.poll() is None:
                 if time.monotonic() >= next_sample:
+                    process_memory_mib: int | None = None
                     try:
                         sampled = subprocess.run(
                             [
@@ -76,10 +77,33 @@ def run(output: Path, name: str, arguments: list[str], *, allowed: tuple[int, ..
                             timeout=3,
                         )
                         gpu = sampled.stdout.strip() or sampled.stderr.strip()
+                        apps = subprocess.run(
+                            [
+                                "nvidia-smi",
+                                "--query-compute-apps=pid,used_gpu_memory",
+                                "--format=csv,noheader,nounits",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            timeout=3,
+                        )
+                        for line in apps.stdout.splitlines():
+                            parts = [part.strip() for part in line.split(",")]
+                            if len(parts) == 2 and parts[0].isdigit() and int(parts[0]) == process.pid:
+                                if parts[1].isdigit():
+                                    process_memory_mib = int(parts[1])
+                                break
                     except (OSError, subprocess.TimeoutExpired) as exc:
                         gpu = str(exc)
                     performance.write(
-                        json.dumps({"time_utc": datetime.now(timezone.utc).isoformat(), "gpu": gpu}) + "\n"
+                        json.dumps(
+                            {
+                                "time_utc": datetime.now(timezone.utc).isoformat(),
+                                "gpu": gpu,
+                                "process_memory_mib": process_memory_mib,
+                            }
+                        )
+                        + "\n"
                     )
                     performance.flush()
                     next_sample = time.monotonic() + 5
@@ -106,8 +130,8 @@ def run(output: Path, name: str, arguments: list[str], *, allowed: tuple[int, ..
 
 
 def record_source_hashes(output: Path, args: argparse.Namespace) -> None:
-    runtime = load_runtime_config("xarm6", task="reach", config_path=args.runtime_config)
-    _, _, robot = build_reach_task_configs("xarm6", recipe_path=args.recipe, runtime_config_path=args.runtime_config)
+    runtime = load_runtime_config(args.robot, task="reach", config_path=args.runtime_config)
+    _, _, robot = build_reach_task_configs(args.robot, recipe_path=args.recipe, runtime_config_path=args.runtime_config)
     sources = list(Path(__file__).parent.glob("*.py")) + [args.recipe, Path(robot["urdf_path"]), ROOT / "uv.lock"]
     sources += list((ROOT / "ufactory/training").glob("*.py"))
     sources += list((ROOT / "ufactory/training/logic").glob("*.py"))
@@ -122,6 +146,7 @@ def record_source_hashes(output: Path, args: argparse.Namespace) -> None:
         output / "source-sha256.json",
         {
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "robot": runtime.robot.key,
             "recipe": str(args.recipe),
             "runtime_config": None if args.runtime_config is None else str(args.runtime_config),
             "runtime_config_sha256": runtime.sha256,
@@ -131,7 +156,7 @@ def record_source_hashes(output: Path, args: argparse.Namespace) -> None:
 
 
 def common_options(args: argparse.Namespace) -> list[str]:
-    options = ["--recipe", str(args.recipe)]
+    options = ["--robot", str(args.robot), "--recipe", str(args.recipe)]
     if args.runtime_config is not None:
         options += ["--runtime-config", str(args.runtime_config)]
     return options
@@ -297,6 +322,7 @@ def accept_checkpoint(output: Path, directory: Path, selected: Path, seed: int, 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--robot", default="xarm6", choices=REACH_RL_ROBOTS)
     parser.add_argument("--output", "--output-dir", type=Path)
     parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     parser.add_argument("--runtime-config", type=Path)
@@ -325,7 +351,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args.recipe = args.recipe.expanduser().resolve()
     if args.runtime_config is not None:
         args.runtime_config = args.runtime_config.expanduser().resolve()
-    build_reach_task_configs("xarm6", recipe_path=args.recipe, runtime_config_path=args.runtime_config)
+    build_reach_task_configs(args.robot, recipe_path=args.recipe, runtime_config_path=args.runtime_config)
     return args
 
 
@@ -344,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
         "pid": os.getpid(),
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "stop_reason": "running",
+        "robot": args.robot,
         "stage": args.stage,
         "training_seeds": args.seeds,
         "num_envs": args.num_envs,

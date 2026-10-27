@@ -1,11 +1,11 @@
-"""Bare-arm xArm6 reach environment.
+"""Bare-arm UFACTORY reach environment.
 
-Observation (24):
-    joint position (6) + joint velocity (6) + end-effector position (3)
+Observation (3 * dof + 6):
+    joint position (dof) + joint velocity (dof) + end-effector position (3)
     + target relative to the end effector (3), world frame, meters
-    + position command minus actual joint position (6).
+    + position command minus actual joint position (dof).
 
-Action (6):
+Action (dof):
     normalized joint-position increments, clipped by the action scale and the
     servo speed limit, accumulated into a position command within URDF limits.
 
@@ -28,7 +28,7 @@ from ufactory.training.reach_config import REACH_ENV_VERSION, REACH_SUCCESS_DIST
 from ufactory.training.logic import action_penalty, reach_action_delta_torch, reach_observation, reward_reach_position
 
 
-class XArm6ReachEnv:
+class ReachEnv:
     def __init__(
         self,
         env_cfg: dict,
@@ -52,8 +52,14 @@ class XArm6ReachEnv:
         self.robot_cfg = robot_cfg
         if self.num_envs < 1:
             raise ValueError("num_envs must be positive")
-        if env_cfg.get("env_version") != REACH_ENV_VERSION or self.num_obs != 24 or self.num_actions != 6:
-            raise ValueError("reach environment version changed; retrain the policy with 24 observations")
+        expected_actions = len(robot_cfg["joint_names"])
+        expected_obs = expected_actions * 3 + 6
+        if (
+            env_cfg.get("env_version") != REACH_ENV_VERSION
+            or self.num_obs != expected_obs
+            or self.num_actions != expected_actions
+        ):
+            raise ValueError(f"reach environment version changed; retrain the policy with {expected_obs} observations")
 
         self.ctrl_dt = float(env_cfg["ctrl_dt"])
         self.max_episode_length = math.ceil(float(env_cfg["episode_length_s"]) / self.ctrl_dt)
@@ -346,3 +352,6 @@ class XArm6ReachEnv:
     def _reward_success(self) -> torch.Tensor:
         # Success is computed before auto-reset in step().
         return (torch.linalg.norm(self.target_pos - self.ee_link.get_pos(), dim=-1) < self.success_distance_m).float()
+
+
+XArm6ReachEnv = ReachEnv

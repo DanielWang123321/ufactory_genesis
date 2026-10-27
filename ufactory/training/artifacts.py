@@ -429,7 +429,7 @@ def validate_checkpoint_artifacts(
     if expected_runtime_env is not None:
         if expected_task == "reach" and env.get("env_version") != expected_runtime_env.get("env_version"):
             raise ArtifactError(
-                "reach environment version changed (24 observations, accumulated commands); retrain the policy"
+                "reach environment version changed (3 * dof + 6 observations, accumulated commands); retrain the policy"
             )
         saved_keys = runtime_env_contract_keys(env)
         expected_keys = runtime_env_contract_keys(expected_runtime_env)

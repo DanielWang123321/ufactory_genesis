@@ -1,0 +1,9 @@
+schema_version: 1
+robot:
+  urdf: lite6.urdf
+arm:
+  default_qpos_rad: [0.0, 0.338839, 1.253953, 0.0, 0.915106, 0.0]
+task:
+  parameters:
+    target_position_lower_m: [0.15, -0.20, 0.05]
+    target_position_upper_m: [0.35, 0.20, 0.35]

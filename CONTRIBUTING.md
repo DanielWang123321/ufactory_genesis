@@ -113,7 +113,7 @@ Tests are grouped under `tests/` by `ufactory` module:
 
 ## Asset Policy
 
-Do not commit RL policy weights or checkpoints. Users train their own policies; keep training artifacts under the Git-ignored `outputs/rl/` directory.
+Do not commit RL policy weights or checkpoints to Git. Pretrained checkpoints are hosted on Hugging Face (`UFACTORY-Developer/ufactory_genesis_rl`); keep local and downloaded training artifacts under the Git-ignored `outputs/rl/` directory.
 
 The public release contains final URDF, STL meshes, and GLB visual meshes needed by users and tests. Registered arm URDFs use selective convex-hull STL meshes under `meshes/<variant>/collision/<robot>_<link>_col_<nn>.stl` for link collision (not OBJ; public `collision/**/*.obj` is forbidden). Unused per-arm collision shells and Lite6 finger GLBs have been removed; historical assets remain available in Git. Raw/source GLBs, relocalize metrics, and vendor/combo generation scripts are internal maintenance material and are ignored from the public source tree.
 

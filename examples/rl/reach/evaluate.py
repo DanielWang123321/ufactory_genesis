@@ -1,4 +1,4 @@
-"""Evaluate a bare-arm xArm6 reach checkpoint."""
+"""Evaluate a bare-arm UFACTORY reach checkpoint."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import math
 from pathlib import Path
 import sys
 
-from .runtime import DEFAULT_RECIPE, configure_runtime, require_checkpoint, require_rsl_runtime
+from .runtime import DEFAULT_RECIPE, configure_runtime, require_checkpoint, require_rsl_runtime, resolve_reach_robot
 
 configure_runtime()
 require_rsl_runtime()
@@ -23,18 +23,19 @@ from ufactory.config import load_runtime_config
 from ufactory.robots.paths import robot_urdf
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.training import (
+    REACH_RL_ROBOTS,
     build_reach_task_configs,
     validate_and_load_rsl_checkpoint,
 )
 from ufactory.training.reach_evaluation import evaluate_fixed_targets, sample_reach_targets, summarize_reach_reports
 
-from .env import XArm6ReachEnv
+from .env import ReachEnv
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate a bare-arm xArm6 reach checkpoint")
+    parser = argparse.ArgumentParser(description="Evaluate a bare-arm UFACTORY reach checkpoint")
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--robot", default="xarm6", choices=("xarm6", "xarm6_1305"))
+    parser.add_argument("--robot", default=None, choices=REACH_RL_ROBOTS)
     parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     parser.add_argument("--runtime-config", type=Path)
     parser.add_argument("-B", "--num-envs", type=int, default=32)
@@ -67,9 +68,10 @@ def main() -> None:
     config_path = checkpoint.parent / "config.yaml"
     if args.summary_json is not None and args.summary_json.exists():
         raise FileExistsError(f"evaluation report already exists: {args.summary_json}")
-    runtime_config = load_runtime_config(args.robot, task="reach", config_path=args.runtime_config)
+    robot = resolve_reach_robot(args.robot, config_path)
+    runtime_config = load_runtime_config(robot, task="reach", config_path=args.runtime_config)
     expected_env, _reward, _robot = build_reach_task_configs(
-        args.robot,
+        robot,
         recipe_path=args.recipe,
         runtime_config_path=args.runtime_config,
     )
@@ -102,7 +104,7 @@ def main() -> None:
         seed=int(train_cfg["seed"]),
         performance_mode=performance_mode,
     )
-    env = XArm6ReachEnv(
+    env = ReachEnv(
         env_cfg=env_cfg,
         reward_cfg=reward_cfg,
         robot_cfg=robot_cfg,

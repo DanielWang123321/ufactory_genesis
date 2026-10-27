@@ -1,0 +1,5 @@
+schema_version: 1
+robot:
+  urdf: xarm7_1305.urdf
+arm:
+  default_qpos_rad: [0.0, -0.491643, 0.0, 0.405552, 0.0, 0.897195, 0.0]

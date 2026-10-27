@@ -1,1 +1,1 @@
-"""Bare-arm xArm6 reach example."""
+"""Bare-arm UFACTORY reach RL example."""

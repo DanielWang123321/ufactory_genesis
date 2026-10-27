@@ -59,27 +59,61 @@ PIP_AUDIT_IGNORED_VULNS = (
     "PYSEC-2026-139",  # torch 2.10.0
     "CVE-2025-3000",  # torch 2.10.0
     "PYSEC-2025-194",  # torch 2.10.0; alias of CVE-2025-3000 (torch.jit.script, not used)
-    "PYSEC-2026-165",
-    "PYSEC-2026-2249",
-    "PYSEC-2026-2250",
-    "PYSEC-2026-2251",
-    "PYSEC-2026-2252",
-    "PYSEC-2026-2253",
-    "PYSEC-2026-2254",
-    "PYSEC-2026-2255",
-    "PYSEC-2026-2256",
-    "PYSEC-2026-2257",
-    "PYSEC-2026-2874",  # pillow (Genesis stack)
-    "PYSEC-2026-3451",  # pillow (Genesis stack)
-    "PYSEC-2026-3453",  # pillow (Genesis stack)
+    "PYSEC-2026-165",  # pillow 11.3.0 (Genesis stack; fix is 12.2.0)
+    "PYSEC-2026-2249",  # pillow 11.3.0 (Genesis stack; fix is 12.1.1)
+    "PYSEC-2026-2250",  # pillow 11.3.0 (Genesis stack; fix is 12.2.0)
+    "PYSEC-2026-2251",  # pillow 11.3.0 (Genesis stack; fix is 12.2.0)
+    "PYSEC-2026-2252",  # pillow 11.3.0 (Genesis stack; fix is 12.2.0)
+    "PYSEC-2026-2253",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "PYSEC-2026-2254",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "PYSEC-2026-2255",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "PYSEC-2026-2256",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "PYSEC-2026-2257",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "PYSEC-2026-2874",  # pillow 11.3.0 (Genesis stack; fix is 12.2.0)
+    "PYSEC-2026-3451",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
+    "PYSEC-2026-3453",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
     "CVE-2026-54058",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
     "CVE-2026-59197",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
     "CVE-2026-59198",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
     "CVE-2026-59200",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
     "CVE-2026-59204",  # pillow 11.3.0 (Genesis stack; fix is 12.3.0)
-    "PYSEC-2026-196",  # pip
-    "PYSEC-2026-3447",  # setuptools
-    "PYSEC-2026-2689",  # onnx
+    # pillow 11.3.0 (Genesis -> moviepy 2.2.1 requires pillow<12.0; fixes require 13.0.0)
+    "CVE-2026-96636",
+    "CVE-2026-96637",
+    "CVE-2026-96638",
+    "CVE-2026-96639",
+    "CVE-2026-96640",
+    "CVE-2026-96641",
+    "CVE-2026-96642",
+    "CVE-2026-96643",
+    "CVE-2026-96644",
+    "CVE-2026-96778",
+    "CVE-2026-112390",
+    "CVE-2026-112391",
+    "CVE-2026-112392",
+    "CVE-2026-112393",
+    "CVE-2026-112395",
+    "CVE-2026-112396",
+    "CVE-2026-112397",
+    "CVE-2026-112398",
+    "CVE-2026-112399",
+    "CVE-2026-112400",
+    "CVE-2026-112401",
+    "CVE-2026-112402",
+    "CVE-2026-112404",
+    "CVE-2026-112406",
+    "CVE-2026-112891",
+    "CVE-2026-112892",
+    "CVE-2026-112893",
+    "CVE-2026-112894",
+    "CVE-2026-112895",
+    "CVE-2026-112896",
+    "CVE-2026-112897",
+    "CVE-2026-112899",
+    "CVE-2026-112900",
+    "CVE-2026-112901",
+    "CVE-2026-114501",
+    "GHSA-78g4-xqwv-q3g8",
 )
 
 UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "dev")

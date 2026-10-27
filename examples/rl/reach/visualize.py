@@ -11,7 +11,14 @@ import argparse
 import copy
 from pathlib import Path
 
-from .runtime import DEFAULT_RECIPE, configure_runtime, patch_pyglet_screen, require_checkpoint, require_rsl_runtime
+from .runtime import (
+    DEFAULT_RECIPE,
+    configure_runtime,
+    patch_pyglet_screen,
+    require_checkpoint,
+    require_rsl_runtime,
+    resolve_reach_robot,
+)
 
 # GLX is only for the interactive command. Importing this module from tests must
 # leave the headless platform alone, or later Genesis teardowns lose the context.
@@ -31,14 +38,18 @@ from .realtime_viewer import RealtimeClock, shutdown, start_viewer, warmup
 from ufactory.config import load_runtime_config
 from ufactory.robots.paths import robot_visual_glb_urdf
 from ufactory.simulation.compat import require_genesis_runtime
-from ufactory.training import build_reach_task_configs, validate_and_load_rsl_checkpoint
+from ufactory.training import (
+    REACH_RL_ROBOTS,
+    build_reach_task_configs,
+    validate_and_load_rsl_checkpoint,
+)
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Real-time viewer for the 5 mm reach policy")
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--robot", default="xarm6", choices=("xarm6", "xarm6_1305"))
+    parser.add_argument("--robot", default=None, choices=REACH_RL_ROBOTS)
     parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     parser.add_argument("--runtime-config", type=Path)
     parser.add_argument("-b", "--num-envs", type=int, default=1, help="parallel environments shown in the viewer")
@@ -48,13 +59,15 @@ def main() -> None:
         parser.error("--num-envs must be positive")
 
     checkpoint = require_checkpoint(args.checkpoint)
-    runtime_config = load_runtime_config(args.robot, task="reach", config_path=args.runtime_config)
+    config_path = checkpoint.parent / "config.yaml"
+    robot = resolve_reach_robot(args.robot, config_path)
+    runtime_config = load_runtime_config(robot, task="reach", config_path=args.runtime_config)
     expected_env, _reward, robot_cfg = build_reach_task_configs(
-        args.robot, recipe_path=args.recipe, runtime_config_path=args.runtime_config
+        robot, recipe_path=args.recipe, runtime_config_path=args.runtime_config
     )
     _loaded, artifact, _manifest = validate_and_load_rsl_checkpoint(
         checkpoint,
-        checkpoint.parent / "config.yaml",
+        config_path,
         map_location="cpu",
         expected_task="reach",
         expected_robot_key=runtime_config.robot.key,

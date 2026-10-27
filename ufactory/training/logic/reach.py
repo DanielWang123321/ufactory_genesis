@@ -1,4 +1,4 @@
-"""Genesis-free numeric core for the xArm6 reach task."""
+"""Genesis-free numeric core for the bare-arm reach task."""
 
 from __future__ import annotations
 

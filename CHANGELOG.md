@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-10-27
+
+### Added
+
+- Extended `examples/rl/reach` across all five bare-arm models (`xarm5`, `xarm6`, `xarm7`, `uf850`, and `lite6` via `REACH_RL_ROBOTS`), with per-robot runtime overlays (`assets/configs/runtime/tasks/robots/*_reach.yaml`), dynamic `3 * dof + 6` observation and `dof` action dimensions in `ReachEnv` (`XArm6ReachEnv` kept as a compatibility alias), `--robot` CLI selection, automatic robot inference from saved checkpoint `config.yaml`, and subprocess peak GPU memory sampling (`process_memory_mib`) in `run_experiments.py`.
+- Published pretrained Reach checkpoints (`model_299.pt` with SHA-256 manifests and repo-relative `robot.urdf_path`) for all five robots to Hugging Face (`UFACTORY-Developer/ufactory_genesis_rl`) and documented one-command `hf download` instructions and RTX 4060 Ti (8 GB) benchmark tables (`num_envs = 4096`, peak VRAM `1.82–2.60 GB`, training time, and dual held-out evaluation pass rates).
+
+### Changed
+
+- Unified the default initial joint configuration (`arm.default_qpos_rad`) across all five Reach robot configs to the analytical IK solution for flange TCP `(0.30, 0.00, 0.30) m`, `RPY = (180°, 0°, 0°)`.
+- `examples/rl/reach` realtime viewer now auto-detects screen resolution via `try_get_display_size()` when `ViewerOptions.res` is unset instead of hardcoding `1280x720`.
+- Upgraded six transitive dependencies in `uv.lock` to resolve 15 vulnerability advisories: `certifi` (`2026.7.22` → `2026.10.23`), `filelock` (`3.29.7` → `4.2.4`), `gitpython` (`3.1.59` → `3.2.1`), `setuptools` (`83.0.0` → `84.2.1`), `urllib3` (`2.7.0` → `2.8.0`), and `werkzeug` (`3.1.8` → `3.1.9`).
+- Updated `PIP_AUDIT_IGNORED_VULNS` in `ufactory.quality.project_check`: added 36 `pillow 11.3.0` advisories whose upstream fix requires `pillow>=13.0.0` (blocked by `genesis-world 1.4.5` → `moviepy 2.2.1` requiring `pillow<12.0`; `ufactory` does not import `PIL` or parse untrusted images/PDFs) and removed three stale ignore IDs (`PYSEC-2026-196`, `PYSEC-2026-3447`, `PYSEC-2026-2689`) already resolved by locked versions.
+
 ## [0.3.4] — 2026-10-26
 
 ### Changed

@@ -15,14 +15,20 @@ import pytest
 from examples.rl.reach import run_experiments as experiments
 
 
-def test_defaults_and_three_seed_extension():
+def test_defaults_and_three_seed_extension(tmp_path):
     args = experiments.parse_args([])
+    assert args.robot == "xarm6"
     assert args.seeds == [7]
-    assert args.num_envs == 16384
+    assert args.num_envs == 4096
     assert args.max_iterations == 300
-    args = experiments.parse_args(["--seeds", "1", "7", "17", "-B", "64", "--max-iterations", "2"])
+    args = experiments.parse_args(["--robot", "lite6", "--seeds", "1", "7", "17", "-B", "64", "--max-iterations", "2"])
+    assert args.robot == "lite6"
     assert args.seeds == [1, 7, 17]
     assert args.num_envs == 64 and args.max_iterations == 2
+    assert experiments.common_options(args)[:2] == ["--robot", "lite6"]
+    experiments.record_source_hashes(tmp_path, args)
+    recorded = json.loads((tmp_path / "source-sha256.json").read_text())
+    assert recorded["robot"] == "lite6"
 
 
 @pytest.mark.parametrize("argv", [["--seeds", "7", "7"], ["-B", "0"], ["--max-iterations", "0"], ["--stage", "select"]])

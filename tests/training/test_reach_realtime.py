@@ -67,6 +67,26 @@ def test_resume_environment_count_is_checked_before_creating_output(tmp_path, mo
     assert not output.exists()
 
 
+def test_resolve_reach_robot_prefers_cli_then_config_yaml_then_default(tmp_path):
+    from examples.rl.reach.runtime import DEFAULT_RECIPE, resolve_reach_robot
+    from ufactory.training import build_reach_task_configs, write_training_config
+
+    config_path = tmp_path / "config.yaml"
+    assert resolve_reach_robot(None, config_path) == "xarm6"
+    env_cfg, reward_cfg, robot_cfg = build_reach_task_configs("xarm5", recipe_path=DEFAULT_RECIPE)
+    write_training_config(
+        config_path,
+        task="reach",
+        robot_key="xarm5_1305",
+        env=env_cfg,
+        reward=reward_cfg,
+        robot=robot_cfg,
+        train={"seed": 7},
+    )
+    assert resolve_reach_robot(None, config_path) == "xarm5_1305"
+    assert resolve_reach_robot("lite6", config_path) == "lite6"
+
+
 @pytest.mark.skipif(sys.platform != "linux", reason="X11 screen fallback is Linux-specific")
 def test_default_screen_falls_back_without_randr_outputs_and_keeps_primary_selection(monkeypatch):
     from pyglet.display import xlib

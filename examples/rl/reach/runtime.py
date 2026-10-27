@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from ufactory.training.artifacts import ArtifactError, load_training_config
 from ufactory.training.runtime import (
     configure_runtime as configure_training_runtime,
     patch_pyglet_screen as patch_pyglet_screen,
@@ -37,3 +38,14 @@ def require_checkpoint(path: Path) -> Path:
         train_command="python -m examples.rl.reach.train -e reach",
         output_root="outputs/rl/reach",
     )
+
+
+def resolve_reach_robot(robot: str | None, config_path: Path | None = None) -> str:
+    if robot is not None:
+        return robot
+    if config_path is not None and config_path.is_file():
+        try:
+            return str(load_training_config(config_path)["robot_key"])
+        except ArtifactError:
+            pass
+    return "xarm6"

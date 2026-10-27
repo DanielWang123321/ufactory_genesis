@@ -1,4 +1,4 @@
-"""Train the bare-arm xArm6 reach task with PPO."""
+"""Train the bare-arm UFACTORY reach task with PPO."""
 
 from __future__ import annotations
 
@@ -8,7 +8,14 @@ import json
 from pathlib import Path
 import shutil
 
-from .runtime import DEFAULT_RECIPE, OUTPUT_ROOT, configure_runtime, require_checkpoint, require_rsl_runtime
+from .runtime import (
+    DEFAULT_RECIPE,
+    OUTPUT_ROOT,
+    configure_runtime,
+    require_checkpoint,
+    require_rsl_runtime,
+    resolve_reach_robot,
+)
 
 configure_runtime()
 require_rsl_runtime()
@@ -31,17 +38,17 @@ from ufactory.training import (
 from ufactory.training.runner import ArtifactOnPolicyRunner
 from ufactory.training.runtime import prepare_log_dir
 
-from .env import XArm6ReachEnv
+from .env import ReachEnv
 
 EXECUTOR_ACTION_CONTRACT = "normalized_joint_position_delta"
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the bare-arm xArm6 reach task")
-    parser.add_argument("--robot", default="xarm6", choices=REACH_RL_ROBOTS)
+    parser = argparse.ArgumentParser(description="Train the bare-arm UFACTORY reach task")
+    parser.add_argument("--robot", default=None, choices=REACH_RL_ROBOTS)
     parser.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     parser.add_argument("--runtime-config", type=Path)
-    parser.add_argument("-e", "--exp-name", default="xarm6-reach")
+    parser.add_argument("-e", "--exp-name", default=None)
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("-v", "--vis", action="store_true")
@@ -55,14 +62,20 @@ def main() -> None:
     if args.max_iterations is not None and args.max_iterations < 1:
         parser.error("--max-iterations must be positive")
 
+    robot = resolve_reach_robot(
+        args.robot,
+        None if args.resume is None else args.resume.parent / "config.yaml",
+    )
+
     recipe = load_training_recipe(args.recipe)
     num_envs = int(args.num_envs if args.num_envs is not None else recipe["environment"]["num_envs"])
     max_iterations = int(
         args.max_iterations if args.max_iterations is not None else recipe["train"]["runner"]["max_iterations"]
     )
-    runtime_config = load_runtime_config(args.robot, task="reach", config_path=args.runtime_config)
+    runtime_config = load_runtime_config(robot, task="reach", config_path=args.runtime_config)
+    exp_name = args.exp_name or f"{runtime_config.robot.robot_name}-reach"
     env_cfg, reward_cfg, robot_cfg = build_reach_task_configs(
-        args.robot,
+        robot,
         recipe_path=args.recipe,
         runtime_config_path=args.runtime_config,
     )
@@ -73,7 +86,7 @@ def main() -> None:
     env_cfg["randomize_initial_episode_length"] = randomize_initial_episode_length
     train_cfg = build_train_config(
         args.recipe,
-        experiment_name=args.exp_name,
+        experiment_name=exp_name,
         max_iterations=max_iterations,
     )
     if args.seed is not None:
@@ -97,7 +110,7 @@ def main() -> None:
         if int(resume_config["env"]["num_envs"]) != num_envs:
             parser.error("resume requires the original --num-envs; the checkpoint restores every environment state")
 
-    log_dir = args.log_dir or OUTPUT_ROOT / args.exp_name
+    log_dir = args.log_dir or OUTPUT_ROOT / exp_name
     prepare_log_dir(log_dir, overwrite=args.overwrite)
     write_training_config(
         log_dir / "config.yaml",
@@ -153,7 +166,7 @@ def main() -> None:
         seed=int(train_cfg["seed"]),
         performance_mode=performance_mode,
     )
-    env = XArm6ReachEnv(env_cfg=env_cfg, reward_cfg=reward_cfg, robot_cfg=robot_cfg, show_viewer=args.vis)
+    env = ReachEnv(env_cfg=env_cfg, reward_cfg=reward_cfg, robot_cfg=robot_cfg, show_viewer=args.vis)
     runner = ArtifactOnPolicyRunner(
         env, train_cfg, log_dir=str(log_dir), device=gs.device, executor_action_contract=EXECUTOR_ACTION_CONTRACT
     )

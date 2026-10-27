@@ -8,6 +8,7 @@ from typing import Any
 
 from ufactory.config import ConfigError, load_runtime_config
 from ufactory.robots.paths import robot_urdf
+from ufactory.robots.registry import robot_cli_choices
 from ufactory.training.reach_config import REACH_ENV_VERSION, REACH_SUCCESS_DISTANCE_M, effective_max_joint_delta_rad
 from ufactory.training.recipe import load_training_recipe
 from ufactory.training.pick_place_config import (
@@ -18,7 +19,7 @@ from ufactory.training.pick_place_config import (
 )
 
 PICK_PLACE_RL_ROBOTS = ("xarm6", "xarm6_1305")
-REACH_RL_ROBOTS = ("xarm6", "xarm6_1305")
+REACH_RL_ROBOTS = tuple(robot_cli_choices())
 # RL keeps the post-solve no-slip PGS pass off (noslip_iterations=5 slows a 512-env
 # batch ~3.5x on an RTX 5090). Tangential contact stability is handled directly by
 # the elliptic Signorini Newton solver configuration.
@@ -202,10 +203,10 @@ def build_reach_task_configs(
     recipe_path: str | Path,
     runtime_config_path: str | Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Resolve the bare-arm xArm6 reach task."""
+    """Resolve the bare-arm reach task for any supported UFACTORY robot."""
 
     if robot not in REACH_RL_ROBOTS:
-        raise ValueError("the reach RL environment supports only xArm6")
+        raise ValueError(f"unsupported reach RL robot {robot!r}; expected one of {REACH_RL_ROBOTS}")
     config = load_runtime_config(robot, task="reach", config_path=runtime_config_path)
     params = config.task.parameters
     if float(params["success_distance_m"]) != REACH_SUCCESS_DISTANCE_M:

@@ -170,7 +170,7 @@ python examples/packaging/run.py \
 
 Linux/NVIDIA 上的仿真示例按以下顺序运行：
 
-1. [Reach](rl/reach/README_zh.md)：xArm 6 裸臂到达，成功阈值为 5 mm。
+1. [Reach](rl/reach/README_zh.md)：多机型（`xarm5`、`xarm6`、`xarm7`、`uf850`、`lite6`）裸臂到达，成功阈值为 5 mm。
 2. [Pick & Place](rl/pick_place/README_zh.md)：xArm6 + Gripper G2 将方块搬运到桌面目标位置。
 3. 装箱：将物体放入箱内，RL 示例待实现。
 

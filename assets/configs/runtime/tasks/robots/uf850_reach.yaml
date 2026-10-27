@@ -1,0 +1,5 @@
+schema_version: 1
+robot:
+  urdf: uf850.urdf
+arm:
+  default_qpos_rad: [0.0, -0.079506, -0.37905, 0.0, -0.299544, 0.0]
