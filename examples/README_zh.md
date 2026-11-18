@@ -55,8 +55,7 @@ python examples/visualization/view_robot.py --robot xarm6
 |---|---|
 | `visualization/` | GLB 机型与夹爪查看器，见[可视化](#可视化) |
 | `kinematics/` | FK/IK / 机型校验包装，见[运动学与动力学仿真](#运动学与动力学仿真) |
-| `pick_place/` | 多机型抓放入口与可选覆盖配置，见[抓放指南](pick_place/README_zh.md) |
-| `packaging/` | 多机型装箱展示入口与可选覆盖配置，见[装箱指南](packaging/README_zh.md) |
+| `simulation/` | 轨迹控制任务仿真（[抓放](simulation/pick_place/README_zh.md)、[装箱](simulation/packaging/README_zh.md)），见[仿真索引](simulation/README_zh.md) |
 | `rl/` | 裸臂 Reach → 桌面 Pick & Place → 装箱（待实现）；Linux/NVIDIA，见 [RL 索引](rl/README_zh.md) |
 
 学习顺序及训练、推理指南见 [RL 索引](rl/README_zh.md)。
@@ -144,25 +143,25 @@ dynamics-sim-check --robot xarm6 --random-count 5
 
 ## 抓放仿真
 
-多机型抓放的 Genesis 物理仿真与离线预检。参数、更多指令及覆盖配置见[抓放指南](pick_place/README_zh.md)。
+多机型抓放的 Genesis 物理仿真与离线预检。参数、更多指令及覆盖配置见[抓放指南](simulation/pick_place/README_zh.md)。
 
 ```bash
 # xArm6 + Gripper G2：抓放离线轨迹与碰撞预检（servo_j）
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j
 
 # Lite6 + Lite6 Gripper：抓放物理仿真并打开查看器（servo_cartesian）
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
 ```
 
 ## 装箱展示仿真
 
-多机型轨迹控制装箱。参数及更多指令见[装箱指南](packaging/README_zh.md)。
+多机型轨迹控制装箱。参数及更多指令见[装箱指南](simulation/packaging/README_zh.md)。
 
 ```bash
 # xArm6 + Gripper G2：单轮装箱物理仿真并打开查看器（servo_j）
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --visual
 ```
 
@@ -202,7 +201,7 @@ python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
 dynamics-sim-collision-check --robot xarm6 --ip <ip>
 
 # Lite6 + Lite6 Gripper：装箱控制器内部虚拟仿真（sdk-sim，真实关节不动作）
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
 ```
@@ -218,12 +217,12 @@ python examples/packaging/run.py \
 dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
 
 # xArm6 + Gripper G2：抓放真机物理运动（需实机标定文件与 --confirm-real）
-XARM_IP=<ip> python examples/pick_place/run.py \
+XARM_IP=<ip> python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 
 # Lite6 + Lite6 Gripper：装箱真机物理运动（当前仅支持 xArm6 + Gripper G2、Lite6 + Lite6 Gripper；需实机标定文件与 --confirm-real）
-XARM_IP=<ip> python examples/packaging/run.py \
+XARM_IP=<ip> python examples/simulation/packaging/run.py \
   --robot lite6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 ```

@@ -28,7 +28,7 @@ def test_microplate_executor_physics_and_substep_agreement(robot, executor, tmp_
         result = subprocess.run(
             [
                 sys.executable,
-                "examples/pick_place/run.py",
+                "examples/simulation/pick_place/run.py",
                 "--robot",
                 robot,
                 "--gripper",

@@ -39,14 +39,16 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/kinematics/verify_robot.py",
         "examples/kinematics/verify_fk.py",
         "examples/kinematics/verify_ik.py",
-        "examples/pick_place/run.py",
-        "examples/pick_place/runtime.example.yaml",
-        "examples/pick_place/README.md",
-        "examples/pick_place/README_zh.md",
-        "examples/packaging/run.py",
-        "examples/packaging/runtime.example.yaml",
-        "examples/packaging/README.md",
-        "examples/packaging/README_zh.md",
+        "examples/simulation/README.md",
+        "examples/simulation/README_zh.md",
+        "examples/simulation/pick_place/run.py",
+        "examples/simulation/pick_place/runtime.example.yaml",
+        "examples/simulation/pick_place/README.md",
+        "examples/simulation/pick_place/README_zh.md",
+        "examples/simulation/packaging/run.py",
+        "examples/simulation/packaging/runtime.example.yaml",
+        "examples/simulation/packaging/README.md",
+        "examples/simulation/packaging/README_zh.md",
         "examples/rl/pick_place/env.py",
         "examples/rl/pick_place/contacts.py",
         "examples/rl/pick_place/expert.py",
@@ -72,6 +74,8 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/rl/reach/README_zh.md",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
+    assert not (PROJECT_ROOT / "examples" / "pick_place").exists()
+    assert not (PROJECT_ROOT / "examples" / "packaging").exists()
     assert not (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").exists()
 
 

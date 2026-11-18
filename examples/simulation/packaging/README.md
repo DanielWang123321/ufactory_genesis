@@ -1,10 +1,10 @@
 # Packaging Showcase Simulation
 
-[中文](README_zh.md) · [Examples guide](../README.md)
+[中文](README_zh.md) · [Simulation index](../README.md) · [Examples guide](../../README.md)
 
-Multi-robot box packing with trajectory control, in Genesis physics simulation or offline preflight. Install the package and run commands from the repository root as described in [Prerequisites](../README.md#prerequisites).
+Multi-robot box packing with trajectory control, in Genesis physics simulation or offline preflight. Install the package and run commands from the repository root as described in [Prerequisites](../../README.md#prerequisites).
 
-`examples/packaging/run.py` delegates to `ufactory-packaging-showcase`.
+`examples/simulation/packaging/run.py` delegates to `ufactory-packaging-showcase`.
 
 The cube is released 50 mm above the box rim and falls naturally. GPU regressions
 allow rebound and require its final collision bounds to remain inside the box
@@ -29,27 +29,27 @@ Grasp, transport, release and return-home checks remain in place.
 
 ```bash
 # xArm6 + Gripper G2: 1-cycle packaging physics simulation with viewer (servo_j)
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --visual
 
 # xArm6 + Gripper G2: 1-cycle packaging physics simulation on CPU backend
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --backend cpu
 
 # Lite6 + Lite6 Gripper: 3-cycle packaging physics simulation regression
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot lite6 --mode sim --executor servo_j --cycles 3
 
 # xArm7 + Gripper G2: packaging offline trajectory and collision preflight
-python examples/packaging/run.py \
-  --robot xarm7 --mode dry-run --executor servo_j
+python examples/simulation/packaging/run.py \
+  --robot xArm7 --mode dry-run --executor servo_j
 
 # xArm6 + Gripper G2: packaging physics simulation with partial configuration overlay
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j \
-  --config examples/packaging/runtime.example.yaml
+  --config examples/simulation/packaging/runtime.example.yaml
 ```
 
 ## Real robot
 
-`sdk-sim` and `real` modes are covered in [Hardware & Real Robot](../README.md#hardware--real-robot). Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper.
+`sdk-sim` and `real` modes are covered in [Hardware & Real Robot](../../README.md#hardware--real-robot). Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper.

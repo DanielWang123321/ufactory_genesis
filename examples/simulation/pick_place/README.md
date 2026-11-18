@@ -1,10 +1,10 @@
 # Pick-place
 
-[中文](README_zh.md) · [Examples guide](../README.md)
+[中文](README_zh.md) · [Simulation index](../README.md) · [Examples guide](../../README.md)
 
-Multi-robot pick-place in Genesis physics simulation or offline trajectory and collision preflight. Install the package and run commands from the repository root as described in [Prerequisites](../README.md#prerequisites).
+Multi-robot pick-place in Genesis physics simulation or offline trajectory and collision preflight. Install the package and run commands from the repository root as described in [Prerequisites](../../README.md#prerequisites).
 
-`examples/pick_place/run.py` delegates to the stable `ufactory-pick-place` console command. Both forms accept the same flags.
+`examples/simulation/pick_place/run.py` delegates to the stable `ufactory-pick-place` console command. Both forms accept the same flags.
 
 ## Flags
 
@@ -24,29 +24,29 @@ Multi-robot pick-place in Genesis physics simulation or offline trajectory and c
 
 ```bash
 # xArm6 + Gripper G2: print resolved pick-place runtime YAML and exit
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j --print-config
 
 # xArm6 + Gripper G2: offline trajectory and collision preflight (servo_j)
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j
 
 # Lite6 + Lite6 Gripper: pick-place physics simulation with viewer (servo_cartesian)
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
 
 # xArm6 + Bio Gripper G2: microplate pick-place physics simulation with viewer (servo_cartesian by default)
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode sim --visual
 
 # Lite6 + Lite6 Gripper: pick-place physics simulation on CPU backend (without a supported GPU)
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --backend cpu
 
 # xArm6 + Gripper G2: offline preflight with partial configuration overlay
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j \
-  --config examples/pick_place/runtime.example.yaml
+  --config examples/simulation/pick_place/runtime.example.yaml
 ```
 
 ## Configuration overlay
@@ -55,4 +55,4 @@ python examples/pick_place/run.py \
 
 ## Real robot
 
-For physical robot pick-place, see [Hardware & Real Robot](../README.md#hardware--real-robot).
+For physical robot pick-place, see [Hardware & Real Robot](../../README.md#hardware--real-robot).

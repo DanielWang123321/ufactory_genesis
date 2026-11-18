@@ -8,6 +8,6 @@ Policy weights are not committed to Git. Pretrained Reach checkpoints are hosted
 2. **[Pick & Place — tabletop](pick_place/README.md)**: use xArm6 + Gripper G2 to grasp, lift and transfer a cube, then set it down and release it at a tabletop target. The cube start position is sampled uniformly at random in `x ∈ [300, 500] mm`, `y ∈ [-200, 200] mm` with a fixed target at `(300, 300) mm`. The guide covers local training, evaluation and real-time GLB inference.
 3. **Box packing — planned**: place an object inside a box, adding box geometry and contact constraints. The RL environment and training/inference entries remain to be implemented.
 
-The existing [packaging showcase](../packaging/README.md) uses trajectory control.
+The existing [packaging showcase](../simulation/packaging/README.md) uses trajectory control.
 
 [中文说明](README_zh.md)

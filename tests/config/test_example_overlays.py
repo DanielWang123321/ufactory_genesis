@@ -11,7 +11,7 @@ from ufactory.config import ConfigError, load_runtime_config
 
 
 def test_pick_place_example_overlay_changes_only_motion_values() -> None:
-    overlay = PROJECT_ROOT / "examples" / "pick_place" / "runtime.example.yaml"
+    overlay = PROJECT_ROOT / "examples" / "simulation" / "pick_place" / "runtime.example.yaml"
     baseline = load_runtime_config("xarm6", task="pick_place")
     resolved = load_runtime_config("xarm6", task="pick_place", config_path=overlay)
 
@@ -22,7 +22,7 @@ def test_pick_place_example_overlay_changes_only_motion_values() -> None:
 
 
 def test_packaging_example_overlay_inherits_core_physical_defaults() -> None:
-    overlay = PROJECT_ROOT / "examples" / "packaging" / "runtime.example.yaml"
+    overlay = PROJECT_ROOT / "examples" / "simulation" / "packaging" / "runtime.example.yaml"
     baseline = load_runtime_config("lite6", task="packaging_showcase")
     resolved = load_runtime_config("lite6", task="packaging_showcase", config_path=overlay)
 

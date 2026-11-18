@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] — 2026-11-18
+
 ### Changed
 
+- Moved the trajectory-controlled pick-place and box-packing examples under `examples/simulation/` (`examples/simulation/pick_place` and `examples/simulation/packaging`) with bilingual simulation index guides, keeping `examples/visualization` and `examples/kinematics` as independent top-level entries.
 - Raised the Genesis World reference baseline and `[sim]` extra upper bound to **1.4.7** (with Quadrants **1.4.0**, `coacd` **1.0.14**, `pygel3d` **0.8.2**, `mujoco` **4.0.0**, and `pip` **26.3** in `uv.lock`; minimum stays **1.4.2**, with `1.4.2` to `1.4.6` emitting one unvalidated-baseline warning).
 - Moved `BioG2PickPlaceSimulation` `set_sol_params()` calls after `scene.build()` for Genesis 1.4.7 compatibility, and changed `CONSTRAINT_TOLERANCE` to `None`.
 - Refactored Bio Gripper G2 simulation to symmetric split-finger actuation and symmetric modal feedback (`0.5 * (qr - ql)`) with mild mimic impedance `(0.95, 0.98)`, aligned `finger_force_n()` with the official 5-point linear force curve (`4–20 N`), switched default precision to `precision="32"`, and decoupled the IK solver target (`10 μm`) from the hard acceptance limit (`0.1 mm`).

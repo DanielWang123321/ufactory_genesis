@@ -39,8 +39,9 @@ EVIDENCE_CARRY_PATH_PREFIXES = (
     "LICENSE",
     "docs/",
     "examples/README",
-    "examples/pick_place/README",
-    "examples/packaging/README",
+    "examples/simulation/README",
+    "examples/simulation/pick_place/README",
+    "examples/simulation/packaging/README",
 )
 
 FAST_CHECK_NAMES = (

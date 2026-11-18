@@ -487,7 +487,7 @@ def test_kinematic_carry_tracker_does_not_attach_when_object_out_of_reach(shared
 @pytest.mark.display
 @pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="No DISPLAY for visual dry-run subprocess")
 def test_visual_sim_subprocess():
-    script = PROJECT_ROOT / "examples" / "pick_place" / "run.py"
+    script = PROJECT_ROOT / "examples" / "simulation" / "pick_place" / "run.py"
     env = os.environ.copy()
     env.setdefault("NUMBA_CACHE_DIR", os.path.expanduser("~/.cache/numba"))
     env["PYTHONUNBUFFERED"] = "1"

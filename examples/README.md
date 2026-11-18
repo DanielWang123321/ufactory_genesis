@@ -56,8 +56,7 @@ Public directories in this release:
 |---|---|
 | `visualization/` | GLB robot and gripper viewers; see [Visualization](#visualization) |
 | `kinematics/` | FK/IK / robot verification wrappers; see [Kinematics & Dynamics Simulation](#kinematics--dynamics-simulation) |
-| `pick_place/` | Multi-robot pick-place entry + optional overlay; see [pick-place guide](pick_place/README.md) |
-| `packaging/` | Multi-robot packaging showcase entry + optional overlay; see [packaging guide](packaging/README.md) |
+| `simulation/` | Trajectory-controlled task simulations ([pick-place](simulation/pick_place/README.md), [packaging](simulation/packaging/README.md)); see [simulation index](simulation/README.md) |
 | `rl/` | Bare-arm Reach → tabletop Pick & Place → box packing (planned); Linux/NVIDIA; see [RL index](rl/README.md) |
 
 See the [RL index](rl/README.md) for the learning sequence and training/inference guides.
@@ -139,25 +138,25 @@ dynamics-sim-check --robot xarm6 --random-count 5
 
 ## Pick-place
 
-Multi-robot pick-place in Genesis physics simulation or offline preflight. Flags, more commands, and the configuration overlay are in the [pick-place guide](pick_place/README.md).
+Multi-robot pick-place in Genesis physics simulation or offline preflight. Flags, more commands, and the configuration overlay are in the [pick-place guide](simulation/pick_place/README.md).
 
 ```bash
 # xArm6 + Gripper G2: offline trajectory and collision preflight (servo_j)
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j
 
 # Lite6 + Lite6 Gripper: pick-place physics simulation with viewer (servo_cartesian)
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
 ```
 
 ## Packaging Showcase Simulation
 
-Multi-robot box packing with trajectory control. Flags and more commands are in the [packaging guide](packaging/README.md).
+Multi-robot box packing with trajectory control. Flags and more commands are in the [packaging guide](simulation/packaging/README.md).
 
 ```bash
 # xArm6 + Gripper G2: 1-cycle packaging physics simulation with viewer (servo_j)
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --visual
 ```
 
@@ -194,7 +193,7 @@ python examples/kinematics/verify_ik.py --robot lite6 --ip <ip>
 dynamics-sim-collision-check --robot xarm6 --ip <ip>
 
 # Lite6 + Lite6 Gripper: packaging controller-internal simulation (sdk-sim, joints do not move)
-python examples/packaging/run.py \
+python examples/simulation/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
 ```
@@ -208,12 +207,12 @@ Sends actual trajectory and servo setpoints to physical hardware:
 dynamics-hardware-check --robot xarm6 --ip <ip> --confirm-real
 
 # xArm6 + Gripper G2: real pick-place motion (requires per-unit calibration + --confirm-real)
-XARM_IP=<ip> python examples/pick_place/run.py \
+XARM_IP=<ip> python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 
 # Lite6 + Lite6 Gripper: real packaging motion (enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; requires per-unit calibration + --confirm-real)
-XARM_IP=<ip> python examples/packaging/run.py \
+XARM_IP=<ip> python examples/simulation/packaging/run.py \
   --robot lite6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 ```

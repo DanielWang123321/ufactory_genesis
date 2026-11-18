@@ -25,7 +25,7 @@ pytestmark = pytest.mark.integration
 PYTHON = sys.executable
 NUMBA_CACHE_DIR = os.path.expanduser("~/.cache/numba")
 REPRESENTATIVE = "xarm6"
-PICK_PLACE = "examples/pick_place/run.py"
+PICK_PLACE = "examples/simulation/pick_place/run.py"
 
 
 def _run(cmd: list[str], timeout: int = 300) -> subprocess.CompletedProcess:

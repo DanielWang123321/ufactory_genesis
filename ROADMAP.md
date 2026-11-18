@@ -20,7 +20,7 @@ Repository ownership has been transferred to `xArm-Developer/ufactory_genesis`. 
 Current commands, example directories and `ufactory` root exports are listed below. Later 0.x releases may rename or remove them. `ufactory.training`, `ufactory.quality`, and modules left off the list can change without a deprecation window.
 
 - Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`, `dynamics-report-compare`. `project-check` and `observe-hold-current` are maintainer tools.
-- Examples: `examples/visualization`, `examples/kinematics`, `examples/pick_place`, `examples/packaging`, `examples/rl/reach`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries. See the [examples guide](examples/README.md) for usage.
+- Examples: `examples/visualization`, `examples/kinematics`, `examples/simulation/pick_place`, `examples/simulation/packaging`, `examples/rl/reach`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries. See the [examples guide](examples/README.md) for usage.
 - Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
 
 ### User promotion checklist

@@ -1,10 +1,10 @@
 # 抓放仿真
 
-[English](README.md) · [示例指南](../README_zh.md)
+[English](README.md) · [仿真索引](../README_zh.md) · [示例指南](../../README_zh.md)
 
-多机型抓放的 Genesis 物理仿真与离线轨迹、碰撞预检。安装方式及运行目录见[前置条件](../README_zh.md#前置条件)。
+多机型抓放的 Genesis 物理仿真与离线轨迹、碰撞预检。安装方式及运行目录见[前置条件](../../README_zh.md#前置条件)。
 
-`examples/pick_place/run.py` 委托给稳定的 `ufactory-pick-place` 控制台命令，两者接受相同参数。
+`examples/simulation/pick_place/run.py` 委托给稳定的 `ufactory-pick-place` 控制台命令，两者接受相同参数。
 
 ## 参数
 
@@ -24,29 +24,29 @@
 
 ```bash
 # xArm6 + Gripper G2：打印解析后的抓放运行时配置并退出
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j --print-config
 
 # xArm6 + Gripper G2：抓放离线轨迹与碰撞预检（servo_j）
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j
 
 # Lite6 + Lite6 Gripper：抓放物理仿真并打开查看器（servo_cartesian）
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --visual
 
 # xArm6 + Bio Gripper G2：微孔板抓放物理仿真并打开查看器（默认 servo_cartesian）
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode sim --visual
 
 # Lite6 + Lite6 Gripper：使用 CPU 后端运行抓放物理仿真（无支持 GPU 时）
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot lite6 --mode sim --executor servo_cartesian --backend cpu
 
 # xArm6 + Gripper G2：使用局部配置覆盖文件运行抓放离线预检
-python examples/pick_place/run.py \
+python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode dry-run --executor servo_j \
-  --config examples/pick_place/runtime.example.yaml
+  --config examples/simulation/pick_place/runtime.example.yaml
 ```
 
 ## 覆盖配置
@@ -55,4 +55,4 @@ python examples/pick_place/run.py \
 
 ## 真机
 
-真实机械臂抓放部署请参见[真机操作与硬件校验](../README_zh.md#真机操作与硬件校验)。
+真实机械臂抓放部署请参见[真机操作与硬件校验](../../README_zh.md#真机操作与硬件校验)。

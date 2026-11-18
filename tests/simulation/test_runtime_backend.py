@@ -60,7 +60,7 @@ def test_default_pick_place_holds_the_cube_without_creep(tmp_path: Path) -> None
     result = subprocess.run(
         [
             sys.executable,
-            "examples/pick_place/run.py",
+            "examples/simulation/pick_place/run.py",
             "--robot",
             "xarm6",
             "--mode",

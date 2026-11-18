@@ -138,7 +138,7 @@ Before release, run the fast tier plus the asset integrity tests. They verify ev
 | `ufactory/visualization/` | GLB/PBR visualization helpers |
 | `assets/urdf/` | Robot and gripper URDFs + mesh files |
 | `assets/configs/runtime/` | Versioned robot/task/safety/motion YAML |
-| `examples/` | Task-oriented visualization, kinematics, pick_place, and packaging entries |
+| `examples/` | Task-oriented visualization, kinematics, and simulation (`pick_place`, `packaging`) entries |
 | `examples/rl/` | Linux/NVIDIA Reach and Pick-and-Place PPO training, evaluation, visualization, and recipes |
 | `scripts/` | User helpers and maintainer tools (see `scripts/README.md`) |
 | `tests/` | Contributor pytest suite (not required for library use) |
