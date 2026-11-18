@@ -220,7 +220,7 @@ class BioGripperG2:
         target = self._targets(active, right_value)
         self._robot.set_dofs_position(target, active)
         if hasattr(self._robot, "control_dofs_position"):
-            self._robot.control_dofs_position(target[:1], self.drive_dof_idx or active)
+            self._robot.control_dofs_position(target, active)
 
     def control_pose(self, right_value: float, dt: float = 0.02) -> None:
         """Servo-control gripper toward *right_value* without teleporting DOFs."""
@@ -246,8 +246,8 @@ class BioGripperG2:
                 controller.command(target_mm, speed_percent=float(speed_percent), force_percent=float(force_percent))
             controller.apply(dt)
             return
-        drive_idx = self.drive_dof_idx or active
-        self._robot.control_dofs_position(np.array([float(right_value)], dtype=np.float64), drive_idx)
+        target = self._targets(active, float(right_value))
+        self._robot.control_dofs_position(target, active)
 
     def gap_mm(self) -> float:
         """Current two-finger gap in millimetres."""

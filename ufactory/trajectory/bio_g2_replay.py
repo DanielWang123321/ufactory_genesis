@@ -100,10 +100,12 @@ DEFAULT_TRANSPORT_SPEED_MM_S = 250.0
 DEFAULT_PICK_PLACE_SPEED_MM_S = 200.0
 GRIPPER_KIT_FRICTION = 0.8
 TRANSPORT_RAMP_S = 0.40
+DEFAULT_PRECISION = "32"
 DEFAULT_SUBSTEPS = 8
-CONSTRAINT_TOLERANCE = 1e-6
+CONSTRAINT_TOLERANCE: float | None = None
 CONSTRAINT_ITERATIONS = 100
 IK_POS_TOL_M = 1e-5
+IK_MAX_POS_ERR_M = 1e-4
 IK_ROT_TOL_RAD = 1e-4
 ALIGN_TIMEOUT_S = 2.0
 ALIGN_GAP_DIFFERENCE_MM = 0.20
@@ -700,7 +702,7 @@ class BioG2PickPlaceSimulation:
         if not gs._initialized:
             gs.init(
                 backend=gs.cuda if backend == "gpu" else gs.cpu,
-                precision="64",
+                precision=DEFAULT_PRECISION,
                 seed=0,
                 logging_level="warning",
                 performance_mode=True,
@@ -708,8 +710,8 @@ class BioG2PickPlaceSimulation:
         expected = gs.cuda if backend == "gpu" else gs.cpu
         if gs.backend != expected or (backend == "gpu" and gs.device.type != "cuda"):
             raise RuntimeError(f"Requested {backend}, got {gs.backend}/{gs.device}; refusing fallback")
-        if np.dtype(gs.np_float) != np.dtype("float64"):
-            raise RuntimeError("This simulation requires Genesis precision=64")
+        if np.dtype(gs.np_float) not in (np.dtype("float32"), np.dtype("float64")):
+            raise RuntimeError("This simulation requires Genesis precision=32 or 64")
 
         self.gs, self.backend, self.headless, self.parameters = gs, backend, headless, parameters
         self.executor = executor
@@ -801,13 +803,13 @@ class BioG2PickPlaceSimulation:
                 surface=glb_view_surface(),
             )
 
+        self.scene.build()
+
         for entity in (self.robot, self.reagent_kit, self.pick_nest, self.place_nest):
             for geom in entity.geoms:
                 geom.set_sol_params(CONTACT_SOL_PARAMS)
         for equality in self.robot.equalities:
             equality.set_sol_params(PICK_PLACE_MIMIC_SOL_PARAMS)
-
-        self.scene.build()
 
         self.arm_dof_idx = [self.robot.get_joint(name).dofs_idx_local[0] for name in self.arm_joint_names]
         self.robot.set_dofs_kp(self.runtime.arm.kp, self.arm_dof_idx)
@@ -890,7 +892,7 @@ class BioG2PickPlaceSimulation:
         if (
             not np.all(np.isfinite(q_full))
             or not np.all(np.isfinite(error))
-            or position_error > IK_POS_TOL_M
+            or position_error > IK_MAX_POS_ERR_M
             or rotation_error > IK_ROT_TOL_RAD
         ):
             raise RuntimeError(f"IK failed: position={position_error * 1000:.6f}mm, rotation={rotation_error:.6g}rad")

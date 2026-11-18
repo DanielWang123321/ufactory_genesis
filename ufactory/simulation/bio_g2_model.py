@@ -51,6 +51,8 @@ SPEEDS_MM_S: tuple[float, ...] = tuple(rpm * 5.0 / 60.0 for rpm in (500, 1000, 2
 
 MIN_FORCE_N = 4.0
 MAX_FORCE_N = 20.0
+FORCE_CURVE_PERCENTS: tuple[float, ...] = (1.0, 25.0, 50.0, 75.0, 100.0)
+FORCE_CURVE_N: tuple[float, ...] = (4.0, 8.0, 12.0, 16.0, 20.0)
 
 RIGHT = "bio_gripper_g2_right_finger_joint"
 LEFT = "bio_gripper_g2_left_finger_joint"
@@ -95,14 +97,15 @@ def q_to_gap(q_right: float, q_left: float | None = None) -> float:
 
 
 def finger_force_n(force_percent: float) -> float:
-    """Map SDK force percentage ``[1, 100]`` linearly to single-finger normal force ``[4, 20]`` N."""
-    return (
-        MIN_FORCE_N + (bounded(force_percent, 1.0, 100.0, "force_percent") - 1.0) * (MAX_FORCE_N - MIN_FORCE_N) / 99.0
-    )
+    """Map SDK force percentage ``[1, 100]`` via the calibrated 5-point curve to single-finger force ``[4, 20]`` N."""
+    pct = bounded(force_percent, 1.0, 100.0, "force_percent")
+    if pct <= 25.0:
+        return MIN_FORCE_N + (pct - 1.0) * (4.0 / 24.0)
+    return 8.0 + (pct - 25.0) * 0.16
 
 
 def drive_limit_n(force_percent: float) -> float:
-    """Right-finger drive force limit (N) via virtual work: ``dW = F*dq_right - F*dq_left = 2F*dq_right``."""
+    """Total symmetric drive force limit (N) via virtual work: ``dW = F*dq_right - F*dq_left = 2F*dq_s``."""
     return 2.0 * finger_force_n(force_percent)
 
 

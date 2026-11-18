@@ -1,4 +1,4 @@
-"""Genesis integration, right-finger-only servo adapter, URDF gravity feedforward, and grasp geometry for Bio Gripper G2."""
+"""Genesis integration, symmetric split-drive servo adapter, URDF gravity feedforward, and grasp geometry for Bio Gripper G2."""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ from ufactory.simulation.bio_g2_model import (
 DT = BIO_G2_DT
 # Genesis solver tuple: (timeconst, dampratio, dmin, dmax, width, mid, power)
 BIO_G2_CONTACT_SOL_PARAMS: tuple[float, ...] = (0.005, 1.0, 0.99, 0.99, 0.001, 0.5, 2.0)
-BIO_G2_MIMIC_SOL_PARAMS: tuple[float, ...] = (0.00125, 1.0, 0.9999, 0.9999, 0.001, 0.5, 2.0)
-BIO_G2_PICK_PLACE_MIMIC_SOL_PARAMS: tuple[float, ...] = (0.005, 1.0, 0.9999, 0.9999, 0.001, 0.5, 2.0)
+BIO_G2_MIMIC_SOL_PARAMS: tuple[float, ...] = (0.005, 1.0, 0.95, 0.98, 0.001, 0.5, 2.0)
+BIO_G2_PICK_PLACE_MIMIC_SOL_PARAMS: tuple[float, ...] = (0.005, 1.0, 0.95, 0.98, 0.001, 0.5, 2.0)
 
 CONTACT_SOL_PARAMS = list(BIO_G2_CONTACT_SOL_PARAMS)
 MIMIC_SOL_PARAMS = list(BIO_G2_MIMIC_SOL_PARAMS)
@@ -85,33 +85,33 @@ def configure_bio_g2_drive(
     *,
     damping: float = 0.0,
     frictionloss: float = 0.0,
+    armature: float = 0.0,
 ) -> tuple[list[int], list[int]]:
-    """Configure right-finger-only actuation; left finger remains a passive mimic."""
+    """Configure symmetric split-drive PD actuation across right and left fingers with mimic sync."""
     right_idx = int(_resolve_joint(robot, RIGHT_JOINT).dofs_idx_local[0])
     left_idx = int(_resolve_joint(robot, LEFT_JOINT).dofs_idx_local[0])
     indices = [right_idx, left_idx]
-    robot.set_dofs_kp([parameters.kp_n_m], [right_idx])
-    robot.set_dofs_kv([parameters.kv_n_s_m], [right_idx])
-    robot.set_dofs_kp([0.0], [left_idx])
-    robot.set_dofs_kv([0.0], [left_idx])
+    half_kp = 0.5 * float(parameters.kp_n_m)
+    half_kv = 0.5 * float(parameters.kv_n_s_m)
+    robot.set_dofs_kp([half_kp, half_kp], indices)
+    robot.set_dofs_kv([half_kv, half_kv], indices)
     robot.set_dofs_damping([damping, damping], indices)
     robot.set_dofs_frictionloss([frictionloss, frictionloss], indices)
     if hasattr(robot, "set_dofs_armature"):
-        robot.set_dofs_armature([0.0, 0.0], indices)
-    if hasattr(robot, "control_dofs_force"):
-        robot.control_dofs_force([0.0], [left_idx])
-    return [right_idx], indices
+        robot.set_dofs_armature([armature, armature], indices)
+    return list(indices), indices
 
 
 class BioG2GenesisAdapter:
-    """Low-level Genesis adapter for Bio Gripper G2 right-finger servo."""
+    """Low-level Genesis adapter for Bio Gripper G2 symmetric split-drive servo."""
 
     def __init__(self, entity: Any, parameters: ServoParameters = ServoParameters()) -> None:
         self.entity, self.parameters = entity, parameters
         drive_idx, indices = configure_bio_g2_drive(entity, parameters)
-        self.right = drive_idx[0]
+        self.right = indices[0]
         self.left = indices[1]
         self.indices = indices
+        self.drive_idx = drive_idx
         self.position_resets = 0
         self.last_servo = (gap_to_q(150.0), 0.0)
         self._fallback_q = (gap_to_q(150.0), -gap_to_q(150.0))
@@ -124,15 +124,18 @@ class BioG2GenesisAdapter:
         return float(q[0]), float(v[0]), float(q[1]), float(v[1])
 
     def set_force_limit(self, limit_n: float) -> None:
-        self.entity.set_dofs_force_range([-limit_n], [limit_n], [self.right])
+        finger_limit = 0.5 * float(limit_n)
+        self.entity.set_dofs_force_range([-finger_limit, -finger_limit], [finger_limit, finger_limit], self.indices)
 
     def servo(self, position_m: float, velocity_m_s: float) -> None:
-        self.last_servo = (position_m, velocity_m_s)
-        self._fallback_q = (float(position_m), -float(position_m))
+        pos = float(position_m)
+        vel = float(velocity_m_s)
+        self.last_servo = (pos, vel)
+        self._fallback_q = (pos, -pos)
         if hasattr(self.entity, "control_dofs_position_velocity"):
-            self.entity.control_dofs_position_velocity([position_m], [velocity_m_s], [self.right])
+            self.entity.control_dofs_position_velocity([pos, -pos], [vel, -vel], self.indices)
         elif hasattr(self.entity, "control_dofs_position"):
-            self.entity.control_dofs_position([position_m], [self.right])
+            self.entity.control_dofs_position([pos, -pos], self.indices)
 
     def initialize(self, q_m: float) -> None:
         self.position_resets += 1
@@ -163,7 +166,7 @@ class BioG2GenesisController:
         self.model = BioGripperG2Model.load()
         self.adapter = BioG2GenesisAdapter(robot, parameters)
         self.controller = BioGripperG2Controller(self.adapter, parameters)
-        self.drive_idx = [self.adapter.right]
+        self.drive_idx = list(self.adapter.indices)
         self.all_dof_idx = list(self.adapter.indices)
         self.output: BioG2ControlOutput | None = None
         self.reset(initial_position_mm)

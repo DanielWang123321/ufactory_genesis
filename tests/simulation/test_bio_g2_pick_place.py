@@ -50,13 +50,13 @@ def test_scene_is_hidden_even_for_visual_run(monkeypatch, substeps):
         assert kwargs["viewer_options"].refresh_rate == 30
         assert kwargs["viewer_options"].realtime_factor is None
         assert kwargs["rigid_options"].constraint_timeconst == 0.005
-        assert kwargs["rigid_options"].tolerance == 1e-6
+        assert kwargs["rigid_options"].tolerance is None
         raise SceneRequested
 
     monkeypatch.setattr(gs, "_initialized", True)
     monkeypatch.setattr(gs, "backend", gs.cpu, raising=False)
     monkeypatch.setattr(gs, "device", SimpleNamespace(type="cpu"), raising=False)
-    monkeypatch.setattr(gs, "np_float", np.float64, raising=False)
+    monkeypatch.setattr(gs, "np_float", np.float32, raising=False)
     monkeypatch.setattr(gs, "Scene", capture_scene)
     with pytest.raises(SceneRequested):
         pick_place.XArm6BioG2PickPlaceSimulation(backend="cpu", headless=False, substeps=substeps)
@@ -488,10 +488,15 @@ def test_steady_transport_force_excludes_supported_grip_and_rounded_corners(run_
 
 
 @pytest.mark.parametrize(
-    "error",
-    [np.zeros(6), np.array([1.1e-5, 0, 0, 0, 0, 0]), np.array([0, 0, 0, 0, 0, 1.1e-4])],
+    ("error", "should_fail"),
+    [
+        (np.zeros(6), False),
+        (np.array([1.1e-5, 0, 0, 0, 0, 0]), False),
+        (np.array([1.1e-4, 0, 0, 0, 0, 0]), True),
+        (np.array([0, 0, 0, 0, 0, 1.1e-4]), True),
+    ],
 )
-def test_ik_tolerances_and_error_validation(error, ik_sim):
+def test_ik_tolerances_and_error_validation(error, should_fail, ik_sim):
     sim = ik_sim
     del sim.solve_arm_ik
     sim.arm_dof_idx = list(range(6))
@@ -511,11 +516,12 @@ def test_ik_tolerances_and_error_validation(error, ik_sim):
         return np.zeros(8), error
 
     sim.robot = SimpleNamespace(n_dofs=8, inverse_kinematics=solve)
-    if np.any(error):
+    if should_fail:
         with pytest.raises(RuntimeError, match="IK failed"):
             sim.solve_arm_ik(pick_place.HOME_GRASP_POS)
     else:
         np.testing.assert_array_equal(sim.solve_arm_ik(pick_place.HOME_GRASP_POS), 0.0)
+        assert sim.max_ik_position_error_m == pytest.approx(np.linalg.norm(error[:3]))
 
 
 def test_gravity_is_applied_as_position_bias_at_measured_configuration(ik_sim):

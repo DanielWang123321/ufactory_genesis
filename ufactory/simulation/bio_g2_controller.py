@@ -48,6 +48,12 @@ class Adapter(Protocol):
     def initialize(self, q_m: float) -> None: ...
 
 
+def _symmetric_state(state: tuple[float, float, float, float]) -> tuple[float, float]:
+    """Convert bilateral finger states ``(q_right, v_right, q_left, v_left)`` into the symmetric half-opening mode."""
+    qr, vr, ql, vl = state
+    return 0.5 * (float(qr) - float(ql)), 0.5 * (float(vr) - float(vl))
+
+
 class BioGripperG2Controller:
     """Calibrated Bio Gripper G2 servo controller."""
 
@@ -60,7 +66,7 @@ class BioGripperG2Controller:
         self.paused = False
         self._paused_by_zero_speed = False
         self._clear_integral_on_resume = False
-        self.reference_q_m = adapter.state()[0]
+        self.reference_q_m, _ = _symmetric_state(adapter.state())
         self.servo_reference_q_m = self.reference_q_m
         self.reference_velocity_m_s = 0.0
         self.integral_n = 0.0
@@ -132,7 +138,7 @@ class BioGripperG2Controller:
         self._paused_by_zero_speed = False
         if self.paused:
             return
-        q, v, _, _ = self.adapter.state()
+        q, v = _symmetric_state(self.adapter.state())
         preload = self.parameters.kp_n_m * (self.reference_q_m - q) + self.integral_n
         stalled = abs(v) < 0.001 and abs(preload) >= 0.9 * self.force_limit_n
         self.integral_n = max(-self.force_limit_n, min(self.force_limit_n, preload)) if stalled else 0.0
@@ -176,7 +182,7 @@ class BioGripperG2Controller:
         dt = float(dt)
         if not math.isfinite(dt) or dt <= 0:
             raise ValueError("dt must be finite and positive")
-        q, v, _, _ = self.adapter.state()
+        q, v = _symmetric_state(self.adapter.state())
         previous_reference = self.reference_q_m
         if not self.paused:
             delta = gap_to_q(self.position_mm) - self.reference_q_m

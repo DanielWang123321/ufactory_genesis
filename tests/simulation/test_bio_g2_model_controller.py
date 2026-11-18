@@ -71,6 +71,15 @@ def test_units_and_virtual_work(gap):
     assert SPEEDS_MM_S == (500 / 12, 1000 / 12, 2000 / 12, 3000 / 12, 4000 / 12)
 
 
+@pytest.mark.parametrize(
+    ("force_percent", "expected_single_n"),
+    [(1, 4.0), (25, 8.0), (50, 12.0), (75, 16.0), (100, 20.0)],
+)
+def test_force_curve_matches_official_five_point_calibration(force_percent, expected_single_n):
+    assert finger_force_n(force_percent) == pytest.approx(expected_single_n)
+    assert drive_limit_n(force_percent) == pytest.approx(2.0 * expected_single_n)
+
+
 def test_speed_percent_and_mm_s_conversions():
     assert bio_g2_speed_mm_s_from_percent(0) == 0.0
     assert bio_g2_speed_mm_s_from_percent(10) == pytest.approx(MIN_SPEED_MM_S)
@@ -291,3 +300,63 @@ def test_xarm6_combo_model_preserves_gripper_mass_and_mimic():
         with pytest.raises(SystemExit) as exc_info:
             parse_args(bad_args)
         assert exc_info.value.code == 2
+
+
+def test_symmetric_split_drive_adapter_and_modal_controller_feedback():
+    from types import SimpleNamespace
+    from ufactory.simulation.bio_g2_adapter import (
+        BIO_G2_MIMIC_SOL_PARAMS,
+        BioG2GenesisAdapter,
+        configure_bio_g2_mimic_constraints,
+    )
+    from ufactory.simulation.bio_g2_controller import ServoParameters
+
+    calls = []
+    robot = SimpleNamespace(
+        joints=[
+            SimpleNamespace(name=RIGHT, dofs_idx_local=[6]),
+            SimpleNamespace(name=LEFT, dofs_idx_local=[7]),
+        ],
+        equalities=[SimpleNamespace(name="mimic_bio_gripper_g2_left_finger_joint_to_bio_gripper_g2_right_finger_joint", set_sol_params=lambda p: calls.append(("eq", list(p))))],
+        set_dofs_kp=lambda v, idx: calls.append(("kp", list(v), list(idx))),
+        set_dofs_kv=lambda v, idx: calls.append(("kv", list(v), list(idx))),
+        set_dofs_damping=lambda v, idx: calls.append(("damping", list(v), list(idx))),
+        set_dofs_frictionloss=lambda v, idx: calls.append(("frictionloss", list(v), list(idx))),
+        set_dofs_armature=lambda v, idx: calls.append(("armature", list(v), list(idx))),
+        set_dofs_force_range=lambda lo, hi, idx: calls.append(("force_range", list(lo), list(hi), list(idx))),
+        control_dofs_position_velocity=lambda pos, vel, idx: calls.append(("servo", list(pos), list(vel), list(idx))),
+    )
+    assert configure_bio_g2_mimic_constraints(robot) == 1
+    assert calls[0] == ("eq", list(BIO_G2_MIMIC_SOL_PARAMS))
+    assert BIO_G2_MIMIC_SOL_PARAMS[2:4] == (0.95, 0.98)
+
+    adapter = BioG2GenesisAdapter(robot, ServoParameters(kp_n_m=16000.0, kv_n_s_m=40.0, ki_n_m_s=4000.0))
+    assert ("kp", [8000.0, 8000.0], [6, 7]) in calls
+    assert ("kv", [20.0, 20.0], [6, 7]) in calls
+    adapter.set_force_limit(drive_limit_n(50.0))
+    assert ("force_range", [-12.0, -12.0], [12.0, 12.0], [6, 7]) in calls
+    adapter.servo(0.015, -0.05)
+    assert ("servo", [0.015, -0.015], [-0.05, 0.05], [6, 7]) in calls
+
+    class AsymmetricAdapter(FakeAdapter):
+        def __init__(self):
+            super().__init__()
+            self.qr, self.vr = 0.021, -0.02
+            self.ql, self.vl = -0.019, 0.01
+
+        def state(self):
+            return self.qr, self.vr, self.ql, self.vl
+
+    asym = AsymmetricAdapter()
+    controller = BioGripperG2Controller(asym, ServoParameters(kp_n_m=16000.0, kv_n_s_m=40.0, ki_n_m_s=4000.0))
+    assert controller.reference_q_m == pytest.approx(0.020)
+    controller.command(71.0, speed_mm_s=100.0, force_percent=50.0)
+    output = controller.apply(0.02)
+    q_sym = 0.5 * (asym.qr - asym.ql)
+    v_sym = 0.5 * (asym.vr - asym.vl)
+    expected_force = (
+        16000.0 * (controller.servo_reference_q_m - q_sym)
+        + 40.0 * (controller.reference_velocity_m_s - v_sym)
+        + output.integral_n
+    )
+    assert output.predicted_force_n == pytest.approx(max(-24.0, min(24.0, expected_force)))

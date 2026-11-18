@@ -275,7 +275,7 @@ def test_lite6_gripper_demo_runs_in_headless_viewer(monkeypatch, tmp_path):
     assert scene.step_count == 5
 
 
-def test_bio_g2_demo_holds_arm_with_pd_and_drives_only_right_finger(monkeypatch, tmp_path):
+def test_bio_g2_demo_holds_arm_with_pd_and_drives_both_fingers_symmetrically(monkeypatch, tmp_path):
     robot_viewer = _load_robot_viewer(monkeypatch)
     robot = _FakeRobot()
     robot.joints = [
@@ -308,11 +308,12 @@ def test_bio_g2_demo_holds_arm_with_pd_and_drives_only_right_finger(monkeypatch,
 
     assert result is not None and result["ticks"] == 2
     assert len(arm_pd_calls) == 1
-    assert ("kp", (6,), None) in robot.calls
-    assert ("kp", (7,), None) in robot.calls
-    assert ("control_force", (7,), None) in robot.calls
-    assert ("control_position", (6,), None) in robot.calls
-    assert ("control_position", (6, 7), None) not in robot.calls
+    assert ("kp", (6, 7), None) in robot.calls
+    assert ("kv", (6, 7), None) in robot.calls
+    assert ("force_range", (6, 7), None) in robot.calls
+    assert ("control_position", (6, 7), None) in robot.calls
+    assert ("control_force", (7,), None) not in robot.calls
+    assert ("control_position", (6,), None) not in robot.calls
 
 
 def test_g2_demo_cycle_starts_closing_and_waits_half_second_after_arrival():
