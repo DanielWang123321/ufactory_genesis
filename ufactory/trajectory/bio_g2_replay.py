@@ -682,7 +682,7 @@ class BioG2PickPlaceSimulation:
     ) -> None:
         import genesis as gs
 
-        from ufactory.simulation.compat import require_genesis_runtime
+        from ufactory.simulation.compat import require_genesis_runtime, require_gpu_fp64_support
 
         require_genesis_runtime(gs)
         if backend not in ("cpu", "gpu"):
@@ -712,6 +712,8 @@ class BioG2PickPlaceSimulation:
             raise RuntimeError(f"Requested {backend}, got {gs.backend}/{gs.device}; refusing fallback")
         if np.dtype(gs.np_float) not in (np.dtype("float32"), np.dtype("float64")):
             raise RuntimeError("This simulation requires Genesis precision=32 or 64")
+        if backend == "gpu" and np.dtype(gs.np_float) == np.dtype("float64"):
+            require_gpu_fp64_support("gpu", "64")
 
         self.gs, self.backend, self.headless, self.parameters = gs, backend, headless, parameters
         self.executor = executor

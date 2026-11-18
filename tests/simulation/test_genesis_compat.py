@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
+from dataclasses import replace
 import inspect
 import math
+import sys
 import textwrap
 from types import SimpleNamespace
 import warnings
@@ -95,20 +96,20 @@ def test_invalid_version_is_rejected(monkeypatch):
         compat.require_genesis_version()
 
 
-# Stand-ins for SupportField._func_direction_cell: only their source text matters to the patch.
+# Stand-ins for SupportField._func_direction_cell: only their source text matters to the guard.
 def _direction_cell_modulo_wrap(theta, support_res):  # Genesis 1.4.4 style
     i = int(math.floor((theta + math.pi) / math.pi / 2 * support_res)) % support_res
     return i
 
 
-def _direction_cell_upper_wrap_only(theta, support_res):  # Genesis 1.4.5 style
+def _direction_cell_upper_wrap_only(theta, support_res):  # Genesis 1.4.5+ underflow style
     i = int(math.floor((theta + math.pi) / math.pi / 2 * support_res))
     if i >= support_res:
         i = i - support_res
     return i
 
 
-def _direction_cell_both_wraps(theta, support_res):  # patched
+def _direction_cell_both_wraps(theta, support_res):  # upstream-fixed style
     i = int(math.floor((theta + math.pi) / math.pi / 2 * support_res))
     if i >= support_res:
         i = i - support_res
@@ -117,60 +118,76 @@ def _direction_cell_both_wraps(theta, support_res):  # patched
     return i
 
 
-def _source_sha256(function) -> str:
-    return hashlib.sha256(textwrap.dedent(inspect.getsource(function)).encode()).hexdigest()
+@pytest.mark.parametrize(("backend", "precision"), [("gpu", "32"), ("cpu", "64"), ("cpu", "32")])
+def test_gpu_fp64_guard_ignores_fp32_and_cpu(backend: str, precision: str):
+    broken = SimpleNamespace(_func_direction_cell=123)
+    compat.require_gpu_fp64_support(backend, precision, support_field=broken)
 
 
-def test_support_field_patch_skips_modulo_wrap():
-    module = SimpleNamespace(_func_direction_cell=_direction_cell_modulo_wrap)
-
-    assert compat.patch_support_field_direction_cell(module) is False
-    assert module._func_direction_cell is _direction_cell_modulo_wrap
-
-
-def test_support_field_patch_skips_missing_function():
-    assert compat.patch_support_field_direction_cell(SimpleNamespace()) is False
+@pytest.mark.parametrize("func", [_direction_cell_modulo_wrap, _direction_cell_both_wraps])
+def test_gpu_fp64_guard_allows_modulo_wrap_and_restored_lower_wrap(func):
+    module = SimpleNamespace(_func_direction_cell=func)
+    compat.require_gpu_fp64_support("gpu", "64", support_field=module)
 
 
-def test_support_field_patch_replaces_known_underflow_once(monkeypatch):
-    monkeypatch.setattr(
-        compat, "_DIRECTION_CELL_UNDERFLOW_SHA256", frozenset({_source_sha256(_direction_cell_upper_wrap_only)})
-    )
-    monkeypatch.setattr(compat, "_build_direction_cell_wrap_fix", lambda: _direction_cell_both_wraps)
+def test_gpu_fp64_guard_allows_missing_function():
+    compat.require_gpu_fp64_support("gpu", "64", support_field=SimpleNamespace())
+
+
+def test_gpu_fp64_guard_rejects_unpatched_underflow_without_mutating_module():
     module = SimpleNamespace(_func_direction_cell=_direction_cell_upper_wrap_only)
 
-    assert compat.patch_support_field_direction_cell(module) is True
-    assert module._func_direction_cell is _direction_cell_both_wraps
-    assert compat.patch_support_field_direction_cell(module) is False
-    assert module._func_direction_cell(-math.pi - 1e-12, 120) == 119
-
-
-def test_support_field_patch_rejects_unknown_underflow_implementation():
-    module = SimpleNamespace(_func_direction_cell=_direction_cell_upper_wrap_only)
-
-    with pytest.raises(compat.GenesisCompatibilityError, match="not a known release"):
-        compat.patch_support_field_direction_cell(module)
+    with pytest.raises(compat.GenesisCompatibilityError, match=r"precision='32'.*backend='cpu'"):
+        compat.require_gpu_fp64_support("gpu", "64", support_field=module)
     assert module._func_direction_cell is _direction_cell_upper_wrap_only
 
 
-def test_support_field_patch_matches_installed_genesis(monkeypatch):
+def test_gpu_fp64_guard_matches_installed_genesis():
     pytest.importorskip("genesis")
     support_field = pytest.importorskip("genesis.engine.solvers.rigid.collider.support_field")
     original = getattr(support_field, "_func_direction_cell", None)
     if original is None:
         pytest.skip("installed Genesis has no SupportField._func_direction_cell")
-    monkeypatch.setattr(support_field, "_func_direction_cell", original)
     source = textwrap.dedent(inspect.getsource(original))
-    if not compat._direction_cell_lacks_lower_wrap(source):
-        assert compat.patch_support_field_direction_cell(support_field) is False
-        return
+    if compat._direction_cell_lacks_lower_wrap(source):
+        with pytest.raises(compat.GenesisCompatibilityError, match=r"precision='32'"):
+            compat.require_gpu_fp64_support("gpu", "64", support_field=support_field)
+        compat.require_gpu_fp64_support("gpu", "32", support_field=support_field)
+        compat.require_gpu_fp64_support("cpu", "64", support_field=support_field)
+    else:
+        compat.require_gpu_fp64_support("gpu", "64", support_field=support_field)
 
-    assert hashlib.sha256(source.encode()).hexdigest() in compat._DIRECTION_CELL_UNDERFLOW_SHA256
-    assert compat.patch_support_field_direction_cell(support_field) is True
-    from ufactory.simulation._support_field_fix import func_direction_cell
 
-    assert support_field._func_direction_cell is func_direction_cell
-    assert compat.patch_support_field_direction_cell(support_field) is False
+def test_runtime_manager_surfaces_gpu_fp64_compatibility_error(monkeypatch):
+    from ufactory.config import load_runtime_config
+    from ufactory.simulation import GenesisRuntimeManager
+
+    sf = SimpleNamespace(_func_direction_cell=_direction_cell_upper_wrap_only)
+    collider = SimpleNamespace(support_field=sf)
+    rigid = SimpleNamespace(collider=collider)
+    solvers = SimpleNamespace(rigid=rigid)
+    engine = SimpleNamespace(solvers=solvers)
+    fake_gs = SimpleNamespace(
+        engine=engine,
+        cpu=object(),
+        gpu=object(),
+        init=lambda **_kwargs: pytest.fail("gs.init should not be called"),
+    )
+    for name, mod in (
+        ("genesis", fake_gs),
+        ("genesis.engine", engine),
+        ("genesis.engine.solvers", solvers),
+        ("genesis.engine.solvers.rigid", rigid),
+        ("genesis.engine.solvers.rigid.collider", collider),
+        ("genesis.engine.solvers.rigid.collider.support_field", sf),
+    ):
+        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setattr(compat, "require_genesis_runtime", lambda: fake_gs)
+
+    sim_cfg = replace(load_runtime_config("xarm6").simulation, backend="gpu", precision="64")
+    with pytest.raises(compat.GenesisCompatibilityError, match=r"precision='32'"):
+        with GenesisRuntimeManager(sim_cfg):
+            pass
 
 
 def test_mesh_decimate_patch_skips_simplify_when_process_drops_faces_below_target():

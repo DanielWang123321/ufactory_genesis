@@ -4,15 +4,15 @@ Genesis 1.4.2 remains the minimum and 1.4.5 is the maximum; newer releases are
 rejected until verified (keep ``MAX_GENESIS_VERSION`` in sync with the ``[sim]``
 extra). Genesis 1.4.5 is the reference baseline with maintainer simulation
 checks. 1.4.2 to 1.4.4 still run and emit one warning;
-their contact results are not part of that verification. On 1.4.5 the
-SupportField azimuth index underflow is patched at runtime (see
-``patch_support_field_direction_cell``).
+their contact results are not part of that verification. Default runs use
+``precision="32"``; explicit GPU ``precision="64"`` is rejected while Genesis
+lacks the lower-bound SupportField azimuth wrap near ``-pi`` (see
+``require_gpu_fp64_support``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 from importlib import metadata
 import inspect
 import textwrap
@@ -149,15 +149,11 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
         "RigidEntity.inverse_kinematics",
     )
     if getattr(gs_module, "__name__", None) == "genesis":
-        patch_support_field_direction_cell()
         patch_mesh_decimate(getattr(gs_module, "Mesh", None))
     return gs_module
 
 
-# Dedented source of SupportField._func_direction_cell releases that carry the azimuth index underflow
-# (Genesis 1.4.5, commit 375fd7eb). Only these exact implementations are replaced.
-_DIRECTION_CELL_UNDERFLOW_SHA256 = frozenset({"42e904138606e51fd8b66fbc707f63e1ced0b623b3ec4d94f63d64d2b5effabd"})
-_SUPPORT_FIELD_PATCH_LOCK = threading.Lock()
+_COMPAT_PATCH_LOCK = threading.Lock()
 _MESH_DECIMATE_PATCH_ATTR = "_ufactory_decimate_post_process_patched"
 
 
@@ -173,7 +169,7 @@ def patch_mesh_decimate(mesh_cls: Any | None = None) -> bool:
     ``clear_visuals()`` and the ``@mutates_tmesh`` cache release.
     """
 
-    with _SUPPORT_FIELD_PATCH_LOCK:
+    with _COMPAT_PATCH_LOCK:
         if mesh_cls is None:
             try:
                 from genesis.engine.mesh import Mesh as mesh_cls
@@ -200,46 +196,41 @@ def _direction_cell_lacks_lower_wrap(source: str) -> bool:
     return "if i >= support_res:" in source and "if i < 0:" not in source
 
 
-def patch_support_field_direction_cell(support_field: ModuleType | Any | None = None) -> bool:
-    """Restore the lower-bound wrap of the SupportField azimuth index.
+def require_gpu_fp64_support(
+    backend: str,
+    precision: str,
+    *,
+    support_field: ModuleType | Any | None = None,
+) -> None:
+    """Reject GPU FP64 when the installed Genesis SupportField lacks the lower-bound azimuth wrap.
 
-    Genesis 1.4.5 replaced ``% support_res`` with an upper-bound check only. For a direction whose azimuth is just
-    above -pi, rounding yields index -1 and the lookup reads the previous geom's support table, or the wrong chart of
-    the same geom, which can create false penetrations. Genesis 1.4.4 and older are unaffected and left untouched.
-
-    Must run before the first scene build compiles the collision kernels. Returns True when this call patched.
+    Default ``precision="32"`` and ``backend="cpu"`` are unaffected and do not import ``support_field``.
+    Once a future Genesis release restores ``if i < 0:`` or modulo wrapping, ``gpu`` + ``"64"`` is allowed
+    automatically without changing this guard.
     """
 
-    with _SUPPORT_FIELD_PATCH_LOCK:
-        if support_field is None:
-            try:
-                from genesis.engine.solvers.rigid.collider import support_field
-            except ImportError:
-                return False
-        current = getattr(support_field, "_func_direction_cell", None)
-        if current is None:
-            return False
+    if backend != "gpu" or str(precision) != "64":
+        return
+    if support_field is None:
         try:
-            source = textwrap.dedent(inspect.getsource(current))
-        except (OSError, TypeError) as exc:
-            raise GenesisCompatibilityError("Cannot inspect Genesis SupportField._func_direction_cell source.") from exc
-        if not _direction_cell_lacks_lower_wrap(source):
-            return False
-        if hashlib.sha256(source.encode()).hexdigest() not in _DIRECTION_CELL_UNDERFLOW_SHA256:
-            raise GenesisCompatibilityError(
-                "Genesis SupportField._func_direction_cell lacks the lower-bound azimuth wrap, but its implementation "
-                "is not a known release; the compatibility patch cannot be applied safely."
-            )
-        support_field._func_direction_cell = _build_direction_cell_wrap_fix()
-        return True
-
-
-def _build_direction_cell_wrap_fix() -> Callable[..., Any]:
-    # Kept in its own module: Quadrants resolves type annotations at decoration time, which postponed annotations
-    # (``from __future__ import annotations`` here) would break.
-    from ufactory.simulation._support_field_fix import func_direction_cell
-
-    return func_direction_cell
+            from genesis.engine.solvers.rigid.collider import support_field
+        except ImportError:
+            return
+    current = getattr(support_field, "_func_direction_cell", None)
+    if current is None:
+        return
+    try:
+        source = textwrap.dedent(inspect.getsource(current))
+    except (OSError, TypeError) as exc:
+        raise GenesisCompatibilityError(
+            "Cannot inspect Genesis SupportField._func_direction_cell source for GPU precision='64'."
+        ) from exc
+    if _direction_cell_lacks_lower_wrap(source):
+        raise GenesisCompatibilityError(
+            "Genesis GPU precision='64' is not supported on this Genesis release because "
+            "SupportField._func_direction_cell lacks the lower-bound azimuth wrap near -pi; "
+            "use simulation.precision='32' or simulation.backend='cpu'."
+        )
 
 
 def require_genesis_capabilities(

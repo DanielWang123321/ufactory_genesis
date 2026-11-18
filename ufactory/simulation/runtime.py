@@ -64,9 +64,10 @@ class GenesisRuntimeManager(AbstractContextManager["GenesisRuntimeManager"]):
         with self._lock:
             if self.__class__._active is not None:
                 raise GenesisRuntimeError("another GenesisRuntimeManager already owns this process")
-            from ufactory.simulation.compat import require_genesis_runtime
+            from ufactory.simulation.compat import require_genesis_runtime, require_gpu_fp64_support
 
             gs = require_genesis_runtime()
+            require_gpu_fp64_support(self.config.backend, self.config.precision)
             backend = genesis_backend_constant(gs, self.config.backend)
             try:
                 gs.init(
