@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the Genesis World reference baseline and `[sim]` extra upper bound to **1.4.7** (with Quadrants **1.4.0**, `coacd` **1.0.14**, `pygel3d` **0.8.2**, `mujoco` **4.0.0**, and `pip` **26.3** in `uv.lock`; minimum stays **1.4.2**, with `1.4.2` to `1.4.6` emitting one unvalidated-baseline warning).
+- Moved `BioG2PickPlaceSimulation` `set_sol_params()` calls after `scene.build()` for Genesis 1.4.7 compatibility, and changed `CONSTRAINT_TOLERANCE` to `None`.
+- Refactored Bio Gripper G2 simulation to symmetric split-finger actuation and symmetric modal feedback (`0.5 * (qr - ql)`) with mild mimic impedance `(0.95, 0.98)`, aligned `finger_force_n()` with the official 5-point linear force curve (`4–20 N`), switched default precision to `precision="32"`, and decoupled the IK solver target (`10 μm`) from the hard acceptance limit (`0.1 mm`).
+- Replaced `ufactory.simulation._support_field_fix` (`patch_support_field_direction_cell`) with the read-only `require_gpu_fp64_support` guard in `ufactory.simulation.compat`, keeping `cpu + "64"` enabled while rejecting `gpu + "64"` until upstream Genesis restores the lower-bound SupportField azimuth wrap near `-π`.
+- Updated `PIP_AUDIT_IGNORED_VULNS` in `ufactory.quality.project_check` with three `pillow 11.3.0` advisories (`CVE-2026-128066`, `CVE-2026-128067`, `PYSEC-2026-4363`) blocked by Genesis/MoviePy's `pillow<12.0` constraint.
+
+### Removed
+
+- Removed `ufactory/simulation/_support_field_fix.py` and `tests/simulation/test_support_field_wrap_gpu.py`.
+
 ## [0.3.6] — 2026-10-29
 
 ### Changed

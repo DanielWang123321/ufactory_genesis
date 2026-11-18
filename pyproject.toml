@@ -56,7 +56,7 @@ real = [
     "coal==3.0.3",
 ]
 sim = [
-    "genesis-world>=1.4.2,<=1.4.5",
+    "genesis-world>=1.4.2,<=1.4.7",
     # Validated baseline. Last release whose PyPI default build is CUDA 12.x (driver >= 570);
     # local builds such as 2.10.0+cu126 / +cu130 / +cpu also satisfy this pin.
     "torch==2.10.0",

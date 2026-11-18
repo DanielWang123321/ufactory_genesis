@@ -317,7 +317,12 @@ def test_symmetric_split_drive_adapter_and_modal_controller_feedback():
             SimpleNamespace(name=RIGHT, dofs_idx_local=[6]),
             SimpleNamespace(name=LEFT, dofs_idx_local=[7]),
         ],
-        equalities=[SimpleNamespace(name="mimic_bio_gripper_g2_left_finger_joint_to_bio_gripper_g2_right_finger_joint", set_sol_params=lambda p: calls.append(("eq", list(p))))],
+        equalities=[
+            SimpleNamespace(
+                name="mimic_bio_gripper_g2_left_finger_joint_to_bio_gripper_g2_right_finger_joint",
+                set_sol_params=lambda p: calls.append(("eq", list(p))),
+            )
+        ],
         set_dofs_kp=lambda v, idx: calls.append(("kp", list(v), list(idx))),
         set_dofs_kv=lambda v, idx: calls.append(("kv", list(v), list(idx))),
         set_dofs_damping=lambda v, idx: calls.append(("damping", list(v), list(idx))),

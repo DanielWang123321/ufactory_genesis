@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-Validated with Python 3.12/3.13 and Genesis World 1.4.5; the minimum Genesis version is 1.4.2. Versions 1.4.2 to 1.4.4 warn once; 1.4.5 is also the maximum, and newer versions are rejected. See the [version policy](../ROADMAP.md).
+Validated with Python 3.12/3.13 and Genesis World 1.4.7; the minimum Genesis version is 1.4.2. Versions 1.4.2 to 1.4.6 warn once; 1.4.7 is also the maximum, and newer versions are rejected. See the [version policy](../ROADMAP.md).
 
 1. Clone this repository and run commands from the repository root.
 2. Editable install (source-only; wheels/sdists are unsupported):

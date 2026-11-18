@@ -113,9 +113,12 @@ PIP_AUDIT_IGNORED_VULNS = (
     "CVE-2026-112900",
     "CVE-2026-112901",
     "CVE-2026-114501",
+    "CVE-2026-128066",
+    "CVE-2026-128067",
     "GHSA-78g4-xqwv-q3g8",
     "PYSEC-2026-4327",
     "PYSEC-2026-4332",
+    "PYSEC-2026-4363",
 )
 
 UV_EXPORT_EXTRAS = ("sim", "real", "rl", "dynamics", "dev")

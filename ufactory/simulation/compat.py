@@ -1,9 +1,9 @@
 """Genesis version and private-hook compatibility checks.
 
-Genesis 1.4.2 remains the minimum and 1.4.5 is the maximum; newer releases are
+Genesis 1.4.2 remains the minimum and 1.4.7 is the maximum; newer releases are
 rejected until verified (keep ``MAX_GENESIS_VERSION`` in sync with the ``[sim]``
-extra). Genesis 1.4.5 is the reference baseline with maintainer simulation
-checks. 1.4.2 to 1.4.4 still run and emit one warning;
+extra). Genesis 1.4.7 is the reference baseline with maintainer simulation
+checks. 1.4.2 to 1.4.6 still run and emit one warning;
 their contact results are not part of that verification. Default runs use
 ``precision="32"``; explicit GPU ``precision="64"`` is rejected while Genesis
 lacks the lower-bound SupportField azimuth wrap near ``-pi`` (see
@@ -25,8 +25,8 @@ from packaging.version import InvalidVersion, Version
 
 
 MIN_GENESIS_VERSION = Version("1.4.2")
-VALIDATED_GENESIS_VERSION = Version("1.4.5")  # reference / pinned baseline alias
-MAX_GENESIS_VERSION = Version("1.4.5")  # keep in sync with the [sim] extra upper bound
+VALIDATED_GENESIS_VERSION = Version("1.4.7")  # reference / pinned baseline alias
+MAX_GENESIS_VERSION = Version("1.4.7")  # keep in sync with the [sim] extra upper bound
 
 _WARNING_LOCK = threading.Lock()
 _WARNED_UNVALIDATED = False
@@ -160,7 +160,7 @@ _MESH_DECIMATE_PATCH_ATTR = "_ufactory_decimate_post_process_patched"
 def patch_mesh_decimate(mesh_cls: Any | None = None) -> bool:
     """Ensure ``Mesh.decimate`` rechecks the face count after ``process(validate=True)``.
 
-    Genesis 1.4.2-1.4.5 checks ``len(self._mesh.faces) > decimate_face_num`` before calling
+    Genesis 1.4.2-1.4.7 checks ``len(self._mesh.faces) > decimate_face_num`` before calling
     ``self._mesh.process(validate=True)``. When ``process(validate=True)`` drops degenerate faces and brings the face
     count to or below ``decimate_face_num`` (e.g. ``hull_012_cup_01.stl`` from 504 to 499 faces under SciPy 1.18.1),
     ``fast_simplification.simplify`` raises ``ValueError: ``target_count`` must be less than the number of faces``.

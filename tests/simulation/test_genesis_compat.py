@@ -1,4 +1,4 @@
-"""Version and private-hook contract tests for the Genesis 1.4.5 baseline."""
+"""Version and private-hook contract tests for the Genesis 1.4.7 baseline."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def test_version_below_minimum_is_rejected(monkeypatch):
 
 
 def test_validated_version_is_accepted_without_warning(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.7")
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -43,23 +43,23 @@ def test_older_version_is_rejected(monkeypatch):
         compat.require_genesis_version()
 
 
-@pytest.mark.parametrize("version", ["1.4.2", "1.4.3", "1.4.4"])
+@pytest.mark.parametrize("version", ["1.4.2", "1.4.3", "1.4.4", "1.4.5", "1.4.6"])
 def test_unvalidated_supported_version_warns_only_once(monkeypatch, version: str):
     monkeypatch.setattr(compat.metadata, "version", lambda _name: version)
 
-    with pytest.warns(RuntimeWarning, match="only 1.4.5 is the project's reference baseline") as caught:
+    with pytest.warns(RuntimeWarning, match="only 1.4.7 is the project's reference baseline") as caught:
         compat.require_genesis_version()
         compat.require_genesis_version()
     assert len(caught) == 1
 
 
-@pytest.mark.parametrize("version", ["1.4.5.post1", "1.4.6.dev0", "1.4.6", "1.5.0"])
+@pytest.mark.parametrize("version", ["1.4.7.post1", "1.4.8.dev0", "1.4.8", "1.5.0"])
 def test_version_above_maximum_is_rejected(monkeypatch, version: str):
     monkeypatch.setattr(compat.metadata, "version", lambda _name: version)
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with pytest.raises(compat.GenesisCompatibilityError, match=r"Genesis<=1\.4\.5 is required"):
+        with pytest.raises(compat.GenesisCompatibilityError, match=r"Genesis<=1\.4\.7 is required"):
             compat.require_genesis_version()
     assert caught == []
 
@@ -76,15 +76,15 @@ def test_maximum_matches_sim_extra_upper_bound():
     ]
     assert genesis.specifier.contains(compat.MAX_GENESIS_VERSION)
     assert genesis.specifier.contains(compat.MIN_GENESIS_VERSION)
-    assert not genesis.specifier.contains("1.4.5.post1")
+    assert not genesis.specifier.contains("1.4.7.post1")
     assert not genesis.specifier.contains("1.4.1")
 
 
 def test_unvalidated_version_with_complete_capabilities_passes_and_warns(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.4")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
     gs = pytest.importorskip("genesis")
 
-    with pytest.warns(RuntimeWarning, match="only 1.4.5 is the project's reference baseline") as caught:
+    with pytest.warns(RuntimeWarning, match="only 1.4.7 is the project's reference baseline") as caught:
         assert compat.require_genesis_capabilities(gs, pbr=True, deferred_viewer=True) is gs
     assert len(caught) == 1
 
@@ -278,7 +278,7 @@ class _CompatibleMesh:
 
 
 def test_pbr_hook_contract_accepts_required_signatures(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.7")
     gs = SimpleNamespace(Mesh=_CompatibleMesh)
     gltf = SimpleNamespace(parse_mesh_glb=_parse_mesh_glb)
     mesh = SimpleNamespace(surface_uvs_to_trimesh_visual=_surface_uvs_to_trimesh_visual)
@@ -298,7 +298,7 @@ def test_pbr_hook_contract_rejects_changed_signature_before_patch(monkeypatch):
 
 
 def test_present_hold_hook_contract_accepts_required_methods(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.7")
 
     class _Viewer:
         def _render(self, camera_node=None, renderer=None, normal=False):
@@ -327,7 +327,7 @@ def test_present_hold_hook_contract_accepts_required_methods(monkeypatch):
 
 
 def test_present_hold_hook_contract_rejects_missing_refresh(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.7")
 
     class _Viewer:
         def _render(self, camera_node=None, renderer=None, normal=False):
@@ -354,7 +354,7 @@ def test_present_hold_hook_contract_rejects_missing_refresh(monkeypatch):
 
 
 def test_viewer_contract_rejects_missing_private_registry(monkeypatch):
-    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.5")
+    monkeypatch.setattr(compat.metadata, "version", lambda _name: "1.4.7")
 
     with pytest.raises(compat.GenesisCompatibilityError, match="_scene_registry"):
         compat.load_deferred_viewer_api(SimpleNamespace())
