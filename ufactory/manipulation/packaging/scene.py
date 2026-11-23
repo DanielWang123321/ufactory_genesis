@@ -10,7 +10,7 @@ import torch
 import genesis as gs
 from ufactory.config import load_runtime_config
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
-from ufactory.robots.paths import robot_visual_glb_urdf
+from ufactory.robots.assembly import compose_robot_urdf
 from ufactory.manipulation.packaging.core import packaging_layout
 from ufactory.simulation import (
     configure_g2_mimic_constraints,
@@ -360,10 +360,8 @@ def build_packaging_scene(
     add_cardboard_box(scene, layout)
 
     if robot_urdf_path is None:
-        if config.gripper.adapter == "lite6":
-            urdf_path = robot_visual_glb_urdf(config.robot.key, with_lite6_gripper=True, movable=True)
-        else:
-            urdf_path = robot_visual_glb_urdf(config.robot.key, with_gripper_g2=True, movable=True)
+        end_effector = "lite6_gripper" if config.gripper.adapter == "lite6" else "gripper_g2"
+        urdf_path = compose_robot_urdf(config.robot.key, end_effector)
     else:
         urdf_path = robot_urdf_path
     robot = _add_packaging_robot(scene, layout, urdf_path)

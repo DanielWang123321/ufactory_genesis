@@ -35,7 +35,7 @@ from ufactory.simulation import (
     validate_g2_contact_substeps,
 )
 from ufactory.simulation.collision import apply_collision_geometry_filters
-from ufactory.robots.paths import robot_visual_glb_urdf, robot_urdf
+from ufactory.robots.assembly import compose_robot_urdf
 from ufactory.robots.registry import joint_names
 from ufactory.robots.runtime import GripperControlParams, RobotRuntimeProfile, get_robot_runtime_profile
 
@@ -151,13 +151,13 @@ def _robot_urdf_for_visual_model(runtime: RobotRuntimeProfile, visual_model: str
     if model == "stl":
         if profile.key != "xarm6_1305":
             raise ValueError(f"visual_model='stl' is only supported for xarm6_1305, got {profile.key!r}")
-        return robot_urdf(profile.key, "xarm6_with_gripper.urdf"), False
+        return compose_robot_urdf(profile.key, "gripper_g2", visual="stl"), False
     if model != "glb":
         raise ValueError("visual_model must be 'glb' or 'stl'")
     if gripper is not None and gripper.family == "lite6":
-        return robot_visual_glb_urdf(profile.key, with_lite6_gripper=True, movable=True), True
+        return compose_robot_urdf(profile.key, "lite6_gripper"), True
     if gripper is not None and gripper.family == "g2":
-        return robot_visual_glb_urdf(profile.key, with_gripper_g2=True, movable=True), True
+        return compose_robot_urdf(profile.key, "gripper_g2"), True
     raise ValueError(f"{profile.key} has no supported gripper for the trajectory scene")
 
 

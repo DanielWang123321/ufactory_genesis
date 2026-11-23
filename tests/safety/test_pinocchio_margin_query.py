@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from ufactory.config import RepositoryAssetStore, load_runtime_config
+from ufactory.robots.assembly import resolve_robot_urdf
 from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBackend
 from ufactory.safety.adapters.pinocchio import StageAwareObjectCollisionBackend
 
@@ -15,7 +15,9 @@ def collision_backend() -> tuple[object, PinocchioCollisionBackend]:
     pytest.importorskip("pinocchio")
     pytest.importorskip("coal")
     config = load_runtime_config("xarm6", task="packaging_showcase")
-    urdf = RepositoryAssetStore.discover().require(Path(config.robot.assets_dir) / config.robot.urdf)
+    urdf = resolve_robot_urdf(
+        config.robot.key, config.robot.urdf, assets_dir=config.robot.assets_dir, store=RepositoryAssetStore.discover()
+    )
     backend = PinocchioCollisionBackend(
         urdf,
         joint_names=config.robot.joint_names,

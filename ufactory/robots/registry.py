@@ -21,21 +21,32 @@ class RobotModelSpec:
     default_urdf: str
     visual_glb_urdf: str
     kinematics_prefix: str
-    supports_bio_gripper_g2: bool = True
-    bio_gripper_g2_visual_urdf: str = ""
-    bio_gripper_g2_movable_visual_urdf: str = ""
-    supports_gripper_g2: bool = True
-    gripper_g2_visual_urdf: str = ""
-    gripper_g2_movable_visual_urdf: str = ""
-    supports_vacuum_gripper: bool = True
-    vacuum_gripper_visual_urdf: str = ""
-    supports_lite6_gripper: bool = False
-    lite6_gripper_visual_urdf: str = ""
-    lite6_gripper_movable_visual_urdf: str = ""
-    supports_lite6_vacuum_gripper: bool = False
-    lite6_vacuum_gripper_visual_urdf: str = ""
-    lite6_with_gripper_urdf: str = ""
-    lite6_with_vacuum_gripper_urdf: str = ""
+
+    # End-effector compatibility comes from assets/urdf/assembly.yaml (single source of truth).
+    def supports(self, end_effector: str) -> bool:
+        from ufactory.robots.assembly import supports_end_effector
+
+        return supports_end_effector(self.key, end_effector)
+
+    @property
+    def supports_gripper_g2(self) -> bool:
+        return self.supports("gripper_g2")
+
+    @property
+    def supports_bio_gripper_g2(self) -> bool:
+        return self.supports("bio_gripper_g2")
+
+    @property
+    def supports_vacuum_gripper(self) -> bool:
+        return self.supports("vacuum_gripper")
+
+    @property
+    def supports_lite6_gripper(self) -> bool:
+        return self.supports("lite6_gripper")
+
+    @property
+    def supports_lite6_vacuum_gripper(self) -> bool:
+        return self.supports("lite6_vacuum_gripper")
 
 
 def _assets(robot: str) -> Path:
@@ -55,11 +66,6 @@ def _xarm_profile(dof: int) -> RobotModelSpec:
         default_urdf=f"{key}.urdf",
         visual_glb_urdf=f"{key}_visual.glb.urdf",
         kinematics_prefix=robot,
-        bio_gripper_g2_visual_urdf=f"{key}_bio_gripper_g2_visual.glb.urdf",
-        bio_gripper_g2_movable_visual_urdf=f"{key}_bio_gripper_g2_movable_visual.glb.urdf",
-        gripper_g2_visual_urdf=f"{key}_g2_visual.urdf",
-        gripper_g2_movable_visual_urdf=f"{key}_g2_movable_visual.urdf",
-        vacuum_gripper_visual_urdf=f"{key}_vacuum_gripper_visual.glb.urdf",
     )
 
 
@@ -76,20 +82,6 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         default_urdf="lite6.urdf",
         visual_glb_urdf="lite6_visual.glb.urdf",
         kinematics_prefix="lite6",
-        supports_bio_gripper_g2=False,
-        bio_gripper_g2_visual_urdf="",
-        supports_gripper_g2=False,
-        gripper_g2_visual_urdf="",
-        gripper_g2_movable_visual_urdf="",
-        supports_vacuum_gripper=False,
-        vacuum_gripper_visual_urdf="",
-        supports_lite6_gripper=True,
-        lite6_gripper_visual_urdf="lite6_gripper_visual.glb.urdf",
-        lite6_gripper_movable_visual_urdf="lite6_gripper_movable_visual.glb.urdf",
-        supports_lite6_vacuum_gripper=True,
-        lite6_vacuum_gripper_visual_urdf="lite6_vacuum_gripper_visual.glb.urdf",
-        lite6_with_gripper_urdf="lite6_with_gripper.urdf",
-        lite6_with_vacuum_gripper_urdf="lite6_with_vacuum_gripper.urdf",
     ),
     "uf850": RobotModelSpec(
         key="uf850",
@@ -101,11 +93,6 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         default_urdf="uf850.urdf",
         visual_glb_urdf="uf850_visual.glb.urdf",
         kinematics_prefix="uf850",
-        bio_gripper_g2_visual_urdf="uf850_bio_gripper_g2_visual.glb.urdf",
-        bio_gripper_g2_movable_visual_urdf="uf850_bio_gripper_g2_movable_visual.glb.urdf",
-        gripper_g2_visual_urdf="uf850_g2_visual.urdf",
-        gripper_g2_movable_visual_urdf="uf850_g2_movable_visual.urdf",
-        vacuum_gripper_visual_urdf="uf850_vacuum_gripper_visual.glb.urdf",
     ),
     "xarm6_1305": _xarm_profile(6),
 }

@@ -1,6 +1,6 @@
 # xArm5 1305 Assets
 
-动力学 URDF：`xarm5_1305.urdf`（及 G2 / bio_gripper / vacuum_gripper / GLB 组合变体）。
+动力学 URDF：`xarm5_1305.urdf`；GLB 视觉 URDF：`xarm5_1305_visual.glb.urdf`（物理与前者相同）。末端组合不再提供静态 URDF，由 `ufactory.robots.assembly` 按 [`assembly.yaml`](../assembly.yaml) 运行时生成（如 `compose_robot_urdf("xarm5_1305", "gripper_g2")`）。
 
 ## 碰撞网格
 
@@ -22,4 +22,4 @@ Genesis 1.4.4/1.4.5 默认启用 `convexify=True` 且 `decompose_robot_error_thr
 ## Source / License
 
 - URDF / STL 源自上游 xArm ROS 描述（见仓库根 [NOTICE](../../../NOTICE)；典型 BSD-3-Clause）。
-- 本仓库维护组合 URDF、GLB 视觉与压缩流水线；代码 MIT，资产归属见 NOTICE。
+- 本仓库维护 GLB 视觉与压缩流水线；代码 MIT，资产归属见 NOTICE。

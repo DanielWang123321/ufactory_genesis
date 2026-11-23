@@ -21,7 +21,7 @@ Current commands, example directories and `ufactory` root exports are listed bel
 
 - Commands: `ufactory-pick-place`, `ufactory-packaging-showcase`, `dynamics-sim-check`, `dynamics-sim-collision-check`, `dynamics-hardware-check`, `dynamics-report-compare`. `project-check` and `observe-hold-current` are maintainer tools.
 - Examples: `examples/visualization`, `examples/kinematics`, `examples/simulation/pick_place`, `examples/simulation/packaging`, `examples/rl/reach`, `examples/rl/pick_place`, including the `runtime.example.yaml` files beside the pick-place and packaging entries. See the [examples guide](examples/README.md) for usage.
-- Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `robot_assets`, `RepositoryAssetStore`.
+- Library exports from `ufactory`: `get_robot_profile`, `robot_urdf`, `robot_visual_glb_urdf`, `compose_robot_urdf`, `supported_end_effectors`, `robot_assets`, `RepositoryAssetStore`.
 
 ### User promotion checklist
 

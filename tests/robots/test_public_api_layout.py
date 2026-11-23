@@ -65,6 +65,8 @@ def test_root_namespace_is_core_robot_api_only() -> None:
         "RepositoryAssetStore",
         "robot_urdf",
         "robot_visual_glb_urdf",
+        "compose_robot_urdf",
+        "supported_end_effectors",
     ):
         assert hasattr(ufactory, name)
 

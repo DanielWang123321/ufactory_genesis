@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from ufactory.robots.assembly import compose_robot_urdf, get_end_effector, parse_assembly_ref
 from ufactory.robots.registry import PROJECT_ROOT, get_robot_profile
 
 DYNAMICS_VALIDATION_POSES_YAML = PROJECT_ROOT / "assets" / "configs" / "dynamics_validation_pose.yaml"
@@ -46,10 +47,26 @@ def kinematics_user_dir(robot_name: str) -> Path:
 
 
 def robot_urdf(robot_key: str, name: str | None = None) -> str:
-    """Return absolute path to a robot URDF by profile key or robot name."""
+    """Return the absolute path of a robot URDF by profile key or robot name.
+
+    ``name`` is a file in the arm asset directory (default: the dynamics URDF) or an assembly reference such as
+    ``assembly:gripper_g2`` (see :mod:`ufactory.robots.assembly`), which is composed on demand.
+    """
     profile = get_robot_profile(robot_key)
     urdf_name = name or profile.default_urdf
+    ref = parse_assembly_ref(urdf_name)
+    if ref is not None:
+        return compose_robot_urdf(profile.key, ref.end_effector, visual=ref.visual, gripper_visual=ref.gripper_visual)
     return _urdf_path(profile.assets_dir, urdf_name)
+
+
+_ACCESSORY_FLAGS = (
+    ("with_bio_gripper_g2", "bio_gripper_g2", "Bio Gripper G2"),
+    ("with_gripper_g2", "gripper_g2", "Gripper G2"),
+    ("with_vacuum_gripper", "vacuum_gripper", "Vacuum Gripper"),
+    ("with_lite6_gripper", "lite6_gripper", "Lite6 Gripper"),
+    ("with_lite6_vacuum_gripper", "lite6_vacuum_gripper", "Lite6 Vacuum Gripper"),
+)
 
 
 def robot_visual_glb_urdf(
@@ -62,15 +79,22 @@ def robot_visual_glb_urdf(
     with_lite6_vacuum_gripper: bool = False,
     movable: bool = False,
 ) -> str:
+    """GLB-visual URDF of an arm, optionally composed with one end effector.
+
+    Without an accessory this is the arm's ``*_visual.glb.urdf``. With one, the arm and part are assembled at
+    runtime: ``movable=True`` keeps per-link gripper visuals, otherwise grippers use their static overlay.
+    New code should call :func:`ufactory.robots.assembly.compose_robot_urdf` directly.
+    """
     profile = get_robot_profile(robot_key)
-    accessory_flags = (
-        with_bio_gripper_g2,
-        with_gripper_g2,
-        with_vacuum_gripper,
-        with_lite6_gripper,
-        with_lite6_vacuum_gripper,
-    )
-    if sum(accessory_flags) > 1:
+    flags = {
+        "with_bio_gripper_g2": with_bio_gripper_g2,
+        "with_gripper_g2": with_gripper_g2,
+        "with_vacuum_gripper": with_vacuum_gripper,
+        "with_lite6_gripper": with_lite6_gripper,
+        "with_lite6_vacuum_gripper": with_lite6_vacuum_gripper,
+    }
+    selected = [(name, label) for flag, name, label in _ACCESSORY_FLAGS if flags[flag]]
+    if len(selected) > 1:
         raise ValueError(
             "with_bio_gripper_g2, with_gripper_g2, with_vacuum_gripper, "
             "with_lite6_gripper, and with_lite6_vacuum_gripper are mutually exclusive"
@@ -79,43 +103,14 @@ def robot_visual_glb_urdf(
         raise ValueError(
             "movable=True requires with_gripper_g2=True, with_lite6_gripper=True, or with_bio_gripper_g2=True"
         )
-    if with_gripper_g2:
-        if not profile.supports_gripper_g2:
-            raise ValueError(f"Robot {robot_key} does not support Gripper G2")
-        if movable:
-            if not profile.gripper_g2_movable_visual_urdf:
-                raise ValueError(f"Robot {robot_key} has no Gripper G2 movable visual URDF")
-            return _urdf_path(profile.assets_dir, profile.gripper_g2_movable_visual_urdf)
-        if not profile.gripper_g2_visual_urdf:
-            raise ValueError(f"Robot {robot_key} has no Gripper G2 visual URDF")
-        return _urdf_path(profile.assets_dir, profile.gripper_g2_visual_urdf)
-    if with_bio_gripper_g2:
-        if not profile.supports_bio_gripper_g2 or not profile.bio_gripper_g2_visual_urdf:
-            raise ValueError(f"Robot {robot_key} does not support Bio Gripper G2 visual URDF")
-        if movable:
-            if not profile.bio_gripper_g2_movable_visual_urdf:
-                raise ValueError(f"Robot {robot_key} has no Bio Gripper G2 movable visual URDF")
-            return _urdf_path(profile.assets_dir, profile.bio_gripper_g2_movable_visual_urdf)
-        return _urdf_path(profile.assets_dir, profile.bio_gripper_g2_visual_urdf)
-    if with_vacuum_gripper:
-        if not profile.supports_vacuum_gripper or not profile.vacuum_gripper_visual_urdf:
-            raise ValueError(f"Robot {robot_key} does not support Vacuum Gripper visual URDF")
-        return _urdf_path(profile.assets_dir, profile.vacuum_gripper_visual_urdf)
-    if with_lite6_gripper:
-        if not profile.supports_lite6_gripper:
-            raise ValueError(f"Robot {robot_key} does not support Lite6 Gripper")
-        if movable:
-            if not profile.lite6_gripper_movable_visual_urdf:
-                raise ValueError(f"Robot {robot_key} has no Lite6 Gripper movable visual URDF")
-            return _urdf_path(profile.assets_dir, profile.lite6_gripper_movable_visual_urdf)
-        if not profile.lite6_gripper_visual_urdf:
-            raise ValueError(f"Robot {robot_key} has no Lite6 Gripper visual URDF")
-        return _urdf_path(profile.assets_dir, profile.lite6_gripper_visual_urdf)
-    if with_lite6_vacuum_gripper:
-        if not profile.supports_lite6_vacuum_gripper or not profile.lite6_vacuum_gripper_visual_urdf:
-            raise ValueError(f"Robot {robot_key} does not support Lite6 Vacuum Gripper visual URDF")
-        return _urdf_path(profile.assets_dir, profile.lite6_vacuum_gripper_visual_urdf)
-    return _urdf_path(profile.assets_dir, profile.visual_glb_urdf)
+    if not selected:
+        return _urdf_path(profile.assets_dir, profile.visual_glb_urdf)
+    end_effector, label = selected[0]
+    if not profile.supports(end_effector):
+        raise ValueError(f"Robot {robot_key} does not support {label}")
+    has_static = get_end_effector(end_effector).static_visual is not None
+    gripper_visual = "movable" if movable or not has_static else "static"
+    return compose_robot_urdf(profile.key, end_effector, visual="glb", gripper_visual=gripper_visual)
 
 
 def lite6_gripper_movable_visual_urdf() -> str:

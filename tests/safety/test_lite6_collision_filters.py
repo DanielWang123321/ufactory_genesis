@@ -6,10 +6,11 @@ import numpy as np
 import pytest
 
 from ufactory.config import load_runtime_config
+from ufactory.robots.paths import robot_urdf
 from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBackend
 
 
-@pytest.mark.parametrize("urdf", ["lite6_with_gripper.urdf", "lite6_gripper_movable_visual.glb.urdf"])
+@pytest.mark.parametrize("urdf", ["assembly:lite6_gripper:stl", "assembly:lite6_gripper"])
 def test_lite6_filter_removes_only_root_pair_from_exact_and_margin_queries(urdf):
     pytest.importorskip("pinocchio")
     pytest.importorskip("coal")
@@ -19,7 +20,7 @@ def test_lite6_filter_removes_only_root_pair_from_exact_and_margin_queries(urdf)
         ee_link=config.robot.ee_link,
         passive_joint_positions={config.gripper.drive_joint: 0.0},
     )
-    path = Path(config.robot.assets_dir) / urdf
+    path = Path(robot_urdf(config.robot.key, urdf))
     baseline = PinocchioCollisionBackend(path, **kwargs)
     q = np.asarray(config.arm.default_qpos_rad)
     baseline.check_all(q, stage="start", gripper_drive=0.0)
@@ -62,7 +63,7 @@ def test_unknown_excluded_geometry_fails_closed():
     config = load_runtime_config("lite6")
     with pytest.raises(ValueError, match="missing from URDF"):
         PinocchioCollisionBackend(
-            Path(config.robot.assets_dir) / config.robot.urdf,
+            robot_urdf(config.robot.key, config.robot.urdf),
             joint_names=config.robot.joint_names,
             ee_link=config.robot.ee_link,
             excluded_geometry_pairs=(("uflite_finger1_0", "unknown_0"),),

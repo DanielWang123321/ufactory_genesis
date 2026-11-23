@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from ufactory.config import RepositoryAssetStore, load_runtime_config
+from ufactory.robots.assembly import resolve_robot_urdf
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.safety.adapters.pinocchio import PinocchioKinematicsBackend
 from ufactory.trajectory.scene import dry_heights
@@ -18,7 +19,9 @@ ROBOTS = ("xarm5", "xarm6", "xarm7", "uf850", "lite6")
 def _kinematics(robot: str):
     pytest.importorskip("pinocchio")
     config = load_runtime_config(robot)
-    urdf = RepositoryAssetStore.discover().require(f"{config.robot.assets_dir}/{config.robot.urdf}")
+    urdf = resolve_robot_urdf(
+        config.robot.key, config.robot.urdf, assets_dir=config.robot.assets_dir, store=RepositoryAssetStore.discover()
+    )
     passive = {config.gripper.drive_joint: config.gripper.open_drive}
     return config, PinocchioKinematicsBackend(
         urdf,

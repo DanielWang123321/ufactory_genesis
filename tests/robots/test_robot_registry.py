@@ -17,6 +17,7 @@ from ufactory.robots.paths import (
     xarm7_urdf,
 )
 from ufactory.robots.registry import (
+    PROJECT_ROOT,
     get_profile_key_for_robot_name,
     get_robot_profile,
     robot_cli_choices,
@@ -67,11 +68,12 @@ def test_robot_cli_choices_includes_aliases() -> None:
     assert "xarm6_1305" in choices
 
 
-def test_lite6_movable_gripper_defaults_to_reversed_assets() -> None:
+def test_lite6_movable_gripper_assembly_matches_standalone_part() -> None:
     combo_path = Path(robot_visual_glb_urdf("lite6", with_lite6_gripper=True, movable=True))
     standalone_path = Path(lite6_gripper_movable_visual_urdf())
 
-    assert combo_path.name == "lite6_gripper_movable_visual.glb.urdf"
+    assert combo_path.name.startswith("lite6__lite6_gripper__glb_movable.")
+    finger_mesh_dir = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "meshes" / "collision"
 
     for path in (combo_path, standalone_path):
         root = ET.parse(path).getroot()
@@ -79,13 +81,13 @@ def test_lite6_movable_gripper_defaults_to_reversed_assets() -> None:
         assert joints["finger_joint1"].find("origin").get("xyz") == "0 0 0.0543"
         assert joints["finger_joint2"].find("origin").get("xyz") == "0 0 0.0543"
         finger_visual_meshes = {
-            link.get("name"): link.find("./visual/geometry/mesh").get("filename")
+            link.get("name"): (path.parent / link.find("./visual/geometry/mesh").get("filename")).resolve()
             for link in root.findall("link")
             if link.get("name") in {"uflite_finger1", "uflite_finger2"}
         }
         assert finger_visual_meshes == {
-            "uflite_finger1": "../lite6_gripper/meshes/collision/finger1.stl",
-            "uflite_finger2": "../lite6_gripper/meshes/collision/finger2.stl",
+            "uflite_finger1": finger_mesh_dir / "finger1.stl",
+            "uflite_finger2": finger_mesh_dir / "finger2.stl",
         }
         expected_boxes = {
             "uflite_finger1": [
@@ -119,16 +121,12 @@ def test_vacuum_gripper_urdf_resolution() -> None:
     assert standalone.name == "vacuum_gripper.urdf"
     assert standalone.is_file()
 
-    expected = {
-        "xarm5": "xarm5_1305_vacuum_gripper_visual.glb.urdf",
-        "xarm6": "xarm6_1305_vacuum_gripper_visual.glb.urdf",
-        "xarm7": "xarm7_1305_vacuum_gripper_visual.glb.urdf",
-        "uf850": "uf850_vacuum_gripper_visual.glb.urdf",
-    }
-    for robot, filename in expected.items():
+    for robot, key in {"xarm5": "xarm5_1305", "xarm6": "xarm6_1305", "xarm7": "xarm7_1305", "uf850": "uf850"}.items():
         combo = Path(robot_visual_glb_urdf(robot, with_vacuum_gripper=True))
-        assert combo.name == filename
+        assert combo.name.startswith(f"{key}__vacuum_gripper__glb_movable.")
         assert combo.is_file()
+        mount = ET.parse(combo).getroot().find("./joint[@name='vacuum_gripper_fix']")
+        assert mount.find("parent").get("link") == get_robot_profile(robot).ee_link
 
     with pytest.raises(ValueError, match="does not support Vacuum Gripper"):
         robot_visual_glb_urdf("lite6", with_vacuum_gripper=True)

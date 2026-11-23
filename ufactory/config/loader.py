@@ -24,6 +24,7 @@ from ufactory.config.models import (
     SimulationConfig,
     TaskProfile,
 )
+from ufactory.robots.assembly import validate_robot_urdf
 from ufactory.robots.registry import get_profile_key_for_robot_name
 from ufactory.safety.models import CollisionExemption, SafetyPolicy
 
@@ -482,7 +483,7 @@ def load_runtime_config(
     resolved = _build_resolved(data, tuple(sources))
     if resolved.robot.key != canonical:
         raise ConfigError(f"requested robot {canonical}, but configuration identifies {resolved.robot.key}")
-    store.require(Path(resolved.robot.assets_dir) / resolved.robot.urdf)
+    validate_robot_urdf(resolved.robot.key, resolved.robot.urdf, assets_dir=resolved.robot.assets_dir, store=store)
     return resolved
 
 

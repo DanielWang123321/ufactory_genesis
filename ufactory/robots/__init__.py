@@ -9,6 +9,12 @@ from ufactory.robots.registry import (
     joint_names,
     robot_cli_choices,
 )
+from ufactory.robots.assembly import (
+    AssemblyError,
+    compose_robot_urdf,
+    parse_assembly_ref,
+    supported_end_effectors,
+)
 from ufactory.robots.paths import (
     DYNAMICS_VALIDATION_POSES_YAML,
     bio_gripper_g2_movable_visual_urdf,
@@ -42,6 +48,10 @@ __all__ = [
     "ROBOT_PROFILES",
     "RobotModelSpec",
     "RobotRuntimeProfile",
+    "AssemblyError",
+    "compose_robot_urdf",
+    "parse_assembly_ref",
+    "supported_end_effectors",
     "get_robot_profile",
     "get_robot_runtime_profile",
     "robot_cli_choices",

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from collections import deque
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from ufactory.config import load_runtime_config
+from ufactory.robots.paths import robot_urdf
 from ufactory.safety import ArmState, CollisionResult, FaultClass
 from ufactory.trajectory.execution import ExecutionBindings, execute_real
 from ufactory.trajectory.preflight import create_safety_gate
@@ -109,7 +109,7 @@ def _approved(samples: int = 4):
         rate=50.0,
         robot_key="xarm6_1305",
     )
-    urdf = Path(config.robot.assets_dir) / config.robot.urdf
+    urdf = robot_urdf(config.robot.key, config.robot.urdf)
     gate = create_safety_gate(
         config,
         kinematics=FakeKinematics(),

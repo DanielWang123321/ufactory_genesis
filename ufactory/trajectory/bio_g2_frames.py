@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 
 from ufactory.kinematics.tcp_offset import matrix_to_rpy, rpy_matrix
-from ufactory.robots.paths import robot_visual_glb_urdf
+from ufactory.robots.assembly import compose_robot_urdf
 from ufactory.robots.runtime import RobotRuntimeProfile, get_robot_runtime_profile
 from ufactory.simulation.bio_g2_adapter import origin_transform, quaternion_rotation
 from ufactory.simulation.bio_g2_model import GRASP_OFFSET_IN_BASE_LINK
@@ -98,7 +98,7 @@ class BioG2TaskFrames:
         runtime = get_robot_runtime_profile(robot)
         if runtime.model.robot_name not in SUPPORTED_ROBOTS:
             raise ValueError(f"Bio G2 simulation robot must be one of {SUPPORTED_ROBOTS}")
-        path = Path(robot_visual_glb_urdf(runtime.model.key, with_bio_gripper_g2=True, movable=True))
+        path = Path(compose_robot_urdf(runtime.model.key, "bio_gripper_g2"))
         root = ET.parse(path).getroot()
         attach = root.find("joint[@name='bio_gripper_g2_attach']")
         if (

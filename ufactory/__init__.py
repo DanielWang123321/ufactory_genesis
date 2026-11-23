@@ -8,6 +8,7 @@ from ufactory.robots.registry import (
     get_robot_profile,
     robot_cli_choices,
 )
+from ufactory.robots.assembly import compose_robot_urdf, supported_end_effectors
 from ufactory.robots.paths import robot_assets, robot_urdf, robot_visual_glb_urdf
 
 __all__ = [
@@ -15,10 +16,12 @@ __all__ = [
     "ROBOT_PROFILES",
     "RobotModelSpec",
     "AssetLayoutError",
+    "compose_robot_urdf",
     "RepositoryAssetStore",
     "get_robot_profile",
     "robot_assets",
     "robot_cli_choices",
     "robot_urdf",
     "robot_visual_glb_urdf",
+    "supported_end_effectors",
 ]

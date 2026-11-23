@@ -15,6 +15,39 @@ if str(_TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_TESTS_ROOT))
 from conftest import PROJECT_ROOT
 
+from ufactory.robots.assembly import compose_robot_urdf, end_effectors
+
+_URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
+
+
+def _assembly_urdfs(
+    end_effector: str | None = None,
+    *,
+    robot: str | None = None,
+    modes: tuple[tuple[str, str], ...] | None = None,
+) -> list[Path]:
+    """Every supported composed URDF variant (robot × end effector × visual mode), optionally filtered."""
+    out: list[Path] = []
+    for name, ee in end_effectors().items():
+        if end_effector is not None and name != end_effector:
+            continue
+        variants = [("glb", "movable"), ("stl", "movable")] + ([("glb", "static")] if ee.static_visual else [])
+        for key in ee.robots:
+            if robot is not None and key != robot:
+                continue
+            for visual, gripper_visual in variants:
+                if modes is None or (visual, gripper_visual) in modes:
+                    out.append(Path(compose_robot_urdf(key, name, visual=visual, gripper_visual=gripper_visual)))
+    assert out, (end_effector, robot, modes)
+    return out
+
+
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
 
 def _public_files() -> set[Path]:
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=PROJECT_ROOT).split(b"\0")[:-1]
@@ -27,6 +60,7 @@ def _public_files() -> set[Path]:
 
 def test_public_urdf_mesh_references_exist() -> None:
     urdfs = sorted(p for p in _public_files() if p.suffix == ".urdf" or p.name.endswith(".glb.urdf"))
+    urdfs += _assembly_urdfs()
     missing: list[str] = []
     for urdf in urdfs:
         root = ET.parse(urdf).getroot()
@@ -36,9 +70,22 @@ def test_public_urdf_mesh_references_exist() -> None:
                 continue
             target = (urdf.parent / filename).resolve()
             if not target.exists():
-                missing.append(f"{urdf.relative_to(PROJECT_ROOT)} -> {filename}")
+                missing.append(f"{_rel(urdf)} -> {filename}")
 
     assert missing == []
+
+
+def _g2_models() -> list[tuple[Path, ET.Element]]:
+    """The Gripper G2 part file plus every composed G2 assembly (4 arms × glb/stl/static)."""
+    parts = []
+    for path in sorted(_URDF_ROOT.rglob("*.urdf")):
+        root = ET.parse(path).getroot()
+        if root.find("./joint[@name='drive_joint']") is not None:
+            parts.append((path, root))
+    assert [path.name for path, _ in parts] == ["gripper_g2_movable_visual.urdf"]
+    composed = [(path, ET.parse(path).getroot()) for path in _assembly_urdfs("gripper_g2")]
+    assert len(composed) == 12
+    return parts + composed
 
 
 def test_standard_g2_urdfs_share_joint_limits_and_mimic_linkage() -> None:
@@ -50,12 +97,7 @@ def test_standard_g2_urdfs_share_joint_limits_and_mimic_linkage() -> None:
         GRIPPER_G2_JOINT_VELOCITY_RAD_S,
     )
 
-    models = []
-    for path in sorted((PROJECT_ROOT / "assets/urdf").rglob("*.urdf")):
-        root = ET.parse(path).getroot()
-        if root.find("./joint[@name='drive_joint']") is not None:
-            models.append((path, root))
-    assert len(models) == 11
+    models = _g2_models()
     for path, root in models:
         for name in G2_JOINT_NAMES:
             joint = root.find(f"./joint[@name='{name}']")
@@ -103,12 +145,7 @@ def test_standard_g2_urdf_joint_origins_and_mesh_alignment() -> None:
         "right_inner_knuckle",
     }
 
-    models = []
-    for path in sorted((PROJECT_ROOT / "assets/urdf").rglob("*.urdf")):
-        root = ET.parse(path).getroot()
-        if root.find("./joint[@name='drive_joint']") is not None:
-            models.append((path, root))
-    assert len(models) == 11
+    models = _g2_models()
 
     for path, root in models:
         for jname, expected_xyz in expected_joint_origins.items():
@@ -187,75 +224,23 @@ def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
     assert leaked == []
 
 
-_REGISTERED_ARM_URDFS: dict[str, tuple[int, str, tuple[str, ...]]] = {
-    "xarm5": (
-        5,
-        "xarm5_1305",
-        (
-            "xarm5_1305.urdf",
-            "xarm5_1305_visual.glb.urdf",
-            "xarm5_1305_g2_visual.urdf",
-            "xarm5_1305_g2_movable_visual.urdf",
-            "xarm5_1305_bio_gripper_g2_visual.glb.urdf",
-            "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
-            "xarm5_1305_vacuum_gripper_visual.glb.urdf",
-        ),
-    ),
-    "xarm6": (
-        6,
-        "xarm6_1305",
-        (
-            "xarm6_1305.urdf",
-            "xarm6_1305_visual.glb.urdf",
-            "xarm6_1305_g2_visual.urdf",
-            "xarm6_1305_g2_movable_visual.urdf",
-            "xarm6_1305_bio_gripper_g2_visual.glb.urdf",
-            "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-            "xarm6_1305_vacuum_gripper_visual.glb.urdf",
-            "xarm6_with_gripper.urdf",
-        ),
-    ),
-    "xarm7": (
-        7,
-        "xarm7_1305",
-        (
-            "xarm7_1305.urdf",
-            "xarm7_1305_visual.glb.urdf",
-            "xarm7_1305_g2_visual.urdf",
-            "xarm7_1305_g2_movable_visual.urdf",
-            "xarm7_1305_bio_gripper_g2_visual.glb.urdf",
-            "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
-            "xarm7_1305_vacuum_gripper_visual.glb.urdf",
-        ),
-    ),
-    "lite6": (
-        6,
-        "lite6",
-        (
-            "lite6.urdf",
-            "lite6_visual.glb.urdf",
-            "lite6_gripper_visual.glb.urdf",
-            "lite6_gripper_movable_visual.glb.urdf",
-            "lite6_gripper_reversed_movable_visual.glb.urdf",
-            "lite6_vacuum_gripper_visual.glb.urdf",
-            "lite6_with_gripper.urdf",
-            "lite6_with_vacuum_gripper.urdf",
-        ),
-    ),
-    "uf850": (
-        6,
-        "uf850",
-        (
-            "uf850.urdf",
-            "uf850_visual.glb.urdf",
-            "uf850_g2_visual.urdf",
-            "uf850_g2_movable_visual.urdf",
-            "uf850_bio_gripper_g2_visual.glb.urdf",
-            "uf850_bio_gripper_g2_movable_visual.glb.urdf",
-            "uf850_vacuum_gripper_visual.glb.urdf",
-        ),
-    ),
+_REGISTERED_ARMS: dict[str, tuple[int, str, str]] = {
+    "xarm5": (5, "xarm5_1305", "xarm5_1305"),
+    "xarm6": (6, "xarm6_1305", "xarm6_1305"),
+    "xarm7": (7, "xarm7_1305", "xarm7_1305"),
+    "lite6": (6, "lite6", "lite6"),
+    "uf850": (6, "uf850", "uf850"),
 }
+
+
+def _registered_arm_urdfs(robot_dir: str) -> list[Path]:
+    """Tracked arm URDFs (dynamics + GLB visual) and every composed assembly of that arm."""
+    _, mesh_prefix, key = _REGISTERED_ARMS[robot_dir]
+    urdf_dir = _URDF_ROOT / robot_dir
+    tracked = [urdf_dir / f"{mesh_prefix}.urdf", urdf_dir / f"{mesh_prefix}_visual.glb.urdf"]
+    assert sorted(p.name for p in urdf_dir.glob("*.urdf")) == sorted(p.name for p in tracked), robot_dir
+    return tracked + _assembly_urdfs(robot=key)
+
 
 _BIO_GRIPPER_G2_LINKS = (
     "bio_gripper_g2_base_link",
@@ -270,26 +255,18 @@ _BIO_GRIPPER_G2_COLLISION_ORIGINS = {
     "bio_gripper_g2_right_finger": (0.0, 0.0, 0.0),
 }
 
-_BIO_GRIPPER_G2_COLLISION_ORIGIN_URDFS = (
-    PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_movable_visual.glb.urdf",
+_BIO_GRIPPER_G2_PARTS = (
+    _URDF_ROOT / "bio_gripper_g2" / "bio_gripper_g2.urdf",
+    _URDF_ROOT / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
 )
 
-_BIO_GRIPPER_G2_MOVABLE_COLLISION_ALIGNMENT_URDFS = (
-    PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_movable_visual.glb.urdf",
-)
+
+def _bio_gripper_g2_collision_origin_urdfs() -> list[Path]:
+    return [*_BIO_GRIPPER_G2_PARTS, *_assembly_urdfs("bio_gripper_g2")]
+
+
+def _bio_gripper_g2_movable_collision_alignment_urdfs() -> list[Path]:
+    return [_BIO_GRIPPER_G2_PARTS[1], *_assembly_urdfs("bio_gripper_g2", modes=(("glb", "movable"),))]
 
 
 def _arm_link_names(dof: int) -> set[str]:
@@ -494,15 +471,12 @@ _EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
 def test_registered_arm_collision_meshes_use_visual_stl() -> None:
     """Registered arm links use selective convex-hull collision STLs; accessories keep their own collision geoms."""
     bad: list[str] = []
-    for robot_dir, (dof, mesh_prefix, basenames) in _REGISTERED_ARM_URDFS.items():
-        urdf_dir = PROJECT_ROOT / "assets" / "urdf" / robot_dir
+    for robot_dir, (dof, mesh_prefix, _key) in _REGISTERED_ARMS.items():
+        urdf_dir = _URDF_ROOT / robot_dir
         arm_links = _arm_link_names(dof)
         expected_counts = _EXPECTED_ARM_COLLISION_COUNTS[robot_dir]
-        for basename in basenames:
-            urdf = urdf_dir / basename
-            if not urdf.exists():
-                bad.append(f"missing registered URDF: {urdf.relative_to(PROJECT_ROOT)}")
-                continue
+        for urdf in _registered_arm_urdfs(robot_dir):
+            basename = _rel(urdf)
             root = ET.parse(urdf).getroot()
             seen_arm_links: set[str] = set()
             all_col_basenames: list[str] = []
@@ -520,13 +494,13 @@ def test_registered_arm_collision_meshes_use_visual_stl() -> None:
                     elif "/collision/" in filename and not filename.endswith(".stl"):
                         bad.append(f"{basename}: collision mesh not STL {filename}")
                     if link_name in arm_links:
-                        arm_filenames.append(filename)
+                        arm_filenames.append(str((urdf.parent / filename).resolve()))
                 if link_name not in arm_links:
                     continue
                 if arm_filenames:
                     seen_arm_links.add(link_name)
                 expected = [
-                    f"meshes/{mesh_prefix}/collision/{robot_dir}_{link_name}_col_{idx:02d}.stl"
+                    str(urdf_dir / f"meshes/{mesh_prefix}/collision/{robot_dir}_{link_name}_col_{idx:02d}.stl")
                     for idx in range(expected_counts[link_name])
                 ]
                 if arm_filenames != expected:
@@ -543,52 +517,42 @@ def test_registered_arm_collision_meshes_use_visual_stl() -> None:
 def test_bio_gripper_g2_collision_mesh_basenames_are_unique_in_combos() -> None:
     """MuJoCo keys URDF mesh assets by basename, so Bio G2 combo basenames must not collide."""
     bad: list[str] = []
-    combo_urdfs = sorted((PROJECT_ROOT / "assets" / "urdf").glob("*/*bio_gripper_g2*.urdf"))
-    for urdf in combo_urdfs:
+    for urdf in _assembly_urdfs("bio_gripper_g2"):
         names = [Path(filename).name for filename in _collision_mesh_filenames(urdf)]
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
-            bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: duplicate collision mesh basename(s) {duplicates}")
+            bad.append(f"{_rel(urdf)}: duplicate collision mesh basename(s) {duplicates}")
     assert bad == []
 
 
 def test_bio_gripper_g2_urdfs_do_not_reference_legacy_short_stl_names() -> None:
-    legacy_refs = {
-        "meshes/visual/link_base.stl",
-        "meshes/visual/left_finger.stl",
-        "meshes/visual/right_finger.stl",
-        "../bio_gripper_g2/meshes/visual/link_base.stl",
-        "../bio_gripper_g2/meshes/visual/left_finger.stl",
-        "../bio_gripper_g2/meshes/visual/right_finger.stl",
+    legacy = {
+        (_URDF_ROOT / "bio_gripper_g2" / "meshes" / "visual" / name).resolve()
+        for name in ("link_base.stl", "left_finger.stl", "right_finger.stl")
     }
     bad: list[str] = []
-    bio_urdfs = sorted((PROJECT_ROOT / "assets" / "urdf").glob("*/*bio_gripper_g2*.urdf"))
-    for urdf in bio_urdfs:
+    for urdf in _bio_gripper_g2_collision_origin_urdfs():
         for filename in _mesh_filenames(urdf):
-            if filename in legacy_refs:
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: legacy Bio G2 STL reference {filename}")
+            if (urdf.parent / filename).resolve() in legacy:
+                bad.append(f"{_rel(urdf)}: legacy Bio G2 STL reference {filename}")
     assert bad == []
 
 
 def test_bio_gripper_g2_collision_origins_align_stl_to_glb_reference() -> None:
     bad: list[str] = []
-    for urdf in _BIO_GRIPPER_G2_COLLISION_ORIGIN_URDFS:
+    for urdf in _bio_gripper_g2_collision_origin_urdfs():
         actual = _collision_origin_pose_by_link(urdf)
         for link_name, expected_xyz in _BIO_GRIPPER_G2_COLLISION_ORIGINS.items():
             pose = actual.get(link_name)
             if pose is None:
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: missing collision origin for {link_name}")
+                bad.append(f"{_rel(urdf)}: missing collision origin for {link_name}")
                 continue
             actual_xyz, actual_rpy = pose
             if actual_xyz != expected_xyz:
-                bad.append(
-                    f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} collision origin xyz "
-                    f"should be {expected_xyz}, got {actual_xyz}"
-                )
+                bad.append(f"{_rel(urdf)}: {link_name} collision origin xyz should be {expected_xyz}, got {actual_xyz}")
             if actual_rpy != (0.0, 0.0, 0.0):
                 bad.append(
-                    f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} collision origin rpy "
-                    f"should be (0.0, 0.0, 0.0), got {actual_rpy}"
+                    f"{_rel(urdf)}: {link_name} collision origin rpy should be (0.0, 0.0, 0.0), got {actual_rpy}"
                 )
     assert bad == []
 
@@ -598,7 +562,7 @@ def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> Non
     pytest.importorskip("DracoPy")
     pytest.importorskip("pygltflib")
     bad: list[str] = []
-    for urdf in _BIO_GRIPPER_G2_MOVABLE_COLLISION_ALIGNMENT_URDFS:
+    for urdf in _bio_gripper_g2_movable_collision_alignment_urdfs():
         root = ET.parse(urdf).getroot()
         masses = []
         for link in root.findall("link"):
@@ -612,7 +576,7 @@ def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> Non
             visual_origin = link.find("./visual/origin")
             collisions = link.findall("collision")
             if visual_mesh is None or not collisions:
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} missing visual/collision mesh")
+                bad.append(f"{_rel(urdf)}: {link_name} missing visual/collision mesh")
                 continue
             visual_vertices = _mesh_vertices((urdf.parent / (visual_mesh.get("filename") or "")).resolve(), trimesh)
             visual_vertices += np.asarray(_xyz_tuple(visual_origin.get("xyz") if visual_origin is not None else None))
@@ -635,11 +599,11 @@ def test_bio_gripper_g2_movable_collision_bbox_centers_match_visual_glb() -> Non
                 col_inner_y = float(col_tip[:, 1].max() if "left" in link_name else col_tip[:, 1].min())
                 if abs(vis_inner_y - col_inner_y) * 1000.0 > 0.01:
                     bad.append(
-                        f"{urdf.relative_to(PROJECT_ROOT)}: {link_name} inner gripping plane mismatch "
+                        f"{_rel(urdf)}: {link_name} inner gripping plane mismatch "
                         f"vis={vis_inner_y:.6f} col={col_inner_y:.6f}"
                     )
         if abs(sum(masses) - 0.79) > 1e-6:
-            bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: Bio Gripper G2 total mass {sum(masses)} != 0.79 kg")
+            bad.append(f"{_rel(urdf)}: Bio Gripper G2 total mass {sum(masses)} != 0.79 kg")
     assert bad == []
 
 
@@ -810,34 +774,22 @@ def test_arm_body_visual_glb_budget(
 
 def test_accessory_collision_meshes_are_stl_files() -> None:
     urdfs = (
-        PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "gripper_g2.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "gripper_g2_movable_visual.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper_collision.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper_stl.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_vacuum_gripper_visual.glb.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_g2_movable_visual.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_vacuum_gripper_visual.glb.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_vacuum_gripper_visual.glb.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_vacuum_gripper_visual.glb.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_gripper_reversed_movable_visual.glb.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_vacuum_gripper_visual.glb.urdf",
+        _URDF_ROOT / "gripper_g2" / "gripper_g2_movable_visual.urdf",
+        *_BIO_GRIPPER_G2_PARTS,
+        _URDF_ROOT / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
+        _URDF_ROOT / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
+        _URDF_ROOT / "vacuum_gripper" / "vacuum_gripper.urdf",
+        *_assembly_urdfs(),
     )
     bad: list[str] = []
     for urdf in urdfs:
         for filename in _collision_mesh_filenames(urdf):
             if not filename.endswith(".stl"):
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: collision mesh not STL {filename}")
+                bad.append(f"{_rel(urdf)}: collision mesh not STL {filename}")
                 continue
             target = (urdf.parent / filename).resolve()
             if not target.exists():
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: missing collision mesh {filename}")
+                bad.append(f"{_rel(urdf)}: missing collision mesh {filename}")
     assert bad == []
 
 
@@ -867,25 +819,22 @@ def test_standalone_movable_accessory_collision_links_are_movable() -> None:
         non_fixed_children = _non_fixed_joint_children(urdf)
         for link in sorted(moving_links):
             if link not in collision_links:
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link} has no collision geometry")
+                bad.append(f"{_rel(urdf)}: {link} has no collision geometry")
             # Mesh-based accessories still require a collision mesh; Lite6 fingers use boxes.
             if urdf.name != "lite6_gripper_movable_visual.urdf" and link not in collision_mesh_by_link:
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link} has no collision mesh")
+                bad.append(f"{_rel(urdf)}: {link} has no collision mesh")
             if link not in non_fixed_children:
-                bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: {link} is not child of a movable joint")
+                bad.append(f"{_rel(urdf)}: {link} is not child of a movable joint")
     assert bad == []
 
 
 def test_lite6_vacuum_standalone_collision_is_static_only() -> None:
-    urdfs = (
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper_collision.urdf",
-    )
+    urdfs = (_URDF_ROOT / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",)
     bad: list[str] = []
     for urdf in urdfs:
         movable_joints = sorted(_non_fixed_joint_names(urdf))
         if movable_joints:
-            bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: unexpected movable joints {movable_joints}")
+            bad.append(f"{_rel(urdf)}: unexpected movable joints {movable_joints}")
     assert bad == []
 
 
@@ -901,12 +850,7 @@ def test_arm_movable_accessory_collision_links_match_standalone_models() -> None
                 "right_finger",
                 "right_inner_knuckle",
             },
-            (
-                PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_g2_movable_visual.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_g2_movable_visual.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_g2_movable_visual.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_g2_movable_visual.urdf",
-            ),
+            tuple(_assembly_urdfs("gripper_g2")),
         ),
         (
             PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf",
@@ -914,12 +858,7 @@ def test_arm_movable_accessory_collision_links_match_standalone_models() -> None
                 "bio_gripper_g2_left_finger",
                 "bio_gripper_g2_right_finger",
             },
-            (
-                PROJECT_ROOT / "assets" / "urdf" / "xarm5" / "xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "xarm6" / "xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "xarm7" / "xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "uf850" / "uf850_bio_gripper_g2_movable_visual.glb.urdf",
-            ),
+            tuple(_assembly_urdfs("bio_gripper_g2")),
         ),
         (
             PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
@@ -927,10 +866,7 @@ def test_arm_movable_accessory_collision_links_match_standalone_models() -> None
                 "uflite_finger1",
                 "uflite_finger2",
             },
-            (
-                PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_gripper_movable_visual.glb.urdf",
-                PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_gripper_reversed_movable_visual.glb.urdf",
-            ),
+            tuple(_assembly_urdfs("lite6_gripper")),
         ),
     )
     bad: list[str] = []
@@ -944,7 +880,7 @@ def test_arm_movable_accessory_collision_links_match_standalone_models() -> None
                     actual_boxes = combo_boxes.get(link, ())
                     if actual_boxes != expected_boxes:
                         bad.append(
-                            f"{combo.relative_to(PROJECT_ROOT)}: {link} collision boxes {actual_boxes} "
+                            f"{_rel(combo)}: {link} collision boxes {actual_boxes} "
                             f"do not match standalone {expected_boxes}"
                         )
             continue
@@ -956,18 +892,18 @@ def test_arm_movable_accessory_collision_links_match_standalone_models() -> None
                 actual_meshes = combo_meshes.get(link, ())
                 if actual_meshes != expected_meshes:
                     bad.append(
-                        f"{combo.relative_to(PROJECT_ROOT)}: {link} collision {actual_meshes} "
-                        f"does not match standalone {expected_meshes}"
+                        f"{_rel(combo)}: {link} collision {actual_meshes} does not match standalone {expected_meshes}"
                     )
     assert bad == []
 
 
-_LITE6_GRIPPER_REVERSIBLE_URDFS = (
-    PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_gripper_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_gripper_reversed_movable_visual.glb.urdf",
-    PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_with_gripper.urdf",
-)
+def _lite6_gripper_finger_urdfs() -> list[Path]:
+    """Lite6 gripper part and composed assemblies that keep per-finger visuals (GLB and STL arm visuals)."""
+    return [
+        _URDF_ROOT / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
+        *_assembly_urdfs("lite6_gripper", modes=(("glb", "movable"), ("stl", "movable"))),
+    ]
+
 
 _LITE6_FINGER_BOXES = {
     "uflite_finger1": (
@@ -1000,7 +936,7 @@ def _lite6_gripper_visual_mesh_by_link(urdf: Path) -> dict[str, str]:
         link = root.find(f".//link[@name='{link_name}']")
         mesh = link.find("./visual/geometry/mesh") if link is not None else None
         if mesh is not None:
-            out[link_name] = mesh.get("filename") or ""
+            out[link_name] = str((urdf.parent / (mesh.get("filename") or "")).resolve())
     return out
 
 
@@ -1057,7 +993,7 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
     finger1_vertices = _mesh_vertices(mesh_dir / "finger1.stl", trimesh)
     finger2_vertices = _mesh_vertices(mesh_dir / "finger2.stl", trimesh)
 
-    for urdf in _LITE6_GRIPPER_REVERSIBLE_URDFS:
+    for urdf in _lite6_gripper_finger_urdfs():
         root = ET.parse(urdf).getroot()
         joints = {joint.get("name"): joint for joint in root.findall("joint")}
         j1 = joints["finger_joint1"]
@@ -1072,20 +1008,20 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
         visual_meshes = _lite6_gripper_visual_mesh_by_link(urdf)
         boxes = _collision_boxes_by_link(urdf)
         assert vis1 == (0.0, 0.0, 0.0), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 visual origin should align with the mesh frame, got {vis1}"
+            f"{_rel(urdf)}: finger1 visual origin should align with the mesh frame, got {vis1}"
         )
         assert vis2 == (0.0, 0.0, 0.0), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 visual origin should align with the mesh frame, got {vis2}"
+            f"{_rel(urdf)}: finger2 visual origin should align with the mesh frame, got {vis2}"
         )
         assert visual_meshes == {
-            "uflite_finger1": "../lite6_gripper/meshes/collision/finger1.stl",
-            "uflite_finger2": "../lite6_gripper/meshes/collision/finger2.stl",
+            "uflite_finger1": str(mesh_dir / "finger1.stl"),
+            "uflite_finger2": str(mesh_dir / "finger2.stl"),
         }
         assert boxes.get("uflite_finger1") == _LITE6_FINGER_BOXES["uflite_finger1"], (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger1 dual-box collision mismatch"
+            f"{_rel(urdf)}: finger1 dual-box collision mismatch"
         )
         assert boxes.get("uflite_finger2") == _LITE6_FINGER_BOXES["uflite_finger2"], (
-            f"{urdf.relative_to(PROJECT_ROOT)}: finger2 dual-box collision mismatch"
+            f"{_rel(urdf)}: finger2 dual-box collision mismatch"
         )
 
         closed_sep = _lite6_gripper_finger_center_separation_mm(
@@ -1145,46 +1081,35 @@ def test_lite6_gripper_finger_collision_gap_at_keyframes() -> None:
             q_m=0.0089,
         )
 
-        assert 14.0 <= closed_sep <= 17.0, (
-            f"{urdf.relative_to(PROJECT_ROOT)}: closed finger center separation {closed_sep:.2f} mm"
-        )
-        assert 32.0 <= open_sep <= 35.0, (
-            f"{urdf.relative_to(PROJECT_ROOT)}: open finger center separation {open_sep:.2f} mm"
-        )
-        assert open_sep > closed_sep, (
-            f"{urdf.relative_to(PROJECT_ROOT)}: opening should increase collision finger separation"
-        )
+        assert 14.0 <= closed_sep <= 17.0, f"{_rel(urdf)}: closed finger center separation {closed_sep:.2f} mm"
+        assert 32.0 <= open_sep <= 35.0, f"{_rel(urdf)}: open finger center separation {open_sep:.2f} mm"
+        assert open_sep > closed_sep, f"{_rel(urdf)}: opening should increase collision finger separation"
         assert closed_gap == pytest.approx(0.0, abs=0.5), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: closed root-region inner gap should overlap at the finger root"
+            f"{_rel(urdf)}: closed root-region inner gap should overlap at the finger root"
         )
         assert mid_gap == pytest.approx(8.9, abs=0.5), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: mid-stroke root-region inner gap should track prismatic travel"
+            f"{_rel(urdf)}: mid-stroke root-region inner gap should track prismatic travel"
         )
         assert open_gap == pytest.approx(17.8, abs=0.5), (
-            f"{urdf.relative_to(PROJECT_ROOT)}: open root-region inner gap should track prismatic travel"
+            f"{_rel(urdf)}: open root-region inner gap should track prismatic travel"
         )
 
 
 def test_lite6_vacuum_collision_uses_visual_stl() -> None:
-    expected_by_urdf = {
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf": {
-            "meshes/visual/vacuum_gripper_lite.stl",
-        },
-        PROJECT_ROOT / "assets" / "urdf" / "lite6_vacuum_gripper" / "lite6_vacuum_gripper_collision.urdf": {
-            "meshes/visual/vacuum_gripper_lite.stl",
-        },
-        PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_with_vacuum_gripper.urdf": {
-            "../lite6_vacuum_gripper/meshes/visual/vacuum_gripper_lite.stl",
-        },
-        PROJECT_ROOT / "assets" / "urdf" / "lite6" / "lite6_vacuum_gripper_visual.glb.urdf": {
-            "../lite6_vacuum_gripper/meshes/visual/vacuum_gripper_lite.stl",
-        },
-    }
+    expected = {(_URDF_ROOT / "lite6_vacuum_gripper" / "meshes" / "visual" / "vacuum_gripper_lite.stl").resolve()}
+    urdfs = (
+        _URDF_ROOT / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
+        *_assembly_urdfs("lite6_vacuum_gripper"),
+    )
     bad: list[str] = []
-    for urdf, expected in expected_by_urdf.items():
-        actual = {filename for filename in _collision_mesh_filenames(urdf) if "vacuum_gripper_lite.stl" in filename}
+    for urdf in urdfs:
+        actual = {
+            (urdf.parent / filename).resolve()
+            for filename in _collision_mesh_filenames(urdf)
+            if "vacuum_gripper_lite.stl" in filename
+        }
         if actual != expected:
-            bad.append(f"{urdf.relative_to(PROJECT_ROOT)}: expected {sorted(expected)}, got {sorted(actual)}")
+            bad.append(f"{_rel(urdf)}: expected {sorted(expected)}, got {sorted(actual)}")
     assert bad == []
 
 
@@ -1204,14 +1129,12 @@ def test_vacuum_gripper_static_urdfs_and_parameters() -> None:
         "iyz": -1.0975e-5,
         "izz": 0.00025642,
     }
-    cases = (
-        (PROJECT_ROOT / "assets/urdf/vacuum_gripper/vacuum_gripper.urdf", "vacuum_mount", 0),
-        (PROJECT_ROOT / "assets/urdf/vacuum_gripper/vacuum_gripper_stl.urdf", "vacuum_mount", 0),
-        (PROJECT_ROOT / "assets/urdf/xarm5/xarm5_1305_vacuum_gripper_visual.glb.urdf", "link5", 5),
-        (PROJECT_ROOT / "assets/urdf/xarm6/xarm6_1305_vacuum_gripper_visual.glb.urdf", "link6", 6),
-        (PROJECT_ROOT / "assets/urdf/xarm7/xarm7_1305_vacuum_gripper_visual.glb.urdf", "link7", 7),
-        (PROJECT_ROOT / "assets/urdf/uf850/uf850_vacuum_gripper_visual.glb.urdf", "link6", 6),
-    )
+    from ufactory.robots.registry import get_robot_profile
+
+    cases = [(_URDF_ROOT / "vacuum_gripper" / "vacuum_gripper.urdf", "vacuum_mount", 0)]
+    for key in end_effectors()["vacuum_gripper"].robots:
+        profile = get_robot_profile(key)
+        cases += [(urdf, profile.ee_link, profile.dof) for urdf in _assembly_urdfs("vacuum_gripper", robot=key)]
     for urdf, expected_parent, expected_dof in cases:
         root = ET.parse(urdf).getroot()
         assert len(_non_fixed_joint_names(urdf)) == expected_dof

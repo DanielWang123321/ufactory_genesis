@@ -1,0 +1,74 @@
+# Runtime URDF assembly: arm + end-effector parts and their mounts.
+#
+# ufactory.robots.assembly composes "arm URDF + end-effector part + mount" into one deterministic URDF under
+# .cache/ufactory/urdf/composed/ (relative mesh paths, content-addressed file name). Arm sources come from the
+# robot registry: visual "glb" uses <key>_visual.glb.urdf, visual "stl" uses the default <key>.urdf.
+#
+# end_effectors.<name>:
+#   source          part URDF (relative to assets/urdf) with per-link GLB visuals; its root link (preview
+#                   "world" or a mount stub) and the joint into base_link are dropped when composing
+#   base_link       part root link attached to the arm flange
+#   mount_joint     name of the fixed joint created between the flange and base_link
+#   robots          compatible robot profile keys
+#   mounts          optional per-robot mount {xyz, rpy} in the flange frame; identity when absent
+#   static_visual   optional single-mesh overlay used by gripper_visual "static" (per-link visuals removed)
+#   glb_visuals     optional per-link GLB that replaces the source visual when visual is "glb"
+#   stl_visuals     optional per-link mesh that replaces the source visual when visual is "stl"
+#   stl_materials   optional per-link material for visual "stl" ("*" = default); remaining GLB visuals
+#                   become the link's collision geometry in that mode
+schema_version: 1
+end_effectors:
+  gripper_g2:
+    source: gripper_g2/gripper_g2_movable_visual.urdf
+    base_link: xarm_gripper_base_link
+    mount_joint: gripper_fix
+    robots: [xarm5_1305, xarm6_1305, xarm7_1305, uf850]
+    static_visual:
+      link: gripper_g2_visual
+      joint: gripper_g2_visual_fix
+      mesh: gripper_g2/meshes/visual/gripper_g2_static.glb
+      material: White
+    stl_materials:
+      xarm_gripper_base_link: White
+      "*": Silver
+  bio_gripper_g2:
+    source: bio_gripper_g2/bio_gripper_g2_movable_visual.urdf
+    base_link: bio_gripper_g2_base_link
+    mount_joint: bio_gripper_g2_attach
+    robots: [xarm5_1305, xarm6_1305, xarm7_1305, uf850]
+    # Canonical pin-hole alignment on each flange.
+    mounts:
+      xarm5_1305: {xyz: [0.026044, -0.000867, -0.000697], rpy: [0.0, 0.0, -0.00702875]}
+      xarm6_1305: {xyz: [0.027018, -0.000715, -0.000692], rpy: [0.0, 0.0, -0.00706128]}
+      xarm7_1305: {xyz: [0.026931, -0.000882, -0.000760], rpy: [0.0, 0.0, -0.00784664]}
+      uf850: {xyz: [0.024657, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    static_visual:
+      link: bio_gripper_g2_visual
+      joint: bio_gripper_g2_visual_fix
+      mesh: bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb
+  vacuum_gripper:
+    source: vacuum_gripper/vacuum_gripper.urdf
+    base_link: xarm_vacuum_gripper_link
+    mount_joint: vacuum_gripper_fix
+    robots: [xarm5_1305, xarm6_1305, xarm7_1305, uf850]
+    stl_visuals:
+      xarm_vacuum_gripper_link: vacuum_gripper/meshes/visual/vacuum_gripper_visual.stl
+  lite6_gripper:
+    source: lite6_gripper/lite6_gripper_movable_visual.urdf
+    base_link: uflite_gripper_link
+    mount_joint: gripper_fix
+    robots: [lite6]
+    static_visual:
+      link: lite6_gripper_visual
+      joint: lite6_gripper_visual_fix
+      mesh: lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb
+      material: White
+    stl_materials:
+      uflite_gripper_link: White
+  lite6_vacuum_gripper:
+    source: lite6_vacuum_gripper/lite6_vacuum_gripper.urdf
+    base_link: uflite_vacuum_gripper_link
+    mount_joint: vacuum_gripper_fix
+    robots: [lite6]
+    glb_visuals:
+      uflite_vacuum_gripper_link: lite6_vacuum_gripper/meshes/visual/lite6_vacuum_gripper_visual_link6.glb

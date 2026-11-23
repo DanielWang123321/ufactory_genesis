@@ -16,6 +16,7 @@ from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
 from ufactory.hardware.xarm import wait_for_servo_motion_ready
 from ufactory.kinematics import build_calibrated_urdf, load_kinematics_calibration
+from ufactory.robots.assembly import resolve_robot_urdf
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
 from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, read_tcp_offset
 from ufactory.safety.adapters import EnvironmentObstacle, PinocchioCollisionBackend, PinocchioKinematicsBackend
@@ -168,7 +169,7 @@ def print_sdk_sim_failures(evidence: Any, evidence_path: Path | None) -> None:
 
 def model_and_hashes(config: Any, calibration_path: Path | None, serial_number: str | None) -> tuple[Path, str, str]:
     store = RepositoryAssetStore.discover()
-    base = store.require(Path(config.robot.assets_dir) / config.robot.urdf)
+    base = resolve_robot_urdf(config.robot.key, config.robot.urdf, assets_dir=config.robot.assets_dir, store=store)
     if calibration_path is None:
         calibration_hash = hashlib.sha256(f"NOMINAL:{config.robot.key}".encode()).hexdigest()
         return base, sha256_file(base), calibration_hash

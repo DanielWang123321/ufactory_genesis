@@ -1,6 +1,6 @@
 # scripts/
 
-用户可用的辅助脚本，以及少量维护者发版工具。资产 vendor / relocalize / combo 生成流水线属于内部维护材料，不随公开面发布。
+用户可用的辅助脚本，以及少量维护者发版工具。资产 vendor / relocalize 流水线属于内部维护材料，不随公开面发布；机械臂与末端组合 URDF 由 `ufactory.robots.assembly` 运行时生成，不再提供生成脚本。
 
 ## 用户脚本
 

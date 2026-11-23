@@ -16,18 +16,18 @@
 
 `bio_gripper_g2.urdf` 是从 xarm_ros2 的 xacro 生成的 standalone 模板文件；v0.1.6 中 mesh 路径已改为本仓库内的 `meshes/visual/*.stl`，可用于基础结构解析。它也是关节 `limit`（行程）的唯一真源。它保留 vendor 的外部父 link，不作为 Genesis standalone 查看入口。
 
-Bio G2 的 STL collision 文件使用 `meshes/collision/bio_gripper_g2_*_convex_*.stl` 唯一文件名（底座 1 个凸包 + 左右手指各 2 个水密凸包，手指在基座系 `X=0.05 m` 处切分为指杆与指根，指杆裁剪至 `±35.5 mm` 夹持平面）。不要把组合 URDF 改回 `link_base.stl` / `left_finger.stl` / `right_finger.stl`：Genesis 经 MuJoCo 回读 URDF collision mesh 时会按 mesh basename 建资产表，机械臂自身也有 `link_base.stl`，短名会让 Bio G2 底座误用机械臂底座 collision。
+Bio G2 的 STL collision 文件使用 `meshes/collision/bio_gripper_g2_*_convex_*.stl` 唯一文件名（底座 1 个凸包 + 左右手指各 2 个水密凸包，手指在基座系 `X=0.05 m` 处切分为指杆与指根，指杆裁剪至 `±35.5 mm` 夹持平面）。不要把零件 URDF 改回 `link_base.stl` / `left_finger.stl` / `right_finger.stl`：Genesis 经 MuJoCo 回读 URDF collision mesh 时会按 mesh basename 建资产表，机械臂自身也有 `link_base.stl`，短名会让 Bio G2 底座误用机械臂底座 collision。
 
-组合 URDF 和 `bio_gripper_g2_movable_visual.urdf` 中的 Bio G2 凸包 collision 已将几何偏移烘焙至网格顶点（`<collision><origin xyz="0 0 0"/>`），可动手指 GLB `<visual><origin>` 通过 Y 轴微调偏移与 `71–150 mm` 物理夹持平面严格对齐；整爪总质量标定为 `0.79 kg`（底座含转接板 `0.765827 kg`、左指 `0.012105 kg`、右指 `0.012068 kg`）。
+`bio_gripper_g2_movable_visual.urdf`（组合源）中的 Bio G2 凸包 collision 已将几何偏移烘焙至网格顶点（`<collision><origin xyz="0 0 0"/>`），可动手指 GLB `<visual><origin>` 通过 Y 轴微调偏移与 `71–150 mm` 物理夹持平面严格对齐；整爪总质量标定为 `0.79 kg`（底座含转接板 `0.765827 kg`、左指 `0.012105 kg`、右指 `0.012068 kg`）。
 
-Genesis standalone 检查可使用 `bio_gripper_g2_movable_visual.urdf`。实际机械臂搭配优先使用 `robot_visual_glb_urdf(..., with_bio_gripper_g2=True)` 返回的组合 URDF。
+Genesis standalone 检查可使用 `bio_gripper_g2_movable_visual.urdf`。搭配机械臂时由 `ufactory.robots.assembly` 运行时组合，每台机型的安装位姿（销孔对位）记录在 [`assembly.yaml`](../assembly.yaml) 的 `bio_gripper_g2.mounts`。
 
 ## 目录结构
 
 ```
 bio_gripper_g2/
 ├── bio_gripper_g2.urdf                      # standalone 模板 URDF
-├── bio_gripper_g2_movable_visual.urdf       # 仅夹爪可动视觉 URDF（标定动力学与凸包碰撞）
+├── bio_gripper_g2_movable_visual.urdf       # 零件 URDF（组合源；标定动力学与凸包碰撞）
 ├── meshes/
 │   ├── collision/
 │   │   ├── bio_gripper_g2_base_link_convex_0.stl
@@ -47,29 +47,18 @@ bio_gripper_g2/
 同一份可动夹爪定义有两种加载入口：
 
 ```python
-from ufactory.robots.paths import (
-    bio_gripper_g2_movable_visual_urdf,  # 独立（无机械臂）
-    robot_visual_glb_urdf,  # 搭配机械臂
-)
+from ufactory.robots.assembly import compose_robot_urdf
+from ufactory.robots.paths import bio_gripper_g2_movable_visual_urdf
 
 # 1) 独立可动夹爪
 urdf = bio_gripper_g2_movable_visual_urdf()
 
-# 2) 搭配 xArm5/6/7 或 UF850（movable=True 取可动版）
-urdf = robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=True, movable=True)
-# 静态高模（不可动）：去掉 movable=True
+# 2) 搭配 xArm5/6/7 或 UF850（运行时组合，输出到 .cache/ufactory/urdf/composed/）
+urdf = compose_robot_urdf("xarm6_1305", "bio_gripper_g2")
+# 静态高模（不可动）：gripper_visual="static"
 ```
 
-支持的 arm + movable Bio Gripper G2 组合已经生成在各机械臂资产目录中：
-
-| 机械臂 | 可动组合 URDF |
-|--------|---------------|
-| xArm5 | `xarm5_1305_bio_gripper_g2_movable_visual.glb.urdf` |
-| xArm6 | `xarm6_1305_bio_gripper_g2_movable_visual.glb.urdf` |
-| xArm7 | `xarm7_1305_bio_gripper_g2_movable_visual.glb.urdf` |
-| UF850 | `uf850_bio_gripper_g2_movable_visual.glb.urdf` |
-
-这些 URDF 同时包含 `<visual>` GLB 与 `<collision>` 中的 `meshes/collision/bio_gripper_g2_*_convex_*.stl`（`<collision><origin xyz="0 0 0"/>`），并通过可动手指 `<visual><origin>` 的 Y 轴微调使视觉与碰撞夹持面在 `71–150 mm` 全行程对齐。
+组合输出同时包含 `<visual>` GLB 与 `<collision>` 中的 `meshes/collision/bio_gripper_g2_*_convex_*.stl`（`<collision><origin xyz="0 0 0"/>`），并通过可动手指 `<visual><origin>` 的 Y 轴微调使视觉与碰撞夹持面在 `71–150 mm` 全行程对齐。
 
 ## 控制（公共模块）
 
@@ -102,4 +91,4 @@ python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --mov
 ## Source / License
 
 - 模板与网格源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。
-- 本仓库维护组合 URDF、共享 `visual_glb/`（取消按 link5/6/7 重复副本）与 Draco 压缩 GLB。
+- 本仓库维护零件 URDF、安装表、共享 `visual_glb/`（取消按 link5/6/7 重复副本）与 Draco 压缩 GLB。

@@ -14,10 +14,8 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from ufactory.robots.paths import (
-    bio_gripper_g2_urdf,
-    robot_visual_glb_urdf,
-)
+from ufactory.robots.assembly import compose_robot_urdf
+from ufactory.robots.paths import bio_gripper_g2_urdf
 from ufactory.simulation.bio_g2_adapter import (
     BIO_G2_CONTACT_SOL_PARAMS as CONTACT_SOL_PARAMS,
     BIO_G2_DT as DT,
@@ -64,7 +62,7 @@ from ufactory.trajectory.bio_g2_frames import (
     rotation_error_rad,
 )
 
-COMBO_MODEL_PATH = Path(robot_visual_glb_urdf("xarm6_1305", with_bio_gripper_g2=True, movable=True))
+COMBO_MODEL_PATH = Path(compose_robot_urdf("xarm6_1305", "bio_gripper_g2"))
 STANDALONE_BIO_G2_PATH = Path(bio_gripper_g2_urdf())
 
 GLB_FINGER_VISUAL_Y_OFFSET_M = {

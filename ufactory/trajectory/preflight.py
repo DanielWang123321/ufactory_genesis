@@ -6,6 +6,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from ufactory.config import RepositoryAssetStore, ResolvedRuntimeConfig
+from ufactory.robots.assembly import resolve_robot_urdf
 from ufactory.safety import CollisionBackend, KinematicsBackend, PreflightReport, SafetyGate
 from ufactory.safety.gate import sha256_file
 from ufactory.trajectory.segments import Program
@@ -48,7 +49,9 @@ def create_safety_gate(
 ) -> SafetyGate:
     store = RepositoryAssetStore.discover()
     path = (
-        Path(urdf_path) if urdf_path is not None else store.require(Path(config.robot.assets_dir) / config.robot.urdf)
+        Path(urdf_path)
+        if urdf_path is not None
+        else resolve_robot_urdf(config.robot.key, config.robot.urdf, assets_dir=config.robot.assets_dir, store=store)
     )
     lower, upper = load_joint_position_limits(path, config.robot.joint_names)
     return SafetyGate(

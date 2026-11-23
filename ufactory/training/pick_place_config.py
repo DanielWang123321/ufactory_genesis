@@ -20,4 +20,5 @@ TABLE_POS = (0.35, 0.15, -0.02)
 TARGET_PAD_SIZE = (0.05, 0.05, 0.001)
 TARGET_PAD_POS = (TARGET_X, TARGET_Y, 0.0005)
 PICK_PLACE_ROBOT = "xarm6"
-PICK_PLACE_URDF = "xarm6_with_gripper.urdf"
+# xArm6 + Gripper G2 with STL visuals, composed at runtime (see ufactory.robots.assembly).
+PICK_PLACE_URDF = "assembly:gripper_g2:stl"

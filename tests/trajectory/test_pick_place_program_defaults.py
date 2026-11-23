@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -15,6 +14,7 @@ from ufactory.cli.pick_place import (
     _scene_layout_kwargs,
 )
 from ufactory.config import RepositoryAssetStore, load_runtime_config
+from ufactory.robots.assembly import resolve_robot_urdf
 
 
 class _FakeKinematics:
@@ -168,7 +168,7 @@ def test_default_pick_place_program_preflight_passes_servo_j():
 
     config = load_runtime_config("xarm6")
     store = RepositoryAssetStore.discover()
-    urdf = store.require(Path(config.robot.assets_dir) / config.robot.urdf)
+    urdf = resolve_robot_urdf(config.robot.key, config.robot.urdf, assets_dir=config.robot.assets_dir, store=store)
     passive = {config.gripper.drive_joint: config.gripper.open_drive}
     kinematics = PinocchioKinematicsBackend(
         urdf,

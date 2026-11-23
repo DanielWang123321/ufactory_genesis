@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added runtime URDF assembly (`ufactory.robots.assembly`): `compose_robot_urdf(robot, end_effector, visual="glb"|"stl", gripper_visual="movable"|"static")` composes the arm URDF, an end-effector part URDF, and the mount table in `assets/urdf/assembly.yaml` into one deterministic URDF under the Git-ignored `.cache/ufactory/urdf/composed/` (relative mesh paths, content-addressed names, atomic writes). Also exports `supported_end_effectors`, `parse_assembly_ref`, `resolve_robot_urdf`, and `validate_robot_urdf`.
+- Runtime configurations and `robot_urdf()` accept assembly references `assembly:<end_effector>[:<visual>[:<gripper_visual>]]` in place of a URDF file name.
+
+### Changed
+
+- Robot runtime configurations now reference assemblies: xArm5/6/7 and UF850 use `assembly:gripper_g2`, Lite6 uses `assembly:lite6_gripper:stl`. `PICK_PLACE_URDF` is `assembly:gripper_g2:stl`. Composed URDFs are physically identical to the removed static files (Genesis link poses, mass matrices and self-collision pairs, Pinocchio frames and CRBA). Their bytes, and therefore `urdf_sha256` bindings in safety approvals, reports and pick-place evaluations, differ from the old files.
+- `robot_visual_glb_urdf()` keeps its flags but composes at runtime. `RobotModelSpec` drops the per-combination file name fields; `supports_*` are now properties backed by `assembly.yaml`.
+- The Lite6 vacuum gripper GLB assembly now carries the real part (`0.14 kg`, `link_tcp`) instead of a massless overlay link.
+
+### Removed
+
+- Removed the 27 static arm + end-effector URDFs (`*_g2_visual.urdf`, `*_g2_movable_visual.urdf`, `*_bio_gripper_g2_*visual.glb.urdf`, `*_vacuum_gripper_visual.glb.urdf`, `xarm6_with_gripper.urdf`, and the six Lite6 combinations including the duplicate `lite6_gripper_reversed_movable_visual.glb.urdf`) and the unused templates `gripper_g2.urdf`, `lite6_gripper.urdf`, `vacuum_gripper_stl.urdf`, and `lite6_vacuum_gripper_collision.urdf` (48 → 17 URDF files). The vacuum gripper's raw visual STL is used by `visual="stl"`.
+
 ## [0.3.7] — 2026-11-18
 
 ### Changed
