@@ -16,9 +16,10 @@ from ufactory.simulation.bio_g2_adapter import origin_transform, quaternion_rota
 from ufactory.simulation.bio_g2_model import GRASP_OFFSET_IN_BASE_LINK
 
 SUPPORTED_ROBOTS = ("xarm5", "xarm6", "xarm7", "uf850")
-# Flange pose in the robot base frame; the scene translates the base by +400 mm Z.
-HOME_FLANGE_XYZ_M = (0.204977625, -0.000524202, 0.197308)
-HOME_FLANGE_RPY_DEG = (180.0, 0.0, -0.404582)
+# Home grasp-point pose in the robot base frame (the scene translates the base by +400 mm Z). The flange home
+# follows from the Bio G2 mount, which is the same on every supported robot.
+HOME_GRASP_XYZ_M = (0.36, 0.0, 0.148)
+HOME_GRASP_RPY_DEG = (180.0, 0.0, 0.0)
 TRANSITION_DURATION_S = 0.4
 HOME_POSITION_TOL_MM = 0.5
 HOME_ROTATION_TOL_RAD = 1e-3
@@ -120,10 +121,10 @@ class BioG2TaskFrames:
         return np.asarray(self.runtime.arm.default_qpos, dtype=np.float64)
 
     def home_flange(self, base_xyz=(0, 0, 0)) -> np.ndarray:
-        pose = np.eye(4)
-        pose[:3, 3] = np.asarray(HOME_FLANGE_XYZ_M) + base_xyz
-        pose[:3, :3] = rpy_matrix(*np.radians(HOME_FLANGE_RPY_DEG))
-        return pose
+        grasp = np.eye(4)
+        grasp[:3, 3] = np.asarray(HOME_GRASP_XYZ_M) + base_xyz
+        grasp[:3, :3] = rpy_matrix(*np.radians(HOME_GRASP_RPY_DEG))
+        return self.tcp_to_flange(grasp)
 
     def tcp_to_flange(self, tcp_pose: np.ndarray) -> np.ndarray:
         return tcp_pose @ np.linalg.inv(self.flange_to_tcp)

@@ -49,6 +49,24 @@
         <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_left_finger_convex_1.stl" />
       </geometry>
     </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_left_finger_convex_2.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_left_finger_convex_3.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_left_finger_convex_4.stl" />
+      </geometry>
+    </collision>
   </link>
   <joint name="bio_gripper_g2_left_finger_joint" type="prismatic">
     <origin rpy="0 0 0" xyz="0.059 0 0.027" />
@@ -81,6 +99,24 @@
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_right_finger_convex_1.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_right_finger_convex_2.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_3">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_right_finger_convex_3.stl" />
+      </geometry>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_4">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../bio_gripper_g2/meshes/collision/bio_gripper_g2_right_finger_convex_4.stl" />
       </geometry>
     </collision>
   </link>

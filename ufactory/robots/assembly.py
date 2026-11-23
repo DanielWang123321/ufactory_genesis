@@ -1,6 +1,6 @@
-"""Runtime URDF assembly: arm URDF + end-effector part + mount table → one deterministic URDF.
+"""Runtime URDF assembly: arm URDF + end-effector part + mount → one deterministic URDF.
 
-Parts and mounts live in ``assets/urdf/assembly.yaml``. Composed files are written under
+Flanges, parts and mounts live in ``assets/urdf/assembly.yaml``. Robots sharing a flange share each part's mount. Composed files are written under
 ``<repo>/.cache/ufactory/urdf/composed/`` with mesh paths relative to that directory, so identical inputs give
 identical bytes (and ``sha256``) on every checkout. File names are content-addressed and writes are atomic.
 
@@ -57,14 +57,19 @@ class StaticVisual:
     material: str | None = None
 
 
+Pose = tuple[tuple[float, float, float], tuple[float, float, float]]
+IDENTITY: Pose = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+
+
 @dataclass(frozen=True)
 class EndEffector:
     name: str
     source: str
     base_link: str
     mount_joint: str
+    flange: str
     robots: tuple[str, ...]
-    mounts: Mapping[str, tuple[tuple[float, float, float], tuple[float, float, float]]]
+    mount: Pose
     static_visual: StaticVisual | None
     glb_visuals: Mapping[str, str]
     stl_visuals: Mapping[str, str]
@@ -87,32 +92,44 @@ def _triplet(value: Any, *, where: str) -> tuple[float, float, float]:
     return (float(value[0]), float(value[1]), float(value[2]))
 
 
+def _load_flanges(data: Mapping[str, Any], path: Path) -> dict[str, tuple[str, ...]]:
+    flanges: dict[str, tuple[str, ...]] = {}
+    owner: dict[str, str] = {}
+    for name, spec in (data.get("flanges") or {}).items():
+        robots = tuple(get_profile_key_for_robot_name(str(r)) for r in spec["robots"])
+        for key in robots:
+            if key in owner:
+                raise AssemblyError(f"{path}: {key} listed under flanges {owner[key]!r} and {name!r}")
+            owner[key] = str(name)
+        flanges[str(name)] = robots
+    return flanges
+
+
 @lru_cache(maxsize=8)
 def _load_end_effectors(path: Path, mtime_ns: int) -> dict[str, EndEffector]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("schema_version") != 1:
+    if not isinstance(data, dict) or data.get("schema_version") != 2:
         raise AssemblyError(f"{path}: unsupported assembly schema")
+    flanges = _load_flanges(data, path)
     out: dict[str, EndEffector] = {}
     for name, spec in (data.get("end_effectors") or {}).items():
-        robots = tuple(get_profile_key_for_robot_name(str(r)) for r in spec["robots"])
-        mounts = {
-            get_profile_key_for_robot_name(str(robot)): (
-                _triplet(m.get("xyz", (0, 0, 0)), where=f"{name}.mounts.{robot}.xyz"),
-                _triplet(m.get("rpy", (0, 0, 0)), where=f"{name}.mounts.{robot}.rpy"),
-            )
-            for robot, m in (spec.get("mounts") or {}).items()
-        }
-        unknown = sorted(set(mounts) - set(robots))
-        if unknown:
-            raise AssemblyError(f"{name}: mounts for incompatible robots {unknown}")
+        flange = str(spec["flange"])
+        if flange not in flanges:
+            raise AssemblyError(f"{name}: unknown flange {flange!r}; expected one of {sorted(flanges)}")
+        m = spec.get("mount") or {}
+        mount = (
+            _triplet(m.get("xyz", (0, 0, 0)), where=f"{name}.mount.xyz"),
+            _triplet(m.get("rpy", (0, 0, 0)), where=f"{name}.mount.rpy"),
+        )
         sv = spec.get("static_visual")
         out[str(name)] = EndEffector(
             name=str(name),
             source=str(spec["source"]),
             base_link=str(spec["base_link"]),
             mount_joint=str(spec["mount_joint"]),
-            robots=robots,
-            mounts=mounts,
+            flange=flange,
+            robots=flanges[flange],
+            mount=mount,
             static_visual=StaticVisual(str(sv["link"]), str(sv["joint"]), str(sv["mesh"]), sv.get("material"))
             if sv
             else None,
@@ -312,7 +329,7 @@ def build_assembly_tree(
         robot.insert(insert_at, copy.deepcopy(tool_materials[name]))
         insert_at += 1
 
-    xyz, rpy = ee.mounts.get(key, ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)))
+    xyz, rpy = ee.mount
     origin = {"xyz": _fmt(xyz), "rpy": _fmt(rpy)}
     sv = ee.static_visual
     if gripper_visual == "static" and sv is not None:

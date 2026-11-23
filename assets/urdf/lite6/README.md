@@ -13,7 +13,7 @@ meshes/lite6/
 
 末端配件见同级目录 `lite6_gripper/`、`lite6_vacuum_gripper/`。
 
-机械臂连杆 `<collision>` 使用 `collision/lite6_link*_col_*.stl`（共 17 个水密凸包，`link_base..link6` 分别为 `3/2/4/2/4/1/1` 个凸体，单凸体 `<= 128` 面），消除零位 `qpos0` 下底座与腕部的单凸包伪自碰撞及紧凑折叠姿态力矩饱和。详见 [xArm5 碰撞说明](../xarm5/README.md#碰撞网格)。
+机械臂连杆 `<collision>` 使用 `collision/lite6_link*_col_*.stl`（共 17 个水密凸包，`link_base..link6` 分别为 `3/2/4/2/4/1/1` 个凸体，单凸体 `<= 128` 面），消除零位 `qpos0` 下底座与腕部的单凸包伪自碰撞及紧凑折叠姿态力矩饱和。详见 [xArm6 碰撞网格](../xarm6/README.md#碰撞网格)。
 
 未引用的历史碰撞简化网格已删除，可从 Git 历史获取。
 

@@ -60,7 +60,8 @@ def test_microplate_executor_physics_and_substep_agreement(robot, executor, tmp_
         for pose in (report["initial_pose"], report["final_pose"]):
             assert pose["flange_position_error_mm"] <= 0.5
             assert pose["flange_rotation_error_rad"] <= 1e-3
-        np.testing.assert_allclose(report["home_flange_target"]["xyz_mm"], [204.977625, -0.524202, 197.308], atol=1e-12)
+        home = BioG2TaskFrames.load(robot).home_flange()[:3, 3] * 1000
+        np.testing.assert_allclose(report["home_flange_target"]["xyz_mm"], home, atol=1e-9)
         assert report["max_ik_position_error_mm"] <= 0.1
         assert report["max_ik_rotation_error_rad"] <= 1e-4
         assert report["metrics"]["place_xy_error_mm"] <= 5

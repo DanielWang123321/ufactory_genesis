@@ -11,7 +11,7 @@ meshes/uf850/
 └── visual_glb/       # Draco 压缩视觉 GLB（单臂合计约 0.7–1.0 MB）
 ```
 
-注册机型 URDF 的机械臂连杆 `<collision>` 使用 `collision/uf850_link*_col_*.stl`（共 27 个水密凸包，`link_base..link6` 分别为 `3/4/7/5/5/2/1` 个凸体，单凸体 `<= 128` 面）；`visual/*.stl` 保留供 STL `<visual>` 与 CAD 几何参考使用，末端配件按各自资源保留独立 collision STL。详见 [xArm5 碰撞说明](../xarm5/README.md#碰撞网格)。
+注册机型 URDF 的机械臂连杆 `<collision>` 使用 `collision/uf850_link*_col_*.stl`（共 27 个水密凸包，`link_base..link6` 分别为 `3/4/7/5/5/2/1` 个凸体，单凸体 `<= 128` 面）；`visual/*.stl` 保留供 STL `<visual>` 与 CAD 几何参考使用，末端配件按各自资源保留独立 collision STL。详见 [xArm6 碰撞网格](../xarm6/README.md#碰撞网格)。
 
 未引用的历史碰撞简化网格已删除，可从 Git 历史获取。
 

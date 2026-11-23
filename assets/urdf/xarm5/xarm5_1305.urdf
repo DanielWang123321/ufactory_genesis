@@ -26,7 +26,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/xarm5_1305/visual/link_base.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link_base.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
@@ -34,13 +34,13 @@
     <collision name="link_base_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link_base_col_00.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link_base_col_00.stl" />
       </geometry>
     </collision>
     <collision name="link_base_col_1">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link_base_col_01.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link_base_col_01.stl" />
       </geometry>
     </collision>
   </link>
@@ -52,7 +52,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/xarm5_1305/visual/link1.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link1.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
@@ -60,13 +60,13 @@
     <collision name="link1_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link1_col_00.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link1_col_00.stl" />
       </geometry>
     </collision>
     <collision name="link1_col_1">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link1_col_01.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link1_col_01.stl" />
       </geometry>
     </collision>
   </link>
@@ -86,7 +86,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/xarm5_1305/visual/link2.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link2.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
@@ -94,31 +94,31 @@
     <collision name="link2_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link2_col_00.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link2_col_00.stl" />
       </geometry>
     </collision>
     <collision name="link2_col_1">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link2_col_01.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link2_col_01.stl" />
       </geometry>
     </collision>
     <collision name="link2_col_2">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link2_col_02.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link2_col_02.stl" />
       </geometry>
     </collision>
     <collision name="link2_col_3">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link2_col_03.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link2_col_03.stl" />
       </geometry>
     </collision>
     <collision name="link2_col_4">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link2_col_04.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link2_col_04.stl" />
       </geometry>
     </collision>
   </link>
@@ -138,51 +138,77 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/xarm5_1305/visual/link3.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link3.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <!-- xArm6 link4 at J4 = 0: xArm5 has a fixed aluminium key in place of the J4 module. -->
+    <visual>
+      <geometry>
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link4.stl" />
+      </geometry>
+      <origin rpy="-1.5708 0 0" xyz="0.0775 0.3425 0" />
       <material name="White" />
     </visual>
     <collision name="link3_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_00.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link3_col_00.stl" />
       </geometry>
     </collision>
     <collision name="link3_col_1">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_01.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link3_col_01.stl" />
       </geometry>
     </collision>
     <collision name="link3_col_2">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_02.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link3_col_02.stl" />
       </geometry>
     </collision>
     <collision name="link3_col_3">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_03.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link3_col_03.stl" />
       </geometry>
     </collision>
     <collision name="link3_col_4">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_04.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link3_col_04.stl" />
       </geometry>
     </collision>
     <collision name="link3_col_5">
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_05.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link4_col_00.stl" />
       </geometry>
     </collision>
     <collision name="link3_col_6">
-      <origin xyz="0 0 0" rpy="0 0 0" />
+      <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link3_col_06.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link4_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_7">
+      <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0" />
+      <geometry>
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link4_col_02.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_8">
+      <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0" />
+      <geometry>
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link4_col_03.stl" />
+      </geometry>
+    </collision>
+    <collision name="link3_col_9">
+      <origin xyz="0.0775 0.3425 0" rpy="-1.5708 0 0" />
+      <geometry>
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link4_col_04.stl" />
       </geometry>
     </collision>
   </link>
@@ -202,7 +228,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/xarm5_1305/visual/link4.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link5.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="White" />
@@ -210,13 +236,13 @@
     <collision name="link4_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link4_col_00.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link5_col_00.stl" />
       </geometry>
     </collision>
     <collision name="link4_col_1">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link4_col_01.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link5_col_01.stl" />
       </geometry>
     </collision>
   </link>
@@ -236,7 +262,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="meshes/xarm5_1305/visual/link5.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/visual/link6.stl" />
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0" />
       <material name="Silver" />
@@ -244,7 +270,7 @@
     <collision name="link5_col_0">
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="meshes/xarm5_1305/collision/xarm5_link5_col_00.stl" />
+        <mesh filename="../xarm6/meshes/xarm6_1305/collision/xarm6_link6_col_00.stl" />
       </geometry>
     </collision>
   </link>

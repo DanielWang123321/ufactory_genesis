@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import pytest
 
-from ufactory.robots.paths import bio_gripper_g2_urdf
+from ufactory.robots.paths import bio_gripper_g2_movable_visual_urdf, bio_gripper_g2_urdf
 from ufactory.simulation.bio_g2_controller import BioGripperG2Controller, GripperController
 from ufactory.simulation.bio_g2_model import (
     BASE_INERTIA_SCALE,
@@ -113,69 +113,78 @@ def test_mass_inertia_and_mimic():
     assert mimic.get("joint") == RIGHT and float(mimic.get("multiplier")) == -1.0
 
 
-@pytest.mark.parametrize("gap", [71, 80, 110, 140, 150])
-def test_actual_visual_and_collision_surfaces(gap):
+FINGER_JOINT_XYZ = np.array([0.059, 0.0, 0.027])
+
+
+def _link_meshes(link_name):
+    """G2 visual (GLB + visual origin) and collision hulls of one link, in the link frame."""
     trimesh = pytest.importorskip("trimesh")
-    urdf_root = ET.parse(MODEL_PATH).getroot()
-    bounds = {}
-    for side in ("left", "right"):
-        name = f"bio_gripper_g2_{side}_finger"
-        link = urdf_root.find(f"link[@name='{name}']")
-        vis_origin = np.fromstring(link.find("visual/origin").get("xyz", "0 0 0"), sep=" ")
-        q = gap_to_q(gap) * (-1 if side == "left" else 1)
-        visual = trimesh.load(MODEL_PATH.parent / f"meshes/visual/{name}.stl", force="mesh")
-        visual.apply_translation(vis_origin + np.array([0.059, q, 0.027]))
-        collision = trimesh.load(MODEL_PATH.parent / f"meshes/collision/{name}_convex_0.stl", force="mesh")
-        collision.apply_translation([0.059, q, 0.027])
-        for surface, mesh in (("visual", visual), ("collision", collision)):
-            tip = mesh.vertices[mesh.vertices[:, 0] > 0.09]
-            bounds[(side, surface)] = tip[:, 1].max() if side == "left" else tip[:, 1].min()
-        assert bounds[(side, "visual")] == pytest.approx(bounds[(side, "collision")], abs=1e-8)
-        assert collision.is_convex and collision.is_watertight
-        if side == "left":
-            assert collision.vertices[:, 1].max() <= -gap / 2000 + 1e-8
-        else:
-            assert collision.vertices[:, 1].min() >= gap / 2000 - 1e-8
-        root = trimesh.load(MODEL_PATH.parent / f"meshes/collision/{name}_convex_1.stl", force="mesh")
-        assert root.is_convex and root.is_watertight
-        assert root.bounds[1, 0] + 0.059 == pytest.approx(0.05, abs=1e-8)
-        assert collision.bounds[0, 0] == pytest.approx(0.05, abs=1e-8)
-    for surface in ("visual", "collision"):
-        assert (bounds[("right", surface)] - bounds[("left", surface)]) * 1000 == pytest.approx(gap, abs=1e-5)
+    pytest.importorskip("DracoPy")
+    urdf = Path(bio_gripper_g2_movable_visual_urdf())
+    link = ET.parse(urdf).getroot().find(f"link[@name='{link_name}']")
+
+    def load(node):
+        return trimesh.load((urdf.parent / node.find("geometry/mesh").get("filename")).resolve(), force="mesh")
+
+    visual = load(link.find("visual"))
+    visual.apply_translation(np.fromstring(link.find("visual/origin").get("xyz"), sep=" "))
+    return visual, [load(node) for node in link.findall("collision")]
+
+
+def _outside_m(hulls, points):
+    """Lower bound of the distance outside the union of convex hulls (<= 0 inside)."""
+    worst = np.full(len(points), np.inf)
+    for hull in hulls:
+        offsets = np.einsum("fk,fk->f", hull.face_normals, hull.triangles[:, 0])
+        worst = np.minimum(worst, (points @ hull.face_normals.T - offsets).max(axis=1))
+    return worst
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_finger_collision_hulls_follow_the_g2_visual(side):
+    name = f"bio_gripper_g2_{side}_finger"
+    for path in (MODEL_PATH, Path(bio_gripper_g2_movable_visual_urdf())):
+        link = ET.parse(path).getroot().find(f"link[@name='{name}']")
+        assert [node.get("name") for node in link.findall("collision")] == [f"{name}_convex_{i}" for i in range(5)]
+    visual, hulls = _link_meshes(name)
+    assert all(hull.is_convex and hull.is_watertight for hull in hulls)
+    vertices = visual.vertices
+    finger = vertices[:, 0] >= -0.025
+    assert _outside_m(hulls, vertices[finger]).max() < 1e-6
+    tips = [vertices[:, 0].max(), max(hull.bounds[1, 0] for hull in hulls)]
+    assert tips[1] == pytest.approx(tips[0], abs=1e-9)
+    # The slider has no hull: it stays inside the base hull over the full stroke.
+    _, (base,) = _link_meshes("bio_gripper_g2_base_link")
+    direction = np.array([0.0, -1.0 if side == "left" else 1.0, 0.0])
+    for q in (0.0, gap_to_q(150)):
+        assert _outside_m([base], vertices[~finger] + FINGER_JOINT_XYZ + q * direction).max() < 1e-6
 
 
 @pytest.mark.parametrize("gap", [71, 80, 110, 140, 150])
 def test_gripping_face_ray_intersections(gap):
-    trimesh = pytest.importorskip("trimesh")
-    urdf_root = ET.parse(MODEL_PATH).getroot()
     for side in ("left", "right"):
-        name = f"bio_gripper_g2_{side}_finger"
-        link = urdf_root.find(f"link[@name='{name}']")
-        vis_origin = np.fromstring(link.find("visual/origin").get("xyz", "0 0 0"), sep=" ")
-        shift = gap_to_q(gap) * (-1 if side == "left" else 1)
-        expected_y = gap / 2000 * (-1 if side == "left" else 1)
-        for rel_path, extra_origin in (
-            (f"meshes/visual/{name}.stl", vis_origin),
-            (f"meshes/collision/{name}_convex_0.stl", np.zeros(3)),
-        ):
-            mesh = trimesh.load(MODEL_PATH.parent / rel_path, force="mesh")
-            mesh.apply_translation(extra_origin + np.array([0.059, shift, 0.027]))
-            tri = mesh.triangles
+        sign = -1.0 if side == "left" else 1.0
+        visual, hulls = _link_meshes(f"bio_gripper_g2_{side}_finger")
+        shift = FINGER_JOINT_XYZ + [0.0, sign * gap_to_q(gap), 0.0]
+        expected_y = sign * gap / 2000
+        assert (sign * (hulls[0].vertices[:, 1] + shift[1])).min() >= gap / 2000 - 1e-8
+        # Collision face: the exact closed-gap plane. Visual face: within the 0.36 deg GLB yaw residual.
+        for mesh, tolerance in ((hulls[0], 1e-8), (visual, 3.5e-4)):
+            tri = mesh.triangles + shift
             a = tri[:, 0][:, [0, 2]]
             u, v = tri[:, 1][:, [0, 2]] - a, tri[:, 2][:, [0, 2]] - a
             det = u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0]
             valid = abs(det) > 1e-14
             divisor = np.where(valid, det, 1)
-            for x in (0.1155, 0.128, 0.135):
-                for z in (0.05,):
-                    b = np.array([x, z]) - a
-                    c = (b[:, 0] * v[:, 1] - b[:, 1] * v[:, 0]) / divisor
-                    d = (u[:, 0] * b[:, 1] - u[:, 1] * b[:, 0]) / divisor
-                    hit = valid & (c >= -1e-8) & (d >= -1e-8) & (c + d <= 1 + 1e-8)
-                    y = tri[:, 0, 1] + c * (tri[:, 1, 1] - tri[:, 0, 1]) + d * (tri[:, 2, 1] - tri[:, 0, 1])
-                    assert hit.any()
-                    inner_y = y[hit].max() if side == "left" else y[hit].min()
-                    assert inner_y == pytest.approx(expected_y, abs=1e-8)
+            for x in (0.095, 0.1155, 0.128):
+                b = np.array([x, 0.05]) - a
+                c = (b[:, 0] * v[:, 1] - b[:, 1] * v[:, 0]) / divisor
+                d = (u[:, 0] * b[:, 1] - u[:, 1] * b[:, 0]) / divisor
+                hit = valid & (c >= -1e-8) & (d >= -1e-8) & (c + d <= 1 + 1e-8)
+                y = tri[:, 0, 1] + c * (tri[:, 1, 1] - tri[:, 0, 1]) + d * (tri[:, 2, 1] - tri[:, 0, 1])
+                assert hit.any()
+                inner_y = y[hit].max() if side == "left" else y[hit].min()
+                assert inner_y == pytest.approx(expected_y, abs=tolerance)
 
 
 @pytest.mark.parametrize("field", ["position_mm", "speed_mm_s", "force_percent"])

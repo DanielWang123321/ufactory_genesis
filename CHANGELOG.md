@@ -17,10 +17,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Robot runtime configurations now reference assemblies: xArm5/6/7 and UF850 use `assembly:gripper_g2`, Lite6 uses `assembly:lite6_gripper:stl`. `PICK_PLACE_URDF` is `assembly:gripper_g2:stl`. Composed URDFs are physically identical to the removed static files (Genesis link poses, mass matrices and self-collision pairs, Pinocchio frames and CRBA). Their bytes, and therefore `urdf_sha256` bindings in safety approvals, reports and pick-place evaluations, differ from the old files.
 - `robot_visual_glb_urdf()` keeps its flags but composes at runtime. `RobotModelSpec` drops the per-combination file name fields; `supports_*` are now properties backed by `assembly.yaml`.
 - The Lite6 vacuum gripper GLB assembly now carries the real part (`0.14 kg`, `link_tcp`) instead of a massless overlay link.
+- `assets/urdf/assembly.yaml` schema 2 adds a `flanges` table: `xarm` (xArm5/6/7, UF850; PCD 50 mm, 4 × M6, Ø6 locating pin at −Y) and `lite6`. Each end effector names its `flange`, which decides the compatible robots, and has one optional `mount` shared by every robot on that flange. `EndEffector.mounts` is replaced by `flange` and `mount`.
+- xArm meshes are unified on the xArm6 files.
+  - xArm5 is an xArm6 with the J4 module replaced by a fixed aluminium key, so every xArm5 link now references xArm6 meshes. link3 carries xArm6 link3 plus link4, placed at J4 = 0. link4 and link5 use xArm6 link5 and link6.
+  - xArm7 references the xArm6 base and flange link.
+  - Kinematics, inertials, and link and joint names are unchanged. xArm5 now has 22 collision hulls (was 19). Its self-collision pairs match xArm6's with J4 locked.
+  - The bytes of the xArm5 and xArm7 URDFs change, and with them the `urdf_sha256` bindings of every model built from them. The xArm6 URDF bytes do not change.
+
+### Fixed
+
+- Bio Gripper G2 mount: the four per-robot mounts came from a fit that paired the adapter's M6 screw tips with the flange locating-pin hole and the tool connector. They left the adapter 2.2–4.6 mm off-centre and 2.5–3.3 mm inside the flange face. A single yaw-only mount now centres the adapter on the flange face, with the screw tips in the 135°/225° M6 holes (< 0.02 mm). The GLB's 0.25° tilt is not compensated, because it would make TCP-down poses unreachable on xArm5 and near-singular on xArm6. This moves the TCP in the flange frame from (159.7–162.0, −1.9–0, 54.2–55.0) mm to (157.6, 0.0, 57.5) mm. The visual fingertips land 157.9/158.5 mm from the flange axis (CAD 157.5 mm).
+- Bio Gripper G2 collision hulls are rebuilt from the G2 visual GLBs.
+  - Fingers: the old hulls came from the G1 template finger, a 6 mm wedge rod. Its gripping face ran from finger x −9 to 85 mm, and its tip reached about 169 mm from the flange axis, 11 mm past the G2 fingertip.
+  - Each finger now has five hulls: pad inner layer, pad outer walls, rod, knuckle plate and knuckle block. The gripping face (`convex_0`, still the first collision element) stays on the 71 mm closed-gap plane and covers the G2 pad (finger x 33–76 mm, z 11–29 mm). The hull tip matches the visual fingertip.
+  - Base: the hull sat 2.5 mm toward the flange. It is rebuilt from the GLB above the adapter face.
+- The Bio G2 home pose is now defined as a grasp-point pose: `HOME_GRASP_XYZ_M = (0.36, 0, 0.148)`, rpy (180°, 0, 0). The flange home is derived from the mount. This replaces `HOME_FLANGE_XYZ_M` / `HOME_FLANGE_RPY_DEG`, whose −0.404582° yaw compensated only the old xArm6 mount.
+- xArm bases now all use the production base (version A: flat top at 150.35 mm, body Ø95.4). The xArm6/xArm7 GLB visuals, and the xArm5 STL visual and collision hulls, used to show a prototype base (version B: body Ø98.0, a Ø57.8 disc rising to 152.55 mm into link1).
+- The xArm5 flange link (link5) GLB was a copy of the xArm6 link6 GLB shifted 1.0 mm off the flange axis, and its STL had no holes. It now uses the xArm6 link6 meshes.
 
 ### Removed
 
 - Removed the 27 static arm + end-effector URDFs (`*_g2_visual.urdf`, `*_g2_movable_visual.urdf`, `*_bio_gripper_g2_*visual.glb.urdf`, `*_vacuum_gripper_visual.glb.urdf`, `xarm6_with_gripper.urdf`, and the six Lite6 combinations including the duplicate `lite6_gripper_reversed_movable_visual.glb.urdf`) and the unused templates `gripper_g2.urdf`, `lite6_gripper.urdf`, `vacuum_gripper_stl.urdf`, and `lite6_vacuum_gripper_collision.urdf` (48 → 17 URDF files). The vacuum gripper's raw visual STL is used by `visual="stl"`.
+- Removed 38 duplicate xArm mesh files: all of `assets/urdf/xarm5/meshes/` (31), and the xArm7 `link_base`/`link7` visuals and hulls (7).
+- Removed the unused nominal calibration files `assets/urdf/{lite6,uf850,xarm5,xarm7}/kinematics/default/*_default_kinematics.yaml`. They repeated the URDF joint origins exactly, and nothing loaded them. Per-unit calibration is still read from `kinematics/user/`.
 
 ## [0.3.7] — 2026-11-18
 

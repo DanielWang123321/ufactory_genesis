@@ -419,15 +419,31 @@ def _non_fixed_joint_names(urdf: Path) -> set[str]:
     return {joint.get("name") or "" for joint in root.findall("joint") if joint.get("type") != "fixed"}
 
 
-_EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
+# Arm links built from another arm's parts, as (source arm, source link) in URDF element order. Hardware facts:
+# xArm5 is xArm6 with the J4 module replaced by a fixed aluminium key at J4 = 0, and xArm5/6/7 share the production
+# base (version A) and the flange link.
+_ARM_PART_SOURCES: dict[str, dict[str, tuple[tuple[str, str], ...]]] = {
     "xarm5": {
-        "link_base": 2,
-        "link1": 2,
-        "link2": 5,
-        "link3": 7,
-        "link4": 2,
-        "link5": 1,
+        "link_base": (("xarm6", "link_base"),),
+        "link1": (("xarm6", "link1"),),
+        "link2": (("xarm6", "link2"),),
+        "link3": (("xarm6", "link3"), ("xarm6", "link4")),
+        "link4": (("xarm6", "link5"),),
+        "link5": (("xarm6", "link6"),),
     },
+    "xarm7": {
+        "link_base": (("xarm6", "link_base"),),
+        "link7": (("xarm6", "link6"),),
+    },
+}
+
+
+def _part_sources(robot_dir: str, link_name: str) -> tuple[tuple[str, str], ...]:
+    return _ARM_PART_SOURCES.get(robot_dir, {}).get(link_name, ((robot_dir, link_name),))
+
+
+# Convex hull count of each arm's own link parts; shared parts are counted at their source.
+_EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
     "xarm6": {
         "link_base": 2,
         "link1": 2,
@@ -438,14 +454,12 @@ _EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
         "link6": 1,
     },
     "xarm7": {
-        "link_base": 2,
         "link1": 2,
         "link2": 5,
         "link3": 4,
         "link4": 5,
         "link5": 5,
         "link6": 2,
-        "link7": 1,
     },
     "lite6": {
         "link_base": 3,
@@ -471,10 +485,8 @@ _EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
 def test_registered_arm_collision_meshes_use_visual_stl() -> None:
     """Registered arm links use selective convex-hull collision STLs; accessories keep their own collision geoms."""
     bad: list[str] = []
-    for robot_dir, (dof, mesh_prefix, _key) in _REGISTERED_ARMS.items():
-        urdf_dir = _URDF_ROOT / robot_dir
+    for robot_dir, (dof, _mesh_prefix, _key) in _REGISTERED_ARMS.items():
         arm_links = _arm_link_names(dof)
-        expected_counts = _EXPECTED_ARM_COLLISION_COUNTS[robot_dir]
         for urdf in _registered_arm_urdfs(robot_dir):
             basename = _rel(urdf)
             root = ET.parse(urdf).getroot()
@@ -500,8 +512,13 @@ def test_registered_arm_collision_meshes_use_visual_stl() -> None:
                 if arm_filenames:
                     seen_arm_links.add(link_name)
                 expected = [
-                    str(urdf_dir / f"meshes/{mesh_prefix}/collision/{robot_dir}_{link_name}_col_{idx:02d}.stl")
-                    for idx in range(expected_counts[link_name])
+                    str(
+                        _URDF_ROOT
+                        / src_dir
+                        / f"meshes/{_REGISTERED_ARMS[src_dir][1]}/collision/{src_dir}_{src_link}_col_{idx:02d}.stl"
+                    )
+                    for src_dir, src_link in _part_sources(robot_dir, link_name)
+                    for idx in range(_EXPECTED_ARM_COLLISION_COUNTS[src_dir][src_link])
                 ]
                 if arm_filenames != expected:
                     bad.append(f"{basename}: {link_name} collision should be {expected}, got {arm_filenames}")
@@ -512,6 +529,152 @@ def test_registered_arm_collision_meshes_use_visual_stl() -> None:
             if missing_arm:
                 bad.append(f"{basename}: missing arm collision links {missing_arm}")
     assert bad == []
+
+
+_XARM_URDF_VARIANTS = ("{}_1305.urdf", "{}_1305_visual.glb.urdf")
+
+
+def _rpy_matrix(rpy: tuple[float, float, float]) -> np.ndarray:
+    """URDF fixed-axis roll-pitch-yaw: R = Rz(yaw) @ Ry(pitch) @ Rx(roll)."""
+    (cr, cp, cy), (sr, sp, sy) = np.cos(rpy), np.sin(rpy)
+    return np.array(
+        [
+            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+            [-sp, cp * sr, cp * cr],
+        ]
+    )
+
+
+def _origin_matrix(elem: ET.Element) -> np.ndarray:
+    origin = elem.find("origin")
+    out = np.eye(4)
+    out[:3, :3] = _rpy_matrix(_xyz_tuple(origin.get("rpy") if origin is not None else None))
+    out[:3, 3] = _xyz_tuple(origin.get("xyz") if origin is not None else None)
+    return out
+
+
+def _axis_angle_matrix(axis: np.ndarray, angle: float) -> np.ndarray:
+    k = np.array([[0.0, -axis[2], axis[1]], [axis[2], 0.0, -axis[0]], [-axis[1], axis[0], 0.0]])
+    out = np.eye(4)
+    out[:3, :3] = np.eye(3) + np.sin(angle) * k + (1.0 - np.cos(angle)) * (k @ k)
+    return out
+
+
+def _link_poses(urdf: Path, q: dict[str, float]) -> dict[str, np.ndarray]:
+    """World pose of every link for joint positions ``q``; joints not in ``q`` stay at 0."""
+    root = ET.parse(urdf).getroot()
+    joints = {joint.find("child").get("link"): joint for joint in root.findall("joint")}
+    poses: dict[str, np.ndarray] = {}
+
+    def pose(link: str) -> np.ndarray:
+        if link not in poses:
+            joint = joints.get(link)
+            if joint is None:
+                poses[link] = np.eye(4)
+            else:
+                out = pose(joint.find("parent").get("link")) @ _origin_matrix(joint)
+                if joint.get("type") != "fixed":
+                    axis = np.asarray(_xyz_tuple(joint.find("axis").get("xyz")))
+                    out = out @ _axis_angle_matrix(axis / np.linalg.norm(axis), q.get(joint.get("name") or "", 0.0))
+                poses[link] = out
+        return poses[link]
+
+    for link in root.findall("link"):
+        pose(link.get("name") or "")
+    return poses
+
+
+def _placed_meshes(urdf: Path, link_name: str, tag: str) -> list[tuple[np.ndarray, Path]]:
+    """(origin in the link frame, resolved mesh file) of each ``tag`` element of ``link_name``."""
+    link = ET.parse(urdf).getroot().find(f"link[@name='{link_name}']")
+    assert link is not None, (urdf, link_name)
+    out = []
+    for elem in link.findall(tag):
+        mesh = elem.find("geometry/mesh")
+        assert mesh is not None, (urdf, link_name, tag)
+        out.append((_origin_matrix(elem), (urdf.parent / (mesh.get("filename") or "")).resolve()))
+    return out
+
+
+@pytest.mark.parametrize("variant", _XARM_URDF_VARIANTS)
+def test_xarm5_is_xarm6_with_j4_locked(variant: str) -> None:
+    """xArm5 link frames and placed meshes equal xArm6's at J4 = 0 (xArm5 J4/J5 are xArm6 J5/J6)."""
+    xarm5 = _URDF_ROOT / "xarm5" / variant.format("xarm5")
+    xarm6 = _URDF_ROOT / "xarm6" / variant.format("xarm6")
+    frames = {link: _part_sources("xarm5", link)[0][1] for link in _arm_link_names(5)}
+    for q in np.random.default_rng(0).uniform(-np.pi, np.pi, size=(8, 5)):
+        poses5 = _link_poses(xarm5, {f"joint{i}": float(v) for i, v in zip((1, 2, 3, 4, 5), q)})
+        poses6 = _link_poses(xarm6, {f"joint{i}": float(v) for i, v in zip((1, 2, 3, 5, 6), q)})
+        for link, frame in frames.items():
+            np.testing.assert_allclose(poses5[link], poses6[frame], atol=1e-9, err_msg=link)
+            for tag in ("visual", "collision"):
+                got = [(poses5[link] @ origin, path) for origin, path in _placed_meshes(xarm5, link, tag)]
+                want = [
+                    (poses6[src] @ origin, path)
+                    for _, src in _part_sources("xarm5", link)
+                    for origin, path in _placed_meshes(xarm6, src, tag)
+                ]
+                assert [path for _, path in got] == [path for _, path in want], (link, tag)
+                for (a, _), (b, _) in zip(got, want):
+                    np.testing.assert_allclose(a, b, atol=1e-9, err_msg=f"{link} {tag}")
+
+
+@pytest.mark.parametrize("variant", _XARM_URDF_VARIANTS)
+def test_shared_arm_links_reuse_the_source_link_meshes(variant: str) -> None:
+    """A shared link with a single source carries exactly the source link's visuals and collisions."""
+    for robot_dir, links in _ARM_PART_SOURCES.items():
+        urdf = _URDF_ROOT / robot_dir / variant.format(robot_dir)
+        for link, sources in links.items():
+            if len(sources) != 1:
+                continue
+            ((src_dir, src_link),) = sources
+            source = _URDF_ROOT / src_dir / variant.format(src_dir)
+            for tag in ("visual", "collision"):
+                got, want = _placed_meshes(urdf, link, tag), _placed_meshes(source, src_link, tag)
+                assert [path for _, path in got] == [path for _, path in want], (robot_dir, link, tag)
+                for (a, _), (b, _) in zip(got, want):
+                    np.testing.assert_array_equal(a, b, err_msg=f"{robot_dir} {link} {tag}")
+
+
+def test_xarm_bases_use_the_production_base() -> None:
+    """Only base version A ships (flat top at z = 150.35 mm); prototype version B rises to 152.55 mm."""
+    trimesh = pytest.importorskip("trimesh")
+    pytest.importorskip("DracoPy")
+    pytest.importorskip("pygltflib")
+    meshes = _URDF_ROOT / "xarm6" / "meshes" / "xarm6_1305"
+    stl, glb = meshes / "visual" / "link_base.stl", meshes / "visual_glb" / "link_base.glb"
+    for robot_dir in ("xarm5", "xarm6", "xarm7"):
+        for variant, visual in zip(_XARM_URDF_VARIANTS, (stl, glb)):
+            urdf = _URDF_ROOT / robot_dir / variant.format(robot_dir)
+            assert [path for _, path in _placed_meshes(urdf, "link_base", "visual")] == [visual], _rel(urdf)
+    hulls = [path for _, path in _placed_meshes(_URDF_ROOT / "xarm6" / "xarm6_1305.urdf", "link_base", "collision")]
+    stl_top = _mesh_vertices(stl, trimesh)[:, 2].max()
+    assert stl_top == pytest.approx(0.15035, abs=5e-5)
+    assert _mesh_vertices(glb, trimesh)[:, 2].max() == pytest.approx(stl_top, abs=1e-4)
+    assert max(_mesh_vertices(path, trimesh)[:, 2].max() for path in hulls) == pytest.approx(stl_top, abs=1e-4)
+
+
+def test_xarm_flange_visual_is_centred_on_the_flange_frame() -> None:
+    """xArm5/6/7 share one flange link; its GLB stays centred on the flange axis like the STL.
+
+    The former xArm5 copy of this GLB sat 0.9 mm off in the flange plane.
+    """
+    trimesh = pytest.importorskip("trimesh")
+    pytest.importorskip("DracoPy")
+    pytest.importorskip("pygltflib")
+    meshes = _URDF_ROOT / "xarm6" / "meshes" / "xarm6_1305"
+    stl, glb = meshes / "visual" / "link6.stl", meshes / "visual_glb" / "link6.glb"
+    for robot_dir, flange in (("xarm5", "link5"), ("xarm6", "link6"), ("xarm7", "link7")):
+        for variant, visual in zip(_XARM_URDF_VARIANTS, (stl, glb)):
+            urdf = _URDF_ROOT / robot_dir / variant.format(robot_dir)
+            assert [path for _, path in _placed_meshes(urdf, flange, "visual")] == [visual], _rel(urdf)
+
+    def bbox_centre(path: Path) -> np.ndarray:
+        vertices = _mesh_vertices(path, trimesh)
+        return (vertices.min(axis=0) + vertices.max(axis=0)) / 2
+
+    np.testing.assert_allclose(bbox_centre(glb)[:2], bbox_centre(stl)[:2], atol=2e-4)
 
 
 def test_bio_gripper_g2_collision_mesh_basenames_are_unique_in_combos() -> None:
@@ -692,12 +855,6 @@ def test_vacuum_gripper_visual_glb_budget() -> None:
     ("arm", "visual_glb_dir", "budget", "expected_names"),
     [
         (
-            "xarm5",
-            "assets/urdf/xarm5/meshes/xarm5_1305/visual_glb",
-            1_500_000,
-            {"link_base.glb", "link1.glb", "link2.glb", "link3.glb", "link4.glb", "link5.glb"},
-        ),
-        (
             "xarm6",
             "assets/urdf/xarm6/meshes/xarm6_1305/visual_glb",
             1_500_000,
@@ -715,16 +872,7 @@ def test_vacuum_gripper_visual_glb_budget() -> None:
             "xarm7",
             "assets/urdf/xarm7/meshes/xarm7_1305/visual_glb",
             1_000_000,
-            {
-                "link_base.glb",
-                "link1.glb",
-                "link2.glb",
-                "link3.glb",
-                "link4.glb",
-                "link5.glb",
-                "link6.glb",
-                "link7.glb",
-            },
+            {"link1.glb", "link2.glb", "link3.glb", "link4.glb", "link5.glb", "link6.glb"},
         ),
         (
             "uf850",

@@ -66,6 +66,24 @@
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_2">
+      <geometry>
+        <mesh filename="meshes/collision/bio_gripper_g2_left_finger_convex_2.stl"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_3">
+      <geometry>
+        <mesh filename="meshes/collision/bio_gripper_g2_left_finger_convex_3.stl"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
+    <collision name="bio_gripper_g2_left_finger_convex_4">
+      <geometry>
+        <mesh filename="meshes/collision/bio_gripper_g2_left_finger_convex_4.stl"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
   </link>
   <joint name="bio_gripper_g2_left_finger_joint" type="prismatic">
     <origin rpy="0 0 0" xyz="0.059 0 0.027"/>
@@ -98,6 +116,24 @@
     <collision name="bio_gripper_g2_right_finger_convex_1">
       <geometry>
         <mesh filename="meshes/collision/bio_gripper_g2_right_finger_convex_1.stl"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_2">
+      <geometry>
+        <mesh filename="meshes/collision/bio_gripper_g2_right_finger_convex_2.stl"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_3">
+      <geometry>
+        <mesh filename="meshes/collision/bio_gripper_g2_right_finger_convex_3.stl"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
+    <collision name="bio_gripper_g2_right_finger_convex_4">
+      <geometry>
+        <mesh filename="meshes/collision/bio_gripper_g2_right_finger_convex_4.stl"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>

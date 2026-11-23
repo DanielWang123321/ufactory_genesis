@@ -56,15 +56,15 @@
     "assets/configs/runtime/tasks/robots/xarm7_1305_reach.yaml": "5059ce9b53123689726e2d3846f43c18ba92db7ca8bba7e87f9dccea9c4fc4d7",
     "assets/scenes/packaging_showcase/meshes/uv_box.obj": "901c6efc7a1e1b4947af16ed95b9e76b2b1d053fd117d36641a9e770768e35cc",
     "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
-    "assets/urdf/assembly.yaml": "8155f42f2a267a63f074e72bfdf2c909c64953d01b77f9aeb3b97f19ed0b2177",
+    "assets/urdf/assembly.yaml": "8a148d477b2a4ad285520249c80fd7a564ab0b55d1d04ef5e4d00f2d602d0584",
     "assets/urdf/gripper_g2/gripper_g2_movable_visual.urdf": "4ce6ca34475b8547b625bce67ff848c70f50e8edcae6e4f7b5b8829a7d242734",
     "assets/urdf/lite6/lite6.urdf": "0045071263238025da9c0719e5a12f8ef68881bd7c45105acbefedae2fd1748e",
     "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf": "d4013937766d7bdb1bd83f82f66cd4720f0ac2fb10ad179889b4bf3b50db1ede",
     "assets/urdf/lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb": "1b7c3b05eb5ef63fadb5b65bf097fb349c18607ccb19ac321b74af247dd9c406",
     "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb": "1ae8f67d1ddfa3b5a7f09265aa680eff72bc05f4c817470ac885333dde1cce57",
     "assets/urdf/uf850/uf850.urdf": "5f5b83d084b78411267886b53420e004ef13ea9ec95c0af471cd7d6f0f6c9d67",
-    "assets/urdf/xarm5/xarm5_1305.urdf": "366848093f40077ad49bc91874056c189ed7a83551781e00dab75fe1affabcac",
+    "assets/urdf/xarm5/xarm5_1305.urdf": "5ee94bb9b104db012fada66d9b272c6a44766a6b88c14ab34155c92fc44f7067",
     "assets/urdf/xarm6/xarm6_1305.urdf": "73e03c904b18c70e489205c4d8c57242a6577d53b7b0ecb1f9384b487e2cb5ad",
-    "assets/urdf/xarm7/xarm7_1305.urdf": "6d5ebdb02126bcf945c863cfa96a2feea36cc66ef8d17d36b43db194904df627"
+    "assets/urdf/xarm7/xarm7_1305.urdf": "dd33d6c298919a163481c8d0b80be82bdf7aa114fe79abcff70630806c4e6a2c"
   }
 }

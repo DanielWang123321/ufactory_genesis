@@ -16,11 +16,38 @@
 
 `bio_gripper_g2.urdf` 是从 xarm_ros2 的 xacro 生成的 standalone 模板文件；v0.1.6 中 mesh 路径已改为本仓库内的 `meshes/visual/*.stl`，可用于基础结构解析。它也是关节 `limit`（行程）的唯一真源。它保留 vendor 的外部父 link，不作为 Genesis standalone 查看入口。
 
-Bio G2 的 STL collision 文件使用 `meshes/collision/bio_gripper_g2_*_convex_*.stl` 唯一文件名（底座 1 个凸包 + 左右手指各 2 个水密凸包，手指在基座系 `X=0.05 m` 处切分为指杆与指根，指杆裁剪至 `±35.5 mm` 夹持平面）。不要把零件 URDF 改回 `link_base.stl` / `left_finger.stl` / `right_finger.stl`：Genesis 经 MuJoCo 回读 URDF collision mesh 时会按 mesh basename 建资产表，机械臂自身也有 `link_base.stl`，短名会让 Bio G2 底座误用机械臂底座 collision。
+Bio G2 的 STL collision 文件使用 `meshes/collision/bio_gripper_g2_*_convex_*.stl` 唯一文件名，均由视觉 GLB 生成（见“碰撞体”）。不要把零件 URDF 改回 `link_base.stl` / `left_finger.stl` / `right_finger.stl`：Genesis 经 MuJoCo 回读 URDF collision mesh 时会按 mesh basename 建资产表，机械臂自身也有 `link_base.stl`，短名会让 Bio G2 底座误用机械臂底座 collision。
 
 `bio_gripper_g2_movable_visual.urdf`（组合源）中的 Bio G2 凸包 collision 已将几何偏移烘焙至网格顶点（`<collision><origin xyz="0 0 0"/>`），可动手指 GLB `<visual><origin>` 通过 Y 轴微调偏移与 `71–150 mm` 物理夹持平面严格对齐；整爪总质量标定为 `0.79 kg`（底座含转接板 `0.765827 kg`、左指 `0.012105 kg`、右指 `0.012068 kg`）。
 
-Genesis standalone 检查可使用 `bio_gripper_g2_movable_visual.urdf`。搭配机械臂时由 `ufactory.robots.assembly` 运行时组合，每台机型的安装位姿（销孔对位）记录在 [`assembly.yaml`](../assembly.yaml) 的 `bio_gripper_g2.mounts`。
+Genesis standalone 检查可使用 `bio_gripper_g2_movable_visual.urdf`。搭配机械臂时由 `ufactory.robots.assembly` 运行时组合。xArm5/6/7 与 UF850 使用同一法兰标准，安装位姿只有一组，见 [`assembly.yaml`](../assembly.yaml) 的 `bio_gripper_g2.mount`。
+
+## 安装与坐标系
+
+- **零件坐标系不在转接板上。** 在 `bio_gripper_g2_base_link` 系中，转接板中心位于 `(-22.636, -0.956, -2.516) mm`，姿态 rpy 为 `(0.031, 0.254, 0.360)°`，原因是早期把 CAD 按质心对齐到了 G1 STL。手指关节、TCP、惯量与碰撞体都定义在这个坐标系中，因此保持不动，由安装位姿补偿。
+- **安装位姿。** xyz `(22.642, 0.814, 2.516) mm`，rpy `(0, 0, -0.00628537) rad`。效果：转接板中心在法兰轴上，转接面中心落在 z=0，两颗 M6 螺钉尾端对准法兰 135°/225° 螺孔（Ø50 圆周，残差 < 0.02 mm）。
+- **不含倾斜。** GLB 相对零件坐标系还有 0.25° 倾斜，这是早期摆放误差：两个平面贴合不可能倾斜。若在安装位姿里补这个倾斜，TCP 朝下时 xArm5（5 轴）会无解，xArm6 会接近腕部奇异。因此转接面边缘在视觉上残留 ±0.16 mm 的不平。
+- **校核。** 视觉指尖距法兰轴 157.9（右）/ 158.5（左）mm，均值 158.2 mm，CAD 实测为 157.5 mm。TCP 在法兰系中为 `(157.6, 0.0, 57.5) mm`，抓取点（`GRASP_OFFSET_IN_BASE_LINK`）为 `(150.6, 0.0, 52.5) mm`。
+- **与厂商模型的关系。** 厂商 xarm_ros2 的 G2 模型以转接板为原点，以恒等变换安装在 `link_eef` 上，网格形状与本仓库一致。但厂商模型的手指相对壳体位置与 CAD 相差约 12 mm（指尖 170.5 mm），以 CAD 为准。
+
+## 碰撞体
+
+全部由视觉 GLB 生成，表达在各连杆坐标系中（`<collision><origin>` 为零）。生成脚本属内部维护材料，不随仓库发布。
+
+- **底座**：1 个凸包，取转接面以上的 GLB 顶点，去掉 M6 螺钉尾端。转接板比壳体后壁多伸出约 20 mm，凸包在此处填平，最多超出视觉 13 mm。
+- **手指**：每指 5 个凸包，在手指坐标系中按下表切分（u = |y|，即到夹爪中面的距离）：
+
+| 文件 | 部位 | 范围 (mm) |
+|---|---|---|
+| `*_finger_convex_0` | 夹持垫内层 | x ≥ 31.5，u ≤ 40.3；内侧面压平到 u = 35.5 |
+| `*_finger_convex_1` | 夹持垫外层 | x ≥ 31.5，u ≥ 40.1，z ≤ 25.9 |
+| `*_finger_convex_2` | 指杆 | −3 ≤ x ≤ 31.5 |
+| `*_finger_convex_3` | 关节立板 | −25 ≤ x ≤ −3，u ≥ 39.6 |
+| `*_finger_convex_4` | 关节横块 | −25 ≤ x ≤ −3，z ≤ 6.8 |
+
+- `convex_0` 的内侧面就是夹持平面：关节零位时位于 u = 35.5（间距 71 mm），垂直于关节轴，覆盖 x 33…76、z 11…29。它必须是手指的第一个碰撞元素，因为 `collision_gripping_planes` 从这里读取夹持面。视觉夹持面带有 0.36° 的偏航残差，与碰撞夹持面最多相差 0.3 mm。
+- 滑块段（x < −25）在全行程内都位于底座凸包内，因此不建碰撞体。
+- 碰撞指尖与视觉指尖一致，距法兰轴 157.9 / 158.5 mm。夹持垫是鳍条镂空结构，凸包会把空腔填实；除空腔外，凸包表面最多超出视觉 3.9 mm，出现在关节横块的颈部，该处位于壳体内。
 
 ## 目录结构
 
@@ -31,8 +58,8 @@ bio_gripper_g2/
 ├── meshes/
 │   ├── collision/
 │   │   ├── bio_gripper_g2_base_link_convex_0.stl
-│   │   ├── bio_gripper_g2_left_finger_convex_0.stl / _1.stl
-│   │   └── bio_gripper_g2_right_finger_convex_0.stl / _1.stl
+│   │   ├── bio_gripper_g2_left_finger_convex_0.stl … _4.stl
+│   │   └── bio_gripper_g2_right_finger_convex_0.stl … _4.stl
 │   └── visual/
 │       ├── bio_gripper_g2_visual.glb        # 合并静态高模 GLB（全机型共用，原生 Draco）
 │       ├── visual_glb/bio_gripper_g2_*.glb  # 可动分体高模 GLB（全机型共用，原生 Draco）
@@ -91,4 +118,4 @@ python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --mov
 ## Source / License
 
 - 模板与网格源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。
-- 本仓库维护零件 URDF、安装表、共享 `visual_glb/`（取消按 link5/6/7 重复副本）与 Draco 压缩 GLB。
+- 本仓库维护零件 URDF、安装位姿、共享 `visual_glb/`（取消按 link5/6/7 重复副本）与 Draco 压缩 GLB。

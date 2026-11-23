@@ -11,7 +11,7 @@ import pytest
 from ufactory.trajectory import bio_g2_replay as replay
 from ufactory.trajectory.bio_g2_frames import (
     BioG2TaskFrames,
-    HOME_FLANGE_XYZ_M,
+    HOME_GRASP_XYZ_M,
     SUPPORTED_ROBOTS,
     pose_components,
     pose_matrix,
@@ -33,8 +33,12 @@ def cli_module():
 def test_common_flange_home_and_complete_tcp_roundtrip(robot):
     frames = BioG2TaskFrames.load(robot)
     home = frames.home_flange()
-    np.testing.assert_array_equal(home[:3, 3], HOME_FLANGE_XYZ_M)
-    np.testing.assert_allclose(replay.pose_report(home, "robot_base")["rpy_deg"], [180, 0, -0.404582])
+    # One flange standard → one mount → the same flange home on every robot.
+    np.testing.assert_array_equal(home, BioG2TaskFrames.load("xarm6").home_flange())
+    np.testing.assert_array_equal(frames.flange_to_tcp, BioG2TaskFrames.load("xarm6").flange_to_tcp)
+    home_grasp = frames.flange_to_tcp_pose(home)
+    np.testing.assert_allclose(home_grasp[:3, 3], HOME_GRASP_XYZ_M, atol=1e-15)
+    np.testing.assert_allclose(home_grasp[:3, :3], np.diag([1.0, -1.0, -1.0]), atol=1e-15)
     # An arbitrary tilted pose exercises the rotated translation as well as the mounting yaw.
     q = np.array([0.4, 0.3, -0.2, 0.1])
     flange = pose_matrix([0.3, 0.1, 0.5], q)
