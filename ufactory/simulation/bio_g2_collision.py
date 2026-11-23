@@ -17,6 +17,8 @@ def audit_collisions(frames: BioG2TaskFrames, joint_artifact: dict, *, exhaustiv
     each collision geometry follows its own finger; commanded states use q_left=-q_right.
     Adjacent links and geometries on the same rigid body are omitted. Only the
     mounted base is omitted from table checks; all moving links and nests are checked.
+    Robot collision meshes are convex hulls and are checked as convex shapes, so a
+    penetration, including one between two robot links, gives a negative distance.
     """
     import coal
     import pinocchio as pin
@@ -34,18 +36,26 @@ def audit_collisions(frames: BioG2TaskFrames, joint_artifact: dict, *, exhaustiv
     geometry = pin.buildGeomFromUrdf(
         model, str(frames.urdf_path), pin.GeometryType.COLLISION, package_dirs=[str(frames.urdf_path.parent)]
     )
-    geometry.addAllCollisionPairs()
+    # Coal returns 0, not a penetration depth, for two intersecting triangle meshes, so robot-robot distances
+    # never went negative. Every robot collision mesh is a convex hull, so its convex representation is exact
+    # and gives signed distances.
+    for obj in geometry.geometryObjects:
+        obj.geometry.buildConvexRepresentation(False)
+        obj.geometry = obj.geometry.convex
     root = ET.parse(frames.urdf_path).getroot()
     adjacent = {frozenset((j.find("parent").get("link"), j.find("child").get("link"))) for j in root.findall("joint")}
 
     def link_name(index):
         return str(model.frames[int(geometry.geometryObjects[index].parentFrame)].name)
 
-    for pair in list(geometry.collisionPairs):
-        a, b = geometry.geometryObjects[pair.first], geometry.geometryObjects[pair.second]
-        if a.parentJoint == b.parentJoint or frozenset((link_name(pair.first), link_name(pair.second))) in adjacent:
-            geometry.removeCollisionPair(pair)
+    # Select the pairs up front: removing from ``collisionPairs`` while iterating over it skips the pair after each
+    # removal, which left joint neighbours in the audit.
     robot_count = len(geometry.geometryObjects)
+    for first in range(robot_count):
+        for second in range(first + 1, robot_count):
+            same_body = geometry.geometryObjects[first].parentJoint == geometry.geometryObjects[second].parentJoint
+            if not same_body and frozenset((link_name(first), link_name(second))) not in adjacent:
+                geometry.addCollisionPair(pin.CollisionPair(first, second))
     for name, size, center in (
         ("table", (0.65, 0.70, TABLE_TOP_Z), (0.25, 0, -TABLE_TOP_Z / 2)),
         ("pick_nest", NEST_SIZE_M, (*PICK_XY, NEST_SIZE_M[2] / 2)),

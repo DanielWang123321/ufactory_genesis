@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Bio G2 home pose is now defined as a grasp-point pose: `HOME_GRASP_XYZ_M = (0.36, 0, 0.148)`, rpy (180°, 0, 0). The flange home is derived from the mount. This replaces `HOME_FLANGE_XYZ_M` / `HOME_FLANGE_RPY_DEG`, whose −0.404582° yaw compensated only the old xArm6 mount.
 - xArm bases now all use the production base (version A: flat top at 150.35 mm, body Ø95.4). The xArm6/xArm7 GLB visuals, and the xArm5 STL visual and collision hulls, used to show a prototype base (version B: body Ø98.0, a Ø57.8 disc rising to 152.55 mm into link1).
 - The xArm5 flange link (link5) GLB was a copy of the xArm6 link6 GLB shifted 1.0 mm off the flange axis, and its STL had no holes. It now uses the xArm6 link6 meshes.
+- The Bio G2 collision audit (`ufactory.simulation.bio_g2_collision.audit_collisions`) now detects self-collisions. Before, it never reported a self-penetration, and its `min_distance_mm["self"]` was always 0. Two defects caused this:
+  - It removed collision pairs while iterating over them, which skipped a pair after each removal and left 36–52 joint-neighbour pairs per robot.
+  - It measured robot hulls as triangle meshes, and Coal reports two intersecting meshes as 0 rather than a negative depth.
+  - Pairs are now selected up front, and robot hulls, which are all convex, are checked as convex shapes with signed distances. As a side effect, table and nest penetration depths now cover the whole hull (16.1 mm where 14.8 mm was reported before).
 
 ### Removed
 

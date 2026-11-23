@@ -677,6 +677,25 @@ def test_xarm_flange_visual_is_centred_on_the_flange_frame() -> None:
     np.testing.assert_allclose(bbox_centre(glb)[:2], bbox_centre(stl)[:2], atol=2e-4)
 
 
+def test_arm_and_bio_g2_collision_meshes_are_convex_hulls() -> None:
+    """Genesis keeps its pure-convex path, and the Bio G2 collision audit checks these meshes as convex shapes."""
+    trimesh = pytest.importorskip("trimesh")
+    urdfs = [_URDF_ROOT / robot_dir / f"{prefix}.urdf" for robot_dir, (_, prefix, _) in _REGISTERED_ARMS.items()]
+    meshes = sorted(
+        {
+            (urdf.parent / name).resolve()
+            for urdf in (*urdfs, *_BIO_GRIPPER_G2_PARTS)
+            for name in _collision_mesh_filenames(urdf)
+        }
+    )
+    bad = []
+    for path in meshes:
+        mesh = trimesh.load(path, force="mesh")
+        if not mesh.is_watertight or 1.0 - mesh.volume / mesh.convex_hull.volume > 1e-5:
+            bad.append(_rel(path))
+    assert meshes and bad == []
+
+
 def test_bio_gripper_g2_collision_mesh_basenames_are_unique_in_combos() -> None:
     """MuJoCo keys URDF mesh assets by basename, so Bio G2 combo basenames must not collide."""
     bad: list[str] = []

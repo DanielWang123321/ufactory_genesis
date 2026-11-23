@@ -179,4 +179,23 @@ def test_collision_audit_expands_both_fingers_and_detects_table_penetration():
     assert result["mimic_expanded"]
     assert result["sample_count"] == 1
     assert not result["passed"]
-    assert any(c["category"] == "table" for c in result["collisions"])
+    assert {c["category"] for c in result["collisions"]} == {"table"}
+    # Joint neighbours are excluded and the other links stay clear (29.5 mm); it read 0 while meshes were unsigned.
+    assert result["min_distance_mm"]["self"] > 20
+
+
+def test_collision_audit_detects_self_penetration():
+    """Wrist folded back (J5 = 3.1 rad): the left finger enters the upper arm (link2) by about 17 mm."""
+    pytest.importorskip("pinocchio")
+    pytest.importorskip("coal")
+    from ufactory.simulation.bio_g2_collision import audit_collisions
+
+    frames = BioG2TaskFrames.load("xarm6")
+    result = audit_collisions(frames, {"initial_arm_q_rad": [0, -0.4, -0.6, 0, 3.1, 0], "executed": []})
+    assert not result["passed"]
+    assert result["collisions"]
+    for collision in result["collisions"]:
+        assert collision["category"] == "self"
+        assert collision["first"].startswith("link2") and "left_finger" in collision["second"]
+    assert result["min_distance_mm"]["self"] < -10
+    assert result["min_distance_mm"]["table"] > 100 and result["min_distance_mm"]["nest"] > 100
