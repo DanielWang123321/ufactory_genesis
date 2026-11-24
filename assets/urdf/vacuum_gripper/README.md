@@ -1,46 +1,40 @@
-# xArm / UF850 Vacuum Gripper Assets
+# Vacuum Gripper (xArm / UF850)
 
-xArm 系列（`xArm5`、`xArm6`、`xArm7`）与 `UF850` 通用五吸杯真空吸头静态配件，无开合活动关节。
+Five-cup vacuum gripper for the `xarm` tool flange (xArm5/6/7, UF850). Static part, no joints.
 
-## 参数规格
+## Parameters
 
-- **质量**：`0.610 kg`（实测值）
-- **质心（相对法兰安装面）**：`[0, 0, 0.053] m`（实测值）
-- **惯性张量（在质心处，与法兰轴向一致，单位 $\text{kg}\cdot\text{m}^2$）**：
-  - `ixx = 0.00047106`, `ixy = 3.9292e-7`, `ixz = 2.6537e-6`
-  - `iyy = 0.00033072`, `iyz = -1.0975e-5`, `izz = 0.00025642`
-- **TCP 偏移（相对法兰安装面）**：`[0, 0, 0.126] m`，方向与法兰一致（关节 `vacuum_joint_tcp` -> 连杆 `vacuum_tcp`）
-- **最大吸附负载能力**：`5.0 kg`（能力参数，不计入工具自身质量）
+Frame: `xarm_vacuum_gripper_link`, origin at the flange mounting face, axes aligned with the flange.
 
-## 目录结构与碰撞网格
+- Mass 0.61 kg; centre of mass at (0, 0, 53) mm.
+- Inertia at the centre of mass (kg·m²): `ixx = 0.00047106`, `iyy = 0.00033072`, `izz = 0.00025642`, `ixy = 3.9292e-7`, `ixz = 2.6537e-6`, `iyz = -1.0975e-5`.
+- TCP: `vacuum_tcp` at (0, 0, 126) mm through `vacuum_joint_tcp`, oriented like the flange.
+- Maximum suction payload: 5.0 kg, excluding the gripper's own mass (vendor spec, not modelled).
 
-```text
+## Files
+
+```
 vacuum_gripper/
-├── vacuum_gripper.urdf                    # 零件 URDF（GLB 视觉 + 33 个水密凸包碰撞；组合源）
-├── meshes/
-│   ├── collision/
-│   │   └── convex/hull_000_*.stl .. hull_032_*.stl  # 33 个分区水密凸包（11,358 面）
-│   └── visual/
-│       ├── vacuum_gripper.glb             # Draco 压缩高模视觉 GLB（209,604 面、5 组材质，~540 KB）
-│       └── vacuum_gripper_visual.stl      # 官方原始视觉 STL（20,544 面；组合 visual="stl" 使用）
+├── vacuum_gripper.urdf                # part URDF: GLB visual + 33 collision hulls; composition source
+└── meshes/
+    ├── collision/convex/              # 33 watertight convex hulls, 11,358 faces
+    │   └── hull_000_flange.stl … hull_032_cup_05.stl
+    └── visual/
+        ├── vacuum_gripper.glb         # Draco-compressed GLB: 209,604 triangles, 5 materials, 0.55 MB (test budget < 1 MB)
+        └── vacuum_gripper_visual.stl  # upstream visual STL, 20,544 faces; used by visual="stl"
 ```
 
-碰撞几何按法兰、主体、上盖及五组支柱与吸杯分区裁剪官方视觉 STL 生成 **33 个独立水密凸包**（`hull_000_flange.stl` 至 `hull_032_cup_05.stl`），相对官方视觉 STL 外轮廓双向偏差 P95 `0.384 mm`、最大值 `0.797 mm`，完整保留五组吸杯间空隙与波纹轮廓。
+The hulls are cut from the upstream visual STL by part: flange (1), body (6), cover (1) and the five cup columns (5 each). Cutting by part keeps the gaps between the cups. `test_vacuum_gripper_static_urdfs_and_parameters` checks the parameters and the hull list.
 
-## 加载与预览方式
+## Usage
 
 ```python
 from ufactory.robots.assembly import compose_robot_urdf
 from ufactory.robots.paths import vacuum_gripper_urdf
 
-# 1) 独立真空吸头
-urdf = vacuum_gripper_urdf()
-
-# 2) 搭配 xArm5 / xArm6 / xArm7 / UF850（运行时组合；visual="stl" 使用原始视觉 STL）
-urdf = compose_robot_urdf("xarm6_1305", "vacuum_gripper")
+urdf = vacuum_gripper_urdf()                               # standalone part
+urdf = compose_robot_urdf("xarm6_1305", "vacuum_gripper")  # on an arm; visual="stl" uses the STL visual
 ```
-
-命令行可视化预览：
 
 ```bash
 python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
@@ -49,5 +43,5 @@ python examples/visualization/view_robot.py --robot uf850 --vacuum-gripper
 
 ## Source / License
 
-- 原始 URDF 参数与 STL 源自上游 [xArm-Developer/xarm_ros2](https://github.com/xArm-Developer/xarm_ros2)（BSD-3-Clause，见仓库根 [NOTICE](../../../NOTICE)）。
-- 本仓库维护 Draco 压缩 GLB 与 33 个分区水密凸包碰撞 STL；多机型搭配由运行时组合生成。
+- URDF parameters and STL come from upstream [xArm-Developer/xarm_ros2](https://github.com/xArm-Developer/xarm_ros2) (BSD-3-Clause; see [NOTICE](../../../NOTICE)).
+- This repository maintains the Draco-compressed GLB and the 33 collision hulls.

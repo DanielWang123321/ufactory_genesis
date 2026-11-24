@@ -19,8 +19,9 @@
 #   static_visual   optional single-mesh overlay used by gripper_visual "static" (per-link visuals removed)
 #   glb_visuals     optional per-link GLB that replaces the source visual when visual is "glb"
 #   stl_visuals     optional per-link mesh that replaces the source visual when visual is "stl"
-#   stl_materials   optional per-link material for visual "stl" ("*" = default); remaining GLB visuals
-#                   become the link's collision geometry in that mode
+#   stl_materials   optional per-link material for visual "stl" ("*" = default), given to stl_visuals that
+#                   carry none and to the remaining GLB visuals, which become the link's collision geometry
+#                   in that mode
 schema_version: 2
 flanges:
   xarm:
@@ -40,6 +41,9 @@ end_effectors:
       joint: gripper_g2_visual_fix
       mesh: gripper_g2/meshes/visual/gripper_g2_static.glb
       material: White
+    # The base collides as 10 convex hulls, so its STL visual is the full mesh rather than its collision geometry.
+    stl_visuals:
+      xarm_gripper_base_link: gripper_g2/meshes/visual/base_link.stl
     stl_materials:
       xarm_gripper_base_link: White
       "*": Silver
@@ -50,10 +54,10 @@ end_effectors:
     flange: xarm
     # The part frame is not at the adapter: in it the adapter sits at (-22.636, -0.956, -2.516) mm with
     # rpy (0.031, 0.254, 0.360) deg. This mount puts the adapter centre on the flange axis and the adapter
-    # face at z=0, with the two M6 screw tips in the 135/225 deg holes. It uses yaw only: the 0.25 deg tilt
-    # is a GLB placement artifact (two flat faces cannot tilt), and adding it would make TCP-down poses
-    # unreachable on xArm5 and near-singular on xArm6. Visual fingertips land about 158 mm from the flange
-    # axis (CAD reference 157.5 mm).
+    # face at z=0, with the adapter's two M6 through-holes over the 135/225 deg holes. It uses yaw only:
+    # the 0.25 deg tilt is a GLB placement artifact (two flat faces cannot tilt), and adding it would make
+    # TCP-down poses unreachable on xArm5 and near-singular on xArm6. Visual fingertips land about 158 mm
+    # from the flange axis (CAD reference 157.5 mm).
     mount: {xyz: [0.022642, 0.000814, 0.002516], rpy: [0.0, 0.0, -0.00628537]}
     static_visual:
       link: bio_gripper_g2_visual

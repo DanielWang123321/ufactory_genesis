@@ -167,7 +167,7 @@ def test_standard_g2_urdf_joint_origins_and_mesh_alignment() -> None:
                         assert _rounded_xyz(orig.get("rpy")) == (0.0, 0.0, 0.0), (path, lname, tag)
 
     pkg = PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "meshes"
-    base_stl = _mesh_vertices(pkg / "collision" / "base_link.stl", trimesh)
+    base_stl = _mesh_vertices(pkg / "visual" / "base_link.stl", trimesh)
     base_glb = _mesh_vertices(pkg / "visual" / "visual_glb" / "base.glb", trimesh)
     static_glb = _mesh_vertices(pkg / "visual" / "gripper_g2_static.glb", trimesh)
     lf_glb = _mesh_vertices(pkg / "visual" / "visual_glb" / "left_finger.glb", trimesh)
@@ -196,6 +196,142 @@ def test_standard_g2_urdf_joint_origins_and_mesh_alignment() -> None:
         actual_axial_mm = float(max(wl[:, 2].max(), wr[:, 2].max()) * 1000.0)
         assert actual_gap_mm == pytest.approx(gap_mm, abs=0.01)
         assert actual_axial_mm == pytest.approx(expected_axial_mm, abs=0.01)
+
+
+_G2_PART = _URDF_ROOT / "gripper_g2" / "gripper_g2_movable_visual.urdf"
+_G2_BASE_GEOMETRY = ("visual/visual_glb/base.glb", "visual/base_link.stl", "collision hulls")
+
+
+def _triangles(mesh_path: Path) -> np.ndarray:
+    """Triangle corners (m) of a binary STL or a Draco GLB without node transforms, in the file frame."""
+    if mesh_path.suffix.lower() == ".glb":
+        DracoPy = pytest.importorskip("DracoPy")
+        pygltflib = pytest.importorskip("pygltflib")
+        glb = pygltflib.GLTF2().load(str(mesh_path))
+        blob = glb.binary_blob()
+        out = []
+        for mesh in glb.meshes:
+            for prim in mesh.primitives:
+                view = glb.bufferViews[prim.extensions["KHR_draco_mesh_compression"]["bufferView"]]
+                decoded = DracoPy.decode(blob[view.byteOffset : view.byteOffset + view.byteLength])
+                points = np.asarray(decoded.points, dtype=np.float64)
+                out.append(points[np.asarray(decoded.faces, dtype=np.int64).reshape(-1, 3)])
+        return np.concatenate(out)
+    trimesh = pytest.importorskip("trimesh")
+    return np.asarray(trimesh.load(mesh_path, force="mesh", process=False).triangles, dtype=np.float64)
+
+
+def _g2_base_triangles(geometry: str) -> np.ndarray:
+    if geometry == "collision hulls":
+        names = _collision_meshes_by_link(_G2_PART)["xarm_gripper_base_link"]
+        return np.concatenate([_triangles((_G2_PART.parent / name).resolve()) for name in names])
+    return _triangles(_URDF_ROOT / "gripper_g2" / "meshes" / geometry)
+
+
+def _section_mm(triangles_mm: np.ndarray, z_mm: float) -> np.ndarray:
+    """Points (mm) where triangle edges cross the plane z = z_mm."""
+    points = []
+    for i, j in ((0, 1), (1, 2), (2, 0)):
+        a, b = triangles_mm[:, i], triangles_mm[:, j]
+        da, db = a[:, 2] - z_mm, b[:, 2] - z_mm
+        cross = (da * db <= 0.0) & (np.abs(db - da) > 1e-12)
+        t = (-da[cross] / (db[cross] - da[cross]))[:, None]
+        points.append(a[cross, :2] + t * (b[cross, :2] - a[cross, :2]))
+    return np.concatenate(points)
+
+
+@pytest.mark.parametrize("geometry", _G2_BASE_GEOMETRY)
+def test_gripper_g2_base_below_the_flange_face_fits_the_openings(geometry: str) -> None:
+    """Below the flange face the G2 base is only the centring boss, the tool-connector block and the locating pin at
+    (0, -25) mm, which fits the flange's 6 mm pin hole. Same check as ufactory_mujoco 0.1.3
+    (test_plan_a_flange_section_partition_and_pin_bound) across a 3 mm camera bracket: pin r <= 3.00 mm (6.10 mm
+    hole), the rest within r < 16.20 mm (34.5 mm bore) or the Pogo-Pin cutout.
+
+    The export's pin was a coarse prism out to r = 3.32 mm, some face vertices sat 4.8-11.5 um below z = 0, and the
+    single visual collision mesh became one hull spanning boss, block and pin.
+    """
+    tri = _g2_base_triangles(geometry) * 1000.0
+    for z in np.linspace(-2.95, -0.01, 60):
+        pts = _section_mm(tri, z)
+        pin_r = np.hypot(pts[:, 0], pts[:, 1] + 25.0)
+        pin = pin_r <= 3.5
+        rest = pts[~pin]
+        bore = np.hypot(rest[:, 0], rest[:, 1]) < 16.20
+        pogo = (np.abs(rest[:, 0]) < 7.60) & (rest[:, 1] > 20.40) & (rest[:, 1] < 25.60)
+        assert pin.any() and pin_r[pin].max() <= 3.00, f"pin r = {pin_r[pin].max():.3f} mm at z = {z:.2f} mm"
+        assert (bore | pogo).all(), f"{(~(bore | pogo)).sum()} section points outside the openings at z = {z:.2f} mm"
+
+
+def test_gripper_g2_base_collides_as_ten_convex_hulls() -> None:
+    """The base collides as ufactory_mujoco's 10 convex hulls (353.2 cm3 together). Its visual mesh, 420 open shells,
+    used to be the collision mesh, and Genesis wrapped it in a single hull of 638.7 cm3."""
+    trimesh = pytest.importorskip("trimesh")
+    names = _collision_meshes_by_link(_G2_PART)["xarm_gripper_base_link"]
+    assert [Path(name).name for name in names] == [f"base_link_col_{i:02d}.stl" for i in range(10)]
+    hulls = [trimesh.load((_G2_PART.parent / name).resolve(), force="mesh") for name in names]
+    for name, mesh in zip(names, hulls):
+        assert mesh.is_watertight and 1.0 - mesh.volume / mesh.convex_hull.volume <= 1e-5, name
+    assert sum(mesh.volume for mesh in hulls) * 1e6 == pytest.approx(353.2, abs=0.1)
+    visual = _triangles(_URDF_ROOT / "gripper_g2" / "meshes" / "visual" / "base_link.stl").reshape(-1, 3)
+    np.testing.assert_allclose(np.min([m.bounds[0] for m in hulls], axis=0), visual.min(axis=0), atol=1e-5)
+    np.testing.assert_allclose(np.max([m.bounds[1] for m in hulls], axis=0), visual.max(axis=0), atol=1e-5)
+
+
+def _glb_material_triangles(path: Path) -> list[tuple[object, np.ndarray]]:
+    """(pbrMetallicRoughness, triangle corners in mm) per Draco primitive of a GLB without node transforms."""
+    DracoPy = pytest.importorskip("DracoPy")
+    pygltflib = pytest.importorskip("pygltflib")
+    glb = pygltflib.GLTF2().load(str(path))
+    blob = glb.binary_blob()
+    out = []
+    for mesh in glb.meshes:
+        for prim in mesh.primitives:
+            view = glb.bufferViews[prim.extensions["KHR_draco_mesh_compression"]["bufferView"]]
+            decoded = DracoPy.decode(blob[view.byteOffset : view.byteOffset + view.byteLength])
+            points = np.asarray(decoded.points, dtype=np.float64) * 1000.0
+            triangles = points[np.asarray(decoded.faces, dtype=np.int64).reshape(-1, 3)]
+            out.append((glb.materials[prim.material].pbrMetallicRoughness, triangles))
+    return out
+
+
+def test_gripper_g2_base_flange_uses_the_arm_flange_material() -> None:
+    """The G2 base GLB shows the flange, centring boss and locating pin in the xArm / UF850 flange material and the +Y
+    connector cover in the fingers' black; the housing stays white. It used to be one white primitive, so the anodised
+    flange looked like the housing."""
+    parts = _glb_material_triangles(_URDF_ROOT / "gripper_g2/meshes/visual/visual_glb/base.glb")
+    finger = _glb_material_triangles(_URDF_ROOT / "gripper_g2/meshes/visual/visual_glb/left_finger.glb")[0][0]
+    assert len(parts) == 3
+    [(flange_pbr, flange)] = [(m, t) for m, t in parts if m.metallicFactor > 0.5]
+    [(cover_pbr, cover)] = [(m, t) for m, t in parts if m.baseColorFactor == finger.baseColorFactor]
+    [(housing_pbr, housing)] = [(m, t) for m, t in parts if m.baseColorFactor == [1.0, 1.0, 1.0, 1.0]]
+    assert (cover_pbr.metallicFactor, cover_pbr.roughnessFactor) == (finger.metallicFactor, finger.roughnessFactor)
+    assert housing_pbr.metallicFactor == 0.0
+    for arm_glb in ("xarm6/meshes/xarm6_1305/visual_glb/link6.glb", "uf850/meshes/uf850/visual_glb/link6.glb"):
+        (arm_pbr,) = [m for m, _ in _glb_material_triangles(_URDF_ROOT / arm_glb) if m.metallicFactor > 0.5]
+        np.testing.assert_allclose(flange_pbr.baseColorFactor, arm_pbr.baseColorFactor, atol=1e-6)
+        assert flange_pbr.metallicFactor == pytest.approx(arm_pbr.metallicFactor, abs=1e-6)
+        assert flange_pbr.roughnessFactor == pytest.approx(arm_pbr.roughnessFactor, abs=0.01)
+
+    # Flange (boss bottom z = -5, top z = 8.3, Ø75 ring), cover (+Y sector, x -15.6..15.4) and housing (from z = 8.18).
+    assert flange[..., 2].min() == pytest.approx(-5.0, abs=0.01) and flange[..., 2].max() < 8.35
+    assert np.hypot(flange[..., 0], flange[..., 1]).max() < 37.95
+    assert cover.reshape(-1, 3).min(0) == pytest.approx([-15.65, 16.71, 0.0], abs=0.01)
+    assert cover.reshape(-1, 3).max(0) == pytest.approx([15.69, 37.61, 8.10], abs=0.01)
+    assert housing[..., 2].min() > 8.17
+    # The ring's outer face is metal all round except the cover's sector (azimuth 65-115 deg), which the cover fills.
+    # Whole degrees reached by points sampled over the outer-face triangles:
+    grid = np.array([(i, j) for i in range(31) for j in range(31 - i)]) / 30.0
+    weights = np.c_[grid, 1.0 - grid.sum(axis=1)]
+
+    def outer_degrees(triangles: np.ndarray) -> set[int]:
+        centre = triangles.mean(axis=1)
+        side = (np.hypot(centre[:, 0], centre[:, 1]) > 37.0) & (centre[:, 2] > 0.5) & (centre[:, 2] < 7.5)
+        points = np.einsum("sk,nkd->nsd", weights, triangles[side]).reshape(-1, 3)
+        return set((np.degrees(np.arctan2(points[:, 1], points[:, 0])) // 1 % 360).astype(int).tolist())
+
+    metal, black = outer_degrees(flange), outer_degrees(cover)
+    assert metal | black == set(range(360))
+    assert black <= set(range(65, 116)) and not metal & set(range(66, 114))
 
 
 def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
@@ -809,6 +945,148 @@ def test_bio_gripper_g2_visual_glb_budget() -> None:
     assert "bio_gripper_g2_left_finger.glb" in names
     assert "bio_gripper_g2_right_finger.glb" in names
     assert not any(name.startswith("bio_gripper_g2_visual_link") for name in names)
+
+
+_BIO_G2_GLBS = ["visual_glb/bio_gripper_g2_base.glb", "bio_gripper_g2_visual.glb"]
+_PCD = 25.0 * np.sqrt(0.5)
+_LUG = {"+y": (15.01, 43.07), "-y": (15.04, -43.02)}  # lug arc / lug hole / screw axis
+_PIN = (0.044, -24.990)  # stepped pin hole at -90 deg
+# Adapter-plate surfaces of revolution in the adapter frame (mm): centre; radius r0 and slope of r = r0 + slope * z;
+# z band; +1 if the solid is on the axis side (convex), -1 if not (hole, concave fillet); azimuth ranges (deg, 0..360).
+_ADAPTER_CIRCLES = {
+    "rim": ((0.0, 0.0), 37.59, 0.0, (1.6, 3.4), 1, ((0, 42), (90, 270), (318, 360))),  # between the lugs
+    "bore": ((0.0, 0.0), 15.97, 0.0, (1.6, 3.4), -1, None),
+    "M6 hole 45": ((_PCD, _PCD), 3.13, 0.0, (0.2, 0.9), -1, None),
+    "M6 hole 135": ((-_PCD, _PCD), 3.13, 0.0, (0.2, 0.9), -1, None),
+    "M6 hole -135": ((-_PCD, -_PCD), 3.13, 0.0, (0.2, 0.9), -1, None),
+    "M6 hole -45": ((_PCD, -_PCD), 3.13, 0.0, (0.2, 0.9), -1, None),
+    "lug arc +y": (_LUG["+y"], 8.02, 0.0, (1.6, 3.4), 1, ((10, 170),)),
+    "lug arc -y": (_LUG["-y"], 8.02, 0.0, (1.6, 3.4), 1, ((190, 350),)),
+    "lug arc fillet +y": ((2.28, 42.27), 4.74, 0.0, (1.1, 3.9), -1, ((277, 353),)),
+    "lug arc fillet -y": ((2.31, -42.26), 4.74, 0.0, (1.1, 3.9), -1, ((7, 83),)),
+    "lug flank fillet +y": ((36.26, 35.69), 13.27, 0.0, (1.1, 3.9), -1, ((185, 219),)),
+    "lug flank fillet -y": ((36.30, -35.65), 13.27, 0.0, (1.1, 3.9), -1, ((141, 175),)),
+    "lug countersink +y": (_LUG["+y"], 7.01, -1.0, (0.4, 3.4), -1, None),
+    "lug countersink -y": (_LUG["-y"], 7.01, -1.0, (0.4, 3.4), -1, None),
+    "lug screw head +y": (_LUG["+y"], 5.68, 0.0, (0.15, 0.6), 1, None),
+    "lug screw head -y": (_LUG["-y"], 5.68, 0.0, (0.15, 0.6), 1, None),
+    # Remeshed: vertices only on the end circles. The counterbore's band leaves out its lower circle, which it shares
+    # with the entry chamfer.
+    "pin counterbore": (_PIN, 2.54, 0.0, (0.25, 3.1), -1, None),
+    "pin hole": (_PIN, 1.04, 0.0, (2.9, 5.1), -1, None),
+}
+# Hole rims where the contact face (z = 0) and the plate top (z = 5) end: centre, radius at z = 0, radius at z = 5.
+_ADAPTER_RIMS = {
+    "bore": ((0.031, 0.026), 16.972, 16.972),
+    "M6 hole 45": ((17.688, 17.695), 3.129, 7.025),
+    "M6 hole 135": ((-17.657, 17.678), 3.129, 7.025),
+    "M6 hole -135": ((-17.647, -17.670), 3.129, 7.025),
+    "M6 hole -45": ((17.700, -17.656), 3.129, 7.025),
+    "pin hole": (_PIN, 2.739, 1.040),
+}
+
+
+def _bio_g2_adapter_metal(name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Metallic primitive of a Bio G2 visual GLB in the adapter frame (README): contact face z = 0, +Z to the housing.
+    Returns points (mm), normals and triangles."""
+    DracoPy = pytest.importorskip("DracoPy")
+    pygltflib = pytest.importorskip("pygltflib")
+    from scipy.spatial.transform import Rotation
+
+    glb = pygltflib.GLTF2().load(str(_URDF_ROOT / "bio_gripper_g2" / "meshes" / "visual" / name))
+    blob = glb.binary_blob()
+    metal = [i for i, m in enumerate(glb.materials) if m.pbrMetallicRoughness.metallicFactor > 0.5]
+    prim = next(p for m in glb.meshes for p in m.primitives if p.material in metal)
+    view = glb.bufferViews[prim.extensions["KHR_draco_mesh_compression"]["bufferView"]]
+    mesh = DracoPy.decode(blob[view.byteOffset : view.byteOffset + view.byteLength])
+    rotation = Rotation.from_euler("xyz", np.radians([0.031, 0.254, 0.360])).as_matrix()
+    points = (np.asarray(mesh.points, np.float64) * 1000 - [-22.636, -0.956, -2.516]) @ rotation
+    return points, np.asarray(mesh.normals, np.float64) @ rotation, np.asarray(mesh.faces, np.int64)
+
+
+@pytest.mark.parametrize("feature", list(_ADAPTER_CIRCLES))
+@pytest.mark.parametrize("name", _BIO_G2_GLBS)
+def test_bio_gripper_g2_adapter_circles_are_round(name: str, feature: str) -> None:
+    """The adapter plate's curved faces are surfaces of revolution with analytic normals: rim, centre bore, the four
+    countersunk M6 holes, on each lug the arc, its two fillets, the countersunk hole and the screw head in it, and the
+    stepped pin hole.
+
+    The export had them as twisted facet strips, up to 1.1 mm (rim, bore), 0.95 mm (pin hole), 0.8 mm (lug holes) and
+    0.5 mm (M6 holes) off, with flat normals up to 25-85 deg off.
+    """
+    points, normals, _ = _bio_g2_adapter_metal(name)
+    centre, nominal, slope, (z_low, z_high), side, arcs = _ADAPTER_CIRCLES[feature]
+    z = points[:, 2]
+
+    def frame(c):
+        d = points[:, :2] - c
+        r = np.linalg.norm(d, axis=1)
+        return d / r[:, None], r - slope * z  # radial unit, equivalent radius at z = 0
+
+    u, equivalent = frame(np.asarray(centre))
+    # Normals point out of the solid: away from the axis when the solid is on its side, towards it otherwise. The
+    # threshold leaves out flat faces at the same height, whose quantized normals tilt by up to ~0.01.
+    facing = side * (normals[:, :2] * u).sum(1) > 0.3
+    surface = (z > z_low) & (z < z_high) & (np.abs(equivalent - nominal) < 0.6) & facing
+    if arcs is not None:
+        azimuth = np.degrees(np.arctan2(u[:, 1], u[:, 0])) % 360
+        surface &= np.any([(azimuth >= lo) & (azimuth <= hi) for lo, hi in arcs], axis=0)
+    xy = np.asarray(centre) + equivalent[surface, None] * u[surface]
+    fx, fy, k = np.linalg.lstsq(np.c_[2 * xy, np.ones(len(xy))], (xy**2).sum(1), rcond=None)[0]
+    fitted = np.sqrt(k + fx**2 + fy**2)
+    residual = np.hypot(xy[:, 0] - fx, xy[:, 1] - fy) - fitted
+    u, _ = frame(np.array([fx, fy]))
+    expected = side * np.c_[u, np.full(len(u), -slope)] / np.hypot(1.0, slope)
+    normal_error = np.degrees(np.arccos(np.clip((normals * expected).sum(1), -1.0, 1.0)))[surface]
+    assert surface.sum() > 30
+    assert np.abs(residual).max() < 0.03, f"surface deviates {np.abs(residual).max():.3f} mm from its circle"
+    assert normal_error.max() < 1.0, f"normals up to {normal_error.max():.1f} deg off the analytic normal"
+    assert fitted == pytest.approx(nominal, abs=0.05)  # free fit: short fillet arcs leave ~0.04 mm of radius play
+
+
+@pytest.mark.parametrize("name", _BIO_G2_GLBS)
+def test_bio_gripper_g2_adapter_has_through_holes_not_screws(name: str) -> None:
+    """The real adapter has open M6 holes at 135/-135 deg (PCD 50).
+
+    The export carried the two mounting screws, their tips standing 5 mm proud of the contact face.
+    """
+    points, _, _ = _bio_g2_adapter_metal(name)
+    assert points[:, 2].min() > -0.1, f"metal {-points[:, 2].min():.2f} mm proud of the contact face"
+    for azimuth in (135.0, -135.0):
+        axis = 25.0 * np.array([np.cos(np.radians(azimuth)), np.sin(np.radians(azimuth))])
+        assert not (np.hypot(*(points[:, :2] - axis).T) < 2.5).any(), f"geometry inside the {azimuth:+.0f} deg hole"
+
+
+@pytest.mark.parametrize("name", _BIO_G2_GLBS)
+def test_bio_gripper_g2_adapter_faces_stop_at_hole_rims(name: str) -> None:
+    """The contact face and the plate top end at each hole's round rim, so the holes look round from both sides.
+
+    The export's flat faces ended at the old polygonal rims and filled T-junctions there with slivers. After the rims
+    were rounded, a sliver face reached 0.16 mm into the +45 deg M6 hole over 37 deg of its rim (a straight edge on
+    the round hole), and T-junction vertices and long rim edges up to 0.09 mm into others. The limit is about two
+    quantization steps.
+    """
+    points, normals, faces = _bio_g2_adapter_metal(name)
+    normal_z, tri = normals[faces][:, :, 2], points[faces]
+    deepest = {}
+    for hole, (centre, rim_bottom, rim_top) in _ADAPTER_RIMS.items():
+        c = np.asarray(centre)
+        for z_face, sign, rim in ((0.0, -1.0, rim_bottom), (5.0, 1.0, rim_top)):
+            flat = (sign * normal_z > 0.99).all(axis=1) & (np.abs(tri[:, :, 2] - z_face) < 0.03).all(axis=1)
+            t = tri[flat][:, :, :2]
+            t = t[np.linalg.norm(t - c, axis=2).min(axis=1) < rim + 1.0]
+            # Distance from the hole's axis to each triangle (0 when the triangle covers the axis).
+            dist = np.full(len(t), np.inf)
+            for i in range(3):
+                a, d = t[:, i], t[:, (i + 1) % 3] - t[:, i]
+                s = np.clip(((c - a) * d).sum(1) / np.maximum((d * d).sum(1), 1e-30), 0.0, 1.0)
+                dist = np.minimum(dist, np.linalg.norm(a + s[:, None] * d - c, axis=1))
+            e, w = [t[:, (i + 1) % 3] - t[:, i] for i in range(3)], [c - t[:, i] for i in range(3)]
+            side = [np.sign(e[i][:, 0] * w[i][:, 1] - e[i][:, 1] * w[i][:, 0]) for i in range(3)]
+            dist[(side[0] == side[1]) & (side[1] == side[2])] = 0.0
+            deepest[f"{hole} z{z_face:.0f}"] = float(rim - dist.min())
+    worst = max(deepest, key=deepest.get)
+    assert deepest[worst] < 0.025, f"flat faces reach {deepest[worst]:.3f} mm into the {worst} rim"
 
 
 def test_gripper_g2_visual_glb_budget() -> None:

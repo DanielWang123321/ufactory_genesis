@@ -138,6 +138,25 @@ def test_visual_modes_do_not_change_physics(robot: str, end_effector: str) -> No
         assert static == reference
 
 
+def test_stl_visual_override_keeps_the_stl_material(tmp_path: Path) -> None:
+    """The G2 base collides as 10 hulls, so visual "stl" shows its full mesh (stl_visuals) in its stl_materials colour;
+    the fingers still show their collision meshes."""
+    path = Path(compose_robot_urdf("xarm6", "gripper_g2", visual="stl", out_dir=tmp_path))
+    root = ET.parse(path).getroot()
+    meshes = PROJECT_ROOT.resolve() / "assets/urdf/gripper_g2/meshes"
+
+    def shown(visual: ET.Element) -> tuple[Path, str]:
+        mesh = (path.parent / visual.find("geometry/mesh").get("filename")).resolve()
+        return mesh, visual.find("material").get("name")
+
+    base = root.find("./link[@name='xarm_gripper_base_link']")
+    assert [shown(v) for v in base.findall("visual")] == [(meshes / "visual/base_link.stl", "White")]
+    assert len(base.findall("collision")) == 10
+    assert shown(root.find("./link[@name='left_finger']/visual")) == (meshes / "collision/left_finger.stl", "Silver")
+    vacuum = ET.parse(compose_robot_urdf("xarm6", "vacuum_gripper", visual="stl", out_dir=tmp_path)).getroot()
+    assert vacuum.find("./link[@name='xarm_vacuum_gripper_link']/visual/material") is None
+
+
 @pytest.mark.parametrize(("robot", "end_effector", "visual", "gripper_visual"), _supported())
 def test_every_supported_assembly_mounts_on_the_flange(
     robot: str, end_effector: str, visual: str, gripper_visual: str
@@ -218,7 +237,7 @@ def _flange_vertices(mesh_path: Path, flange_T_mesh: np.ndarray) -> np.ndarray:
 
 
 def test_bio_gripper_g2_adapter_sits_on_the_xarm_flange() -> None:
-    """Adapter face flush with the flange face; M6 screw tips in the 135/225 deg holes (PCD 50 mm)."""
+    """Adapter face flush with the flange face; its M6 through-holes over the 135/225 deg holes (PCD 50 mm)."""
     trimesh = pytest.importorskip("trimesh")
     pytest.importorskip("DracoPy")
     xyz, rpy = get_end_effector("bio_gripper_g2").mount
@@ -232,12 +251,15 @@ def test_bio_gripper_g2_adapter_sits_on_the_xarm_flange() -> None:
     face = (normals[:, 2] < -0.99) & (np.abs(centres[:, 2]) < 1e-3)
     assert mesh.area_faces[face].sum() > 3e-3
     assert np.average(centres[face, 2], weights=mesh.area_faces[face]) == pytest.approx(0.0, abs=2e-5)
-    shank = _flange_vertices(base, mount)
-    shank = shank[(shank[:, 2] > -0.0045) & (shank[:, 2] < -0.0015)]
+    # Straight part of the two countersunk through-holes (R 3.13 mm, 0-1.1 mm into the plate).
+    wall = _flange_vertices(base, mount)
+    wall = wall[(wall[:, 2] > 0.0003) & (wall[:, 2] < 0.0008)]
     for sign in (1, -1):
-        xy = shank[shank[:, 1] * sign > 0, :2]
+        expected = np.array([-0.025, sign * 0.025]) * np.sqrt(0.5)
+        xy = wall[np.linalg.norm(wall[:, :2] - expected, axis=1) < 0.004, :2]
+        assert len(xy) > 50
         centre = np.linalg.lstsq(np.c_[2 * xy, np.ones(len(xy))], (xy**2).sum(1), rcond=None)[0][:2]
-        np.testing.assert_allclose(centre, [-0.025 * np.sqrt(0.5), sign * 0.025 * np.sqrt(0.5)], atol=1e-4)
+        np.testing.assert_allclose(centre, expected, atol=1e-4)
 
 
 def test_bio_gripper_g2_fingertips_match_cad_reach() -> None:

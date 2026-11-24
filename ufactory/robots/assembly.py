@@ -260,6 +260,7 @@ def _apply_visual_mode(
                 link.remove(v)
             continue
         override = (ee.glb_visuals if visual == "glb" else ee.stl_visuals).get(name)
+        material = ee.stl_materials.get(name, ee.stl_materials.get("*")) if visual == "stl" else None
         if override is not None:
             for v in link.findall("visual"):
                 mesh = v.find("geometry/mesh")
@@ -268,9 +269,10 @@ def _apply_visual_mode(
                 mat = v.find("material")
                 if visual == "glb" and mat is not None:
                     v.remove(mat)
+                elif material and mat is None:
+                    ET.SubElement(v, "material", {"name": material})
             continue
         if visual == "stl":
-            material = ee.stl_materials.get(name, ee.stl_materials.get("*"))
             for v in link.findall("visual"):
                 mesh = v.find("geometry/mesh")
                 if mesh is None or not (mesh.get("filename") or "").lower().endswith(".glb"):

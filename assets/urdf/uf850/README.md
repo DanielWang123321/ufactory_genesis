@@ -1,21 +1,29 @@
-# UF850 Assets
+# UF850
 
-动力学 URDF：`uf850.urdf`；GLB 视觉 URDF：`uf850_visual.glb.urdf`（物理与前者相同）。末端组合不再提供静态 URDF，由 `ufactory.robots.assembly` 按 [`assembly.yaml`](../assembly.yaml) 运行时生成（如 `compose_robot_urdf("uf850", "gripper_g2")`）。
+UF850 arm description.
 
-## 碰撞与视觉
+## Files
 
-```
-meshes/uf850/
-├── collision/*.stl   # 注册 URDF 的机械臂选择性多凸包碰撞 STL（27 个凸体）
-├── visual/*.stl      # STL 视觉与 CAD 几何参考资源
-└── visual_glb/       # Draco 压缩视觉 GLB（单臂合计约 0.7–1.0 MB）
-```
+| Path | Content |
+|---|---|
+| `uf850.urdf` | Default URDF, STL visuals |
+| `uf850_visual.glb.urdf` | Same physics, GLB visuals |
+| `meshes/uf850/visual/*.stl` | STL visuals (7) |
+| `meshes/uf850/visual_glb/*.glb` | Draco-compressed GLB visuals (7), 0.74 MB in total (test budget < 1 MB) |
+| `meshes/uf850/collision/uf850_link*_col_*.stl` | Convex collision hulls (27) |
+| `kinematics/user/` | Per-unit calibration `<prefix>_kinematics_<suffix>.yaml` (Git-ignored), read by `ufactory/kinematics/calibration.py` |
 
-注册机型 URDF 的机械臂连杆 `<collision>` 使用 `collision/uf850_link*_col_*.stl`（共 27 个水密凸包，`link_base..link6` 分别为 `3/4/7/5/5/2/1` 个凸体，单凸体 `<= 128` 面）；`visual/*.stl` 保留供 STL `<visual>` 与 CAD 几何参考使用，末端配件按各自资源保留独立 collision STL。详见 [xArm6 碰撞网格](../xarm6/README.md#碰撞网格)。
+The UF850 has the same `xarm` tool flange as xArm5/6/7, so it takes the same end effectors: [`gripper_g2`](../gripper_g2/README.md), [`bio_gripper_g2`](../bio_gripper_g2/README.md) and [`vacuum_gripper`](../vacuum_gripper/README.md). No arm + end-effector URDFs are stored: `ufactory.robots.assembly` composes them at runtime from [`assembly.yaml`](../assembly.yaml), e.g. `compose_robot_urdf("uf850", "gripper_g2")`.
 
-未引用的历史碰撞简化网格已删除，可从 Git 历史获取。
+## Collision meshes
+
+| Link | link_base | link1 | link2 | link3 | link4 | link5 | link6 |
+|---|---|---|---|---|---|---|---|
+| Hulls | 3 | 4 | 7 | 5 | 5 | 2 | 1 |
+
+Why the links use several hulls: see [xArm6 collision meshes](../xarm6/README.md#collision-meshes).
 
 ## Source / License
 
-- URDF / STL 源自上游 UFACTORY / xArm ROS 描述家族（见仓库根 [NOTICE](../../../NOTICE)）。
-- 本仓库维护 GLB 视觉与压缩流水线；代码 MIT，资产归属见 NOTICE。
+- URDF and STL derive from the upstream UFACTORY / xArm ROS descriptions (see [NOTICE](../../../NOTICE)).
+- This repository maintains the GLB visuals, the collision hulls and the Draco compression. Code is MIT; asset attribution is in NOTICE.

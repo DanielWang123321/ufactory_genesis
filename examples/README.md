@@ -105,7 +105,7 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 # Gripper G2 standalone viewer and open/close demo
 python examples/visualization/view_gripper_g2.py
 
-# Bio Gripper G2 standalone viewer and open/close demo
+# Bio Gripper G2 standalone viewer and open/close demo (as mounted: adapter flange up, TCP down)
 python examples/visualization/view_bio_gripper_g2.py
 
 # Lite6 Gripper standalone viewer and open/close demo

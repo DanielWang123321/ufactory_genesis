@@ -104,7 +104,7 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 # Gripper G2 独立查看与开合演示
 python examples/visualization/view_gripper_g2.py
 
-# Bio Gripper G2 独立查看与开合演示
+# Bio Gripper G2 独立查看与开合演示（安装朝向：转接板朝上，TCP 朝下）
 python examples/visualization/view_bio_gripper_g2.py
 
 # Lite6 Gripper 独立查看与开合演示

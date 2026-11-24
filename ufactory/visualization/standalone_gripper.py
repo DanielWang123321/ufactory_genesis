@@ -12,10 +12,25 @@ from ufactory.simulation import make_rigid_options
 from ufactory.simulation.compat import require_genesis_runtime
 from ufactory.simulation.collision import configure_lite6_collision_filters
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
+from ufactory.visualization.viewer import start_deferred_viewer
 
 CAMERA_POS = (0.22, -0.28, 0.18)
 CAMERA_LOOKAT = (0.0, 0.0, 0.14)
 CAMERA_FOV = 35
+# Same as the view_robot.py warm-up for calibrated grippers.
+VIEWER_WARMUP_STEPS = 3
+
+
+def _open_viewer(scene) -> None:
+    """Warm up, then open the window through the deferred viewer.
+
+    A window opened at scene construction shows black or undefined frames until the scene renders.
+    The deferred viewer only presents complete frames, and the first shows the initial gripper pose.
+    The warm-up steps leave the demo unchanged: the gripper holds the PD target set by its setup.
+    """
+    for _ in range(VIEWER_WARMUP_STEPS):
+        scene.step()
+    start_deferred_viewer(scene)
 
 
 def run_standalone_gripper_viewer(
@@ -26,7 +41,10 @@ def run_standalone_gripper_viewer(
     headless_steps: int = 600,
     calibrated_g2: bool = False,
     calibrated_bio_g2: bool = False,
+    base_pos: tuple[float, float, float] | None = None,
+    base_quat: tuple[float, float, float, float] | None = None,
 ) -> dict | None:
+    """Run a gripper demo, with the URDF root placed at ``base_pos`` / ``base_quat`` (w, x, y, z) when given."""
     from ufactory.simulation import genesis_backend_constant
 
     parser = argparse.ArgumentParser(description=description)
@@ -64,7 +82,7 @@ def run_standalone_gripper_viewer(
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, args.backend), logging_level="error")
     scene = gs.Scene(
-        show_viewer=not args.headless,
+        show_viewer=False,
         sim_options=gs.options.SimOptions(dt=0.02, substeps=32) if calibrated else gs.options.SimOptions(dt=0.01),
         rigid_options=(
             make_rigid_options(gs, constraint_timeconst=0.00125 if calibrated_g2 else 0.002)
@@ -76,8 +94,13 @@ def run_standalone_gripper_viewer(
         ),
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
+    pose = {}
+    if base_pos is not None:
+        pose["pos"] = base_pos
+    if base_quat is not None:
+        pose["quat"] = base_quat
     with glb_pbr_surfaces():
-        robot = scene.add_entity(gs.morphs.URDF(file=urdf_path, fixed=True), surface=glb_view_surface())
+        robot = scene.add_entity(gs.morphs.URDF(file=urdf_path, fixed=True, **pose), surface=glb_view_surface())
     configure_lite6_collision_filters(robot)
     scene.build()
     if calibrated_g2:
@@ -91,6 +114,8 @@ def run_standalone_gripper_viewer(
         )
 
     step_controller = controller(robot)
+    if not args.headless:
+        _open_viewer(scene)
     gaps = []
     for step in count():
         step_controller(step)

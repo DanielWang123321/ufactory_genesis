@@ -1,23 +1,29 @@
-# Lite6 Assets
+# Lite6
 
-动力学 URDF：`lite6.urdf`；GLB 视觉 URDF：`lite6_visual.glb.urdf`（物理与前者相同，`link_base` 惯量为 0，固定基座不影响动力学）。末端组合不再提供静态 URDF，由 `ufactory.robots.assembly` 按 [`assembly.yaml`](../assembly.yaml) 运行时生成（如 `compose_robot_urdf("lite6", "lite6_gripper")`）。运行配置使用 `assembly:lite6_gripper:stl`（STL 视觉）。
+Lite6 arm description.
 
-## 碰撞与视觉
+## Files
 
-```
-meshes/lite6/
-├── collision/*.stl   # 注册 URDF 的机械臂选择性多凸包碰撞 STL（17 个凸体）
-├── visual/*.stl      # STL 视觉与 CAD 几何参考资源
-└── visual_glb/       # Draco 压缩视觉 GLB（单臂合计约 0.7–1.0 MB）
-```
+| Path | Content |
+|---|---|
+| `lite6.urdf` | Default URDF, STL visuals |
+| `lite6_visual.glb.urdf` | GLB visuals. Same physics, except that the `link_base` inertia tensor is zero (fixed base, no effect on dynamics) |
+| `meshes/lite6/visual/*.stl` | STL visuals (7) |
+| `meshes/lite6/visual_glb/*.glb` | Draco-compressed GLB visuals (7), 0.74 MB in total (test budget < 1 MB) |
+| `meshes/lite6/collision/lite6_link*_col_*.stl` | Convex collision hulls (17) |
+| `kinematics/user/` | Per-unit calibration `<prefix>_kinematics_<suffix>.yaml` (Git-ignored), read by `ufactory/kinematics/calibration.py` |
 
-末端配件见同级目录 `lite6_gripper/`、`lite6_vacuum_gripper/`。
+End effectors for the `lite6` flange: [`lite6_gripper`](../lite6_gripper/README.md) and [`lite6_vacuum_gripper`](../lite6_vacuum_gripper/README.md). No arm + end-effector URDFs are stored: `ufactory.robots.assembly` composes them at runtime from [`assembly.yaml`](../assembly.yaml), e.g. `compose_robot_urdf("lite6", "lite6_gripper")`. The runtime configuration uses `assembly:lite6_gripper:stl` (STL visuals).
 
-机械臂连杆 `<collision>` 使用 `collision/lite6_link*_col_*.stl`（共 17 个水密凸包，`link_base..link6` 分别为 `3/2/4/2/4/1/1` 个凸体，单凸体 `<= 128` 面），消除零位 `qpos0` 下底座与腕部的单凸包伪自碰撞及紧凑折叠姿态力矩饱和。详见 [xArm6 碰撞网格](../xarm6/README.md#碰撞网格)。
+## Collision meshes
 
-未引用的历史碰撞简化网格已删除，可从 Git 历史获取。
+| Link | link_base | link1 | link2 | link3 | link4 | link5 | link6 |
+|---|---|---|---|---|---|---|---|
+| Hulls | 3 | 2 | 4 | 2 | 4 | 1 | 1 |
+
+Why the links use several hulls: see [xArm6 collision meshes](../xarm6/README.md#collision-meshes).
 
 ## Source / License
 
-- URDF / STL 源自上游 xArm ROS / xarm_ros2 家族（见仓库根 [NOTICE](../../../NOTICE)）。
-- 本仓库维护 GLB 视觉与压缩流水线；代码 MIT，资产归属见 NOTICE。
+- URDF and STL derive from the upstream xArm ROS / xarm_ros2 family (see [NOTICE](../../../NOTICE)).
+- This repository maintains the GLB visuals, the collision hulls and the Draco compression. Code is MIT; asset attribution is in NOTICE.

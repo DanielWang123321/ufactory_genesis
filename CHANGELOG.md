@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] — 2026-11-24
+
 ### Added
 
 - Added runtime URDF assembly (`ufactory.robots.assembly`): `compose_robot_urdf(robot, end_effector, visual="glb"|"stl", gripper_visual="movable"|"static")` composes the arm URDF, an end-effector part URDF, and the mount table in `assets/urdf/assembly.yaml` into one deterministic URDF under the Git-ignored `.cache/ufactory/urdf/composed/` (relative mesh paths, content-addressed names, atomic writes). Also exports `supported_end_effectors`, `parse_assembly_ref`, `resolve_robot_urdf`, and `validate_robot_urdf`.
@@ -18,15 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `robot_visual_glb_urdf()` keeps its flags but composes at runtime. `RobotModelSpec` drops the per-combination file name fields; `supports_*` are now properties backed by `assembly.yaml`.
 - The Lite6 vacuum gripper GLB assembly now carries the real part (`0.14 kg`, `link_tcp`) instead of a massless overlay link.
 - `assets/urdf/assembly.yaml` schema 2 adds a `flanges` table: `xarm` (xArm5/6/7, UF850; PCD 50 mm, 4 × M6, Ø6 locating pin at −Y) and `lite6`. Each end effector names its `flange`, which decides the compatible robots, and has one optional `mount` shared by every robot on that flange. `EndEffector.mounts` is replaced by `flange` and `mount`.
+- `stl_materials` in `assembly.yaml` now also colours `stl_visuals` that carry no material. It used to apply only where the collision geometry stands in for the visual.
 - xArm meshes are unified on the xArm6 files.
   - xArm5 is an xArm6 with the J4 module replaced by a fixed aluminium key, so every xArm5 link now references xArm6 meshes. link3 carries xArm6 link3 plus link4, placed at J4 = 0. link4 and link5 use xArm6 link5 and link6.
   - xArm7 references the xArm6 base and flange link.
   - Kinematics, inertials, and link and joint names are unchanged. xArm5 now has 22 collision hulls (was 19). Its self-collision pairs match xArm6's with J4 locked.
   - The bytes of the xArm5 and xArm7 URDFs change, and with them the `urdf_sha256` bindings of every model built from them. The xArm6 URDF bytes do not change.
+- `view_bio_gripper_g2.py` shows the gripper as mounted on an arm at home: adapter flange up, TCP down (base link turned 180° about X). It used to stand on the adapter flange with the fingers up. `run_standalone_gripper_viewer` takes `base_pos` / `base_quat` for this. The Gripper G2 and Lite6 gripper viewers keep their orientation.
 
 ### Fixed
 
-- Bio Gripper G2 mount: the four per-robot mounts came from a fit that paired the adapter's M6 screw tips with the flange locating-pin hole and the tool connector. They left the adapter 2.2–4.6 mm off-centre and 2.5–3.3 mm inside the flange face. A single yaw-only mount now centres the adapter on the flange face, with the screw tips in the 135°/225° M6 holes (< 0.02 mm). The GLB's 0.25° tilt is not compensated, because it would make TCP-down poses unreachable on xArm5 and near-singular on xArm6. This moves the TCP in the flange frame from (159.7–162.0, −1.9–0, 54.2–55.0) mm to (157.6, 0.0, 57.5) mm. The visual fingertips land 157.9/158.5 mm from the flange axis (CAD 157.5 mm).
+- Bio Gripper G2 mount: the four per-robot mounts came from a fit that paired the adapter's M6 screw tips with the flange locating-pin hole and the tool connector. They left the adapter 2.2–4.6 mm off-centre and 2.5–3.3 mm inside the flange face. A single yaw-only mount now centres the adapter on the flange face, with the adapter's M6 through-holes over the 135°/225° M6 holes (< 0.04 mm). The GLB's 0.25° tilt is not compensated, because it would make TCP-down poses unreachable on xArm5 and near-singular on xArm6. This moves the TCP in the flange frame from (159.7–162.0, −1.9–0, 54.2–55.0) mm to (157.6, 0.0, 57.5) mm. The visual fingertips land 157.9/158.5 mm from the flange axis (CAD 157.5 mm).
 - Bio Gripper G2 collision hulls are rebuilt from the G2 visual GLBs.
   - Fingers: the old hulls came from the G1 template finger, a 6 mm wedge rod. Its gripping face ran from finger x −9 to 85 mm, and its tip reached about 169 mm from the flange axis, 11 mm past the G2 fingertip.
   - Each finger now has five hulls: pad inner layer, pad outer walls, rod, knuckle plate and knuckle block. The gripping face (`convex_0`, still the first collision element) stays on the 71 mm closed-gap plane and covers the G2 pad (finger x 33–76 mm, z 11–29 mm). The hull tip matches the visual fingertip.
@@ -38,6 +42,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - It removed collision pairs while iterating over them, which skipped a pair after each removal and left 36–52 joint-neighbour pairs per robot.
   - It measured robot hulls as triangle meshes, and Coal reports two intersecting meshes as 0 rather than a negative depth.
   - Pairs are now selected up front, and robot hulls, which are all convex, are checked as convex shapes with signed distances. As a side effect, table and nest penetration depths now cover the whole hull (16.1 mm where 14.8 mm was reported before).
+- The standalone gripper viewers (`view_bio_gripper_g2.py`, `view_gripper_g2.py`, `view_lite6_gripper.py`) no longer flicker at startup. They opened the window when the scene was built, so black or undefined frames reached the screen. They now warm up for three steps and open it through the deferred viewer, as `view_robot.py` does, which presents only complete frames. Headless runs are unchanged.
+- The Bio Gripper G2 adapter plate in `bio_gripper_g2_base.glb` and `bio_gripper_g2_visual.glb`:
+  - It showed two 5 mm studs on its face. The export included the two M6 countersunk mounting screws in the 135°/225° holes, with their tips past the contact face. The real part has through-holes there, and the screws are removed (2 × 6592 triangles). When the gripper is on an arm, the screw tips sat inside the flange, so only the empty countersinks under the plate's overhang show the change.
+  - It looked faceted. Its curved faces were exported as twisted flat facets, with normals up to 25–85° off:
+    - the Ø75.2 mm rim (1 mm chamfers on both edges), up to 1.1 mm off the circle;
+    - the two lugs on the rim: an R 8 mm arc around the lug screw, a straight flank and two concave fillets (R 13.3 and R 4.7 mm) into the rim, with the same chamfers, up to 1.2 mm off;
+    - the Ø31.9 mm centre bore (1 mm chamfers on both edges), up to 1.1 mm off;
+    - the four Ø6.26 mm countersunk M6 holes, up to 0.5 mm off;
+    - the two countersunk holes in the lugs (Ø14.0 mm at the contact face) and the Phillips screws in them (head Ø11.4 mm), up to 0.8 and 1.1 mm off;
+    - the stepped locating-pin hole at −90°: a 0.2 mm entry chamfer, a Ø5.09 mm counterbore to a step 3 mm deep, and a Ø2.08 mm hole through to the top, up to 0.95 mm off. Its export was so coarse that the small hole showed as a slit, so its walls are regenerated from the profile.
+  - These faces now lie on their analytic shapes within 0.015 mm, with analytic normals.
+  - The contact face and the plate top now stop at each hole's round edge. Once the holes were round, sliver triangles that filled seams at the old polygonal edges reached up to 0.16 mm into them. On the contact face, one cut straight across 37° of the +45° M6 hole's edge. These triangles are cut back to the edge.
+  - All other vertices are unchanged. Triangle counts drop by about 1.5k further after the screw removal, because the pin-hole walls need fewer triangles. The base collision hull is not rebuilt; the rounded rim lies up to 0.25 mm outside it.
+- The Gripper G2 base, synced from ufactory_mujoco 0.1.3 (commit `183e1b7`):
+  - Collision: the base collided as its visual mesh, 420 open shells, which Genesis wraps in a single convex hull of 638.7 cm³. It now collides as ufactory_mujoco's 10 convex hulls (`base_link_col_00`–`09`, byte-identical, 353.2 cm³ together). Below the flange face only the centring boss and the locating pin have hulls. As before, no finger or knuckle touches the base over the full stroke.
+  - Visual: the Ø6 locating pin at (0, −25) mm was a coarse prism reaching r = 3.32 mm, and 148 vertices sat 4.8–11.5 µm below the flange face. In `visual_glb/base.glb` and the base STL, 42 pin vertices are moved in to r = 2.98 mm and the 148 vertices onto the face. Topology is unchanged, and the GLB keeps its Draco settings (`-qp 16 -qn 10 -cl 10`). `gripper_g2_static.glb` has no pin and is unchanged.
+  - The base STL moves from `meshes/collision/base_link.stl` to `meshes/visual/base_link.stl`. `visual="stl"` shows it through a new `stl_visuals` entry instead of the collision hulls.
+  - The bytes of the part URDF change, and with them the `urdf_sha256` bindings of every composed Gripper G2 model.
+- The Gripper G2 flange showed in the housing's white, because `visual_glb/base.glb` was one white primitive. The GLB is now split by CAD body into three primitives:
+  - the flange, centring boss and locating pin use the xArm / UF850 flange material (anodised aluminium);
+  - the +Y connector cover is black like the fingers (UFACTORY's contact-type cover for XX1305 and UF850 arm ends);
+  - the housing stays white.
+  - Geometry is unchanged: points move by less than 1 µm, from the per-part Draco quantization. `visual="stl"` still shows the base in one colour.
 
 ### Removed
 
