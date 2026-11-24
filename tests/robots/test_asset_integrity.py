@@ -15,7 +15,7 @@ if str(_TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_TESTS_ROOT))
 from conftest import PROJECT_ROOT
 
-from ufactory.robots.assembly import compose_robot_urdf, end_effectors
+from ufactory.robots.assembly import accessories, compose_robot_urdf, end_effectors
 
 _URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
 
@@ -61,6 +61,13 @@ def _public_files() -> set[Path]:
 def test_public_urdf_mesh_references_exist() -> None:
     urdfs = sorted(p for p in _public_files() if p.suffix == ".urdf" or p.name.endswith(".glb.urdf"))
     urdfs += _assembly_urdfs()
+    urdfs += [
+        Path(compose_robot_urdf(robot, ee, accessory=accessory, visual=visual))
+        for robot in ("xarm6_1305", "uf850")
+        for ee in (None, "gripper_g2", "vacuum_gripper")
+        for accessory in accessories()
+        for visual in ("glb", "stl")
+    ]
     missing: list[str] = []
     for urdf in urdfs:
         root = ET.parse(urdf).getroot()

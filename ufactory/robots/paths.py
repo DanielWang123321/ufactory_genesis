@@ -50,13 +50,20 @@ def robot_urdf(robot_key: str, name: str | None = None) -> str:
     """Return the absolute path of a robot URDF by profile key or robot name.
 
     ``name`` is a file in the arm asset directory (default: the dynamics URDF) or an assembly reference such as
-    ``assembly:gripper_g2`` (see :mod:`ufactory.robots.assembly`), which is composed on demand.
+    ``assembly:gripper_g2`` or ``assembly:gripper_g2+d435`` (see :mod:`ufactory.robots.assembly`), which is composed
+    on demand.
     """
     profile = get_robot_profile(robot_key)
     urdf_name = name or profile.default_urdf
     ref = parse_assembly_ref(urdf_name)
     if ref is not None:
-        return compose_robot_urdf(profile.key, ref.end_effector, visual=ref.visual, gripper_visual=ref.gripper_visual)
+        return compose_robot_urdf(
+            profile.key,
+            ref.end_effector,
+            visual=ref.visual,
+            gripper_visual=ref.gripper_visual,
+            accessory=ref.accessory,
+        )
     return _urdf_path(profile.assets_dir, urdf_name)
 
 
@@ -78,11 +85,13 @@ def robot_visual_glb_urdf(
     with_lite6_gripper: bool = False,
     with_lite6_vacuum_gripper: bool = False,
     movable: bool = False,
+    accessory: str | None = None,
 ) -> str:
-    """GLB-visual URDF of an arm, optionally composed with one end effector.
+    """GLB-visual URDF of an arm, optionally composed with one end effector and/or one accessory.
 
-    Without an accessory this is the arm's ``*_visual.glb.urdf``. With one, the arm and part are assembled at
-    runtime: ``movable=True`` keeps per-link gripper visuals, otherwise grippers use their static overlay.
+    Without parts this is the arm's ``*_visual.glb.urdf``. With any, the arm and parts are assembled at runtime:
+    ``movable=True`` keeps per-link gripper visuals, otherwise grippers use their static overlay. ``accessory`` is
+    ``camera_stand`` or a camera on it (``d405``, ``d435``, ``gemini_305``, ``zed_x_nano``).
     New code should call :func:`ufactory.robots.assembly.compose_robot_urdf` directly.
     """
     profile = get_robot_profile(robot_key)
@@ -104,13 +113,21 @@ def robot_visual_glb_urdf(
             "movable=True requires with_gripper_g2=True, with_lite6_gripper=True, or with_bio_gripper_g2=True"
         )
     if not selected:
-        return _urdf_path(profile.assets_dir, profile.visual_glb_urdf)
+        if accessory is None:
+            return _urdf_path(profile.assets_dir, profile.visual_glb_urdf)
+        if not profile.supports_accessory(accessory):
+            raise ValueError(f"Robot {robot_key} does not support {accessory}")
+        return compose_robot_urdf(profile.key, None, visual="glb", accessory=accessory)
     end_effector, label = selected[0]
     if not profile.supports(end_effector):
         raise ValueError(f"Robot {robot_key} does not support {label}")
+    if accessory is not None and not profile.supports_accessory(accessory, end_effector):
+        raise ValueError(f"{accessory} does not fit {label} on {robot_key}")
     has_static = get_end_effector(end_effector).static_visual is not None
     gripper_visual = "movable" if movable or not has_static else "static"
-    return compose_robot_urdf(profile.key, end_effector, visual="glb", gripper_visual=gripper_visual)
+    return compose_robot_urdf(
+        profile.key, end_effector, visual="glb", gripper_visual=gripper_visual, accessory=accessory
+    )
 
 
 def lite6_gripper_movable_visual_urdf() -> str:

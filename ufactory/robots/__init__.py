@@ -11,8 +11,10 @@ from ufactory.robots.registry import (
 )
 from ufactory.robots.assembly import (
     AssemblyError,
+    accessories,
     compose_robot_urdf,
     parse_assembly_ref,
+    supported_accessories,
     supported_end_effectors,
 )
 from ufactory.robots.paths import (
@@ -51,6 +53,8 @@ __all__ = [
     "AssemblyError",
     "compose_robot_urdf",
     "parse_assembly_ref",
+    "accessories",
+    "supported_accessories",
     "supported_end_effectors",
     "get_robot_profile",
     "get_robot_runtime_profile",

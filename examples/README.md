@@ -71,6 +71,8 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 | `uf850` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
 | `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper |
 
+xArm5/6/7 and UF850 also take the [camera stand](../assets/urdf/camera_stand/README.md), alone or with an [Intel RealSense D405](../assets/urdf/d405/README.md), [D435](../assets/urdf/d435/README.md), [Orbbec Gemini 305](../assets/urdf/gemini_305/README.md) or [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) looking along the tool axis. It fits the bare arm, Gripper G2 and Vacuum Gripper, not Bio Gripper G2. The stand moves the end effector and its TCP 3 mm along the tool axis. In configurations the URDF reference is `assembly:gripper_g2+d435`, or `assembly:bare+camera_stand` for a bare arm.
+
 All five families support simulation and offline preflight. Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; see [Hardware & Real Robot](#hardware--real-robot).
 
 G2 simulations use `g2_calibrated_v1`. The [pick-place RL guide](rl/pick_place/README.md) documents training and the current v3 checkpoint contract.
@@ -96,6 +98,12 @@ python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --mov
 # xArm6 + Vacuum Gripper static view
 python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
 
+# xArm6 + camera stand + ZED X Nano + Gripper G2 open/close demo
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo --camera zed_x_nano
+
+# UF850 + camera stand + D435 + Vacuum Gripper static view
+python examples/visualization/view_robot.py --robot uf850 --vacuum-gripper --camera d435
+
 # Lite6 + Lite6 Gripper open/close demo
 python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
 
@@ -116,6 +124,7 @@ python examples/visualization/view_lite6_gripper.py
 |------|---------|
 | `--robot` | Required profile key |
 | `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
+| `--camera` | `camera_stand`, `d405`, `d435`, `gemini_305` or `zed_x_nano`: the camera stand, alone or with that camera (xArm5/6/7 and UF850; bare arm, `--gripper-g2` or `--vacuum-gripper`) |
 | `--movable` | Per-link movable gripper meshes (requires a supported gripper flag) |
 | `--gripper-demo` | Cycle open/close with a 0.5 s hold after reaching each endpoint (requires `--movable`) |
 | `--pd` | Smooth joint-motion demo (~0.873 rad/s), visual only |

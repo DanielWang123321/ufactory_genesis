@@ -1,6 +1,6 @@
-# Runtime URDF assembly: arm + end-effector parts and their mounts.
+# Runtime URDF assembly: arm + end-effector parts, camera stand + cameras, and their mounts.
 #
-# ufactory.robots.assembly composes "arm URDF + end-effector part + mount" into one deterministic URDF under
+# ufactory.robots.assembly composes "arm URDF [+ accessory] [+ end-effector part]" into one deterministic URDF under
 # .cache/ufactory/urdf/composed/ (relative mesh paths, content-addressed file name). Arm sources come from the
 # robot registry: visual "glb" uses <key>_visual.glb.urdf, visual "stl" uses the default <key>.urdf.
 #
@@ -22,7 +22,18 @@
 #   stl_materials   optional per-link material for visual "stl" ("*" = default), given to stl_visuals that
 #                   carry none and to the remaining GLB visuals, which become the link's collision geometry
 #                   in that mode
-schema_version: 2
+#
+# spacers.<name>: a plate clamped between the flange and the end effector (it may carry a camera)
+#   source, base_link, mount_joint, flange, mount, stl_visuals, stl_materials: as for end_effectors
+#   tool_lift_m     the end effector mount (or the arm's link_eef when there is none) moves this far along flange +Z
+#   end_effectors   end effectors that fit on the spacer; the bare arm always does
+#
+# cameras.<name>: a camera on a spacer
+#   source, base_link, mount_joint, stl_materials: as for end_effectors; visual "stl" draws the collision boxes
+#   spacer          spacer the camera mounts on; robots and end effectors are the spacer's
+#   mount           base_link pose {xyz, rpy} in the spacer's base_link frame
+#   optical_frame   link with the OpenCV optical frame (+X right, +Y down, +Z forward), uncalibrated
+schema_version: 3
 flanges:
   xarm:
     # One part on xArm5/6/7; same layout on UF850: PCD 50 mm, 4 x M6 at 45/135/225/315 deg,
@@ -89,3 +100,58 @@ end_effectors:
     flange: lite6
     glb_visuals:
       uflite_vacuum_gripper_link: lite6_vacuum_gripper/meshes/visual/lite6_vacuum_gripper_visual_link6.glb
+spacers:
+  camera_stand:
+    # UFACTORY 3 mm aluminium camera stand, 48 g. Its frame has the plate thickness along +Y, so the mount turns
+    # +Y onto flange +Z. Camera holes around (67.5, 3, 0) mm: 2 x M3 at 20 mm and at 45 mm, and a 20 x 20 mm
+    # square of 4 x M3. Bio Gripper G2 is excluded: its body reaches x = 59.22 mm and hits D405/D435.
+    source: camera_stand/camera_stand.urdf
+    base_link: camera_stand
+    mount_joint: camera_stand_fix
+    flange: xarm
+    mount: {xyz: [0.0, 0.0, 0.0], rpy: [1.5707963267948966, 0.0, 0.0]}
+    tool_lift_m: 0.003
+    end_effectors: [gripper_g2, vacuum_gripper]
+    stl_visuals:
+      camera_stand: camera_stand/meshes/visual/camera_stand.stl
+    stl_materials:
+      camera_stand: StandAluminum
+cameras:
+  # Mount poses put each camera's rear mounting face on the stand face with its holes on the stand's holes. Every
+  # camera looks along flange +Z with its top towards flange +X.
+  d405:
+    # Rear 2 x M3 at 20 mm.
+    source: d405/d405.urdf
+    base_link: d405_body
+    mount_joint: d405_fix
+    spacer: camera_stand
+    mount: {xyz: [0.0675, 0.026, 0.0], rpy: [-1.5707963267948966, -1.5707963267948966, 0.0]}
+    optical_frame: d405_optical_frame
+    stl_materials: {"*": d405_housing}
+  d435:
+    # Rear 2 x M3 at 45 mm; 0.055 mm gap because the ROS mesh pokes 0.0547 mm past its nominal rear face.
+    source: d435/d435.urdf
+    base_link: d435_body
+    mount_joint: d435_fix
+    spacer: camera_stand
+    mount: {xyz: [0.0675, 0.028055, 0.0], rpy: [-1.5707963267948966, -1.5707963267948966, 0.0]}
+    optical_frame: d435_optical_frame
+    stl_materials: {"*": d435_housing}
+  gemini_305:
+    # Rear 2 x M3 at 20 mm.
+    source: gemini_305/gemini_305.urdf
+    base_link: gemini_305_body
+    mount_joint: gemini_305_fix
+    spacer: camera_stand
+    mount: {xyz: [0.084677002, 0.026076703, -0.018348755], rpy: [-3.141592653589793, -1.5707963267948966, 0.0]}
+    optical_frame: gemini_305_optical_frame
+    stl_materials: {"*": gemini_305_housing}
+  zed_x_nano:
+    # Rear 20 x 20 mm square of 4 x M3; the GMSL2 connector passes through the stand's centre opening.
+    source: zed_x_nano/zed_x_nano.urdf
+    base_link: zed_x_nano_body
+    mount_joint: zed_x_nano_fix
+    spacer: camera_stand
+    mount: {xyz: [0.052237, 0.02357, 0.0], rpy: [-3.141592653589793, -1.5707963267948966, 0.0]}
+    optical_frame: zed_x_nano_optical_frame
+    stl_materials: {"*": zed_x_nano_housing}

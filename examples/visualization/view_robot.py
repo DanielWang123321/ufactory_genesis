@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from ufactory.robots.assembly import accessories
 from ufactory.robots.paths import robot_visual_glb_urdf
 from ufactory.robots.registry import get_robot_profile, robot_cli_choices
 from ufactory.visualization.robot_viewer import run_glb_diagnose, run_glb_viewer
@@ -36,6 +37,13 @@ def main() -> None:
         "--vacuum-gripper",
         action="store_true",
         help="Load xArm/UF850 vacuum gripper static visual combo URDF",
+    )
+    parser.add_argument(
+        "--camera",
+        choices=accessories(),
+        default=None,
+        help="Mount the camera stand (camera_stand) or a camera on it between the flange and the end effector "
+        "(xArm5/6/7 and UF850; bare arm, --gripper-g2 or --vacuum-gripper)",
     )
     parser.add_argument(
         "--movable",
@@ -100,6 +108,20 @@ def main() -> None:
         parser.error(f"{args.robot} does not support Lite6 Gripper")
     if args.lite6_vacuum_gripper and not profile.supports_lite6_vacuum_gripper:
         parser.error(f"{args.robot} does not support Lite6 Vacuum Gripper")
+    end_effector = next(
+        (
+            name
+            for flag, name in zip(
+                accessory_flags,
+                ("bio_gripper_g2", "gripper_g2", "vacuum_gripper", "lite6_gripper", "lite6_vacuum_gripper"),
+                strict=True,
+            )
+            if flag
+        ),
+        None,
+    )
+    if args.camera and not profile.supports_accessory(args.camera, end_effector):
+        parser.error(f"--camera {args.camera} does not fit {args.robot} with {end_effector or 'no end effector'}")
 
     if args.diagnose:
         run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2, backend=args.backend)
@@ -113,6 +135,7 @@ def main() -> None:
         with_lite6_gripper=args.lite6_gripper,
         with_lite6_vacuum_gripper=args.lite6_vacuum_gripper,
         movable=args.movable,
+        accessory=args.camera,
     )
     print(f"Loading: {urdf_path}")
     run_glb_viewer(

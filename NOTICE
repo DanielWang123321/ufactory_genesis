@@ -26,6 +26,15 @@ Visual and collision meshes for accessories follow the same upstream family
 where noted in each `assets/urdf/<name>/README.md`. Combo URDFs, movable
 visual variants, and compressed GLBs are maintained in this repository.
 
+### Camera stand and depth cameras (`assets/urdf/{camera_stand,d405,d435,gemini_305,zed_x_nano}/`)
+
+- **Camera stand:** UFACTORY CAD. GLB, STL and collision prisms are maintained in this repository.
+- **Intel RealSense D405 / D435:** meshes from [realsenseai/realsense-ros](https://github.com/realsenseai/realsense-ros)
+  (`realsense2_description/meshes`, Apache-2.0; full text in `assets/urdf/d405/LICENSE` and `assets/urdf/d435/LICENSE`).
+  This repository converted them to Draco GLBs and added mount, hole and optical frames, box collisions and inertials.
+- **Orbbec Gemini 305 / Stereolabs ZED X Nano:** meshes converted from the vendors' public CAD downloads (see each
+  part's `README.md`). Product names are trademarks of their owners.
+
 ### SBS 96-well microplate (`assets/urdf/microplate/`)
 
 - **Upstream:** [ramonaoptics/labware](https://github.com/ramonaoptics/labware/tree/b2de87e717584b2e27f436ee03c17b827085e87b) (`b2de87e`).

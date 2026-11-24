@@ -56,7 +56,7 @@
     "assets/configs/runtime/tasks/robots/xarm7_1305_reach.yaml": "5059ce9b53123689726e2d3846f43c18ba92db7ca8bba7e87f9dccea9c4fc4d7",
     "assets/scenes/packaging_showcase/meshes/uv_box.obj": "901c6efc7a1e1b4947af16ed95b9e76b2b1d053fd117d36641a9e770768e35cc",
     "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
-    "assets/urdf/assembly.yaml": "965d742b47dc6fcd9b8baeb4be8cda15c82e2f2a6bb3cd98fced5aba736ff9dd",
+    "assets/urdf/assembly.yaml": "8ffad11ae0bd40e3ab7974f3d495883f0e735ba1b9921b73ffc9bf33b46ac59d",
     "assets/urdf/gripper_g2/gripper_g2_movable_visual.urdf": "1088891ca89d14b1912ac62bd00c1ae0bebc287e7663821c372bfc32984c1bea",
     "assets/urdf/lite6/lite6.urdf": "0045071263238025da9c0719e5a12f8ef68881bd7c45105acbefedae2fd1748e",
     "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf": "d4013937766d7bdb1bd83f82f66cd4720f0ac2fb10ad179889b4bf3b50db1ede",

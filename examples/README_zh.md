@@ -70,6 +70,8 @@ python examples/visualization/view_robot.py --robot xarm6
 | `uf850` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
 | `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper |
 
+xArm5/6/7 与 UF850 还可加装[相机支架](../assets/urdf/camera_stand/README.md)。支架可单独安装，也可再装一台相机：[Intel RealSense D405](../assets/urdf/d405/README.md)、[D435](../assets/urdf/d435/README.md)、[奥比中光 Gemini 305](../assets/urdf/gemini_305/README.md) 或 [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md)，视野沿工具轴方向。支架适配裸臂、Gripper G2 和 Vacuum Gripper，不适配 Bio Gripper G2。装上支架后，末端及其 TCP 沿工具轴前移 3 mm。配置中的 URDF 引用写作 `assembly:gripper_g2+d435`；裸臂写作 `assembly:bare+camera_stand`。
+
 五类机型均支持仿真与离线预检。真机装箱启用 xArm6 + Gripper G2、Lite6 + Lite6 Gripper，详见[真机操作与硬件校验](#真机操作与硬件校验)。
 
 G2 仿真使用 `g2_calibrated_v1`。策略训练与当前 v3 检查点契约见 [抓放 RL 指南](rl/pick_place/README_zh.md)。
@@ -95,6 +97,12 @@ python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --mov
 # xArm6 + Vacuum Gripper 静态查看
 python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
 
+# xArm6 + 相机支架 + ZED X Nano + Gripper G2 开合演示
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo --camera zed_x_nano
+
+# UF850 + 相机支架 + D435 + Vacuum Gripper 静态查看
+python examples/visualization/view_robot.py --robot uf850 --vacuum-gripper --camera d435
+
 # Lite6 + Lite6 Gripper 开合演示
 python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
 
@@ -116,6 +124,7 @@ python examples/visualization/view_lite6_gripper.py
 | ---------------------------------------------------------------------------------- | ------------------------------------- |
 | `--robot`                                                                          | 必选机型 key                              |
 | `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
+| `--camera`                                                                         | `camera_stand`、`d405`、`d435`、`gemini_305` 或 `zed_x_nano`：加装相机支架，可单独装支架，也可再装对应相机（限 xArm5/6/7 与 UF850；适配裸臂、`--gripper-g2` 或 `--vacuum-gripper`） |
 | `--movable`                                                                        | 按连杆可动夹爪网格（需配合受支持的夹爪标志）                |
 | `--gripper-demo`                                                                   | 循环开合，到位后保持 0.5 s 切换（需要 `--movable`）   |
 | `--pd`                                                                             | 平滑关节运动演示（约 0.873 rad/s），仅视觉           |

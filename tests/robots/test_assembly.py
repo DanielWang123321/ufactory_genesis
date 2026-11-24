@@ -187,7 +187,7 @@ def test_flanges_partition_registry_and_define_compatibility() -> None:
 def _write_schema(tmp_path: Path, flanges: str, flange: str) -> Path:
     path = tmp_path / "assembly.yaml"
     path.write_text(
-        f"schema_version: 2\nflanges:\n{flanges}end_effectors:\n  p:\n    source: s.urdf\n    base_link: b\n"
+        f"schema_version: 3\nflanges:\n{flanges}end_effectors:\n  p:\n    source: s.urdf\n    base_link: b\n"
         f"    mount_joint: j\n    flange: {flange}\n",
         encoding="utf-8",
     )
@@ -197,9 +197,9 @@ def _write_schema(tmp_path: Path, flanges: str, flange: str) -> Path:
 def test_flange_schema_rejects_shared_robots_and_unknown_flanges(tmp_path: Path) -> None:
     shared = "  a:\n    robots: [xarm6]\n  b:\n    robots: [xarm6_1305]\n"
     with pytest.raises(AssemblyError, match="listed under flanges"):
-        assembly._load_end_effectors(_write_schema(tmp_path, shared, "a"), 0)
+        assembly._load_catalog(_write_schema(tmp_path, shared, "a"), 0)
     with pytest.raises(AssemblyError, match="unknown flange"):
-        assembly._load_end_effectors(_write_schema(tmp_path, "  a:\n    robots: [lite6]\n", "c"), 1)
+        assembly._load_catalog(_write_schema(tmp_path, "  a:\n    robots: [lite6]\n", "c"), 1)
 
 
 @pytest.mark.parametrize("end_effector", sorted(end_effectors()))

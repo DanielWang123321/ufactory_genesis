@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added the UFACTORY 3 mm camera stand (`assets/urdf/camera_stand/`, 48 g) and four depth cameras that mount on it: Intel RealSense D405 (`d405`, 58 g) and D435 (`d435`, 75 g), Orbbec Gemini 305 (`gemini_305`, 68 g) and Stereolabs ZED X Nano (`zed_x_nano`, 75 g).
+  - Each part has a Draco GLB under 0.5 MB with housing and glass PBR materials, an inertial, box collisions (stand: 45 convex 2D prisms), mount and hole frames, and an uncalibrated OpenCV `<camera>_optical_frame`.
+  - On the stand every camera looks along flange +Z with its top towards flange +X. The ZED X Nano uses its rear 20 × 20 mm 4 × M3 pattern, and its GMSL2 connector passes through the stand opening.
+- `assets/urdf/assembly.yaml` schema 3 adds `spacers` (`camera_stand`: xarm flange, `tool_lift_m: 0.003`, fits bare arm, `gripper_g2`, `vacuum_gripper`) and `cameras`.
+  - `compose_robot_urdf(robot, end_effector, accessory=...)` mounts the stand (and camera) on the flange. The end effector, or the xArm6's `link_eef`, moves 3 mm along flange +Z, so G2 and vacuum TCPs move 3 mm. `end_effector=None` composes a bare arm with an accessory.
+  - Assembly references take `assembly:<end_effector>+<accessory>[:visual[:gripper_visual]]` and `assembly:bare+<accessory>`.
+  - New exports: `accessories`, `spacers`, `cameras`, `resolve_accessory`, `supported_accessories`, `supports_accessory`, plus `RobotModelSpec.supports_accessory()` / `supports_camera_stand`.
+- `robot_visual_glb_urdf(..., accessory=...)` and `view_robot.py --camera {camera_stand,d405,d435,gemini_305,zed_x_nano}`.
+
+### Changed
+
+- Composed URDFs without an accessory are byte-identical to 0.3.8. `validate_assembly()` now returns `EndEffector | None`. `AssemblyRef.end_effector` may be `None` and gains an `accessory` field.
+
 ## [0.3.8] — 2026-11-24
 
 ### Added

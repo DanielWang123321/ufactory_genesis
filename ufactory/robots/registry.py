@@ -48,6 +48,16 @@ class RobotModelSpec:
     def supports_lite6_vacuum_gripper(self) -> bool:
         return self.supports("lite6_vacuum_gripper")
 
+    def supports_accessory(self, accessory: str, end_effector: str | None = None) -> bool:
+        """Whether a camera stand or camera (with ``end_effector``; ``None`` = bare arm) fits this arm."""
+        from ufactory.robots.assembly import supports_accessory
+
+        return supports_accessory(self.key, accessory, end_effector)
+
+    @property
+    def supports_camera_stand(self) -> bool:
+        return self.supports_accessory("camera_stand")
+
 
 def _assets(robot: str) -> Path:
     return PROJECT_ROOT / "assets" / "urdf" / robot
