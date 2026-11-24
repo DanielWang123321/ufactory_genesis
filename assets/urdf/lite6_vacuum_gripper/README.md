@@ -17,6 +17,7 @@ lite6_vacuum_gripper/
 `compose_robot_urdf("lite6", "lite6_vacuum_gripper")` replaces the STL visual with the GLB (`glb_visuals` in [`assembly.yaml`](../assembly.yaml)); `visual="stl"` keeps the STL. The collision mesh is always `vacuum_gripper_lite.stl`.
 
 ```bash
+python examples/visualization/view_tool.py --tool lite6_vacuum_gripper    # standalone (GLB, flange up)
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 ```
 

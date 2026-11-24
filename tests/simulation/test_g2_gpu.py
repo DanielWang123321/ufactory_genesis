@@ -217,20 +217,16 @@ def test_rl_batch_control_and_independent_reset(num_envs):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("robot", ["standalone", "xarm6"])
-def test_dynamic_demo_opens_and_closes_without_teleport(robot, monkeypatch, tmp_path):
+def test_dynamic_demo_opens_and_closes_without_teleport(robot, tmp_path):
     import genesis as gs
-    from ufactory.robots.paths import gripper_g2_movable_visual_urdf, robot_visual_glb_urdf
+    from ufactory.robots.paths import robot_visual_glb_urdf
     from ufactory.robots.registry import get_robot_profile
     from ufactory.visualization.robot_viewer import run_glb_viewer
-    from ufactory.visualization.standalone_gripper import run_standalone_gripper_viewer
-    from examples.visualization.view_gripper_g2 import _controller
+    from ufactory.visualization.standalone_gripper import run_standalone_tool_viewer
 
     try:
         if robot == "standalone":
-            monkeypatch.setattr("sys.argv", ["viewer", "--headless"])
-            result = run_standalone_gripper_viewer(
-                "G2", gripper_g2_movable_visual_urdf(), _controller, calibrated_g2=True
-            )
+            result = run_standalone_tool_viewer(["--tool", "gripper_g2", "--headless"])
         else:
             result = run_glb_viewer(
                 get_robot_profile(robot),

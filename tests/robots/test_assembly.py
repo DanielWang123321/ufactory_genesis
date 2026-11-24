@@ -28,26 +28,24 @@ from ufactory.robots.assembly import (
 from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.registry import PROJECT_ROOT, ROBOT_PROFILES, get_robot_profile
 
-_VARIANTS = (("glb", "movable"), ("stl", "movable"), ("glb", "static"))
+_VARIANTS = ("glb", "stl")
 
 
-def _supported() -> list[tuple[str, str, str, str]]:
+def _supported() -> list[tuple[str, str, str]]:
     out = []
     for name, ee in end_effectors().items():
         for key in ee.robots:
-            for visual, gripper_visual in _VARIANTS:
-                if gripper_visual == "static" and ee.static_visual is None:
-                    continue
-                out.append((key, name, visual, gripper_visual))
+            for visual in _VARIANTS:
+                out.append((key, name, visual))
     return out
 
 
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("assembly:gripper_g2", AssemblyRef("gripper_g2", "glb", "movable")),
-        ("assembly:lite6_gripper:stl", AssemblyRef("lite6_gripper", "stl", "movable")),
-        ("assembly:bio_gripper_g2:glb:static", AssemblyRef("bio_gripper_g2", "glb", "static")),
+        ("assembly:gripper_g2", AssemblyRef("gripper_g2", "glb")),
+        ("assembly:lite6_gripper:stl", AssemblyRef("lite6_gripper", "stl")),
+        ("assembly:bio_gripper_g2", AssemblyRef("bio_gripper_g2", "glb")),
         ("xarm6_1305.urdf", None),
     ],
 )
@@ -57,7 +55,10 @@ def test_parse_assembly_ref(value: str, expected: AssemblyRef | None) -> None:
         assert str(expected) == value
 
 
-@pytest.mark.parametrize("value", ["assembly:", "assembly:g2:obj", "assembly:g2:glb:moving", "assembly:a:b:c:d"])
+@pytest.mark.parametrize(
+    "value",
+    ["assembly:", "assembly:g2:obj", "assembly:gripper_g2:glb:static", "assembly:g2:glb:moving", "assembly:a:b:c:d"],
+)
 def test_parse_assembly_ref_rejects_malformed(value: str) -> None:
     with pytest.raises(AssemblyError):
         parse_assembly_ref(value)
@@ -66,7 +67,7 @@ def test_parse_assembly_ref_rejects_malformed(value: str) -> None:
 def test_assembly_ref_omits_defaults() -> None:
     assert assembly_ref("gripper_g2") == "assembly:gripper_g2"
     assert assembly_ref("gripper_g2", visual="stl") == "assembly:gripper_g2:stl"
-    assert assembly_ref("gripper_g2", gripper_visual="static") == "assembly:gripper_g2:glb:static"
+    assert parse_assembly_ref("assembly:bio_gripper_g2:glb") == AssemblyRef("bio_gripper_g2", "glb")
 
 
 def test_compatibility_matrix() -> None:
@@ -76,8 +77,6 @@ def test_compatibility_matrix() -> None:
     assert not get_robot_profile("lite6").supports_gripper_g2
     with pytest.raises(AssemblyError, match="not supported on lite6"):
         compose_robot_urdf("lite6", "gripper_g2")
-    with pytest.raises(AssemblyError, match="no static visual"):
-        compose_robot_urdf("xarm6", "vacuum_gripper", gripper_visual="static")
     with pytest.raises(AssemblyError, match="unknown end effector"):
         compose_robot_urdf("xarm6", "camera")
 
@@ -106,12 +105,10 @@ def test_custom_output_directory_keeps_meshes_resolvable(tmp_path: Path) -> None
         assert (path.parent / (mesh.get("filename") or "")).resolve().is_file()
 
 
-def _physics(path: Path, drop_links: set[str]) -> dict[tuple[str, str | None], str]:
+def _physics(path: Path) -> dict[tuple[str, str | None], str]:
     out = {}
     for e in ET.parse(path).getroot():
-        if e.tag not in ("link", "joint") or e.get("name") in drop_links:
-            continue
-        if e.tag == "joint" and e.find("child") is not None and e.find("child").get("link") in drop_links:
+        if e.tag not in ("link", "joint"):
             continue
         e = ET.fromstring(ET.tostring(e))
         for v in e.findall("visual"):
@@ -122,20 +119,15 @@ def _physics(path: Path, drop_links: set[str]) -> dict[tuple[str, str | None], s
     return out
 
 
-@pytest.mark.parametrize(("robot", "end_effector"), sorted({(r, ee) for r, ee, _, _ in _supported()}))
+@pytest.mark.parametrize(("robot", "end_effector"), sorted({(r, ee) for r, ee, _ in _supported()}))
 def test_visual_modes_do_not_change_physics(robot: str, end_effector: str) -> None:
-    ee = end_effectors()[end_effector]
-    overlay = {ee.static_visual.link} if ee.static_visual else set()
-    reference = _physics(Path(compose_robot_urdf(robot, end_effector)), overlay)
-    stl = _physics(Path(compose_robot_urdf(robot, end_effector, visual="stl")), overlay)
+    reference = _physics(Path(compose_robot_urdf(robot, end_effector)))
+    stl = _physics(Path(compose_robot_urdf(robot, end_effector, visual="stl")))
     # Arm dynamics URDFs differ from GLB visual URDFs only in visuals, except Lite6's fixed-base link_base inertia.
     assert {k for k in reference if reference[k] != stl.get(k)} <= (
         {("link", "link_base")} if robot == "lite6" else set()
     )
     assert reference.keys() == stl.keys()
-    if ee.static_visual is not None:
-        static = _physics(Path(compose_robot_urdf(robot, end_effector, gripper_visual="static")), overlay)
-        assert static == reference
 
 
 def test_stl_visual_override_keeps_the_stl_material(tmp_path: Path) -> None:
@@ -157,12 +149,10 @@ def test_stl_visual_override_keeps_the_stl_material(tmp_path: Path) -> None:
     assert vacuum.find("./link[@name='xarm_vacuum_gripper_link']/visual/material") is None
 
 
-@pytest.mark.parametrize(("robot", "end_effector", "visual", "gripper_visual"), _supported())
-def test_every_supported_assembly_mounts_on_the_flange(
-    robot: str, end_effector: str, visual: str, gripper_visual: str
-) -> None:
+@pytest.mark.parametrize(("robot", "end_effector", "visual"), _supported())
+def test_every_supported_assembly_mounts_on_the_flange(robot: str, end_effector: str, visual: str) -> None:
     ee = end_effectors()[end_effector]
-    root = ET.parse(compose_robot_urdf(robot, end_effector, visual=visual, gripper_visual=gripper_visual)).getroot()
+    root = ET.parse(compose_robot_urdf(robot, end_effector, visual=visual)).getroot()
     mount = root.find(f"./joint[@name='{ee.mount_joint}']")
     assert mount is not None and mount.get("type") == "fixed"
     assert mount.find("parent").get("link") == get_robot_profile(robot).ee_link
@@ -205,15 +195,11 @@ def test_flange_schema_rejects_shared_robots_and_unknown_flanges(tmp_path: Path)
 @pytest.mark.parametrize("end_effector", sorted(end_effectors()))
 def test_mount_is_shared_by_every_robot_on_a_flange(end_effector: str) -> None:
     ee = end_effectors()[end_effector]
-    joints = [ee.mount_joint] + ([ee.static_visual.joint] if ee.static_visual else [])
     origins = set()
     for robot in ee.robots:
-        root = ET.parse(
-            compose_robot_urdf(robot, end_effector, gripper_visual="static" if ee.static_visual else "movable")
-        )
-        for name in joints:
-            origin = root.getroot().find(f"./joint[@name='{name}']/origin")
-            origins.add((origin.get("xyz"), origin.get("rpy")))
+        root = ET.parse(compose_robot_urdf(robot, end_effector))
+        origin = root.getroot().find(f"./joint[@name='{ee.mount_joint}']/origin")
+        origins.add((origin.get("xyz"), origin.get("rpy")))
     assert len(origins) == 1
 
 
@@ -316,13 +302,55 @@ def test_validate_robot_urdf_never_composes(monkeypatch: pytest.MonkeyPatch) -> 
 def test_visual_glb_wrapper_maps_flags_to_assemblies() -> None:
     assert Path(robot_visual_glb_urdf("xarm6")).name == "xarm6_1305_visual.glb.urdf"
     cases = {
-        ("gripper_g2", True): dict(with_gripper_g2=True, movable=True),
-        ("gripper_g2", False): dict(with_gripper_g2=True),
-        ("bio_gripper_g2", False): dict(with_bio_gripper_g2=True),
-        ("vacuum_gripper", True): dict(with_vacuum_gripper=True),
+        "gripper_g2": (
+            dict(with_gripper_g2=True, movable=True),
+            dict(with_gripper_g2=True),
+        ),
+        "bio_gripper_g2": (
+            dict(with_bio_gripper_g2=True, movable=True),
+            dict(with_bio_gripper_g2=True),
+        ),
+        "vacuum_gripper": (dict(with_vacuum_gripper=True),),
     }
-    for (end_effector, movable), flags in cases.items():
-        gripper_visual = "movable" if movable else "static"
-        assert robot_visual_glb_urdf("xarm6", **flags) == compose_robot_urdf(
-            "xarm6", end_effector, gripper_visual=gripper_visual
-        )
+    for end_effector, flag_sets in cases.items():
+        expected = compose_robot_urdf("xarm6", end_effector)
+        for flags in flag_sets:
+            assert robot_visual_glb_urdf("xarm6", **flags) == expected
+
+
+def test_compose_standalone_end_effector_urdf(tmp_path: Path) -> None:
+    from ufactory.robots.paths import lite6_vacuum_gripper_visual_glb_urdf
+
+    out = Path(lite6_vacuum_gripper_visual_glb_urdf())
+    assert out.is_file()
+    assert out == Path(assembly.compose_standalone_end_effector_urdf("lite6_vacuum_gripper", visual="glb"))
+
+    composed = Path(
+        assembly.compose_standalone_end_effector_urdf("lite6_vacuum_gripper", visual="glb", out_dir=tmp_path)
+    )
+    assert composed.parent == tmp_path
+    root = ET.parse(composed).getroot()
+    assert [link.get("name") for link in root.findall("link")][:2] == ["world", "uflite_vacuum_gripper_link"]
+    fix = root.find("./joint[@name='vacuum_gripper_fix']")
+    assert fix is not None
+    assert fix.find("parent").get("link") == "world"
+    assert fix.find("child").get("link") == "uflite_vacuum_gripper_link"
+    vis = root.find("./link[@name='uflite_vacuum_gripper_link']/visual")
+    assert vis is not None
+    assert vis.find("material") is None
+    mesh_attr = vis.find("geometry/mesh").get("filename")
+    assert mesh_attr is not None and not os.path.isabs(mesh_attr)
+    assert Path(mesh_attr).name == "lite6_vacuum_gripper_visual_link6.glb"
+    assert (composed.parent / mesh_attr).is_file()
+
+    vac = Path(assembly.compose_standalone_end_effector_urdf("vacuum_gripper", out_dir=tmp_path))
+    vac_root = ET.parse(vac).getroot()
+    vac_fix = vac_root.find("./joint[@name='vacuum_gripper_fix']")
+    assert vac_fix is not None and vac_fix.find("parent").get("link") == "world"
+    assert vac_fix.find("child").get("link") == "xarm_vacuum_gripper_link"
+    for mesh in vac_root.findall(".//mesh"):
+        fn = mesh.get("filename")
+        assert fn is not None and (vac.parent / fn).is_file()
+
+    with pytest.raises(AssemblyError):
+        assembly.compose_standalone_end_effector_urdf("lite6_vacuum_gripper", visual="obj", out_dir=tmp_path)

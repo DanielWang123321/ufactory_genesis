@@ -1,6 +1,6 @@
 # ufactory_genesis
 
-![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-0.3.8-orange) ![Genesis](https://img.shields.io/badge/genesis-1.4.7-lightgrey) ![CI](https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Version](https://img.shields.io/badge/version-0.3.9-orange) ![Genesis](https://img.shields.io/badge/genesis-1.4.7-lightgrey) ![CI](https://github.com/xArm-Developer/ufactory_genesis/actions/workflows/ci.yml/badge.svg)
 
 UFACTORY robot simulation and reinforcement learning examples built on Genesis.
 

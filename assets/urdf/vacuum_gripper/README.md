@@ -37,6 +37,7 @@ urdf = compose_robot_urdf("xarm6_1305", "vacuum_gripper")  # on an arm; visual="
 ```
 
 ```bash
+python examples/visualization/view_tool.py --tool vacuum_gripper    # standalone (flange up, cups down)
 python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
 python examples/visualization/view_robot.py --robot uf850 --vacuum-gripper
 ```

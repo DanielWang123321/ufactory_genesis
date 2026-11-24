@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ufactory.robots.assembly import compose_robot_urdf, get_end_effector, parse_assembly_ref
+from ufactory.robots.assembly import compose_robot_urdf, compose_standalone_end_effector_urdf, parse_assembly_ref
 from ufactory.robots.registry import PROJECT_ROOT, get_robot_profile
 
 DYNAMICS_VALIDATION_POSES_YAML = PROJECT_ROOT / "assets" / "configs" / "dynamics_validation_pose.yaml"
@@ -61,7 +61,6 @@ def robot_urdf(robot_key: str, name: str | None = None) -> str:
             profile.key,
             ref.end_effector,
             visual=ref.visual,
-            gripper_visual=ref.gripper_visual,
             accessory=ref.accessory,
         )
     return _urdf_path(profile.assets_dir, urdf_name)
@@ -89,10 +88,10 @@ def robot_visual_glb_urdf(
 ) -> str:
     """GLB-visual URDF of an arm, optionally composed with one end effector and/or one accessory.
 
-    Without parts this is the arm's ``*_visual.glb.urdf``. With any, the arm and parts are assembled at runtime:
-    ``movable=True`` keeps per-link gripper visuals, otherwise grippers use their static overlay. ``accessory`` is
-    ``camera_stand`` or a camera on it (``d405``, ``d435``, ``gemini_305``, ``zed_x_nano``).
-    New code should call :func:`ufactory.robots.assembly.compose_robot_urdf` directly.
+    Without parts this is the arm's ``*_visual.glb.urdf``. With any, the arm and parts are assembled at runtime using
+    per-link visuals; ``movable`` is kept for compatibility (grippers always use per-link movable visuals).
+    ``accessory`` is ``camera_stand`` or a camera on it (``d405``, ``d435``, ``gemini_305``, ``zed_x_nano``). New code
+    should call :func:`ufactory.robots.assembly.compose_robot_urdf` directly.
     """
     profile = get_robot_profile(robot_key)
     flags = {
@@ -123,11 +122,7 @@ def robot_visual_glb_urdf(
         raise ValueError(f"Robot {robot_key} does not support {label}")
     if accessory is not None and not profile.supports_accessory(accessory, end_effector):
         raise ValueError(f"{accessory} does not fit {label} on {robot_key}")
-    has_static = get_end_effector(end_effector).static_visual is not None
-    gripper_visual = "movable" if movable or not has_static else "static"
-    return compose_robot_urdf(
-        profile.key, end_effector, visual="glb", gripper_visual=gripper_visual, accessory=accessory
-    )
+    return compose_robot_urdf(profile.key, end_effector, visual="glb", accessory=accessory)
 
 
 def lite6_gripper_movable_visual_urdf() -> str:
@@ -153,6 +148,11 @@ def bio_gripper_g2_movable_visual_urdf() -> str:
 def vacuum_gripper_urdf() -> str:
     """Standalone xArm / UF850 vacuum gripper URDF (no arm)."""
     return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper.urdf")
+
+
+def lite6_vacuum_gripper_visual_glb_urdf() -> str:
+    """Standalone Lite6 vacuum gripper URDF with per-link GLB visual resolved from assembly.yaml."""
+    return compose_standalone_end_effector_urdf("lite6_vacuum_gripper", visual="glb")
 
 
 def microplate_sbs_96_well_urdf() -> str:

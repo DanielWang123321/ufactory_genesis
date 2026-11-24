@@ -32,8 +32,12 @@ pin = pytest.importorskip("pinocchio")
 URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
 CAMERAS = ("d405", "d435", "gemini_305", "zed_x_nano")
 ACCESSORIES = ("camera_stand", *CAMERAS)
-ARMS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850")
-END_EFFECTORS: tuple[str | None, ...] = (None, "gripper_g2", "vacuum_gripper")
+XARM_ARMS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850")
+ARMS = (*XARM_ARMS, "lite6")
+ARM_END_EFFECTORS: dict[str, tuple[str | None, ...]] = {
+    **{arm: (None, "gripper_g2", "vacuum_gripper") for arm in XARM_ARMS},
+    "lite6": (None, "lite6_gripper", "lite6_vacuum_gripper"),
+}
 STAND_MASS = 0.048
 CAMERA_MASS = {"d405": 0.058, "d435": 0.075, "gemini_305": 0.068, "zed_x_nano": 0.075}
 # camera_stand hole frames matched index-by-index with each camera's <camera>_hole_<i> frames.
@@ -53,6 +57,7 @@ G2_FINGERS = {
     "right_finger",
     "right_inner_knuckle",
 }
+LITE6_FINGERS = {"uflite_finger1", "uflite_finger2"}
 
 
 def _model(urdf: str | Path) -> tuple[pin.Model, pin.Data]:
@@ -80,9 +85,10 @@ def test_catalog_lists_the_stand_and_four_cameras() -> None:
     assert tuple(spacers()) == ("camera_stand",)
     assert tuple(cameras()) == CAMERAS
     stand = spacers()["camera_stand"]
+    assert stand.flanges == ("xarm", "lite6")
     assert stand.robots == ARMS
     assert stand.tool_lift_m == pytest.approx(0.003)
-    assert stand.end_effectors == ("gripper_g2", "vacuum_gripper")
+    assert stand.end_effectors == ("gripper_g2", "vacuum_gripper", "lite6_gripper", "lite6_vacuum_gripper")
     for name, cam in cameras().items():
         assert cam.spacer == "camera_stand"
         assert cam.optical_frame == f"{name}_optical_frame"
@@ -95,10 +101,9 @@ def test_catalog_lists_the_stand_and_four_cameras() -> None:
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("assembly:gripper_g2+d435", AssemblyRef("gripper_g2", "glb", "movable", "d435")),
-        ("assembly:bare+camera_stand:stl", AssemblyRef(None, "stl", "movable", "camera_stand")),
-        ("assembly:gripper_g2+zed_x_nano:glb:static", AssemblyRef("gripper_g2", "glb", "static", "zed_x_nano")),
-        ("assembly:vacuum_gripper+gemini_305:stl", AssemblyRef("vacuum_gripper", "stl", "movable", "gemini_305")),
+        ("assembly:gripper_g2+d435", AssemblyRef("gripper_g2", "glb", "d435")),
+        ("assembly:bare+camera_stand:stl", AssemblyRef(None, "stl", "camera_stand")),
+        ("assembly:vacuum_gripper+gemini_305:stl", AssemblyRef("vacuum_gripper", "stl", "gemini_305")),
     ],
 )
 def test_parse_accessory_refs_round_trip(value: str, expected: AssemblyRef) -> None:
@@ -106,7 +111,16 @@ def test_parse_accessory_refs_round_trip(value: str, expected: AssemblyRef) -> N
     assert str(expected) == value
 
 
-@pytest.mark.parametrize("value", ["assembly:bare", "assembly:+d435", "assembly:gripper_g2+", "assembly:a+b+c"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "assembly:bare",
+        "assembly:+d435",
+        "assembly:gripper_g2+",
+        "assembly:a+b+c",
+        "assembly:gripper_g2+zed_x_nano:glb:static",
+    ],
+)
 def test_parse_accessory_refs_rejects_malformed(value: str) -> None:
     with pytest.raises(AssemblyError, match="malformed"):
         parse_assembly_ref(value)
@@ -122,17 +136,19 @@ def test_compatibility_matrix() -> None:
     for arm in ARMS:
         assert supported_accessories(arm) == ACCESSORIES
         assert get_robot_profile(arm).supports_camera_stand
-        for ee in ("gripper_g2", "vacuum_gripper"):
+        for ee in ARM_END_EFFECTORS[arm]:
             assert supported_accessories(arm, ee) == ACCESSORIES
-        assert supported_accessories(arm, "bio_gripper_g2") == ()
-    assert supported_accessories("lite6") == ()
-    assert not get_robot_profile("lite6").supports_camera_stand
+    for arm in XARM_ARMS:
+        for ee in ("bio_gripper_g2", "lite6_gripper", "lite6_vacuum_gripper"):
+            assert supported_accessories(arm, ee) == ()
+    for ee in ("gripper_g2", "bio_gripper_g2", "vacuum_gripper"):
+        assert supported_accessories("lite6", ee) == ()
     cases = [
-        (("lite6", None), {"accessory": "d435"}, "not supported on lite6"),
+        (("lite6", "gripper_g2"), {"accessory": "d435"}, "not supported on lite6"),
+        (("xarm6", "lite6_gripper"), {"accessory": "d435"}, "not supported on xarm6_1305"),
         (("xarm6", "bio_gripper_g2"), {"accessory": "d405"}, "does not fit with bio_gripper_g2"),
         (("xarm6", None), {"accessory": "d455"}, "unknown accessory"),
         (("xarm6", None), {}, "end effector or an accessory"),
-        (("xarm6", None), {"accessory": "d405", "gripper_visual": "static"}, "needs an end effector"),
     ]
     for args, kwargs, message in cases:
         with pytest.raises(AssemblyError, match=message):
@@ -142,29 +158,30 @@ def test_compatibility_matrix() -> None:
 # --- composition --------------------------------------------------------------------------------------------------
 
 
-def _variants(ee: str | None) -> list[tuple[str, str]]:
-    return [("glb", "movable"), ("stl", "movable")] + ([("glb", "static")] if ee == "gripper_g2" else [])
+def _variants() -> tuple[str, ...]:
+    return ("glb", "stl")
 
 
 def test_every_combination_composes_deterministically_with_relative_existing_meshes(tmp_path: Path) -> None:
     count = 0
-    for arm, ee, acc in itertools.product(ARMS, END_EFFECTORS, ACCESSORIES):
-        for visual, gripper_visual in _variants(ee):
-            path = Path(compose_robot_urdf(arm, ee, accessory=acc, visual=visual, gripper_visual=gripper_visual))
-            again = Path(compose_robot_urdf(arm, ee, accessory=acc, visual=visual, gripper_visual=gripper_visual))
-            assert path == again
-            label = f"{ee or 'bare'}__{acc}"
-            assert path.name.startswith(f"{arm}__{label}__{visual}_{gripper_visual}.")
-            root = ET.parse(path).getroot()
-            names = [e.get("name") for e in root if e.tag in ("link", "joint")]
-            assert len(names) == len(set(names))
-            assert sum(e.tag == "link" for e in root) == sum(e.tag == "joint" for e in root) + 1
-            for mesh in root.iter("mesh"):
-                filename = mesh.get("filename") or ""
-                assert not os.path.isabs(filename), filename
-                assert (path.parent / filename).resolve().is_file(), filename
-            count += 1
-    assert count == 4 * 5 * (2 + 3 + 2)
+    for arm in ARMS:
+        for ee, acc in itertools.product(ARM_END_EFFECTORS[arm], ACCESSORIES):
+            for visual in _variants():
+                path = Path(compose_robot_urdf(arm, ee, accessory=acc, visual=visual))
+                again = Path(compose_robot_urdf(arm, ee, accessory=acc, visual=visual))
+                assert path == again
+                label = f"{ee or 'bare'}__{acc}"
+                assert path.name.startswith(f"{arm}__{label}__{visual}.")
+                root = ET.parse(path).getroot()
+                names = [e.get("name") for e in root if e.tag in ("link", "joint")]
+                assert len(names) == len(set(names))
+                assert sum(e.tag == "link" for e in root) == sum(e.tag == "joint" for e in root) + 1
+                for mesh in root.iter("mesh"):
+                    filename = mesh.get("filename") or ""
+                    assert not os.path.isabs(filename), filename
+                    assert (path.parent / filename).resolve().is_file(), filename
+                count += 1
+    assert count == 5 * 3 * 5 * 2
 
     cwd = os.getcwd()
     try:
@@ -184,14 +201,24 @@ def test_path_helpers_accept_accessories() -> None:
     assert robot_urdf("uf850", "assembly:bare+camera_stand:stl") == compose_robot_urdf(
         "uf850", None, accessory="camera_stand", visual="stl"
     )
-    assert robot_visual_glb_urdf("xarm7", accessory="d405") == compose_robot_urdf("xarm7", None, accessory="d405")
-    assert robot_visual_glb_urdf("xarm6", with_gripper_g2=True, accessory="zed_x_nano") == compose_robot_urdf(
-        "xarm6", "gripper_g2", accessory="zed_x_nano", gripper_visual="static"
+    assert robot_urdf("lite6", "assembly:lite6_gripper+d435") == compose_robot_urdf(
+        "lite6", "lite6_gripper", accessory="d435"
     )
+    assert robot_visual_glb_urdf("xarm7", accessory="d405") == compose_robot_urdf("xarm7", None, accessory="d405")
+    assert robot_visual_glb_urdf("lite6", accessory="d405") == compose_robot_urdf("lite6", None, accessory="d405")
+    assert robot_visual_glb_urdf("xarm6", with_gripper_g2=True, accessory="zed_x_nano") == compose_robot_urdf(
+        "xarm6", "gripper_g2", accessory="zed_x_nano"
+    )
+    assert robot_visual_glb_urdf("lite6", with_lite6_gripper=True, accessory="zed_x_nano") == compose_robot_urdf(
+        "lite6", "lite6_gripper", accessory="zed_x_nano"
+    )
+    assert robot_visual_glb_urdf(
+        "lite6", with_lite6_vacuum_gripper=True, accessory="camera_stand"
+    ) == compose_robot_urdf("lite6", "lite6_vacuum_gripper", accessory="camera_stand")
     with pytest.raises(ValueError, match="does not fit"):
         robot_visual_glb_urdf("xarm6", with_bio_gripper_g2=True, accessory="d405")
     with pytest.raises(ValueError, match="does not support"):
-        robot_visual_glb_urdf("lite6", accessory="d405")
+        robot_visual_glb_urdf("lite6", with_gripper_g2=True, accessory="d405")
 
 
 def test_stl_mode_uses_stand_stl_and_camera_boxes() -> None:
@@ -209,7 +236,12 @@ def test_stl_mode_uses_stand_stl_and_camera_boxes() -> None:
 
 
 def _tcp(model: pin.Model, data: pin.Data, arm: str, ee: str | None) -> np.ndarray:
-    name = {"gripper_g2": "link_tcp", "vacuum_gripper": "vacuum_tcp"}.get(ee or "", "")
+    name = {
+        "gripper_g2": "link_tcp",
+        "vacuum_gripper": "vacuum_tcp",
+        "lite6_gripper": "link_tcp",
+        "lite6_vacuum_gripper": "link_tcp",
+    }.get(ee or "", "")
     if not name:
         name = "link_eef" if model.existFrame("link_eef") else get_robot_profile(arm).ee_link
     return np.asarray(_frame(model, data, name).translation, dtype=np.float64)
@@ -219,7 +251,7 @@ def _tcp(model: pin.Model, data: pin.Data, arm: str, ee: str | None) -> np.ndarr
 def test_tool_moves_3_mm_and_mass_adds_up(arm: str) -> None:
     flange = get_robot_profile(arm).ee_link
     rng = np.random.default_rng(39)
-    for ee in END_EFFECTORS:
+    for ee in ARM_END_EFFECTORS[arm]:
         base_urdf = (
             compose_robot_urdf(arm, ee)
             if ee
@@ -240,9 +272,10 @@ def test_tool_moves_3_mm_and_mass_adds_up(arm: str) -> None:
             assert added == pytest.approx(STAND_MASS + CAMERA_MASS.get(acc, 0.0), abs=1e-12)
 
 
+@pytest.mark.parametrize("arm", ["xarm6", "lite6"])
 @pytest.mark.parametrize("camera", CAMERAS)
-def test_camera_sits_on_the_stand_holes_and_looks_along_flange_z(camera: str) -> None:
-    model, data = _placements(compose_robot_urdf("xarm6", None, accessory=camera))
+def test_camera_sits_on_the_stand_holes_and_looks_along_flange_z(arm: str, camera: str) -> None:
+    model, data = _placements(compose_robot_urdf(arm, None, accessory=camera))
     flange = _frame(model, data, "link6")
     stand_mount = _frame(model, data, "stand_camera_mount")
     cam_mount = _frame(model, data, f"{camera}_mount")
@@ -329,6 +362,29 @@ def test_g2_clearances_and_zed_connector_in_the_stand_opening(camera: str) -> No
     for angle in (0.0572, 0.46, 0.865):  # open, mid, closed
         q[drive] = angle
         assert _min_distance(model, data, geom, gdata, q, body, G2_FINGERS) > 0.040
+
+
+@pytest.mark.parametrize("camera", CAMERAS)
+def test_lite6_clearances_with_camera_stand_and_tools(camera: str) -> None:
+    body = {f"{camera}_body"}
+    urdf = compose_robot_urdf("lite6", "lite6_gripper", accessory=camera)
+    model, data, geom, gdata = _geometry(urdf)
+    stroke = model.joints[model.getJointId("finger_joint1")].idx_q
+    q = pin.neutral(model)
+    assert _min_distance(model, data, geom, gdata, q, {"camera_stand"}, body) > -1e-6
+    assert _min_distance(model, data, geom, gdata, q, {"camera_stand"}, {"link6"}) > -1e-6
+    assert _min_distance(model, data, geom, gdata, q, {"camera_stand"}, {"uflite_gripper_link"}) > -1e-6
+    assert _min_distance(model, data, geom, gdata, q, body, {"uflite_gripper_link"}) > 0.007
+    assert _min_distance(model, data, geom, gdata, q, body, {"link6"}) > 0.008
+    for pos in (0.0, 0.00445, 0.0089):  # open, mid, closed
+        q[stroke] = pos
+        assert _min_distance(model, data, geom, gdata, q, body, LITE6_FINGERS) > 0.045
+
+    vac_urdf = compose_robot_urdf("lite6", "lite6_vacuum_gripper", accessory=camera)
+    vm, vd, vg, vgd = _geometry(vac_urdf)
+    vq = pin.neutral(vm)
+    assert _min_distance(vm, vd, vg, vgd, vq, {"camera_stand"}, {"uflite_vacuum_gripper_link"}) > -1e-6
+    assert _min_distance(vm, vd, vg, vgd, vq, body, {"uflite_vacuum_gripper_link"}) > 0.007
 
 
 # --- assets -------------------------------------------------------------------------------------------------------

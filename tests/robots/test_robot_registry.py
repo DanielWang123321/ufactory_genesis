@@ -72,7 +72,7 @@ def test_lite6_movable_gripper_assembly_matches_standalone_part() -> None:
     combo_path = Path(robot_visual_glb_urdf("lite6", with_lite6_gripper=True, movable=True))
     standalone_path = Path(lite6_gripper_movable_visual_urdf())
 
-    assert combo_path.name.startswith("lite6__lite6_gripper__glb_movable.")
+    assert combo_path.name.startswith("lite6__lite6_gripper__glb.")
     finger_mesh_dir = PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "meshes" / "collision"
 
     for path in (combo_path, standalone_path):
@@ -123,7 +123,7 @@ def test_vacuum_gripper_urdf_resolution() -> None:
 
     for robot, key in {"xarm5": "xarm5_1305", "xarm6": "xarm6_1305", "xarm7": "xarm7_1305", "uf850": "uf850"}.items():
         combo = Path(robot_visual_glb_urdf(robot, with_vacuum_gripper=True))
-        assert combo.name.startswith(f"{key}__vacuum_gripper__glb_movable.")
+        assert combo.name.startswith(f"{key}__vacuum_gripper__glb.")
         assert combo.is_file()
         mount = ET.parse(combo).getroot().find("./joint[@name='vacuum_gripper_fix']")
         assert mount.find("parent").get("link") == get_robot_profile(robot).ee_link

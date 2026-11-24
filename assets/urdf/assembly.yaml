@@ -16,7 +16,6 @@
 #   flange          flange the part mounts on; compatible robots are that flange's robots
 #   mount           optional base_link pose {xyz, rpy} in the flange frame, same on every robot of the
 #                   flange; identity when absent
-#   static_visual   optional single-mesh overlay used by gripper_visual "static" (per-link visuals removed)
 #   glb_visuals     optional per-link GLB that replaces the source visual when visual is "glb"
 #   stl_visuals     optional per-link mesh that replaces the source visual when visual is "stl"
 #   stl_materials   optional per-link material for visual "stl" ("*" = default), given to stl_visuals that
@@ -24,7 +23,7 @@
 #                   in that mode
 #
 # spacers.<name>: a plate clamped between the flange and the end effector (it may carry a camera)
-#   source, base_link, mount_joint, flange, mount, stl_visuals, stl_materials: as for end_effectors
+#   source, base_link, mount_joint, flange (or flanges), mount, stl_visuals, stl_materials: as for end_effectors
 #   tool_lift_m     the end effector mount (or the arm's link_eef when there is none) moves this far along flange +Z
 #   end_effectors   end effectors that fit on the spacer; the bare arm always does
 #
@@ -40,6 +39,7 @@ flanges:
     # one 6 mm locating-pin hole at -Y, 6 mm deep centring recess.
     robots: [xarm5_1305, xarm6_1305, xarm7_1305, uf850]
   lite6:
+    # Shares the ISO 9409-1-50-4-M6 bolt pattern with xarm, kept separate so Lite 6 tools stay scoped to Lite 6.
     robots: [lite6]
 end_effectors:
   gripper_g2:
@@ -47,11 +47,6 @@ end_effectors:
     base_link: xarm_gripper_base_link
     mount_joint: gripper_fix
     flange: xarm
-    static_visual:
-      link: gripper_g2_visual
-      joint: gripper_g2_visual_fix
-      mesh: gripper_g2/meshes/visual/gripper_g2_static.glb
-      material: White
     # The base collides as 10 convex hulls, so its STL visual is the full mesh rather than its collision geometry.
     stl_visuals:
       xarm_gripper_base_link: gripper_g2/meshes/visual/base_link.stl
@@ -70,10 +65,6 @@ end_effectors:
     # TCP-down poses unreachable on xArm5 and near-singular on xArm6. Visual fingertips land about 158 mm
     # from the flange axis (CAD reference 157.5 mm).
     mount: {xyz: [0.022642, 0.000814, 0.002516], rpy: [0.0, 0.0, -0.00628537]}
-    static_visual:
-      link: bio_gripper_g2_visual
-      joint: bio_gripper_g2_visual_fix
-      mesh: bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb
   vacuum_gripper:
     source: vacuum_gripper/vacuum_gripper.urdf
     base_link: xarm_vacuum_gripper_link
@@ -86,11 +77,6 @@ end_effectors:
     base_link: uflite_gripper_link
     mount_joint: gripper_fix
     flange: lite6
-    static_visual:
-      link: lite6_gripper_visual
-      joint: lite6_gripper_visual_fix
-      mesh: lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb
-      material: White
     stl_materials:
       uflite_gripper_link: White
   lite6_vacuum_gripper:
@@ -103,15 +89,16 @@ end_effectors:
 spacers:
   camera_stand:
     # UFACTORY 3 mm aluminium camera stand, 48 g. Its frame has the plate thickness along +Y, so the mount turns
-    # +Y onto flange +Z. Camera holes around (67.5, 3, 0) mm: 2 x M3 at 20 mm and at 45 mm, and a 20 x 20 mm
-    # square of 4 x M3. Bio Gripper G2 is excluded: its body reaches x = 59.22 mm and hits D405/D435.
+    # +Y onto flange +Z. Fits both xarm and lite6 (ISO 9409-1-50-4-M6 flange). Camera holes around (67.5, 3, 0) mm:
+    # 2 x M3 at 20 mm and at 45 mm, and a 20 x 20 mm square of 4 x M3. Bio Gripper G2 is excluded: its body
+    # reaches x = 59.22 mm and hits D405/D435.
     source: camera_stand/camera_stand.urdf
     base_link: camera_stand
     mount_joint: camera_stand_fix
-    flange: xarm
+    flanges: [xarm, lite6]
     mount: {xyz: [0.0, 0.0, 0.0], rpy: [1.5707963267948966, 0.0, 0.0]}
     tool_lift_m: 0.003
-    end_effectors: [gripper_g2, vacuum_gripper]
+    end_effectors: [gripper_g2, vacuum_gripper, lite6_gripper, lite6_vacuum_gripper]
     stl_visuals:
       camera_stand: camera_stand/meshes/visual/camera_stand.stl
     stl_materials:

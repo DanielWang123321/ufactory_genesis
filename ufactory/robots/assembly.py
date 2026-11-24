@@ -10,12 +10,11 @@ identical bytes (and ``sha256``) on every checkout. File names are content-addre
 Runtime configurations and :func:`ufactory.robots.paths.robot_urdf` accept an assembly reference in place of a
 URDF file name::
 
-    assembly:<end_effector>[+<accessory>][:<visual>[:<gripper_visual>]]
-    assembly:bare+<accessory>[:<visual>[:<gripper_visual>]]
+    assembly:<end_effector>[+<accessory>][:<visual>]
+    assembly:bare+<accessory>[:<visual>]
 
-``bare`` means no end effector. ``visual`` is ``glb`` (default, GLB arm visuals) or ``stl`` (the arm's dynamics URDF; end-effector GLB visuals are
-replaced by their collision geometry; cameras draw their collision boxes). ``gripper_visual`` is ``movable`` (default, per-link visuals) or ``static``
-(one overlay mesh, kinematics unchanged).
+``bare`` means no end effector. ``visual`` is ``glb`` (default, per-link GLB arm and gripper visuals) or ``stl`` (the arm's dynamics URDF; end-effector GLB visuals are
+replaced by their collision geometry; cameras draw their collision boxes).
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ ASSEMBLY_PREFIX = "assembly:"
 ASSEMBLY_YAML = Path("assets") / "urdf" / "assembly.yaml"
 COMPOSED_DIR = Path(".cache") / "ufactory" / "urdf" / "composed"
 VISUALS = ("glb", "stl")
-GRIPPER_VISUALS = ("movable", "static")
 # Bump when the composition rules change so cached files are regenerated.
 COMPOSER_VERSION = "1"
 
@@ -56,14 +54,6 @@ class _AssetStore(Protocol):
     def require(self, relative_path: str | Path) -> Path: ...
 
 
-@dataclass(frozen=True)
-class StaticVisual:
-    link: str
-    joint: str
-    mesh: str
-    material: str | None = None
-
-
 Pose = tuple[tuple[float, float, float], tuple[float, float, float]]
 IDENTITY: Pose = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
 
@@ -77,7 +67,6 @@ class EndEffector:
     flange: str
     robots: tuple[str, ...]
     mount: Pose
-    static_visual: StaticVisual | None
     glb_visuals: Mapping[str, str]
     stl_visuals: Mapping[str, str]
     stl_materials: Mapping[str, str]
@@ -89,7 +78,7 @@ class Spacer:
     source: str
     base_link: str
     mount_joint: str
-    flange: str
+    flanges: tuple[str, ...]
     robots: tuple[str, ...]
     mount: Pose
     tool_lift_m: float
@@ -135,13 +124,10 @@ class _Catalog:
 class AssemblyRef:
     end_effector: str | None
     visual: str = "glb"
-    gripper_visual: str = "movable"
     accessory: str | None = None
 
     def __str__(self) -> str:
-        return assembly_ref(
-            self.end_effector, visual=self.visual, gripper_visual=self.gripper_visual, accessory=self.accessory
-        )
+        return assembly_ref(self.end_effector, visual=self.visual, accessory=self.accessory)
 
 
 def _triplet(value: Any, *, where: str) -> tuple[float, float, float]:
@@ -188,11 +174,25 @@ def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
             raise AssemblyError(f"{name}: unknown flange {flange!r}; expected one of {sorted(flanges)}")
         return flange
 
+    def flanges_of(name: str, spec: Mapping[str, Any]) -> tuple[str, ...]:
+        if "flanges" not in spec:
+            return (flange_of(name, spec),)
+        raw = spec["flanges"]
+        if not isinstance(raw, list | tuple) or not raw:
+            raise AssemblyError(f"{name}: flanges must be a non-empty list")
+        seen: list[str] = []
+        for item in raw:
+            flange = str(item)
+            if flange not in flanges:
+                raise AssemblyError(f"{name}: unknown flange {flange!r}; expected one of {sorted(flanges)}")
+            if flange not in seen:
+                seen.append(flange)
+        return tuple(seen)
+
     out: dict[str, EndEffector] = {}
     for name, spec in (data.get("end_effectors") or {}).items():
         flange = flange_of(str(name), spec)
         mount = _pose(spec, str(name))
-        sv = spec.get("static_visual")
         out[str(name)] = EndEffector(
             name=str(name),
             source=str(spec["source"]),
@@ -201,27 +201,25 @@ def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
             flange=flange,
             robots=flanges[flange],
             mount=mount,
-            static_visual=StaticVisual(str(sv["link"]), str(sv["joint"]), str(sv["mesh"]), sv.get("material"))
-            if sv
-            else None,
             glb_visuals=_str_map(spec.get("glb_visuals")),
             stl_visuals=_str_map(spec.get("stl_visuals")),
             stl_materials=_str_map(spec.get("stl_materials")),
         )
     spacers: dict[str, Spacer] = {}
     for name, spec in (data.get("spacers") or {}).items():
-        flange = flange_of(str(name), spec)
+        spacer_flanges = flanges_of(str(name), spec)
+        robots = tuple(r for f in spacer_flanges for r in flanges[f])
         fits = tuple(str(e) for e in spec.get("end_effectors") or ())
         for ee_name in fits:
-            if ee_name not in out or out[ee_name].flange != flange:
-                raise AssemblyError(f"{name}: end effector {ee_name!r} is not a {flange!r}-flange part")
+            if ee_name not in out or out[ee_name].flange not in spacer_flanges:
+                raise AssemblyError(f"{name}: end effector {ee_name!r} is not on flanges {list(spacer_flanges)}")
         spacers[str(name)] = Spacer(
             name=str(name),
             source=str(spec["source"]),
             base_link=str(spec["base_link"]),
             mount_joint=str(spec["mount_joint"]),
-            flange=flange,
-            robots=flanges[flange],
+            flanges=spacer_flanges,
+            robots=robots,
             mount=_pose(spec, str(name)),
             tool_lift_m=float(spec.get("tool_lift_m", 0.0)),
             end_effectors=fits,
@@ -308,6 +306,8 @@ def supports_end_effector(robot_key: str, end_effector: str, root: Path | None =
 def supported_accessories(robot_key: str, end_effector: str | None = None, root: Path | None = None) -> tuple[str, ...]:
     """Accessories that fit ``robot_key`` (with ``end_effector``; ``None`` = bare arm)."""
     key = get_profile_key_for_robot_name(robot_key)
+    if end_effector is not None and not supports_end_effector(key, end_effector, root):
+        return ()
     out = []
     for name in accessories(root):
         spacer, _ = resolve_accessory(name, root)
@@ -326,7 +326,6 @@ def assembly_ref(
     end_effector: str | None,
     *,
     visual: str = "glb",
-    gripper_visual: str = "movable",
     accessory: str | None = None,
 ) -> str:
     """Canonical reference string, omitting default fields."""
@@ -334,28 +333,25 @@ def assembly_ref(
         raise AssemblyError("an assembly needs an end effector or an accessory")
     head = end_effector or BARE
     parts = [f"{head}+{accessory}" if accessory else head]
-    if gripper_visual != "movable":
-        parts += [visual, gripper_visual]
-    elif visual != "glb":
+    if visual != "glb":
         parts.append(visual)
     return ASSEMBLY_PREFIX + ":".join(parts)
 
 
 def parse_assembly_ref(value: str) -> AssemblyRef | None:
-    """Parse ``assembly:<end_effector|bare>[+<accessory>][:<visual>[:<gripper_visual>]]``; ``None`` for a file name."""
+    """Parse ``assembly:<end_effector|bare>[+<accessory>][:<visual>]``; ``None`` for a file name."""
     if not value.startswith(ASSEMBLY_PREFIX):
         return None
     fields = value[len(ASSEMBLY_PREFIX) :].split(":")
-    if not fields[0] or len(fields) > 3:
+    if not fields[0] or len(fields) > 2:
         raise AssemblyError(f"malformed assembly reference {value!r}")
     head, plus, accessory = fields[0].partition("+")
     if not head or (plus and not accessory) or "+" in accessory or (head == BARE and not accessory):
         raise AssemblyError(f"malformed assembly reference {value!r}")
     visual = fields[1] if len(fields) > 1 else "glb"
-    gripper_visual = fields[2] if len(fields) > 2 else "movable"
-    if visual not in VISUALS or gripper_visual not in GRIPPER_VISUALS:
-        raise AssemblyError(f"{value!r}: visual must be one of {VISUALS}, gripper_visual one of {GRIPPER_VISUALS}")
-    return AssemblyRef(None if head == BARE else head, visual, gripper_visual, accessory or None)
+    if visual not in VISUALS:
+        raise AssemblyError(f"{value!r}: visual must be one of {VISUALS}")
+    return AssemblyRef(None if head == BARE else head, visual, accessory or None)
 
 
 def validate_assembly(
@@ -363,15 +359,14 @@ def validate_assembly(
     end_effector: str | None,
     *,
     visual: str = "glb",
-    gripper_visual: str = "movable",
     accessory: str | None = None,
     root: Path | None = None,
 ) -> EndEffector | None:
     """Check that the assembly can be composed, without writing anything."""
     root = root or PROJECT_ROOT
     key = get_profile_key_for_robot_name(robot_key)
-    if visual not in VISUALS or gripper_visual not in GRIPPER_VISUALS:
-        raise AssemblyError(f"visual must be one of {VISUALS}, gripper_visual one of {GRIPPER_VISUALS}")
+    if visual not in VISUALS:
+        raise AssemblyError(f"visual must be one of {VISUALS}")
     if end_effector is None and accessory is None:
         raise AssemblyError("an assembly needs an end effector or an accessory")
     urdf_root = root / "assets" / "urdf"
@@ -381,11 +376,7 @@ def validate_assembly(
         ee = get_end_effector(end_effector, root)
         if key not in ee.robots:
             raise AssemblyError(f"{end_effector} is not supported on {key}; supported robots: {list(ee.robots)}")
-        if gripper_visual == "static" and ee.static_visual is None:
-            raise AssemblyError(f"{end_effector} has no static visual")
         sources.append(urdf_root / ee.source)
-    elif gripper_visual == "static":
-        raise AssemblyError("gripper_visual 'static' needs an end effector")
     if accessory is not None:
         spacer, camera = resolve_accessory(accessory, root)
         if key not in spacer.robots:
@@ -443,15 +434,9 @@ def _tool_elements(ee: EndEffector | Spacer | Camera, source: Path) -> tuple[lis
     return elems, materials
 
 
-def _apply_visual_mode(
-    elems: list[ET.Element], ee: _VisualParts, visual: str, gripper_visual: str, urdf_root: Path
-) -> None:
+def _apply_visual_mode(elems: list[ET.Element], ee: _VisualParts, visual: str, urdf_root: Path) -> None:
     for link in (e for e in elems if e.tag == "link"):
         name = link.get("name") or ""
-        if gripper_visual == "static":
-            for v in link.findall("visual"):
-                link.remove(v)
-            continue
         override = (ee.glb_visuals if visual == "glb" else ee.stl_visuals).get(name)
         material = ee.stl_materials.get(name, ee.stl_materials.get("*")) if visual == "stl" else None
         if override is not None:
@@ -505,7 +490,7 @@ def _attach_part(
     """Append a spacer or camera part, fixed to ``parent`` at its mount pose."""
     source = urdf_root / part.source
     elems, materials = _tool_elements(part, source)
-    _apply_visual_mode(elems, part, visual, "movable", urdf_root)
+    _apply_visual_mode(elems, part, visual, urdf_root)
     for e in elems:
         _rebase_meshes(e, source.parent, out_dir)
     _merge_part_materials(robot, elems, materials)
@@ -535,7 +520,6 @@ def build_assembly_tree(
     end_effector: str | None,
     *,
     visual: str = "glb",
-    gripper_visual: str = "movable",
     accessory: str | None = None,
     root: Path | None = None,
     out_dir: Path | None = None,
@@ -544,9 +528,7 @@ def build_assembly_tree(
     root = (root or PROJECT_ROOT).resolve()
     out_dir = (out_dir or root / COMPOSED_DIR).resolve()
     key = get_profile_key_for_robot_name(robot_key)
-    ee = validate_assembly(
-        key, end_effector, visual=visual, gripper_visual=gripper_visual, accessory=accessory, root=root
-    )
+    ee = validate_assembly(key, end_effector, visual=visual, accessory=accessory, root=root)
     urdf_root = root / "assets" / "urdf"
     arm_file = _arm_source(key, visual, root)
     flange = get_robot_profile(key).ee_link
@@ -560,7 +542,7 @@ def build_assembly_tree(
     if ee is not None:
         sources.append(urdf_root / ee.source)
     label = _assembly_label(end_effector, accessory)
-    robot = ET.Element("robot", {"name": f"{key}__{label}__{visual}_{gripper_visual}"})
+    robot = ET.Element("robot", {"name": f"{key}__{label}__{visual}"})
     robot.append(
         ET.Comment(
             f" Generated by ufactory.robots.assembly v{COMPOSER_VERSION} from "
@@ -582,7 +564,7 @@ def build_assembly_tree(
     if ee is not None:
         tool_file = urdf_root / ee.source
         elems, tool_materials = _tool_elements(ee, tool_file)
-        _apply_visual_mode(elems, ee, visual, gripper_visual, urdf_root)
+        _apply_visual_mode(elems, ee, visual, urdf_root)
         for e in elems:
             _rebase_meshes(e, tool_file.parent, out_dir)
         _merge_part_materials(robot, elems, tool_materials)
@@ -591,16 +573,6 @@ def build_assembly_tree(
         if lift:
             xyz = (xyz[0], xyz[1], xyz[2] + lift)
         origin = {"xyz": _fmt(xyz), "rpy": _fmt(rpy)}
-        sv = ee.static_visual
-        if gripper_visual == "static" and sv is not None:
-            link = ET.SubElement(robot, "link", {"name": sv.link})
-            vis = ET.SubElement(link, "visual")
-            ET.SubElement(vis, "origin", {"xyz": "0 0 0", "rpy": "0 0 0"})
-            ET.SubElement(ET.SubElement(vis, "geometry"), "mesh", {"filename": str(urdf_root / sv.mesh)})
-            if sv.material:
-                ET.SubElement(vis, "material", {"name": sv.material})
-            _rebase_meshes(link, urdf_root, out_dir)
-            _fixed_joint(robot, sv.joint, flange, sv.link, origin)
         _fixed_joint(robot, ee.mount_joint, flange, ee.base_link, origin)
         robot.extend(elems)
     elif lift:
@@ -620,12 +592,81 @@ def serialize_assembly(robot: ET.Element) -> bytes:
     return b'<?xml version="1.0" encoding="utf-8"?>\n' + body + b"\n"
 
 
+def _write_composed_urdf(out_dir: Path, stem: str, tree: ET.Element) -> str:
+    data = serialize_assembly(tree)
+    digest = hashlib.sha256(data).hexdigest()[:12]
+    path = out_dir / f"{stem}.{digest}.urdf"
+    if not path.is_file() or path.read_bytes() != data:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    return str(path)
+
+
+def build_standalone_end_effector_tree(
+    end_effector: str,
+    *,
+    visual: str = "glb",
+    root: Path | None = None,
+    out_dir: Path | None = None,
+) -> ET.Element:
+    """Return a standalone ``<robot>`` element (rooted at ``world``) for one end effector."""
+    root = (root or PROJECT_ROOT).resolve()
+    out_dir = (out_dir or root / COMPOSED_DIR).resolve()
+    if visual not in VISUALS:
+        raise AssemblyError(f"visual must be one of {VISUALS}")
+    ee = get_end_effector(end_effector, root)
+    urdf_root = root / "assets" / "urdf"
+    tool_file = urdf_root / ee.source
+    if not tool_file.is_file():
+        raise AssemblyError(f"missing assembly source {tool_file}")
+
+    elems, tool_materials = _tool_elements(ee, tool_file)
+    _apply_visual_mode(elems, ee, visual, urdf_root)
+    for elem in elems:
+        _rebase_meshes(elem, tool_file.parent, out_dir)
+
+    robot = ET.Element("robot", {"name": f"standalone__{ee.name}__{visual}"})
+    robot.append(
+        ET.Comment(
+            f" Generated by ufactory.robots.assembly v{COMPOSER_VERSION} from "
+            f"{tool_file.relative_to(root).as_posix()}; do not edit. "
+        )
+    )
+    _merge_part_materials(robot, elems, tool_materials)
+    ET.SubElement(robot, "link", {"name": "world"})
+    xyz, rpy = ee.mount
+    _fixed_joint(robot, ee.mount_joint, "world", ee.base_link, {"xyz": _fmt(xyz), "rpy": _fmt(rpy)})
+    robot.extend(elems)
+    return robot
+
+
+def compose_standalone_end_effector_urdf(
+    end_effector: str,
+    *,
+    visual: str = "glb",
+    root: Path | None = None,
+    out_dir: Path | None = None,
+) -> str:
+    """Compose (or reuse) a standalone end-effector URDF with visuals resolved from ``assembly.yaml``."""
+    resolved_root = (root or PROJECT_ROOT).resolve()
+    resolved_out = (out_dir or resolved_root / COMPOSED_DIR).resolve()
+    tree = build_standalone_end_effector_tree(
+        end_effector,
+        visual=visual,
+        root=resolved_root,
+        out_dir=resolved_out,
+    )
+    ee = get_end_effector(end_effector, resolved_root)
+    return _write_composed_urdf(resolved_out, f"standalone__{ee.name}__{visual}", tree)
+
+
 def compose_robot_urdf(
     robot_key: str,
     end_effector: str | None,
     *,
     visual: str = "glb",
-    gripper_visual: str = "movable",
     accessory: str | None = None,
     root: Path | None = None,
     out_dir: Path | None = None,
@@ -641,20 +682,11 @@ def compose_robot_urdf(
         key,
         end_effector,
         visual=visual,
-        gripper_visual=gripper_visual,
         accessory=accessory,
         root=root,
         out_dir=out_dir,
     )
-    data = serialize_assembly(tree)
-    digest = hashlib.sha256(data).hexdigest()[:12]
-    path = out_dir / f"{key}__{_assembly_label(end_effector, accessory)}__{visual}_{gripper_visual}.{digest}.urdf"
-    if not path.is_file() or path.read_bytes() != data:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-        tmp.write_bytes(data)
-        os.replace(tmp, path)
-    return str(path)
+    return _write_composed_urdf(out_dir, f"{key}__{_assembly_label(end_effector, accessory)}__{visual}", tree)
 
 
 def resolve_robot_urdf(
@@ -673,7 +705,6 @@ def resolve_robot_urdf(
                 robot_key,
                 ref.end_effector,
                 visual=ref.visual,
-                gripper_visual=ref.gripper_visual,
                 accessory=ref.accessory,
                 root=root,
             )
@@ -703,7 +734,6 @@ def validate_robot_urdf(
         robot_key,
         ref.end_effector,
         visual=ref.visual,
-        gripper_visual=ref.gripper_visual,
         accessory=ref.accessory,
         root=store.root,
     )

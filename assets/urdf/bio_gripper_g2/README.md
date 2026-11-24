@@ -21,14 +21,13 @@ bio_gripper_g2/
     │   ├── bio_gripper_g2_left_finger_convex_0.stl … _4.stl
     │   └── bio_gripper_g2_right_finger_convex_0.stl … _4.stl
     └── visual/
-        ├── bio_gripper_g2_visual.glb        # single static mesh, ~465k triangles (gripper_visual="static")
         ├── visual_glb/bio_gripper_g2_*.glb  # per-link meshes, ~258k triangles in total
         └── bio_gripper_g2_*.stl             # upstream STL visuals, used by bio_gripper_g2.urdf
 ```
 
 - `bio_gripper_g2_movable_visual.urdf` is the composition source, the standalone preview model (its `world` link raises the base 0.12 m) and the default model of `BioGripperG2Model.load()`. Masses: base with adapter 0.765827 kg, fingers 0.012105 / 0.012068 kg, 0.79 kg in total.
 - `bio_gripper_g2.urdf` has the same inertials, joints and hulls, with the STL visuals. Its parent link `link_tool` is not defined in the file, so it is not a Genesis standalone model. Bio G2 replay reports record its SHA-256 (`ufactory/trajectory/bio_g2_replay.py`).
-- The GLBs are compressed with the native `draco_encoder`: 0.67 MB in total (test budget < 1 MB). Collision STLs keep full density.
+- The GLBs are compressed with the native `draco_encoder`: 0.27 MB in total (test budget < 1 MB). Collision STLs keep full density.
 - Collision STLs need unique `bio_gripper_g2_*` basenames. Genesis reads URDF collision meshes through MuJoCo, which keys mesh assets by basename, and the arms also have a `link_base.stl` (`test_bio_gripper_g2_collision_mesh_basenames_are_unique_in_combos`).
 
 ## Frames and mount
@@ -76,7 +75,7 @@ from ufactory.robots.assembly import compose_robot_urdf
 from ufactory.robots.paths import bio_gripper_g2_movable_visual_urdf
 
 urdf = bio_gripper_g2_movable_visual_urdf()                # standalone
-urdf = compose_robot_urdf("xarm6_1305", "bio_gripper_g2")  # on an arm; gripper_visual="static" for the single mesh
+urdf = compose_robot_urdf("xarm6_1305", "bio_gripper_g2")  # on an arm
 
 # After scene.build(); robot is the Genesis entity loaded from a Bio G2 URDF.
 gripper = BioGripperG2(robot)
@@ -88,8 +87,8 @@ if gripper.found:
 ```
 
 ```bash
-python examples/visualization/view_bio_gripper_g2.py    # standalone, as mounted: adapter up, TCP down
-python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
+python examples/visualization/view_tool.py --tool bio_gripper_g2    # standalone, as mounted: adapter up, TCP down
+python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --gripper-demo
 ```
 
 ## Source / License

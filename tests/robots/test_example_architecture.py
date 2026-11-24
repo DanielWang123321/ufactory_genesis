@@ -33,9 +33,7 @@ def test_public_examples_do_not_modify_python_path_or_keep_bootstraps() -> None:
 def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
     expected = {
         "examples/visualization/view_robot.py",
-        "examples/visualization/view_gripper_g2.py",
-        "examples/visualization/view_bio_gripper_g2.py",
-        "examples/visualization/view_lite6_gripper.py",
+        "examples/visualization/view_tool.py",
         "examples/kinematics/verify_robot.py",
         "examples/kinematics/verify_fk.py",
         "examples/kinematics/verify_ik.py",
@@ -74,6 +72,12 @@ def test_task_oriented_examples_exist_and_legacy_paths_are_removed() -> None:
         "examples/rl/reach/README_zh.md",
     }
     assert all((PROJECT_ROOT / relative).is_file() for relative in expected)
+    for removed in (
+        "examples/visualization/view_gripper_g2.py",
+        "examples/visualization/view_bio_gripper_g2.py",
+        "examples/visualization/view_lite6_gripper.py",
+    ):
+        assert not (PROJECT_ROOT / removed).exists()
     assert not (PROJECT_ROOT / "examples" / "pick_place").exists()
     assert not (PROJECT_ROOT / "examples" / "packaging").exists()
     assert not (PROJECT_ROOT / "examples" / "rl" / "pick_place" / "pretrained").exists()

@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.3.8",
+  "manifest_version": "0.3.9",
   "required_paths": [
     "assets/configs/runtime/motion/default.yaml",
     "assets/configs/runtime/safety/default.yaml",
@@ -18,7 +18,6 @@
     "assets/configs/runtime/robots/lite6.yaml",
     "assets/scenes/packaging_showcase/textures/cardboard.jpg",
     "assets/scenes/packaging_showcase/meshes/uv_box.obj",
-    "assets/urdf/lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb",
     "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb",
     "assets/configs/runtime/tasks/robots/lite6_reach.yaml",
     "assets/configs/runtime/tasks/robots/uf850_reach.yaml",
@@ -56,11 +55,10 @@
     "assets/configs/runtime/tasks/robots/xarm7_1305_reach.yaml": "5059ce9b53123689726e2d3846f43c18ba92db7ca8bba7e87f9dccea9c4fc4d7",
     "assets/scenes/packaging_showcase/meshes/uv_box.obj": "901c6efc7a1e1b4947af16ed95b9e76b2b1d053fd117d36641a9e770768e35cc",
     "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
-    "assets/urdf/assembly.yaml": "8ffad11ae0bd40e3ab7974f3d495883f0e735ba1b9921b73ffc9bf33b46ac59d",
+    "assets/urdf/assembly.yaml": "2ec27ad4a908ca4c432d6e3a4a7c422335b4750fdb6e4bb878bed16aa5240e3d",
     "assets/urdf/gripper_g2/gripper_g2_movable_visual.urdf": "1088891ca89d14b1912ac62bd00c1ae0bebc287e7663821c372bfc32984c1bea",
     "assets/urdf/lite6/lite6.urdf": "0045071263238025da9c0719e5a12f8ef68881bd7c45105acbefedae2fd1748e",
     "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf": "d4013937766d7bdb1bd83f82f66cd4720f0ac2fb10ad179889b4bf3b50db1ede",
-    "assets/urdf/lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb": "1b7c3b05eb5ef63fadb5b65bf097fb349c18607ccb19ac321b74af247dd9c406",
     "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb": "1ae8f67d1ddfa3b5a7f09265aa680eff72bc05f4c817470ac885333dde1cce57",
     "assets/urdf/uf850/uf850.urdf": "5f5b83d084b78411267886b53420e004ef13ea9ec95c0af471cd7d6f0f6c9d67",
     "assets/urdf/xarm5/xarm5_1305.urdf": "5ee94bb9b104db012fada66d9b272c6a44766a6b88c14ab34155c92fc44f7067",

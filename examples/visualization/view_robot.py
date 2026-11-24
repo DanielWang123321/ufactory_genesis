@@ -43,17 +43,17 @@ def main() -> None:
         choices=accessories(),
         default=None,
         help="Mount the camera stand (camera_stand) or a camera on it between the flange and the end effector "
-        "(xArm5/6/7 and UF850; bare arm, --gripper-g2 or --vacuum-gripper)",
+        "(all robots; bare arm or any end effector except --bio-gripper-g2)",
     )
     parser.add_argument(
         "--movable",
         action="store_true",
-        help="Per-link GLBs for gripper open/close (requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2)",
+        help="Kept for compatibility (grippers always use per-link movable GLBs)",
     )
     parser.add_argument(
         "--gripper-demo",
         action="store_true",
-        help="Cycle gripper open/close with a 0.5 s hold at each endpoint (requires --movable)",
+        help="Cycle gripper open/close with a 0.5 s hold at each endpoint (requires a gripper flag)",
     )
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--position-mm", type=float, default=None)
@@ -96,8 +96,8 @@ def main() -> None:
         parser.error("Only one end-effector flag may be set at a time")
     if args.movable and not (args.gripper_g2 or args.lite6_gripper or args.bio_gripper_g2):
         parser.error("--movable requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2")
-    if args.gripper_demo and not args.movable:
-        parser.error("--gripper-demo requires --movable")
+    if args.gripper_demo and not (args.gripper_g2 or args.lite6_gripper or args.bio_gripper_g2):
+        parser.error("--gripper-demo requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2")
     if args.bio_gripper_g2 and not profile.supports_bio_gripper_g2:
         parser.error(f"{args.robot} does not support Bio Gripper G2")
     if args.gripper_g2 and not profile.supports_gripper_g2:

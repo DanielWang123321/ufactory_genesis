@@ -7,20 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] — 2026-11-24
+
 ### Added
 
 - Added the UFACTORY 3 mm camera stand (`assets/urdf/camera_stand/`, 48 g) and four depth cameras that mount on it: Intel RealSense D405 (`d405`, 58 g) and D435 (`d435`, 75 g), Orbbec Gemini 305 (`gemini_305`, 68 g) and Stereolabs ZED X Nano (`zed_x_nano`, 75 g).
   - Each part has a Draco GLB under 0.5 MB with housing and glass PBR materials, an inertial, box collisions (stand: 45 convex 2D prisms), mount and hole frames, and an uncalibrated OpenCV `<camera>_optical_frame`.
   - On the stand every camera looks along flange +Z with its top towards flange +X. The ZED X Nano uses its rear 20 × 20 mm 4 × M3 pattern, and its GMSL2 connector passes through the stand opening.
-- `assets/urdf/assembly.yaml` schema 3 adds `spacers` (`camera_stand`: xarm flange, `tool_lift_m: 0.003`, fits bare arm, `gripper_g2`, `vacuum_gripper`) and `cameras`.
-  - `compose_robot_urdf(robot, end_effector, accessory=...)` mounts the stand (and camera) on the flange. The end effector, or the xArm6's `link_eef`, moves 3 mm along flange +Z, so G2 and vacuum TCPs move 3 mm. `end_effector=None` composes a bare arm with an accessory.
-  - Assembly references take `assembly:<end_effector>+<accessory>[:visual[:gripper_visual]]` and `assembly:bare+<accessory>`.
+- `assets/urdf/assembly.yaml` schema 3 adds `spacers` (`camera_stand`: `flanges: [xarm, lite6]`, `tool_lift_m: 0.003`, fits bare arm, `gripper_g2`, `vacuum_gripper`, `lite6_gripper`, `lite6_vacuum_gripper`) and `cameras`.
+  - `compose_robot_urdf(robot, end_effector, accessory=...)` mounts the stand (and camera) on the flange. The end effector, or the arm's `link_eef` when present, moves 3 mm along flange +Z, so tool TCPs move 3 mm. `end_effector=None` composes a bare arm with an accessory.
+  - Assembly references take `assembly:<end_effector>+<accessory>[:visual]` and `assembly:bare+<accessory>`.
   - New exports: `accessories`, `spacers`, `cameras`, `resolve_accessory`, `supported_accessories`, `supports_accessory`, plus `RobotModelSpec.supports_accessory()` / `supports_camera_stand`.
 - `robot_visual_glb_urdf(..., accessory=...)` and `view_robot.py --camera {camera_stand,d405,d435,gemini_305,zed_x_nano}`.
 
 ### Changed
 
+- Rebuilt the Gripper G2 locating pin in `assets/urdf/gripper_g2/meshes/visual/visual_glb/base.glb` and `visual/base_link.stl` as a watertight analytic rounded cylinder (`r = 2.98 mm`, 2.00 mm dome fillet to `z = -4.50 mm`) with a 1.00 mm × 2.00 mm flathead slot at the STEP orientation (`-7.04°`), and rebuilt the centring boss, mounting flange, and +Y connector cover as analytic OpenCASCADE B-Rep solids (`OCP`).
+- Split the Gripper G2 motor bearing cover between the fingers (`机械手轴承盖 A1`) and its four M3×8 countersunk screws in `visual_glb/base.glb` from the white housing into a matte black anodized aluminium material (`baseColor = [0.12, 0.12, 0.125, 1.0]`, `metallic = 0.80`, `roughness = 0.62`).
+- Split the inner finger pads in `assets/urdf/gripper_g2/meshes/visual/visual_glb/{left,right}_finger.glb` (320 triangles each, geometry unchanged) into a separate white translucent silicone PBR primitive (`baseColor = [0.92, 0.92, 0.90, 0.75]`, `alphaMode = "BLEND"`, `metallic = 0.0`, `roughness = 0.30`).
+- Consolidated the three standalone gripper viewers (`view_gripper_g2.py`, `view_bio_gripper_g2.py`, `view_lite6_gripper.py`) into `examples/visualization/view_tool.py --tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper}` (all mounted with the flange up and tool tip down; `compose_standalone_end_effector_urdf()` resolves standalone visuals such as `lite6_vacuum_gripper`).
+- Simplified `ufactory.robots.assembly` and `robot_visual_glb_urdf()` to always compose per-link movable gripper visuals (`assembly:<end_effector>[+<accessory>][:<visual>]`, dropping the `gripper_visual="static"` overlay mode). In `examples/visualization/view_robot.py`, `--gripper-demo` no longer requires `--movable` (kept as a compatibility no-op).
 - Composed URDFs without an accessory are byte-identical to 0.3.8. `validate_assembly()` now returns `EndEffector | None`. `AssemblyRef.end_effector` may be `None` and gains an `accessory` field.
+
+### Removed
+
+- Deleted the three separate standalone gripper viewers (`examples/visualization/view_gripper_g2.py`, `view_bio_gripper_g2.py`, `view_lite6_gripper.py`), replaced by `examples/visualization/view_tool.py`.
+- Moved the three redundant whole-gripper static overlay GLBs (`gripper_g2/meshes/visual/gripper_g2_static.glb`, `bio_gripper_g2/meshes/visual/bio_gripper_g2_visual.glb`, and `lite6_gripper/meshes/visual/lite6_gripper_static_link6.glb`, 855 KB total) out of the public `assets/urdf/` tree into Git-ignored `dev/end_effectors/legacy_static_glbs/`, and removed `static_visual` entries from `assets/urdf/assembly.yaml` and `assets/manifest.json`.
 
 ## [0.3.8] — 2026-11-24
 

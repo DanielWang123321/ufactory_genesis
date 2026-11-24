@@ -53,7 +53,7 @@ python examples/visualization/view_robot.py --robot xarm6
 
 | 目录 | 用途 |
 |---|---|
-| `visualization/` | GLB 机型与夹爪查看器，见[可视化](#可视化) |
+| `visualization/` | GLB 机型与末端工具查看器，见[可视化](#可视化) |
 | `kinematics/` | FK/IK / 机型校验包装，见[运动学与动力学仿真](#运动学与动力学仿真) |
 | `simulation/` | 轨迹控制任务仿真（[抓放](simulation/pick_place/README_zh.md)、[装箱](simulation/packaging/README_zh.md)），见[仿真索引](simulation/README_zh.md) |
 | `rl/` | 裸臂 Reach → 桌面 Pick & Place → 装箱（待实现）；Linux/NVIDIA，见 [RL 索引](rl/README_zh.md) |
@@ -62,19 +62,26 @@ python examples/visualization/view_robot.py --robot xarm6
 
 ## 支持机型与末端
 
-| 机械臂 | 可用末端 |
-|---|---|
-| `xarm5` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
-| `xarm6` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
-| `xarm7` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
-| `uf850` | Gripper G2、Bio Gripper G2、Vacuum Gripper |
-| `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper |
+| 机械臂 | 可用末端 | 相机支架适配 | 仿真与预检 | 真机装箱 |
+|---|---|---|---|---|
+| `xarm5` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
+| `xarm6` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | Gripper G2 |
+| `xarm7` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
+| `uf850` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
+| `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper | 裸臂、Lite6 Gripper、Lite6 Vacuum Gripper | 支持 | Lite6 Gripper |
 
-xArm5/6/7 与 UF850 还可加装[相机支架](../assets/urdf/camera_stand/README.md)。支架可单独安装，也可再装一台相机：[Intel RealSense D405](../assets/urdf/d405/README.md)、[D435](../assets/urdf/d435/README.md)、[奥比中光 Gemini 305](../assets/urdf/gemini_305/README.md) 或 [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md)，视野沿工具轴方向。支架适配裸臂、Gripper G2 和 Vacuum Gripper，不适配 Bio Gripper G2。装上支架后，末端及其 TCP 沿工具轴前移 3 mm。配置中的 URDF 引用写作 `assembly:gripper_g2+d435`；裸臂写作 `assembly:bare+camera_stand`。
+所有机械臂均支持加装[相机支架](../assets/urdf/camera_stand/README.md)（可单独安装或搭载一台视野沿工具轴方向的深度相机）；装上支架后，末端及其 TCP 沿工具轴前移 3 mm：
 
-五类机型均支持仿真与离线预检。真机装箱启用 xArm6 + Gripper G2、Lite6 + Lite6 Gripper，详见[真机操作与硬件校验](#真机操作与硬件校验)。
+| 配件 key | 名称 | 说明 |
+|---|---|---|
+| `camera_stand` | [相机支架](../assets/urdf/camera_stand/README.md) | 3 mm 铝合金支架（48 g） |
+| `d405` | [Intel RealSense D405](../assets/urdf/d405/README.md) | 支架 + D405 短距双目深度相机（58 g） |
+| `d435` | [Intel RealSense D435](../assets/urdf/d435/README.md) | 支架 + D435 双目深度相机（75 g） |
+| `gemini_305` | [奥比中光 Gemini 305](../assets/urdf/gemini_305/README.md) | 支架 + Gemini 305 双目深度相机（68 g） |
+| `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) | 支架 + ZED X Nano 双目相机（75 g） |
 
-G2 仿真使用 `g2_calibrated_v1`。策略训练与当前 v3 检查点契约见 [抓放 RL 指南](rl/pick_place/README_zh.md)。
+- 配置中的 URDF 引用示例：`assembly:gripper_g2+d435`、`assembly:lite6_gripper+d435`；裸臂写作 `assembly:bare+camera_stand`。
+- 真机说明与安全约束见[真机操作与硬件校验](#真机操作与硬件校验)；G2 仿真使用 `g2_calibrated_v1`，策略训练与当前 v3 检查点契约见[抓放 RL 指南](rl/pick_place/README_zh.md)。
 
 ## 可视化
 
@@ -82,56 +89,60 @@ G2 仿真使用 `g2_calibrated_v1`。策略训练与当前 v3 检查点契约见
 # xArm6 裸臂静态查看
 python examples/visualization/view_robot.py --robot xarm6
 
-# xArm6 + Gripper G2 静态查看
+# xArm6 + Gripper G2 静态查看（固定张开位姿）
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 
 # xArm6 + Gripper G2 开合演示
-python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo
 
-# UF850 + Bio Gripper G2 静态查看
+# UF850 + Bio Gripper G2 静态查看（固定张开位姿）
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
 
 # xArm6 + Bio Gripper G2 开合演示
-python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --gripper-demo
 
 # xArm6 + Vacuum Gripper 静态查看
 python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
 
 # xArm6 + 相机支架 + ZED X Nano + Gripper G2 开合演示
-python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo --camera zed_x_nano
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo --camera zed_x_nano
 
 # UF850 + 相机支架 + D435 + Vacuum Gripper 静态查看
 python examples/visualization/view_robot.py --robot uf850 --vacuum-gripper --camera d435
 
 # Lite6 + Lite6 Gripper 开合演示
-python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
+python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --gripper-demo
+
+# Lite6 + 相机支架 + D435 + Lite6 Gripper 开合演示
+python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --gripper-demo --camera d435
 
 # Lite6 + Lite6 Vacuum Gripper 静态查看
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
-# Gripper G2 独立查看与开合演示
-python examples/visualization/view_gripper_g2.py
-
-# Bio Gripper G2 独立查看与开合演示（安装朝向：转接板朝上，TCP 朝下）
-python examples/visualization/view_bio_gripper_g2.py
-
-# Lite6 Gripper 独立查看与开合演示
-python examples/visualization/view_lite6_gripper.py
+# 末端工具独立查看
+python examples/visualization/view_tool.py --tool gripper_g2
+python examples/visualization/view_tool.py --tool bio_gripper_g2
+python examples/visualization/view_tool.py --tool lite6_gripper
+python examples/visualization/view_tool.py --tool vacuum_gripper
+python examples/visualization/view_tool.py --tool lite6_vacuum_gripper
 ```
 
+`view_robot.py` 参数：
 
 | 参数                                                                                 | 说明                                    |
 | ---------------------------------------------------------------------------------- | ------------------------------------- |
 | `--robot`                                                                          | 必选机型 key                              |
 | `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
-| `--camera`                                                                         | `camera_stand`、`d405`、`d435`、`gemini_305` 或 `zed_x_nano`：加装相机支架，可单独装支架，也可再装对应相机（限 xArm5/6/7 与 UF850；适配裸臂、`--gripper-g2` 或 `--vacuum-gripper`） |
-| `--movable`                                                                        | 按连杆可动夹爪网格（需配合受支持的夹爪标志）                |
-| `--gripper-demo`                                                                   | 循环开合，到位后保持 0.5 s 切换（需要 `--movable`）   |
+| `--camera`                                                                         | `camera_stand`、`d405`、`d435`、`gemini_305` 或 `zed_x_nano`：加装相机支架，可单独装支架，也可再装对应相机（适配所有机型，支持裸臂及除 `--bio-gripper-g2` 外的末端） |
+| `--movable`                                                                        | 兼容保留（所有夹爪默认均使用逐连杆可动 GLB）              |
+| `--gripper-demo`                                                                   | 循环开合，到位后保持 0.5 s 切换（需配合夹爪标志）          |
 | `--pd`                                                                             | 平滑关节运动演示（约 0.873 rad/s），仅视觉           |
 | `--show-tcp`                                                                       | 法兰 TCP 红色标记（默认隐藏）                     |
 | `--diagnose`                                                                       | 无窗口 STL/GLB 连杆位姿诊断                    |
 | `--headless`                                                                       | 不打开查看器窗口                              |
 | `--backend`                                                                        | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
+
+`view_tool.py` 支持 `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper}`、`--headless`、`--backend`，以及标定夹爪调参选项（`--position-mm`、`--speed-percent`、`--force-percent`，其中 `bio_gripper_g2` 另支持 `--speed-mm-s`）。
 
 
 

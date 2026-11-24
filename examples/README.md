@@ -54,7 +54,7 @@ Public directories in this release:
 
 | Directory | Purpose |
 |---|---|
-| `visualization/` | GLB robot and gripper viewers; see [Visualization](#visualization) |
+| `visualization/` | GLB robot and tool viewers; see [Visualization](#visualization) |
 | `kinematics/` | FK/IK / robot verification wrappers; see [Kinematics & Dynamics Simulation](#kinematics--dynamics-simulation) |
 | `simulation/` | Trajectory-controlled task simulations ([pick-place](simulation/pick_place/README.md), [packaging](simulation/packaging/README.md)); see [simulation index](simulation/README.md) |
 | `rl/` | Bare-arm Reach → tabletop Pick & Place → box packing (planned); Linux/NVIDIA; see [RL index](rl/README.md) |
@@ -63,19 +63,26 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 
 ## Supported robots and end effectors
 
-| Robot | Available end effectors |
-|---|---|
-| `xarm5` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
-| `xarm6` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
-| `xarm7` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
-| `uf850` | Gripper G2, Bio Gripper G2, Vacuum Gripper |
-| `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper |
+| Robot | End effectors | Camera stand compatibility | Sim & preflight | Real packaging |
+|---|---|---|---|---|
+| `xarm5` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
+| `xarm6` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | Gripper G2 |
+| `xarm7` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
+| `uf850` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
+| `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper | Bare arm, Lite6 Gripper, Lite6 Vacuum Gripper | Yes | Lite6 Gripper |
 
-xArm5/6/7 and UF850 also take the [camera stand](../assets/urdf/camera_stand/README.md), alone or with an [Intel RealSense D405](../assets/urdf/d405/README.md), [D435](../assets/urdf/d435/README.md), [Orbbec Gemini 305](../assets/urdf/gemini_305/README.md) or [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) looking along the tool axis. It fits the bare arm, Gripper G2 and Vacuum Gripper, not Bio Gripper G2. The stand moves the end effector and its TCP 3 mm along the tool axis. In configurations the URDF reference is `assembly:gripper_g2+d435`, or `assembly:bare+camera_stand` for a bare arm.
+All robots accept the [camera stand](../assets/urdf/camera_stand/README.md) (alone or with one depth camera looking along the tool axis), which moves the end effector and its TCP 3 mm along the tool axis:
 
-All five families support simulation and offline preflight. Real packaging is enabled for xArm6 + Gripper G2 and Lite6 + Lite6 Gripper; see [Hardware & Real Robot](#hardware--real-robot).
+| Accessory key | Name | Notes |
+|---|---|---|
+| `camera_stand` | [Camera Stand](../assets/urdf/camera_stand/README.md) | 3 mm aluminium stand (48 g) |
+| `d405` | [Intel RealSense D405](../assets/urdf/d405/README.md) | Stand + D405 short-range stereo depth camera (58 g) |
+| `d435` | [Intel RealSense D435](../assets/urdf/d435/README.md) | Stand + D435 stereo depth camera (75 g) |
+| `gemini_305` | [Orbbec Gemini 305](../assets/urdf/gemini_305/README.md) | Stand + Gemini 305 stereo depth camera (68 g) |
+| `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) | Stand + ZED X Nano stereo camera (75 g) |
 
-G2 simulations use `g2_calibrated_v1`. The [pick-place RL guide](rl/pick_place/README.md) documents training and the current v3 checkpoint contract.
+- Configuration URDF references: `assembly:gripper_g2+d435`, `assembly:lite6_gripper+d435`, or `assembly:bare+camera_stand` for a bare arm.
+- Real packaging details: [Hardware & Real Robot](#hardware--real-robot). G2 simulations use `g2_calibrated_v1`; see the [pick-place RL guide](rl/pick_place/README.md) for training and the current v3 checkpoint contract.
 
 ## Visualization
 
@@ -83,55 +90,60 @@ G2 simulations use `g2_calibrated_v1`. The [pick-place RL guide](rl/pick_place/R
 # xArm6 bare arm static view
 python examples/visualization/view_robot.py --robot xarm6
 
-# xArm6 + Gripper G2 static view
+# xArm6 + Gripper G2 static view (fixed open pose)
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 
 # xArm6 + Gripper G2 open/close demo
-python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo
 
-# UF850 + Bio Gripper G2 static view
+# UF850 + Bio Gripper G2 static view (fixed open pose)
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
 
 # xArm6 + Bio Gripper G2 open/close demo
-python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --movable --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --bio-gripper-g2 --gripper-demo
 
 # xArm6 + Vacuum Gripper static view
 python examples/visualization/view_robot.py --robot xarm6 --vacuum-gripper
 
 # xArm6 + camera stand + ZED X Nano + Gripper G2 open/close demo
-python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --movable --gripper-demo --camera zed_x_nano
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo --camera zed_x_nano
 
 # UF850 + camera stand + D435 + Vacuum Gripper static view
 python examples/visualization/view_robot.py --robot uf850 --vacuum-gripper --camera d435
 
 # Lite6 + Lite6 Gripper open/close demo
-python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
+python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --gripper-demo
+
+# Lite6 + camera stand + D435 + Lite6 Gripper open/close demo
+python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --gripper-demo --camera d435
 
 # Lite6 + Lite6 Vacuum Gripper static view
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
-# Gripper G2 standalone viewer and open/close demo
-python examples/visualization/view_gripper_g2.py
-
-# Bio Gripper G2 standalone viewer and open/close demo (as mounted: adapter flange up, TCP down)
-python examples/visualization/view_bio_gripper_g2.py
-
-# Lite6 Gripper standalone viewer and open/close demo
-python examples/visualization/view_lite6_gripper.py
+# Standalone tool preview
+python examples/visualization/view_tool.py --tool gripper_g2
+python examples/visualization/view_tool.py --tool bio_gripper_g2
+python examples/visualization/view_tool.py --tool lite6_gripper
+python examples/visualization/view_tool.py --tool vacuum_gripper
+python examples/visualization/view_tool.py --tool lite6_vacuum_gripper
 ```
+
+`view_robot.py` flags:
 
 | Flag | Meaning |
 |------|---------|
 | `--robot` | Required profile key |
 | `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
-| `--camera` | `camera_stand`, `d405`, `d435`, `gemini_305` or `zed_x_nano`: the camera stand, alone or with that camera (xArm5/6/7 and UF850; bare arm, `--gripper-g2` or `--vacuum-gripper`) |
-| `--movable` | Per-link movable gripper meshes (requires a supported gripper flag) |
-| `--gripper-demo` | Cycle open/close with a 0.5 s hold after reaching each endpoint (requires `--movable`) |
+| `--camera` | `camera_stand`, `d405`, `d435`, `gemini_305` or `zed_x_nano`: the camera stand, alone or with that camera (all robots; bare arm or any end effector except `--bio-gripper-g2`) |
+| `--movable` | Compatibility no-op (grippers always use per-link movable GLBs) |
+| `--gripper-demo` | Cycle open/close with a 0.5 s hold after reaching each endpoint (requires a gripper flag) |
 | `--pd` | Smooth joint-motion demo (~0.873 rad/s), visual only |
 | `--show-tcp` | Red flange TCP marker (hidden by default) |
 | `--diagnose` | Headless STL/GLB link-pose diagnostic |
 | `--headless` | No viewer window |
 | `--backend` | `cpu` / `gpu` (default `gpu`; use `cpu` without a supported GPU) |
+
+`view_tool.py` accepts `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
 
 ## Kinematics & Dynamics Simulation
 

@@ -15,6 +15,7 @@ if str(_TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_TESTS_ROOT))
 from conftest import PROJECT_ROOT
 
+from ufactory.grippers.g2 import G2_LINKAGE_GEOMETRY
 from ufactory.robots.assembly import accessories, compose_robot_urdf, end_effectors
 
 _URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
@@ -24,20 +25,20 @@ def _assembly_urdfs(
     end_effector: str | None = None,
     *,
     robot: str | None = None,
-    modes: tuple[tuple[str, str], ...] | None = None,
+    modes: tuple[str, ...] | None = None,
 ) -> list[Path]:
     """Every supported composed URDF variant (robot × end effector × visual mode), optionally filtered."""
     out: list[Path] = []
     for name, ee in end_effectors().items():
         if end_effector is not None and name != end_effector:
             continue
-        variants = [("glb", "movable"), ("stl", "movable")] + ([("glb", "static")] if ee.static_visual else [])
+        variants = ("glb", "stl")
         for key in ee.robots:
             if robot is not None and key != robot:
                 continue
-            for visual, gripper_visual in variants:
-                if modes is None or (visual, gripper_visual) in modes:
-                    out.append(Path(compose_robot_urdf(key, name, visual=visual, gripper_visual=gripper_visual)))
+            for visual in variants:
+                if modes is None or visual in modes:
+                    out.append(Path(compose_robot_urdf(key, name, visual=visual)))
     assert out, (end_effector, robot, modes)
     return out
 
@@ -83,7 +84,7 @@ def test_public_urdf_mesh_references_exist() -> None:
 
 
 def _g2_models() -> list[tuple[Path, ET.Element]]:
-    """The Gripper G2 part file plus every composed G2 assembly (4 arms × glb/stl/static)."""
+    """The Gripper G2 part file plus every composed G2 assembly (4 arms × glb/stl)."""
     parts = []
     for path in sorted(_URDF_ROOT.rglob("*.urdf")):
         root = ET.parse(path).getroot()
@@ -91,7 +92,7 @@ def _g2_models() -> list[tuple[Path, ET.Element]]:
             parts.append((path, root))
     assert [path.name for path, _ in parts] == ["gripper_g2_movable_visual.urdf"]
     composed = [(path, ET.parse(path).getroot()) for path in _assembly_urdfs("gripper_g2")]
-    assert len(composed) == 12
+    assert len(composed) == 8
     return parts + composed
 
 
@@ -142,7 +143,6 @@ def test_standard_g2_urdf_joint_origins_and_mesh_alignment() -> None:
         "joint_tcp": (0.0, 0.0, 0.1735),
     }
     g2_links = {
-        "gripper_g2_visual",
         "xarm_gripper_base_link",
         "left_outer_knuckle",
         "left_finger",
@@ -176,7 +176,6 @@ def test_standard_g2_urdf_joint_origins_and_mesh_alignment() -> None:
     pkg = PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "meshes"
     base_stl = _mesh_vertices(pkg / "visual" / "base_link.stl", trimesh)
     base_glb = _mesh_vertices(pkg / "visual" / "visual_glb" / "base.glb", trimesh)
-    static_glb = _mesh_vertices(pkg / "visual" / "gripper_g2_static.glb", trimesh)
     lf_glb = _mesh_vertices(pkg / "visual" / "visual_glb" / "left_finger.glb", trimesh)
     rf_glb = _mesh_vertices(pkg / "visual" / "visual_glb" / "right_finger.glb", trimesh)
 
@@ -184,8 +183,6 @@ def test_standard_g2_urdf_joint_origins_and_mesh_alignment() -> None:
     assert base_stl[:, 2].max() * 1000.0 == pytest.approx(104.5, abs=0.01)
     assert base_glb[:, 2].min() * 1000.0 == pytest.approx(-5.0, abs=0.01)
     assert base_glb[:, 2].max() * 1000.0 == pytest.approx(104.5, abs=0.01)
-    assert static_glb[:, 2].min() * 1000.0 == pytest.approx(-5.0, abs=0.01)
-    assert static_glb[:, 2].max() * 1000.0 == pytest.approx(176.323, abs=0.01)
 
     for gap_mm, expected_axial_mm in (
         (0.0, 175.86527),
@@ -302,29 +299,44 @@ def _glb_material_triangles(path: Path) -> list[tuple[object, np.ndarray]]:
 
 
 def test_gripper_g2_base_flange_uses_the_arm_flange_material() -> None:
-    """The G2 base GLB shows the flange, centring boss and locating pin in the xArm / UF850 flange material and the +Y
-    connector cover in the fingers' black; the housing stays white. It used to be one white primitive, so the anodised
-    flange looked like the housing."""
+    """The G2 base GLB shows the flange, centring boss and locating pin in the xArm / UF850 flange material, the +Y
+    connector cover in the fingers' black, and the bearing cover between the fingers (plus its four M3x8 screws) in
+    matte black anodized aluminium; only the outer housing stays white."""
     parts = _glb_material_triangles(_URDF_ROOT / "gripper_g2/meshes/visual/visual_glb/base.glb")
     finger = _glb_material_triangles(_URDF_ROOT / "gripper_g2/meshes/visual/visual_glb/left_finger.glb")[0][0]
-    assert len(parts) == 3
-    [(flange_pbr, flange)] = [(m, t) for m, t in parts if m.metallicFactor > 0.5]
+    assert len(parts) == 4
+    [(flange_pbr, flange)] = [(m, t) for m, t in parts if m.metallicFactor > 0.5 and m.baseColorFactor[0] > 0.5]
+    [(bearing_pbr, bearing)] = [(m, t) for m, t in parts if m.metallicFactor > 0.5 and m.baseColorFactor[0] < 0.25]
     [(cover_pbr, cover)] = [(m, t) for m, t in parts if m.baseColorFactor == finger.baseColorFactor]
     [(housing_pbr, housing)] = [(m, t) for m, t in parts if m.baseColorFactor == [1.0, 1.0, 1.0, 1.0]]
     assert (cover_pbr.metallicFactor, cover_pbr.roughnessFactor) == (finger.metallicFactor, finger.roughnessFactor)
     assert housing_pbr.metallicFactor == 0.0
+    assert bearing_pbr.metallicFactor == pytest.approx(0.8, abs=1e-6)
+    assert bearing_pbr.roughnessFactor == pytest.approx(0.62, abs=0.01)
+    np.testing.assert_allclose(bearing_pbr.baseColorFactor[:3], [0.12, 0.12, 0.125], atol=1e-4)
+    assert bearing[..., 0].min() > -14.6 and bearing[..., 0].max() < 14.4
+    assert bearing[..., 1].min() > -15.1 and bearing[..., 1].max() < 15.1
+    assert bearing[..., 2].min() == pytest.approx(92.94, abs=0.05)
+    assert bearing[..., 2].max() == pytest.approx(101.94, abs=0.05)
+
     for arm_glb in ("xarm6/meshes/xarm6_1305/visual_glb/link6.glb", "uf850/meshes/uf850/visual_glb/link6.glb"):
         (arm_pbr,) = [m for m, _ in _glb_material_triangles(_URDF_ROOT / arm_glb) if m.metallicFactor > 0.5]
         np.testing.assert_allclose(flange_pbr.baseColorFactor, arm_pbr.baseColorFactor, atol=1e-6)
         assert flange_pbr.metallicFactor == pytest.approx(arm_pbr.metallicFactor, abs=1e-6)
         assert flange_pbr.roughnessFactor == pytest.approx(arm_pbr.roughnessFactor, abs=0.01)
 
-    # Flange (boss bottom z = -5, top z = 8.3, Ø75 ring), cover (+Y sector, x -15.6..15.4) and housing (from z = 8.18).
+    # Flange (boss bottom z = -5, top z = 8.3, Ø75 ring), cover (+Y sector, x -15.5..15.5) and housing (from z = 8.18).
     assert flange[..., 2].min() == pytest.approx(-5.0, abs=0.01) and flange[..., 2].max() < 8.35
     assert np.hypot(flange[..., 0], flange[..., 1]).max() < 37.95
-    assert cover.reshape(-1, 3).min(0) == pytest.approx([-15.65, 16.71, 0.0], abs=0.01)
-    assert cover.reshape(-1, 3).max(0) == pytest.approx([15.69, 37.61, 8.10], abs=0.01)
+    assert cover.reshape(-1, 3).min(0) == pytest.approx([-15.50, 17.15, 0.0], abs=0.02)
+    assert cover.reshape(-1, 3).max(0) == pytest.approx([15.50, 37.50, 8.10], abs=0.02)
     assert housing[..., 2].min() > 8.17
+    in_bearing_cavity = (
+        (housing[..., 2].max(axis=1) > 97.9)
+        & (np.abs(housing[..., 0]).max(axis=1) < 12.0)
+        & (np.abs(housing[..., 1]).max(axis=1) < 14.0)
+    )
+    assert not in_bearing_cavity.any()
     # The ring's outer face is metal all round except the cover's sector (azimuth 65-115 deg), which the cover fills.
     # Whole degrees reached by points sampled over the outer-face triangles:
     grid = np.array([(i, j) for i in range(31) for j in range(31 - i)]) / 30.0
@@ -338,7 +350,168 @@ def test_gripper_g2_base_flange_uses_the_arm_flange_material() -> None:
 
     metal, black = outer_degrees(flange), outer_degrees(cover)
     assert metal | black == set(range(360))
-    assert black <= set(range(65, 116)) and not metal & set(range(66, 114))
+    assert black <= set(range(64, 116)) and not metal & set(range(66, 114))
+
+
+def test_gripper_g2_finger_pads_use_white_translucent_silicone() -> None:
+    """The Gripper G2 left/right finger GLBs split the inner grip pad (320 triangles) into a white translucent
+    silicone primitive while keeping the rest of the finger in the original dark material as primitive 0."""
+    pygltflib = pytest.importorskip("pygltflib")
+    cover_black = [
+        m.baseColorFactor
+        for m, _ in _glb_material_triangles(_URDF_ROOT / "gripper_g2/meshes/visual/visual_glb/base.glb")
+        if m.metallicFactor == 0.0 and m.baseColorFactor != [1.0, 1.0, 1.0, 1.0]
+    ][0]
+
+    for side in ("left", "right"):
+        glb_path = _URDF_ROOT / f"gripper_g2/meshes/visual/visual_glb/{side}_finger.glb"
+        glb = pygltflib.GLTF2().load(str(glb_path))
+        assert glb.materials[glb.meshes[0].primitives[0].material].alphaMode in (None, "OPAQUE")
+        assert glb.materials[glb.meshes[1].primitives[0].material].alphaMode == "BLEND"
+
+        parts = _glb_material_triangles(glb_path)
+        assert len(parts) == 2
+        (body_pbr, _), (pad_pbr, pad) = parts
+        assert body_pbr.baseColorFactor == cover_black
+        assert body_pbr.metallicFactor == 0.0
+        np.testing.assert_allclose(pad_pbr.baseColorFactor, [0.92, 0.92, 0.90, 0.75], atol=1e-4)
+        assert pad_pbr.metallicFactor == 0.0
+        assert pad_pbr.roughnessFactor == pytest.approx(0.30, abs=0.01)
+        assert len(pad) == 320
+
+        pts = pad.reshape(-1, 3)
+        want_y_min, want_y_max = (-26.0, -23.0) if side == "left" else (23.0, 26.0)
+        assert pts.min(0) == pytest.approx([-14.75, want_y_min, 22.26], abs=0.05)
+        assert pts.max(0) == pytest.approx([14.75, want_y_max, 59.75], abs=0.05)
+
+        inner_y_m = float(pts[:, 1].min() if side == "left" else -pts[:, 1].max()) * 0.001
+        assert inner_y_m == pytest.approx(G2_LINKAGE_GEOMETRY.pad_inner_y_m, abs=5e-5)
+
+
+@pytest.mark.parametrize("geometry", ("visual/visual_glb/base.glb", "visual/base_link.stl"))
+def test_gripper_g2_locating_pin_is_round_and_slotted(geometry: str) -> None:
+    """The locating pin at (0, -25) mm is a round dome-tipped cylinder (r = 2.98 mm, tip z = -4.50 mm)
+    with a 1.00 mm wide x 2.00 mm deep slot at the STEP yaw (-0.12283004 rad)."""
+    tri_mm = _triangles(_URDF_ROOT / "gripper_g2" / "meshes" / geometry) * 1000.0
+    pin_axis = np.array([0.0, -25.0])
+    tri_r = np.hypot(tri_mm[:, :, 0] - pin_axis[0], tri_mm[:, :, 1] - pin_axis[1])
+    pin_tri = tri_mm[(tri_r.max(axis=1) <= 3.1) & (tri_mm[:, :, 2].min(axis=1) < -0.05)]
+    assert len(pin_tri) > 200, geometry
+    pts = pin_tri.reshape(-1, 3)
+    assert float(pts[:, 2].min()) == pytest.approx(-4.50, abs=0.02)
+
+    # Cylindrical body z in [-2.40, -0.10] mm: round (r = 2.98 mm) and smoothly tessellated (max gap < 15 deg).
+    cyl_sec = _section_mm(pin_tri, -1.25)
+    cyl_d = cyl_sec - pin_axis
+    cyl_r = np.hypot(cyl_d[:, 0], cyl_d[:, 1])
+    np.testing.assert_allclose(cyl_r, 2.98, atol=0.02)
+    angles = np.sort(np.degrees(np.arctan2(cyl_d[:, 1], cyl_d[:, 0])) % 360.0)
+    diffs = np.diff(np.r_[angles, angles[0] + 360.0])
+    assert float(diffs.max()) < 15.0
+
+    # Dome section z in [-4.50, -2.50] mm: stays within r <= 3.00 mm and opens a clear 1.00 mm slot.
+    yaw = -0.12283004
+    c, s = np.cos(-yaw), np.sin(-yaw)
+    rot2 = np.array([[c, -s], [s, c]])
+    for z in np.linspace(-4.30, -2.65, 6):
+        sec = _section_mm(pin_tri, z)
+        sec_r = np.hypot(sec[:, 0] - pin_axis[0], sec[:, 1] - pin_axis[1])
+        assert sec.any() and float(sec_r.max()) <= 3.00
+        uv = (sec - pin_axis) @ rot2.T
+        assert not (np.abs(uv[:, 0]) < 0.45).any(), f"slot blocked at z = {z:.2f} mm"
+        assert (uv[:, 0] > 0.55).any() and (uv[:, 0] < -0.55).any(), f"asymmetric dome lobes at z = {z:.2f} mm"
+
+    # Slot floor at z = -2.50 mm spans across |u| < 0.40 mm.
+    floor_pts = pts[np.abs(pts[:, 2] + 2.50) < 0.02]
+    floor_uv = (floor_pts[:, :2] - pin_axis) @ rot2.T
+    assert (np.abs(floor_uv[:, 0]) < 0.40).any()
+
+
+_G2_FLANGE_CIRCLES = (
+    ("boss", (0.0, 0.0), 15.75, (-4.4, 1.4), 1, -1.5, None),
+    ("flange outer", (0.0, 0.0), 37.50, (0.4, 7.9), 1, 4.5, (117.0, 423.0)),
+    ("boss pocket", (0.0, 0.0), 15.75, (0.35, 1.95), -1, 1.15, None),
+    ("pin hole", (0.0, -25.0), 3.00, (0.35, 1.95), -1, 1.15, None),
+    ("cover outer", (0.0, 0.0), 37.50, (0.1, 8.0), 1, 4.5, (67.0, 113.0)),
+    ("cover fillet +x", (5.5, 27.15), 10.00, (0.1, 2.8), 1, 1.45, (272.0, 358.0)),
+    ("cover fillet -x", (-5.5, 27.15), 10.00, (0.1, 2.8), 1, 1.45, (182.0, 268.0)),
+)
+
+
+@pytest.mark.parametrize("geometry", ("visual/visual_glb/base.glb", "visual/base_link.stl"))
+def test_gripper_g2_flange_and_boss_circles_are_round(geometry: str) -> None:
+    """The centring boss, mounting flange, pin hole, and +Y connector cover have smooth analytic circular surfaces."""
+    tri_mm = _triangles(_URDF_ROOT / "gripper_g2" / "meshes" / geometry) * 1000.0
+    fn = np.cross(tri_mm[:, 1] - tri_mm[:, 0], tri_mm[:, 2] - tri_mm[:, 0])
+    fn_norm = np.linalg.norm(fn, axis=1)
+    valid = fn_norm > 1e-10
+    assert int((~valid).sum()) <= 2
+    tri_mm = tri_mm[valid]
+    fn = fn[valid] / fn_norm[valid, None]
+    centers = tri_mm.mean(axis=1)
+
+    for name, xy, radius, (z_lo, z_hi), side, z_sec, arc in _G2_FLANGE_CIRCLES:
+        axis = np.asarray(xy)
+        d = centers[:, :2] - axis
+        r = np.hypot(d[:, 0], d[:, 1])
+        u = d / np.maximum(r[:, None], 1e-12)
+        ang = np.degrees(np.arctan2(u[:, 1], u[:, 0])) % 360.0
+        sel = (
+            (tri_mm[:, :, 2].min(axis=1) >= z_lo - 0.5)
+            & (tri_mm[:, :, 2].max(axis=1) <= z_hi + 0.5)
+            & (np.abs(r - radius) < 0.8)
+            & (side * (fn[:, :2] * u).sum(axis=1) > 0.85)
+            & (np.abs(fn[:, 2]) < 0.1)
+        )
+        if arc is not None:
+            a0, a1 = arc
+            sel &= ((ang >= a0) | (ang <= a1 - 360.0)) if a1 > 360.0 else ((ang >= a0) & (ang <= a1))
+        assert sel.sum() >= 60, f"{geometry} {name}: too few triangles ({sel.sum()})"
+        sec = _section_mm(tri_mm[sel], z_sec)
+        sec_d = sec - axis
+        assert float(np.abs(np.hypot(sec_d[:, 0], sec_d[:, 1]) - radius).max()) < 0.02, f"{geometry} {name}"
+        sa = np.sort(np.degrees(np.arctan2(sec_d[:, 1], sec_d[:, 0])) % 360.0)
+        diffs = (
+            np.diff(np.sort((sa - arc[0]) % 360.0))
+            if arc is not None and arc[1] > 360.0
+            else (np.diff(sa) if arc is not None else np.diff(np.r_[sa, sa[0] + 360.0]))
+        )
+        assert float(diffs.max()) < 6.0, f"{geometry} {name} gap {diffs.max():.2f} deg"
+
+    if geometry.endswith(".glb"):
+        DracoPy = pytest.importorskip("DracoPy")
+        pygltflib = pytest.importorskip("pygltflib")
+        glb = pygltflib.GLTF2().load(str(_URDF_ROOT / "gripper_g2" / "meshes" / geometry))
+        blob = glb.binary_blob()
+        pts_chunks, nrm_chunks = [], []
+        for mesh in glb.meshes:
+            for prim in mesh.primitives:
+                view = glb.bufferViews[prim.extensions["KHR_draco_mesh_compression"]["bufferView"]]
+                decoded = DracoPy.decode(blob[view.byteOffset : view.byteOffset + view.byteLength])
+                pts_chunks.append(np.asarray(decoded.points, dtype=np.float64) * 1000.0)
+                nrm_chunks.append(np.asarray(decoded.normals, dtype=np.float64))
+        pts = np.vstack(pts_chunks)
+        nrms = np.vstack(nrm_chunks)
+        for name, xy, radius, (z_lo, z_hi), side, _, arc in _G2_FLANGE_CIRCLES:
+            axis = np.asarray(xy)
+            d = pts[:, :2] - axis
+            r = np.hypot(d[:, 0], d[:, 1])
+            u = d / np.maximum(r[:, None], 1e-12)
+            ang = np.degrees(np.arctan2(u[:, 1], u[:, 0])) % 360.0
+            sel = (
+                (pts[:, 2] >= z_lo - 0.15)
+                & (pts[:, 2] <= z_hi + 0.15)
+                & (np.abs(r - radius) < 0.05)
+                & (side * (nrms[:, :2] * u).sum(axis=1) > 0.9)
+                & (np.abs(nrms[:, 2]) < 0.1)
+            )
+            if arc is not None:
+                a0, a1 = arc
+                sel &= ((ang >= a0) | (ang <= a1 - 360.0)) if a1 > 360.0 else ((ang >= a0) & (ang <= a1))
+            assert sel.sum() >= 60, f"GLB normals {name}: too few vertices ({sel.sum()})"
+            expected = side * np.c_[u[sel], np.zeros(sel.sum())]
+            err_deg = np.degrees(np.arccos(np.clip((nrms[sel] * expected).sum(axis=1), -1.0, 1.0)))
+            assert float(err_deg.max()) < 1.0, f"GLB normals {name}: {err_deg.max():.2f} deg"
 
 
 def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
@@ -351,7 +524,10 @@ def test_intermediate_assets_and_dev_scripts_are_not_public_files() -> None:
         "scripts/vendor_robot_assets.py",
         "bio_gripper_g2/meshes/visual/link",
         "bio_gripper_g2_visual_link",
+        "bio_gripper_g2_visual.glb",
+        "gripper_g2_static.glb",
         "gripper_g2_static_link",
+        "lite6_gripper_static_link6.glb",
     )
     forbidden_script_shapes = (
         ("scripts/generate_", "_combo_urdf.py"),
@@ -409,7 +585,7 @@ def _bio_gripper_g2_collision_origin_urdfs() -> list[Path]:
 
 
 def _bio_gripper_g2_movable_collision_alignment_urdfs() -> list[Path]:
-    return [_BIO_GRIPPER_G2_PARTS[1], *_assembly_urdfs("bio_gripper_g2", modes=(("glb", "movable"),))]
+    return [_BIO_GRIPPER_G2_PARTS[1], *_assembly_urdfs("bio_gripper_g2", modes=("glb",))]
 
 
 def _arm_link_names(dof: int) -> set[str]:
@@ -943,18 +1119,16 @@ def test_bio_gripper_g2_visual_glb_budget() -> None:
     )
     assert glbs, "expected Bio G2 visual GLBs"
     glb_total = sum(path.stat().st_size for path in glbs)
-    # Same tris as pre-slim hipoly; native draco_encoder ~0.65 MB vs DracoPy ~5.5 MB.
-    # Collision STL stay at original density; only GLB size is the optimization target.
     assert glb_total < 1_000_000, f"Bio G2 visual GLBs total {glb_total} bytes; expected < 1 MB"
     names = {path.name for path in glbs}
-    assert "bio_gripper_g2_visual.glb" in names
-    assert "bio_gripper_g2_base.glb" in names
-    assert "bio_gripper_g2_left_finger.glb" in names
-    assert "bio_gripper_g2_right_finger.glb" in names
-    assert not any(name.startswith("bio_gripper_g2_visual_link") for name in names)
+    assert names == {
+        "bio_gripper_g2_base.glb",
+        "bio_gripper_g2_left_finger.glb",
+        "bio_gripper_g2_right_finger.glb",
+    }
 
 
-_BIO_G2_GLBS = ["visual_glb/bio_gripper_g2_base.glb", "bio_gripper_g2_visual.glb"]
+_BIO_G2_GLBS = ["visual_glb/bio_gripper_g2_base.glb"]
 _PCD = 25.0 * np.sqrt(0.5)
 _LUG = {"+y": (15.01, 43.07), "-y": (15.04, -43.02)}  # lug arc / lug hole / screw axis
 _PIN = (0.044, -24.990)  # stepped pin hole at -90 deg
@@ -1109,11 +1283,16 @@ def test_gripper_g2_visual_glb_budget() -> None:
     glb_total = sum(path.stat().st_size for path in glbs)
     assert glb_total < 1_000_000, f"Gripper G2 visual GLBs total {glb_total} bytes; expected < 1 MB"
     names = {path.name for path in glbs}
-    assert "gripper_g2_static.glb" in names
-    assert "base.glb" in names
-    assert "left_finger.glb" in names
-    assert "right_finger.glb" in names
-    assert not any(name.startswith("gripper_g2_static_link") for name in names)
+    assert names == {
+        "base.glb",
+        "left_finger.glb",
+        "left_inner_knuckle.glb",
+        "left_outer_knuckle.glb",
+        "right_finger.glb",
+        "right_inner_knuckle.glb",
+        "right_outer_knuckle.glb",
+    }
+    assert not any("static" in name for name in names)
     assert not any(part in {"link5", "link6", "link7"} for path in glbs for part in path.parts)
 
 
@@ -1126,9 +1305,8 @@ def test_lite6_gripper_visual_glb_budget() -> None:
     glb_total = sum(path.stat().st_size for path in glbs)
     assert glb_total < 1_000_000, f"Lite6 gripper visual GLBs total {glb_total} bytes; expected < 1 MB"
     names = {path.name for path in glbs}
-    assert "lite6_gripper_static_link6.glb" in names
-    assert "shell.glb" in names
-    assert names == {"lite6_gripper_static_link6.glb", "shell.glb"}
+    assert names == {"shell.glb"}
+    assert "lite6_gripper_static_link6.glb" not in names
 
 
 def test_lite6_vacuum_gripper_visual_glb_budget() -> None:
@@ -1353,7 +1531,7 @@ def _lite6_gripper_finger_urdfs() -> list[Path]:
     """Lite6 gripper part and composed assemblies that keep per-finger visuals (GLB and STL arm visuals)."""
     return [
         _URDF_ROOT / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
-        *_assembly_urdfs("lite6_gripper", modes=(("glb", "movable"), ("stl", "movable"))),
+        *_assembly_urdfs("lite6_gripper", modes=("glb", "stl")),
     ]
 
 

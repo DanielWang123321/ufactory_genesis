@@ -11,8 +11,7 @@ lite6_gripper/
     ├── collision/
     │   ├── shell.stl                       # shell collision
     │   └── finger1.stl / finger2.stl       # finger visuals (finger collision uses boxes)
-    └── visual/                             # Draco-compressed GLBs, 0.22 MB in total (test budget < 1 MB)
-        ├── lite6_gripper_static_link6.glb  # single static mesh (gripper_visual="static")
+    └── visual/                             # Draco-compressed GLBs, 0.09 MB in total (test budget < 1 MB)
         └── visual_glb/shell.glb            # shell visual
 ```
 
@@ -28,15 +27,14 @@ lite6_gripper/
 ```python
 from ufactory.robots.assembly import compose_robot_urdf
 
-urdf = compose_robot_urdf("lite6", "lite6_gripper")                          # per-link visuals, movable
-urdf = compose_robot_urdf("lite6", "lite6_gripper", gripper_visual="static")  # single static GLB
+urdf = compose_robot_urdf("lite6", "lite6_gripper")  # per-link visuals, movable
 ```
 
 The runtime configuration uses `assembly:lite6_gripper:stl` (STL visuals, same collision).
 
 ```bash
-python examples/visualization/view_lite6_gripper.py    # standalone
-python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --movable --gripper-demo
+python examples/visualization/view_tool.py --tool lite6_gripper    # standalone (flange up, fingertips down)
+python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --gripper-demo
 ```
 
 ## Source / License
