@@ -1868,3 +1868,32 @@ def test_vacuum_gripper_static_urdfs_and_parameters() -> None:
         assert tcp_joint.find("parent").attrib["link"] == "xarm_vacuum_gripper_link"
         assert tcp_joint.find("child").attrib["link"] == "vacuum_tcp"
         assert _rounded_xyz(tcp_joint.find("origin").attrib["xyz"]) == (0.0, 0.0, 0.126), urdf
+
+
+@pytest.mark.parametrize("variant", ("robotiq_2f_85", "robotiq_2f_140"))
+def test_robotiq_urdfs_share_joint_limits_mimic_and_glb_budget(variant: str) -> None:
+    from ufactory.grippers.robotiq import get_robotiq_spec
+
+    spec = get_robotiq_spec(variant)
+    glb_dir = _URDF_ROOT / variant / "meshes" / "visual" / "visual_glb"
+    glb_total = sum(p.stat().st_size for p in glb_dir.glob("*.glb"))
+    assert 0 < glb_total < 1_000_000, f"{variant} GLB total {glb_total} bytes exceeds 1 MB"
+
+    part = _URDF_ROOT / variant / f"{variant}_movable_visual.urdf"
+    models = [part, *_assembly_urdfs(variant)]
+    assert len(models) == 9
+    for path in models:
+        root = ET.parse(path).getroot()
+        for name in spec.joint_names:
+            joint = root.find(f"./joint[@name='{name}']")
+            assert joint is not None, (path, name)
+            limit = joint.find("limit")
+            assert limit is not None, (path, name)
+            assert float(limit.attrib["lower"]) == pytest.approx(spec.linkage.drive_lower_rad, abs=1e-9), path
+            assert float(limit.attrib["upper"]) == pytest.approx(spec.linkage.drive_upper_rad, abs=1e-9), path
+            if name != spec.drive_joint_name:
+                mimic = joint.find("mimic")
+                assert mimic is not None, (path, name)
+                assert mimic.get("joint") == spec.drive_joint_name, (path, name)
+                assert float(mimic.get("multiplier", "1")) == 1.0, (path, name)
+                assert float(mimic.get("offset", "0")) == 0.0, (path, name)

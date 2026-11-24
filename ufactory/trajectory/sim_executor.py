@@ -100,10 +100,23 @@ def replay_sim(
     ``on_tick`` runs after each commanded physics step and is intended for
     diagnostics that need to observe intra-segment ordering.
     """
-    if getattr(ctx.gripper, "family", "") == "g2":
+    family = getattr(ctx.gripper, "family", "")
+    if family == "g2":
         from ufactory.trajectory.g2_replay import replay_g2
 
         return replay_g2(
+            program,
+            ctx,
+            final_metric_settle_s=final_metric_settle_s,
+            on_phase=on_phase,
+            on_tick=on_tick,
+            csv_path=csv_path,
+            sim_report_path=sim_report_path,
+        )
+    if family in {"robotiq_2f_85", "robotiq_2f_140"}:
+        from ufactory.trajectory.g2_replay import replay_robotiq
+
+        return replay_robotiq(
             program,
             ctx,
             final_metric_settle_s=final_metric_settle_s,

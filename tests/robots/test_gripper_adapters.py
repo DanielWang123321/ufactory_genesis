@@ -208,3 +208,55 @@ def test_bio_g2_adapter_mapping_and_sdk_contract():
     arm.get_bio_gripper_error.return_value = (0, 3)
     with pytest.raises(RuntimeError, match="recover manually"):
         adapter.prepare_real(arm)
+
+
+@pytest.mark.parametrize(("variant", "open_m"), [("robotiq_2f_85", 0.085), ("robotiq_2f_140", 0.140)])
+def test_robotiq_adapter_mapping_and_sdk_safety_contract(variant: str, open_m: float) -> None:
+    config = load_runtime_config("xarm6", gripper=variant)
+    assert config.gripper is not None
+    adapter = create_gripper_adapter(config.gripper)
+
+    q_open = adapter.gap_to_drive(open_m)
+    q_close = adapter.gap_to_drive(0.0)
+    assert adapter.drive_to_gap(q_open) == pytest.approx(open_m, abs=1e-4)
+    assert adapter.drive_to_gap(q_close) == pytest.approx(0.0, abs=1e-4)
+
+    arm = MagicMock()
+    arm.robotiq_status = {"gFLT": 0, "gSTA": 3}
+    arm.robotiq_is_activated = True
+    arm.robotiq_get_status.return_value = (0, [0] * 9)
+    arm.robotiq_set_position.return_value = (0, [0] * 6)
+    assert adapter.prepare_real(arm) == 0
+    arm.robotiq_reset.assert_not_called()
+    assert adapter.send_real_gap(arm, open_m) == 0
+    arm.robotiq_set_position.assert_called_with(
+        0,
+        speed=128,
+        force=128,
+        wait=False,
+        wait_motion=False,
+        auto_enable=False,
+    )
+    assert adapter.send_real_gap(arm, 0.0) == 0
+    arm.robotiq_set_position.assert_called_with(
+        255,
+        speed=128,
+        force=128,
+        wait=False,
+        wait_motion=False,
+        auto_enable=False,
+    )
+
+    # Faulted gripper raises cleanly without calling robotiq_reset().
+    arm.robotiq_status = {"gFLT": 9, "gSTA": 0}
+    arm.robotiq_is_activated = False
+    with pytest.raises(RuntimeError, match="gFLT=9"):
+        adapter.prepare_real(arm)
+    arm.robotiq_reset.assert_not_called()
+
+    # Unactivated healthy gripper activates explicitly without calling robotiq_reset().
+    arm.robotiq_status = {"gFLT": 0, "gSTA": 0}
+    arm.robotiq_set_activate.return_value = (0, [0] * 6)
+    assert adapter.prepare_real(arm) == 0
+    arm.robotiq_set_activate.assert_called_once_with(wait=True)
+    arm.robotiq_reset.assert_not_called()

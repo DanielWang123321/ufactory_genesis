@@ -56,10 +56,19 @@ def build_manipulation_backends(
         place_center_m=tuple(map(float, place_center_m)),
         relocated_stages=tuple(relocated_stages),
     )
-    if calibrated_g2 and config.gripper is not None and config.gripper.adapter == "g2":
-        from ufactory.simulation.g2_adapter import G2ContactCollisionBackend
+    if calibrated_g2 and config.gripper is not None:
+        if config.gripper.adapter == "g2":
+            from ufactory.simulation.g2_adapter import G2ContactCollisionBackend
 
-        collision = G2ContactCollisionBackend(collision, object_width_m=float(object_width_m))
+            collision = G2ContactCollisionBackend(collision, object_width_m=float(object_width_m))
+        elif config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+            from ufactory.simulation.robotiq_adapter import RobotiqContactCollisionBackend
+
+            collision = RobotiqContactCollisionBackend(
+                collision,
+                variant=config.gripper.adapter,
+                object_width_m=float(object_width_m),
+            )
     return kinematics, collision
 
 

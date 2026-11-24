@@ -11,7 +11,7 @@ Multi-robot pick-place in Genesis physics simulation or offline trajectory and c
 | Flag | Values / notes |
 |------|----------------|
 | `--robot` | Required: `xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
-| `--gripper` | Optional: `default` / `g2` / `bio_gripper_g2` / `lite6` (`bio_gripper_g2` supports microplate task on `xarm5`, `xarm6`, `xarm7`, `uf850`, `sim` mode only) |
+| `--gripper` | Optional: `default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` (`bio_gripper_g2`, `robotiq_2f_*` support `xarm5`, `xarm6`, `xarm7`, `uf850`) |
 | `--mode` | Required for simulation: `sim` (Genesis physics), `dry-run` (offline trajectory and collision preflight) |
 | `--executor` | `servo_j` or `servo_cartesian`; Bio G2 defaults to `servo_cartesian`, required for other grippers |
 | `--backend` | Optional: `cpu` / `gpu`; overrides `simulation.backend` (use `cpu` without a Genesis-supported GPU) |
@@ -38,6 +38,12 @@ python examples/simulation/pick_place/run.py \
 # xArm6 + Bio Gripper G2: microplate pick-place physics simulation with viewer (servo_cartesian by default)
 python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode sim --visual
+
+# xArm6 + Robotiq 2F-85 / 2F-140: pick-place physics simulation
+python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper robotiq_2f_85 --mode sim --executor servo_j
+python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper robotiq_2f_140 --mode sim --executor servo_cartesian
 
 # Lite6 + Lite6 Gripper: pick-place physics simulation on CPU backend (without a supported GPU)
 python examples/simulation/pick_place/run.py \

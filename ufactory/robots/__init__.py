@@ -28,6 +28,8 @@ from ufactory.robots.paths import (
     robot_assets,
     robot_urdf,
     robot_visual_glb_urdf,
+    robotiq_2f_140_movable_visual_urdf,
+    robotiq_2f_85_movable_visual_urdf,
     vacuum_gripper_urdf,
     xarm5_urdf,
     xarm6_1305_urdf,

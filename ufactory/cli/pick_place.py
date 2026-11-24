@@ -113,7 +113,8 @@ def _build_program(config: Any, kinematics: Any | None = None, *, q_home: np.nda
     target_pos = np.asarray(params["fixed_target_position_m"], dtype=np.float64)
     from ufactory.trajectory.scene import dry_heights
 
-    heights = dry_heights(config.robot.key)
+    gripper_name = config.gripper.adapter if config.gripper is not None else None
+    heights = dry_heights(config.robot.key, gripper=gripper_name)
     is_lite6 = str(getattr(config.gripper, "adapter", "")) == "lite6"
     obj_x, obj_y = float(object_pos[0]), float(object_pos[1])
     place_x, place_y = float(target_pos[0]), float(target_pos[1])
@@ -224,7 +225,8 @@ def _home_xyz_m(config: Any) -> np.ndarray:
 
     params = config.task.parameters
     object_pos = np.asarray(params["fixed_object_position_m"], dtype=np.float64)
-    heights = dry_heights(config.robot.key)
+    gripper_name = config.gripper.adapter if config.gripper is not None else None
+    heights = dry_heights(config.robot.key, gripper=gripper_name)
     return np.asarray(
         [float(object_pos[0]), float(object_pos[1]), float(heights.home_pos_base[2])],
         dtype=np.float64,
@@ -242,6 +244,7 @@ def _build_ik_scene(
 ) -> Any:
     from ufactory.trajectory.scene import build_scene
 
+    gripper_name = config.gripper.adapter if config.gripper is not None else None
     return build_scene(
         robot_key=config.robot.key,
         rate=config.motion.rate_hz,
@@ -257,6 +260,8 @@ def _build_ik_scene(
         kinematics_yaml=str(calibration) if calibration is not None else None,
         calibrated_g2=calibrated_g2,
         g2_settings=config.simulation.g2,
+        robotiq_settings=config.simulation.robotiq,
+        gripper=gripper_name,
         excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
         **_scene_layout_kwargs(config),
     )
@@ -358,9 +363,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--robot", required=True, choices=("xarm5", "xarm6", "xarm7", "uf850", "lite6"))
     parser.add_argument(
         "--gripper",
-        choices=("default", "g2", "bio_gripper_g2", "lite6"),
+        choices=("default", "g2", "bio_gripper_g2", "lite6", "robotiq_2f_85", "robotiq_2f_140"),
         default="default",
-        help="Select end-effector variant (bio_gripper_g2 supports xarm5/6/7 and uf850 microplate simulation)",
+        help="Select end-effector variant (bio_gripper_g2, robotiq_2f_85, robotiq_2f_140 support xarm5/6/7 and uf850)",
     )
     parser.add_argument("--mode", required=True, choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", choices=("servo_j", "servo_cartesian"))
@@ -464,16 +469,32 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.executor is None:
         parser.error("--executor is required for this gripper")
-    g2_overrides = {
-        f"simulation.g2.{name}": getattr(args, name)
+    sim_section = "robotiq" if args.gripper in {"robotiq_2f_85", "robotiq_2f_140"} else "g2"
+    gripper_overrides = {
+        f"simulation.{sim_section}.{name}": getattr(args, name)
         for name in ("position_mm", "speed_percent", "force_percent")
         if getattr(args, name) is not None
     }
-    if args.mode != "sim" and (g2_overrides or args.csv or args.sim_report):
+    if args.mode != "sim" and (gripper_overrides or args.csv or args.sim_report):
         parser.error("percentage commands and execution records require --mode sim")
-    config = load_runtime_config(args.robot, config_path=args.config, overrides=g2_overrides)
+    selected_gripper = None if args.gripper == "default" else args.gripper
+    try:
+        config = load_runtime_config(
+            args.robot,
+            gripper=selected_gripper,
+            config_path=args.config,
+            overrides=gripper_overrides,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.mode == "sim" and config.gripper.adapter == "g2" and config.simulation.g2.speed_percent <= 0:
         parser.error("automatic G2 manipulation requires --speed-percent > 0")
+    if (
+        args.mode == "sim"
+        and config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}
+        and config.simulation.robotiq.speed_percent <= 0
+    ):
+        parser.error("automatic Robotiq manipulation requires --speed-percent > 0")
     if args.backend is not None:
         config = override_simulation_backend(config, args.backend)
     if args.print_config:
@@ -507,7 +528,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         genesis_for_ik = None
         try:
             if args.mode == "sim":
-                from ufactory.trajectory.g2_confirmation import prepare_g2_program
+                from ufactory.trajectory.g2_confirmation import prepare_g2_program, prepare_robotiq_program
 
                 genesis_for_ik = GenesisRuntimeManager(config.simulation)
                 genesis_for_ik.__enter__()
@@ -519,6 +540,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 program = _build_program(config, q_home=q_home)
                 if config.gripper.adapter == "g2":
                     program = prepare_g2_program(program, config.simulation.g2)
+                elif config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+                    program = prepare_robotiq_program(program, config.simulation.robotiq, config.gripper.adapter)
                 if args.executor == "servo_j":
                     program = compile_cartesian_program_to_joint_stream(program, ik_ctx)
             elif args.executor == "servo_j":
@@ -580,7 +603,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     f"home_drift_mm={sim_report.home_drift_mm:.3f} "
                     f"metric_settle_ticks={sim_report.metric_settle_ticks}"
                 )
-                if config.gripper.adapter == "g2":
+                calibrated_adaptive = config.gripper.adapter in {"g2", "robotiq_2f_85", "robotiq_2f_140"}
+                if calibrated_adaptive:
                     print(
                         f"completed={sim_report.completed} timing={'PASS' if sim_report.timing_passed else 'FAIL'} "
                         f"transport={'PASS' if sim_report.transport_passed else 'FAIL'}"
@@ -591,7 +615,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     0
                     if sim_report.completed
                     and sim_report.timing_passed
-                    and (config.gripper.adapter != "g2" or sim_report.transport_passed)
+                    and (not calibrated_adaptive or sim_report.transport_passed)
                     and sim_report.place_error_mm < 50.0
                     and sim_report.home_drift_mm < 10.0
                     else 1

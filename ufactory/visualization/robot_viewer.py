@@ -9,6 +9,7 @@ import torch
 
 import genesis as gs
 from ufactory.grippers.bio_g2 import BioGripperG2
+from ufactory.grippers.robotiq import get_robotiq_spec
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 from ufactory.robots.paths import robot_urdf, robot_visual_glb_urdf
 from ufactory.robots.runtime import get_robot_runtime_profile
@@ -35,6 +36,14 @@ from ufactory.visualization.lite6_gripper_viewer import (
     set_lite6_gripper_pose,
     setup_lite6_gripper_pd,
     step_lite6_gripper_demo_target,
+)
+from ufactory.visualization.robotiq_viewer import (
+    control_robotiq_pose,
+    get_robotiq_demo_cycle,
+    robotiq_dof_indices,
+    set_robotiq_pose,
+    setup_robotiq_pd,
+    step_robotiq_demo_target,
 )
 
 TCP_MARKER_RADIUS = 0.008
@@ -134,6 +143,8 @@ def run_glb_diagnose(
     profile: RobotModelSpec,
     *,
     with_gripper_g2: bool = False,
+    with_robotiq_2f_85: bool = False,
+    with_robotiq_2f_140: bool = False,
     backend: str = "gpu",
 ) -> None:
     """Headless GLB/STL link pose diagnostic for any supported arm."""
@@ -142,7 +153,12 @@ def run_glb_diagnose(
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, backend))
     stl_path = robot_urdf(profile.key)
-    glb_path = robot_visual_glb_urdf(profile.key, with_gripper_g2=with_gripper_g2)
+    glb_path = robot_visual_glb_urdf(
+        profile.key,
+        with_gripper_g2=with_gripper_g2,
+        with_robotiq_2f_85=with_robotiq_2f_85,
+        with_robotiq_2f_140=with_robotiq_2f_140,
+    )
     link_names = tuple(["link_base"] + [f"link{i}" for i in range(1, profile.dof + 1)])
 
     def load_robot(urdf_path: str, use_glb: bool = False):
@@ -220,6 +236,8 @@ def _apply_kinematic_hold(
     all_lite6_gripper_dof_idx: list[int],
     all_bio_gripper_g2_dof_idx: list[int],
     bio_gripper: BioGripperG2 | None = None,
+    all_robotiq_dof_idx: list[int] | None = None,
+    robotiq_open_drive: float | None = None,
 ) -> None:
     """Visual-only hold: teleport joints after physics step, no PD."""
     if hold_arm and arm_dof_idx:
@@ -228,6 +246,8 @@ def _apply_kinematic_hold(
         return
     if all_gripper_dof_idx:
         _set_gripper_kinematic(robot, all_gripper_dof_idx, GRIPPER_OPEN)
+    elif all_robotiq_dof_idx and robotiq_open_drive is not None:
+        _set_gripper_kinematic(robot, all_robotiq_dof_idx, robotiq_open_drive)
     elif all_lite6_gripper_dof_idx:
         _set_gripper_kinematic(robot, all_lite6_gripper_dof_idx, LITE6_GRIPPER_OPEN)
     elif all_bio_gripper_g2_dof_idx and bio_gripper is not None:
@@ -248,6 +268,8 @@ def _kinematic_step(
     all_lite6_gripper_dof_idx: list[int],
     all_bio_gripper_g2_dof_idx: list[int],
     bio_gripper: BioGripperG2 | None = None,
+    all_robotiq_dof_idx: list[int] | None = None,
+    robotiq_open_drive: float | None = None,
     arm_target: np.ndarray | None = None,
 ) -> None:
     """Advance sim one step; held DOFs are teleported immediately before and after."""
@@ -263,6 +285,8 @@ def _kinematic_step(
             all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
             all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
             bio_gripper=bio_gripper,
+            all_robotiq_dof_idx=all_robotiq_dof_idx,
+            robotiq_open_drive=robotiq_open_drive,
         )
         scene.step(update_visualizer=False)
         _apply_kinematic_hold(
@@ -275,6 +299,8 @@ def _kinematic_step(
             all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
             all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
             bio_gripper=bio_gripper,
+            all_robotiq_dof_idx=all_robotiq_dof_idx,
+            robotiq_open_drive=robotiq_open_drive,
         )
         visualizer = getattr(scene, "visualizer", None)
         if getattr(visualizer, "viewer", None) is not None:
@@ -345,10 +371,16 @@ def run_glb_viewer(
 
     urdf_root = ET.parse(urdf_path).getroot()
     calibrated_g2 = gripper_demo and urdf_root.find("./joint[@name='drive_joint']") is not None
+    calibrated_robotiq = None
+    if gripper_demo:
+        if urdf_root.find("./joint[@name='robotiq_2f_85_drive_joint']") is not None:
+            calibrated_robotiq = "robotiq_2f_85"
+        elif urdf_root.find("./joint[@name='robotiq_2f_140_drive_joint']") is not None:
+            calibrated_robotiq = "robotiq_2f_140"
     calibrated_bio_g2 = (
         gripper_demo and urdf_root.find("./joint[@name='bio_gripper_g2_right_finger_joint']") is not None
     )
-    calibrated_dynamic = calibrated_g2 or calibrated_bio_g2
+    calibrated_dynamic = calibrated_g2 or calibrated_bio_g2 or calibrated_robotiq is not None
     resolved_position_mm = float(
         71.0 if (position_mm is None and calibrated_bio_g2) else (0.0 if position_mm is None else position_mm)
     )
@@ -357,6 +389,16 @@ def run_glb_viewer(
 
         for name, value, low, high in (
             ("position_mm", resolved_position_mm, 0, 84),
+            ("speed_percent", speed_percent, 0, 100),
+            ("force_percent", force_percent, 1, 100),
+        ):
+            checked(value, low, high, name)
+    elif calibrated_robotiq is not None:
+        from ufactory.simulation.g2_model import checked
+
+        open_mm = get_robotiq_spec(calibrated_robotiq).open_gap_mm
+        for name, value, low, high in (
+            ("position_mm", resolved_position_mm, 0, open_mm),
             ("speed_percent", speed_percent, 0, 100),
             ("force_percent", force_percent, 1, 100),
         ):
@@ -385,7 +427,7 @@ def run_glb_viewer(
         if calibrated_dynamic
         else gs.options.SimOptions(dt=0.01),
         rigid_options=(
-            make_rigid_options(gs, constraint_timeconst=0.00125 if calibrated_g2 else 0.005)
+            make_rigid_options(gs, constraint_timeconst=0.00125 if (calibrated_g2 or calibrated_robotiq) else 0.005)
             if calibrated_dynamic
             else make_rigid_options(gs)
         ),
@@ -423,14 +465,19 @@ def run_glb_viewer(
 
         # Neutral xArm poses put gripper fingers through the ground. Initialize a
         # reachable gripper-down pose before starting physical opening/closing.
+        home_z = 0.40 if calibrated_robotiq == "robotiq_2f_140" else 0.35
         home = solve_link6_ik(
             robot,
             resolve_robot_link(robot, profile.ee_link),
-            (0.30, 0.0, 0.35),
+            (0.30, 0.0, home_z),
             arm_dof_idx=arm_dof_idx,
             init_qpos=np.asarray(get_robot_runtime_profile(profile.key).arm.default_qpos),
         )
     gripper_dof_idx, all_gripper_dof_idx = gripper_dof_indices(robot)
+    robotiq_variant, robotiq_dof_idx, all_robotiq_dof_idx = robotiq_dof_indices(robot)
+    robotiq_open_drive = (
+        get_robotiq_spec(robotiq_variant).linkage.drive_lower_rad if robotiq_variant is not None else None
+    )
     lite6_gripper_dof_idx, all_lite6_gripper_dof_idx = lite6_gripper_dof_indices(robot)
     # Use BioGripperG2 class for discovery and control (preferred API).
     bio_gripper = BioGripperG2(robot)
@@ -448,7 +495,9 @@ def run_glb_viewer(
     if arm_kinematic_hold:
         held_dof_idx.extend(arm_dof_idx)
     if idle_gripper_kinematic_hold:
-        held_dof_idx.extend(all_gripper_dof_idx or all_lite6_gripper_dof_idx or all_bio_gripper_g2_dof_idx)
+        held_dof_idx.extend(
+            all_gripper_dof_idx or all_robotiq_dof_idx or all_lite6_gripper_dof_idx or all_bio_gripper_g2_dof_idx
+        )
     if held_dof_idx:
         _disable_robot_pd(robot, sorted(set(held_dof_idx)))
     if arm_kinematic_hold or idle_gripper_kinematic_hold:
@@ -462,6 +511,8 @@ def run_glb_viewer(
             all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
             all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
             bio_gripper=bio_gripper,
+            all_robotiq_dof_idx=all_robotiq_dof_idx,
+            robotiq_open_drive=robotiq_open_drive,
         )
     if pd_demo and arm_dof_idx:
         setup_arm_pd(robot, arm_dof_idx, profile)
@@ -478,6 +529,11 @@ def run_glb_viewer(
         robot._ufactory_g2_demo_settings = (resolved_position_mm, speed_percent, force_percent)
         setup_gripper_pd(robot, gripper_dof_idx, all_gripper_dof_idx)
         set_gripper_pose(robot, gripper_dof_idx, all_gripper_dof_idx, GRIPPER_OPEN)
+    elif gripper_demo and robotiq_variant is not None and robotiq_dof_idx:
+        assert robotiq_open_drive is not None
+        robot._ufactory_robotiq_demo_settings = (resolved_position_mm, speed_percent, force_percent)
+        setup_robotiq_pd(robot, robotiq_variant, robotiq_dof_idx, all_robotiq_dof_idx)
+        set_robotiq_pose(robot, robotiq_variant, robotiq_dof_idx, all_robotiq_dof_idx, robotiq_open_drive)
     elif gripper_demo and lite6_gripper_dof_idx:
         setup_lite6_gripper_pd(robot, lite6_gripper_dof_idx, all_lite6_gripper_dof_idx)
         set_lite6_gripper_pose(
@@ -500,6 +556,8 @@ def run_glb_viewer(
     for _ in range(warmup_steps):
         if calibrated_g2:
             control_gripper_pose(robot, gripper_dof_idx, all_gripper_dof_idx, GRIPPER_OPEN)
+        elif calibrated_robotiq is not None and robotiq_open_drive is not None:
+            control_robotiq_pose(robot, calibrated_robotiq, robotiq_dof_idx, all_robotiq_dof_idx, robotiq_open_drive)
         elif calibrated_bio_g2:
             bio_gripper.control_pose(BioGripperG2.OPEN_POS)
         if pd_demo and arm_dof_idx:
@@ -517,6 +575,8 @@ def run_glb_viewer(
             all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
             all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
             bio_gripper=bio_gripper,
+            all_robotiq_dof_idx=all_robotiq_dof_idx,
+            robotiq_open_drive=robotiq_open_drive,
         )
 
     if headless and not calibrated_dynamic and not gripper_demo:
@@ -565,6 +625,19 @@ def run_glb_viewer(
                 all_gripper_dof_idx,
                 target_drive,
             )
+        elif gripper_demo and robotiq_variant is not None and robotiq_dof_idx:
+            active_cycle = get_robotiq_demo_cycle(robot, robotiq_variant, dt=step_dt)
+            target_drive, label = step_robotiq_demo_target(robot, robotiq_variant, dt=step_dt)
+            if label != last_gripper_phase:
+                print(f"  Robotiq gripper target: {label}")
+                last_gripper_phase = label
+            control_robotiq_pose(
+                robot,
+                robotiq_variant,
+                robotiq_dof_idx,
+                all_robotiq_dof_idx,
+                target_drive,
+            )
         elif gripper_demo and lite6_gripper_dof_idx:
             active_cycle = get_lite6_gripper_demo_cycle(robot, lite6_gripper_dof_idx, dt=step_dt)
             target_drive, label = step_lite6_gripper_demo_target(robot, lite6_gripper_dof_idx, dt=step_dt)
@@ -597,11 +670,15 @@ def run_glb_viewer(
             all_lite6_gripper_dof_idx=all_lite6_gripper_dof_idx,
             all_bio_gripper_g2_dof_idx=all_bio_gripper_g2_dof_idx,
             bio_gripper=bio_gripper,
+            all_robotiq_dof_idx=all_robotiq_dof_idx,
+            robotiq_open_drive=robotiq_open_drive,
             arm_target=arm_target,
         )
         step += 1
         if calibrated_g2:
             g2_gaps.append(robot._ufactory_g2_controller.gap_mm())
+        elif calibrated_robotiq is not None:
+            g2_gaps.append(robot._ufactory_robotiq_controller.gap_mm())
         elif calibrated_bio_g2:
             g2_gaps.append(bio_gripper.gap_mm())
         if active_cycle is not None:

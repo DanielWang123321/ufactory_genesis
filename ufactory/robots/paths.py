@@ -75,6 +75,8 @@ def robot_urdf(robot_key: str, name: str | None = None) -> str:
 _ACCESSORY_FLAGS = (
     ("with_bio_gripper_g2", "bio_gripper_g2", "Bio Gripper G2"),
     ("with_gripper_g2", "gripper_g2", "Gripper G2"),
+    ("with_robotiq_2f_85", "robotiq_2f_85", "Robotiq 2F-85"),
+    ("with_robotiq_2f_140", "robotiq_2f_140", "Robotiq 2F-140"),
     ("with_vacuum_gripper", "vacuum_gripper", "Vacuum Gripper"),
     ("with_lite6_gripper", "lite6_gripper", "Lite6 Gripper"),
     ("with_lite6_vacuum_gripper", "lite6_vacuum_gripper", "Lite6 Vacuum Gripper"),
@@ -86,6 +88,8 @@ def robot_visual_glb_urdf(
     *,
     with_bio_gripper_g2: bool = False,
     with_gripper_g2: bool = False,
+    with_robotiq_2f_85: bool = False,
+    with_robotiq_2f_140: bool = False,
     with_vacuum_gripper: bool = False,
     with_lite6_gripper: bool = False,
     with_lite6_vacuum_gripper: bool = False,
@@ -104,6 +108,8 @@ def robot_visual_glb_urdf(
     flags = {
         "with_bio_gripper_g2": with_bio_gripper_g2,
         "with_gripper_g2": with_gripper_g2,
+        "with_robotiq_2f_85": with_robotiq_2f_85,
+        "with_robotiq_2f_140": with_robotiq_2f_140,
         "with_vacuum_gripper": with_vacuum_gripper,
         "with_lite6_gripper": with_lite6_gripper,
         "with_lite6_vacuum_gripper": with_lite6_vacuum_gripper,
@@ -111,12 +117,15 @@ def robot_visual_glb_urdf(
     selected = [(name, label) for flag, name, label in _ACCESSORY_FLAGS if flags[flag]]
     if len(selected) > 1:
         raise ValueError(
-            "with_bio_gripper_g2, with_gripper_g2, with_vacuum_gripper, "
-            "with_lite6_gripper, and with_lite6_vacuum_gripper are mutually exclusive"
+            "with_bio_gripper_g2, with_gripper_g2, with_robotiq_2f_85, with_robotiq_2f_140, "
+            "with_vacuum_gripper, with_lite6_gripper, and with_lite6_vacuum_gripper are mutually exclusive"
         )
-    if movable and not (with_gripper_g2 or with_lite6_gripper or with_bio_gripper_g2):
+    if movable and not (
+        with_gripper_g2 or with_robotiq_2f_85 or with_robotiq_2f_140 or with_lite6_gripper or with_bio_gripper_g2
+    ):
         raise ValueError(
-            "movable=True requires with_gripper_g2=True, with_lite6_gripper=True, or with_bio_gripper_g2=True"
+            "movable=True requires with_gripper_g2=True, with_robotiq_2f_85=True, "
+            "with_robotiq_2f_140=True, with_lite6_gripper=True, or with_bio_gripper_g2=True"
         )
     if not selected:
         if accessory is None and not base_plate:
@@ -140,6 +149,16 @@ def lite6_gripper_movable_visual_urdf() -> str:
 def gripper_g2_movable_visual_urdf() -> str:
     """Standalone gripper-only movable visual URDF (no arm)."""
     return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "gripper_g2_movable_visual.urdf")
+
+
+def robotiq_2f_85_movable_visual_urdf() -> str:
+    """Standalone Robotiq 2F-85 gripper-only movable visual URDF (no arm)."""
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "robotiq_2f_85" / "robotiq_2f_85_movable_visual.urdf")
+
+
+def robotiq_2f_140_movable_visual_urdf() -> str:
+    """Standalone Robotiq 2F-140 gripper-only movable visual URDF (no arm)."""
+    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "robotiq_2f_140" / "robotiq_2f_140_movable_visual.urdf")
 
 
 def bio_gripper_g2_urdf() -> str:

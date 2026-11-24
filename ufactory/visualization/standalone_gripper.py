@@ -15,6 +15,8 @@ from ufactory.robots.paths import (
     lite6_base_plate_urdf,
     lite6_gripper_movable_visual_urdf,
     lite6_vacuum_gripper_visual_glb_urdf,
+    robotiq_2f_85_movable_visual_urdf,
+    robotiq_2f_140_movable_visual_urdf,
     uf850_base_plate_urdf,
     vacuum_gripper_urdf,
     xarm_base_plate_urdf,
@@ -50,6 +52,7 @@ class StandaloneToolSpec:
     controller: Callable[[object], Callable[[int], None]] | None = None
     calibrated_g2: bool = False
     calibrated_bio_g2: bool = False
+    calibrated_robotiq: str | None = None
     camera_pos: tuple[float, float, float] = CAMERA_POS
     camera_lookat: tuple[float, float, float] = CAMERA_LOOKAT
 
@@ -96,6 +99,29 @@ def _lite6_gripper_controller(robot: object) -> Callable[[int], None]:
     )
 
 
+def _robotiq_controller(variant: str) -> Callable[[object], Callable[[int], None]]:
+    def _setup(robot: object) -> Callable[[int], None]:
+        from ufactory.visualization.robotiq_viewer import (
+            control_robotiq_pose,
+            robotiq_dof_indices,
+            setup_robotiq_pd,
+            step_robotiq_demo_target,
+        )
+
+        resolved, drive_idx, all_idx = robotiq_dof_indices(robot, variant)
+        assert resolved is not None
+        setup_robotiq_pd(robot, resolved, drive_idx, all_idx)
+        return lambda _step: control_robotiq_pose(
+            robot,
+            resolved,
+            drive_idx,
+            all_idx,
+            step_robotiq_demo_target(robot, resolved)[0],
+        )
+
+    return _setup
+
+
 STANDALONE_TOOL_SPECS: dict[str, StandaloneToolSpec] = {
     "gripper_g2": StandaloneToolSpec(
         name="gripper_g2",
@@ -104,6 +130,22 @@ STANDALONE_TOOL_SPECS: dict[str, StandaloneToolSpec] = {
         base_pos=(0.0, 0.0, 0.35),
         controller=_gripper_g2_controller,
         calibrated_g2=True,
+    ),
+    "robotiq_2f_85": StandaloneToolSpec(
+        name="robotiq_2f_85",
+        description="Robotiq 2F-85 open/close demo (standalone)",
+        urdf_loader=robotiq_2f_85_movable_visual_urdf,
+        base_pos=(0.0, 0.0, 0.35),
+        controller=_robotiq_controller("robotiq_2f_85"),
+        calibrated_robotiq="robotiq_2f_85",
+    ),
+    "robotiq_2f_140": StandaloneToolSpec(
+        name="robotiq_2f_140",
+        description="Robotiq 2F-140 open/close demo (standalone)",
+        urdf_loader=robotiq_2f_140_movable_visual_urdf,
+        base_pos=(0.0, 0.0, 0.40),
+        controller=_robotiq_controller("robotiq_2f_140"),
+        calibrated_robotiq="robotiq_2f_140",
     ),
     "bio_gripper_g2": StandaloneToolSpec(
         name="bio_gripper_g2",
@@ -182,7 +224,13 @@ def _add_calibrated_args(parser: argparse.ArgumentParser, *, bio_g2: bool) -> No
     parser.add_argument("--force-percent", type=float, default=50)
 
 
-def _validate_calibrated_args(args: argparse.Namespace, *, calibrated_g2: bool, calibrated_bio_g2: bool) -> None:
+def _validate_calibrated_args(
+    args: argparse.Namespace,
+    *,
+    calibrated_g2: bool,
+    calibrated_bio_g2: bool,
+    calibrated_robotiq: str | None = None,
+) -> None:
     if calibrated_g2:
         from ufactory.simulation.g2_model import checked
 
@@ -195,6 +243,13 @@ def _validate_calibrated_args(args: argparse.Namespace, *, calibrated_g2: bool, 
             checked(getattr(args, name), low, high, name)
         if args.speed_mm_s is not None:
             checked(args.speed_mm_s, MIN_SPEED_MM_S, MAX_SPEED_MM_S, "speed_mm_s")
+    elif calibrated_robotiq is not None:
+        from ufactory.grippers.robotiq import get_robotiq_spec
+        from ufactory.simulation.g2_model import checked
+
+        open_mm = get_robotiq_spec(calibrated_robotiq).open_gap_mm
+        for name, low, high in (("position_mm", 0, open_mm), ("speed_percent", 0, 100), ("force_percent", 1, 100)):
+            checked(getattr(args, name), low, high, name)
 
 
 def parse_standalone_tool_args(argv: Sequence[str] | None = None) -> tuple[StandaloneToolSpec, argparse.Namespace]:
@@ -226,12 +281,12 @@ def parse_standalone_tool_args(argv: Sequence[str] | None = None) -> tuple[Stand
 
     spec = STANDALONE_TOOL_SPECS[args.tool]
     gripper_opts = ("--position-mm", "--speed-percent", "--speed-mm-s", "--force-percent")
-    if not (spec.calibrated_g2 or spec.calibrated_bio_g2):
+    if not (spec.calibrated_g2 or spec.calibrated_bio_g2 or spec.calibrated_robotiq):
         bad = [flag for flag in gripper_opts if getattr(args, flag.lstrip("-").replace("-", "_")) is not None]
         if bad:
             parser.error(f"{', '.join(bad)} not supported for --tool {spec.name}")
     else:
-        if spec.calibrated_g2 and args.speed_mm_s is not None:
+        if (spec.calibrated_g2 or spec.calibrated_robotiq) and args.speed_mm_s is not None:
             parser.error("--speed-mm-s is only supported for --tool bio_gripper_g2")
         if args.position_mm is None:
             args.position_mm = 71.0 if spec.calibrated_bio_g2 else 0.0
@@ -240,7 +295,12 @@ def parse_standalone_tool_args(argv: Sequence[str] | None = None) -> tuple[Stand
         if args.force_percent is None:
             args.force_percent = 50.0
         try:
-            _validate_calibrated_args(args, calibrated_g2=spec.calibrated_g2, calibrated_bio_g2=spec.calibrated_bio_g2)
+            _validate_calibrated_args(
+                args,
+                calibrated_g2=spec.calibrated_g2,
+                calibrated_bio_g2=spec.calibrated_bio_g2,
+                calibrated_robotiq=spec.calibrated_robotiq,
+            )
         except ValueError as exc:
             parser.error(str(exc))
     return spec, args
@@ -255,6 +315,7 @@ def _run_standalone_viewer(
     headless_steps: int,
     calibrated_g2: bool = False,
     calibrated_bio_g2: bool = False,
+    calibrated_robotiq: str | None = None,
     base_pos: tuple[float, float, float] | None = None,
     base_quat: tuple[float, float, float, float] | None = None,
     position_mm: float | None = None,
@@ -266,14 +327,14 @@ def _run_standalone_viewer(
 ) -> dict | None:
     from ufactory.simulation import genesis_backend_constant
 
-    calibrated = calibrated_g2 or calibrated_bio_g2
+    calibrated = calibrated_g2 or calibrated_bio_g2 or calibrated_robotiq is not None
     require_genesis_runtime(gs)
     gs.init(backend=genesis_backend_constant(gs, backend), logging_level="error")
     scene = gs.Scene(
         show_viewer=False,
         sim_options=gs.options.SimOptions(dt=0.02, substeps=32) if calibrated else gs.options.SimOptions(dt=0.01),
         rigid_options=(
-            make_rigid_options(gs, constraint_timeconst=0.00125 if calibrated_g2 else 0.002)
+            make_rigid_options(gs, constraint_timeconst=0.00125 if (calibrated_g2 or calibrated_robotiq) else 0.002)
             if calibrated
             else make_rigid_options(gs)
         ),
@@ -293,6 +354,12 @@ def _run_standalone_viewer(
     scene.build()
     if calibrated_g2:
         robot._ufactory_g2_demo_settings = (0.0 if position_mm is None else position_mm, speed_percent, force_percent)
+    elif calibrated_robotiq is not None:
+        robot._ufactory_robotiq_demo_settings = (
+            0.0 if position_mm is None else position_mm,
+            speed_percent,
+            force_percent,
+        )
     elif calibrated_bio_g2:
         robot._ufactory_bio_g2_demo_settings = (
             71.0 if position_mm is None else position_mm,
@@ -312,10 +379,13 @@ def _run_standalone_viewer(
         scene.step()
         if calibrated_g2:
             gaps.append(robot._ufactory_g2_controller.gap_mm())
+        elif calibrated_robotiq is not None:
+            gaps.append(robot._ufactory_robotiq_controller.gap_mm())
         elif calibrated_bio_g2:
             gaps.append(robot._ufactory_bio_g2_controller.gap_mm())
         demo_cycle = (
             getattr(robot, "_ufactory_g2_demo_cycle", None)
+            or getattr(robot, "_ufactory_robotiq_demo_cycle", None)
             or getattr(robot, "_ufactory_bio_g2_demo_cycle", None)
             or getattr(robot, "_ufactory_lite6_demo_cycle", None)
         )
@@ -347,6 +417,7 @@ def run_standalone_tool_viewer(argv: Sequence[str] | None = None, *, headless_st
         headless_steps=headless_steps,
         calibrated_g2=spec.calibrated_g2,
         calibrated_bio_g2=spec.calibrated_bio_g2,
+        calibrated_robotiq=spec.calibrated_robotiq,
         base_pos=spec.base_pos,
         base_quat=spec.base_quat,
         position_mm=args.position_mm,

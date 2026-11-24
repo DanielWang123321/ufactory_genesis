@@ -188,3 +188,30 @@ def test_object_mass_override_changes_config_hash():
     changed = load_runtime_config("xarm6", overrides={"task.parameters.object_mass_kg": 0.018})
     assert resolve_pick_place_object_spec(changed).mass_kg == pytest.approx(0.018)
     assert changed.sha256 != base.sha256
+
+
+@pytest.mark.parametrize(
+    ("variant", "open_m", "default_z"),
+    [("robotiq_2f_85", 0.085, 0.30), ("robotiq_2f_140", 0.140, 0.36)],
+)
+def test_robotiq_gripper_overlay_resolution_and_validation(variant: str, open_m: float, default_z: float):
+    cfg = load_runtime_config("xarm6", gripper=variant)
+    assert cfg.gripper is not None
+    assert cfg.gripper.adapter == variant
+    assert cfg.gripper.open_gap_m == pytest.approx(open_m)
+    assert cfg.robot.urdf == f"assembly:{variant}"
+    assert float(cfg.task.parameters["default_ee_position_m"][2]) == pytest.approx(default_z)
+
+    pack_cfg = load_runtime_config("uf850", task="packaging_showcase", gripper=variant)
+    assert pack_cfg.gripper is not None and pack_cfg.gripper.adapter == variant
+
+    with pytest.raises(ConfigError, match="not supported"):
+        load_runtime_config("lite6", gripper=variant)
+
+    with pytest.raises(ConfigError, match="reach"):
+        load_runtime_config("xarm6", task="reach", gripper=variant)
+
+
+def test_robotiq_2f_85_rejects_position_mm_above_85():
+    with pytest.raises(ConfigError, match="85"):
+        load_runtime_config("xarm6", gripper="robotiq_2f_85", overrides={"simulation.robotiq.position_mm": 100.0})

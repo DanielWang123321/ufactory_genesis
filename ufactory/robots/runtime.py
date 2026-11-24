@@ -8,6 +8,16 @@ import xml.etree.ElementTree as ET
 
 from ufactory.robots.registry import RobotModelSpec, get_robot_profile, joint_names, robot_cli_choices
 from ufactory.grippers.g2 import G2_JOINT_NAMES, GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE
+from ufactory.grippers.robotiq import (
+    ROBOTIQ_2F_85_JOINT_NAMES,
+    ROBOTIQ_2F_85_OPEN_GAP_M,
+    ROBOTIQ_2F_85_SIM_CLOSE_DRIVE,
+    ROBOTIQ_2F_85_SIM_OPEN_DRIVE,
+    ROBOTIQ_2F_140_JOINT_NAMES,
+    ROBOTIQ_2F_140_OPEN_GAP_M,
+    ROBOTIQ_2F_140_SIM_CLOSE_DRIVE,
+    ROBOTIQ_2F_140_SIM_OPEN_DRIVE,
+)
 
 
 FloatTuple = tuple[float, ...]
@@ -146,6 +156,40 @@ LITE6_GRIPPER_PARAMS = GripperControlParams(
     frictionloss=0.0,
 )
 
+ROBOTIQ_2F_85_GRIPPER_PARAMS = GripperControlParams(
+    family="robotiq_2f_85",
+    drive_joint="robotiq_2f_85_drive_joint",
+    all_joint_names=ROBOTIQ_2F_85_JOINT_NAMES,
+    finger_link_names=("robotiq_2f_85_left_finger", "robotiq_2f_85_right_finger"),
+    open_pos=ROBOTIQ_2F_85_SIM_OPEN_DRIVE,
+    close_pos=ROBOTIQ_2F_85_SIM_CLOSE_DRIVE,
+    closed_gap_m=0.0,
+    open_gap_m=ROBOTIQ_2F_85_OPEN_GAP_M,
+    kp=120.0,
+    kv=10.0,
+    force_lower=-30.0,
+    force_upper=30.0,
+    damping=0.1,
+    frictionloss=0.0,
+)
+
+ROBOTIQ_2F_140_GRIPPER_PARAMS = GripperControlParams(
+    family="robotiq_2f_140",
+    drive_joint="robotiq_2f_140_drive_joint",
+    all_joint_names=ROBOTIQ_2F_140_JOINT_NAMES,
+    finger_link_names=("robotiq_2f_140_left_finger", "robotiq_2f_140_right_finger"),
+    open_pos=ROBOTIQ_2F_140_SIM_OPEN_DRIVE,
+    close_pos=ROBOTIQ_2F_140_SIM_CLOSE_DRIVE,
+    closed_gap_m=0.0,
+    open_gap_m=ROBOTIQ_2F_140_OPEN_GAP_M,
+    kp=120.0,
+    kv=10.0,
+    force_lower=-30.0,
+    force_upper=30.0,
+    damping=0.1,
+    frictionloss=0.0,
+)
+
 
 def _tuple(values) -> FloatTuple:
     return tuple(map(float, values))
@@ -268,28 +312,47 @@ def _task_profile(profile: RobotModelSpec) -> TaskProfile:
     )
 
 
-def _gripper_params_for(profile: RobotModelSpec) -> GripperControlParams | None:
-    if profile.supports_gripper_g2:
+def _gripper_params_for(profile: RobotModelSpec, *, gripper: str | None = None) -> GripperControlParams | None:
+    choice = None if gripper in (None, "default") else str(gripper)
+    if choice is None:
+        if profile.supports_gripper_g2:
+            return G2_GRIPPER_PARAMS
+        if profile.supports_lite6_gripper:
+            return LITE6_GRIPPER_PARAMS
+        return None
+    if choice in {"g2", "gripper_g2"}:
+        if not profile.supports_gripper_g2:
+            raise ValueError(f"Robot {profile.key} does not support gripper {choice!r}")
         return G2_GRIPPER_PARAMS
-    if profile.supports_lite6_gripper:
+    if choice == "lite6":
+        if not profile.supports_lite6_gripper:
+            raise ValueError(f"Robot {profile.key} does not support gripper {choice!r}")
         return LITE6_GRIPPER_PARAMS
-    return None
+    if choice == "robotiq_2f_85":
+        if not profile.supports_robotiq_2f_85:
+            raise ValueError(f"Robot {profile.key} does not support gripper {choice!r}")
+        return ROBOTIQ_2F_85_GRIPPER_PARAMS
+    if choice == "robotiq_2f_140":
+        if not profile.supports_robotiq_2f_140:
+            raise ValueError(f"Robot {profile.key} does not support gripper {choice!r}")
+        return ROBOTIQ_2F_140_GRIPPER_PARAMS
+    raise ValueError(f"Unknown gripper {choice!r} for robot {profile.key}")
 
 
-def _build_runtime_profile(profile: RobotModelSpec) -> RobotRuntimeProfile:
+def _build_runtime_profile(profile: RobotModelSpec, *, gripper: str | None = None) -> RobotRuntimeProfile:
     arm = _arm_params(profile)
     return RobotRuntimeProfile(
         model=profile,
         arm=arm,
         dynamics=_dynamics_params(profile, arm),
-        gripper=_gripper_params_for(profile),
+        gripper=_gripper_params_for(profile, gripper=gripper),
         task=_task_profile(profile),
     )
 
 
-def get_robot_runtime_profile(robot_key: str) -> RobotRuntimeProfile:
+def get_robot_runtime_profile(robot_key: str, *, gripper: str | None = None) -> RobotRuntimeProfile:
     """Resolve a robot key or alias to typed runtime parameters."""
-    return _build_runtime_profile(get_robot_profile(robot_key))
+    return _build_runtime_profile(get_robot_profile(robot_key), gripper=gripper)
 
 
 def robot_runtime_cli_choices() -> list[str]:

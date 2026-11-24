@@ -9,6 +9,7 @@ from typing import Protocol, runtime_checkable
 from ufactory.config.models import GripperProfile
 from ufactory.grippers.bio_g2 import bio_gripper_g2_gap_m_to_sim_drive, bio_gripper_g2_sim_drive_to_gap_m
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive, gripper_g2_sim_drive_to_gap_m
+from ufactory.grippers.robotiq import RobotiqSpec, get_robotiq_spec, robotiq_percent_to_register
 
 
 @dataclass(frozen=True)
@@ -161,7 +162,80 @@ class BioG2Adapter(ConfiguredGripperAdapter):
         return int(method(pos=self._finite(gap_m, "gap_m") * 1000.0, wait=False))
 
 
-_ADAPTERS = {"g2": G2Adapter, "bio_g2": BioG2Adapter, "lite6": Lite6Adapter}
+class RobotiqAdapter(ConfiguredGripperAdapter):
+    """Adapter for Robotiq 2F-85 and 2F-140 grippers driven over xArm RS-485 Modbus."""
+
+    def __init__(
+        self,
+        profile: GripperProfile,
+        *,
+        speed_percent: float = 50.0,
+        force_percent: float = 50.0,
+    ) -> None:
+        super().__init__(profile)
+        self.spec: RobotiqSpec = get_robotiq_spec(profile.adapter)
+        self.speed_register: int = robotiq_percent_to_register(speed_percent)
+        self.force_register: int = robotiq_percent_to_register(force_percent)
+
+    def gap_to_drive(self, gap_m: float) -> float:
+        gap = self._finite(gap_m, "gap_m")
+        if not self.profile.closed_gap_m <= gap <= self.profile.open_gap_m:
+            raise ValueError(f"gap_m {gap} outside [{self.profile.closed_gap_m}, {self.profile.open_gap_m}]")
+        return self.spec.gap_m_to_sim_drive(gap)
+
+    def drive_to_gap(self, drive: float) -> float:
+        value = self._finite(drive, "drive")
+        lo, hi = sorted((self.profile.open_drive, self.profile.closed_drive))
+        if not lo <= value <= hi:
+            raise ValueError(f"drive {value} outside [{lo}, {hi}]")
+        return self.spec.sim_drive_to_gap_m(value)
+
+    def prepare_real(self, arm: object) -> int:
+        code, _ret = getattr(arm, "robotiq_get_status")(number_of_registers=3)
+        if int(code) != 0:
+            return int(code)
+        status = getattr(arm, "robotiq_status", {}) or {}
+        fault = int(status.get("gFLT", getattr(arm, "robotiq_error_code", 0)))
+        if fault != 0:
+            raise RuntimeError(f"{self.spec.display_name} has fault gFLT={fault}; recover manually before real motion")
+        gsta = int(status.get("gSTA", 0))
+        if bool(getattr(arm, "robotiq_is_activated", False)) or gsta == 3:
+            return 0
+        # Never call robotiq_reset(); fail on faults and activate explicitly only if unactivated without fault.
+        act_result = getattr(arm, "robotiq_set_activate")(wait=True)
+        return int(act_result[0]) if isinstance(act_result, tuple) else int(act_result)
+
+    def send_real_gap(self, arm: object, gap_m: float) -> int:
+        if not self.capabilities.real_command:
+            raise RuntimeError(f"real {self.spec.display_name} commands are not enabled for this robot profile")
+        pos = self.spec.gap_m_to_register(self._finite(gap_m, "gap_m"))
+        method = getattr(arm, "robotiq_set_position")
+        result = method(
+            pos,
+            speed=self.speed_register,
+            force=self.force_register,
+            wait=False,
+            wait_motion=False,
+            auto_enable=False,
+        )
+        return int(result[0]) if isinstance(result, tuple) else int(result)
+
+
+class Robotiq2F85Adapter(RobotiqAdapter):
+    """Robotiq 2F-85 adapter."""
+
+
+class Robotiq2F140Adapter(RobotiqAdapter):
+    """Robotiq 2F-140 adapter."""
+
+
+_ADAPTERS = {
+    "g2": G2Adapter,
+    "bio_g2": BioG2Adapter,
+    "lite6": Lite6Adapter,
+    "robotiq_2f_85": Robotiq2F85Adapter,
+    "robotiq_2f_140": Robotiq2F140Adapter,
+}
 
 
 def create_gripper_adapter(profile: GripperProfile) -> GripperAdapter:

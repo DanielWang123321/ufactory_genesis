@@ -12,6 +12,8 @@ from ufactory.safety.models import SafetyPolicy
 
 FloatTuple = tuple[float, ...]
 G2_PHYSICS_PROFILE = "g2_calibrated_v1"
+ROBOTIQ_2F_85_PHYSICS_PROFILE = "robotiq_2f_85_calibrated_v1"
+ROBOTIQ_2F_140_PHYSICS_PROFILE = "robotiq_2f_140_calibrated_v1"
 # Pyramidal friction with DEFAULT_IMPRATIO=100.0 in make_rigid_options() stiffens
 # tangential regularization in the main Newton solver so a held cube does not
 # creep under gravity, keeping the post-solve no-slip PGS pass off globally.
@@ -221,6 +223,21 @@ class G2SimulationConfig:
                 raise ValueError(f"simulation.g2.{name} must be finite and within {low}–{high}")
 
 
+@dataclass(frozen=True)
+class RobotiqSimulationConfig:
+    """SDK position and percentage commands for the calibrated Robotiq 2F-85/2F-140 servo."""
+
+    position_mm: float = 0.0
+    speed_percent: float = 50.0
+    force_percent: float = 50.0
+
+    def __post_init__(self) -> None:
+        for name, low, high in (("position_mm", 0, 140), ("speed_percent", 0, 100), ("force_percent", 1, 100)):
+            value = float(getattr(self, name))
+            if not math.isfinite(value) or not low <= value <= high:
+                raise ValueError(f"simulation.robotiq.{name} must be finite and within {low}–{high}")
+
+
 CONSTRAINT_SOLVERS = ("newton",)
 FRICTION_CONES = ("pyramidal", "elliptic")
 CONTACT_RESOLUTIONS = ("convex", "signorini")
@@ -268,6 +285,7 @@ class SimulationConfig:
     use_gjk_collision: bool | None
     show_viewer: bool
     g2: G2SimulationConfig = G2SimulationConfig()
+    robotiq: RobotiqSimulationConfig = RobotiqSimulationConfig()
 
     def __post_init__(self) -> None:
         if self.backend not in {"cpu", "gpu"}:

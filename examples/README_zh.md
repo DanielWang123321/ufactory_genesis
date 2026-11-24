@@ -64,10 +64,10 @@ python examples/visualization/view_robot.py --robot xarm6
 
 | 机械臂 | 可用末端 | 相机支架适配 | 仿真与预检 | 真机装箱 |
 |---|---|---|---|---|
-| `xarm5` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
-| `xarm6` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | Gripper G2 |
-| `xarm7` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
-| `uf850` | Gripper G2、Bio Gripper G2、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
+| `xarm5` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | — |
+| `xarm6` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | Gripper G2 |
+| `xarm7` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | — |
+| `uf850` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | — |
 | `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper | 裸臂、Lite6 Gripper、Lite6 Vacuum Gripper | 支持 | Lite6 Gripper |
 
 所有机械臂均支持加装[相机支架](../assets/urdf/camera_stand/README.md)（可单独安装或搭载一台视野沿工具轴方向的深度相机）；装上支架后，末端及其 TCP 沿工具轴前移 3 mm：
@@ -102,6 +102,10 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 
 # xArm6 + Gripper G2 开合演示
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo
+
+# xArm6 + Robotiq 2F-85 / 2F-140 开合演示
+python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-85 --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-140 --gripper-demo
 
 # UF850 + Bio Gripper G2 静态查看（固定张开位姿）
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2

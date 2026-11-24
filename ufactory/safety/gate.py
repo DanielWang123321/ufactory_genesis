@@ -14,6 +14,7 @@ import numpy as np
 
 from ufactory.config.models import ResolvedRuntimeConfig
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive
+from ufactory.grippers.robotiq import robotiq_gap_m_to_sim_drive
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.safety.approved import ApprovedProgram, issue_approved_program
 from ufactory.safety.interfaces import CollisionBackend, CollisionResult, KinematicsBackend
@@ -320,6 +321,9 @@ class SafetyGate:
                     continue
                 if self.config.gripper.adapter == "g2":
                     drive_segment = np.asarray([gripper_g2_gap_m_to_sim_drive(gap) for gap in gaps])
+                elif self.config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+                    variant = self.config.gripper.adapter
+                    drive_segment = np.asarray([robotiq_gap_m_to_sim_drive(variant, float(gap)) for gap in gaps])
                 else:
                     drive_segment = self.config.gripper.closed_drive + ratios * (
                         self.config.gripper.open_drive - self.config.gripper.closed_drive

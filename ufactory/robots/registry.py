@@ -35,6 +35,14 @@ class RobotModelSpec:
         return self.supports("gripper_g2")
 
     @property
+    def supports_robotiq_2f_85(self) -> bool:
+        return self.supports("robotiq_2f_85")
+
+    @property
+    def supports_robotiq_2f_140(self) -> bool:
+        return self.supports("robotiq_2f_140")
+
+    @property
     def supports_bio_gripper_g2(self) -> bool:
         return self.supports("bio_gripper_g2")
 

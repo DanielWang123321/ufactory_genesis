@@ -71,12 +71,26 @@ def test_assembly_ref_omits_defaults() -> None:
 
 
 def test_compatibility_matrix() -> None:
-    assert supported_end_effectors("xarm6") == ("gripper_g2", "bio_gripper_g2", "vacuum_gripper")
+    assert supported_end_effectors("xarm6") == (
+        "gripper_g2",
+        "bio_gripper_g2",
+        "vacuum_gripper",
+        "robotiq_2f_85",
+        "robotiq_2f_140",
+    )
     assert supported_end_effectors("lite6") == ("lite6_gripper", "lite6_vacuum_gripper")
     assert get_robot_profile("uf850").supports_bio_gripper_g2
+    assert get_robot_profile("xarm6").supports_robotiq_2f_85
+    assert get_robot_profile("xarm6").supports_robotiq_2f_140
     assert not get_robot_profile("lite6").supports_gripper_g2
+    assert not get_robot_profile("lite6").supports_robotiq_2f_85
+    assert not get_robot_profile("lite6").supports_robotiq_2f_140
     with pytest.raises(AssemblyError, match="not supported on lite6"):
         compose_robot_urdf("lite6", "gripper_g2")
+    with pytest.raises(AssemblyError, match="not supported on lite6"):
+        compose_robot_urdf("lite6", "robotiq_2f_85")
+    with pytest.raises(AssemblyError, match="not supported on lite6"):
+        compose_robot_urdf("lite6", "robotiq_2f_140")
     with pytest.raises(AssemblyError, match="unknown end effector"):
         compose_robot_urdf("xarm6", "camera")
 
@@ -171,7 +185,14 @@ def test_flanges_partition_registry_and_define_compatibility() -> None:
     for ee in end_effectors().values():
         assert ee.robots == flanges[ee.flange]
     identity = {n for n, ee in end_effectors().items() if ee.mount == assembly.IDENTITY}
-    assert identity == {"gripper_g2", "vacuum_gripper", "lite6_gripper", "lite6_vacuum_gripper"}
+    assert identity == {
+        "gripper_g2",
+        "vacuum_gripper",
+        "robotiq_2f_85",
+        "robotiq_2f_140",
+        "lite6_gripper",
+        "lite6_vacuum_gripper",
+    }
 
 
 def _write_schema(tmp_path: Path, flanges: str, flange: str, *, extra: str = "") -> Path:
@@ -338,6 +359,14 @@ def test_visual_glb_wrapper_maps_flags_to_assemblies() -> None:
         "bio_gripper_g2": (
             dict(with_bio_gripper_g2=True, movable=True),
             dict(with_bio_gripper_g2=True),
+        ),
+        "robotiq_2f_85": (
+            dict(with_robotiq_2f_85=True, movable=True),
+            dict(with_robotiq_2f_85=True),
+        ),
+        "robotiq_2f_140": (
+            dict(with_robotiq_2f_140=True, movable=True),
+            dict(with_robotiq_2f_140=True),
         ),
         "vacuum_gripper": (dict(with_vacuum_gripper=True),),
     }

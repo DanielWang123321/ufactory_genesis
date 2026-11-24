@@ -12,7 +12,8 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from ufactory.config.models import G2_PHYSICS_PROFILE, G2SimulationConfig
+from ufactory.config.models import G2_PHYSICS_PROFILE, G2SimulationConfig, RobotiqSimulationConfig
+from ufactory.grippers.robotiq import get_robotiq_spec
 from ufactory.simulation.g2_adapter import (
     G2GenesisController,
     object_finger_contact_forces_n,
@@ -20,21 +21,29 @@ from ufactory.simulation.g2_adapter import (
     pad_normal,
 )
 from ufactory.simulation.g2_model import g2_physics_summary, sdk_position_counts
+from ufactory.simulation.robotiq_adapter import RobotiqGenesisController, robotiq_pad_centers
+from ufactory.simulation.robotiq_model import robotiq_physics_summary
 from ufactory.trajectory.g2_confirmation import (
     G2Telemetry,
     GripForceGate,
     ReleaseGate,
     grip_timeout_s,
     release_timeout_s,
+    robotiq_grip_timeout_s,
+    robotiq_release_timeout_s,
 )
 
 
-def save_sim_report(report, csv_path=None, sim_report_path=None) -> None:
+def save_sim_report(report, csv_path=None, sim_report_path=None, *, failure_subdir: str = "g2") -> None:
     if not report.completed and (csv_path is None or sim_report_path is None):
         from datetime import datetime
         from ufactory.config.assets import discover_asset_store
 
-        stem = discover_asset_store().root / "reports/g2/failures" / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        stem = (
+            discover_asset_store().root
+            / f"reports/{failure_subdir}/failures"
+            / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        )
         csv_path = csv_path or stem.with_suffix(".csv")
         sim_report_path = sim_report_path or stem.with_suffix(".json")
     report.record_paths = {
@@ -78,6 +87,7 @@ def _record(ctx, adapter, output, phase: str, time_s: float, previous_gap: float
     from genesis.utils.geom import transform_by_quat
 
     c, model = adapter.controller, adapter.model
+    variant: str | None = getattr(adapter, "variant", None)
     lookup = c.force_lookup()
     position_mm = _scalar(c.position_mm)
     gap = adapter.gap_mm()
@@ -91,19 +101,32 @@ def _record(ctx, adapter, output, phase: str, time_s: float, previous_gap: float
         right_normal=pad_normal(ctx.right_finger),
     )
     left, right = _scalar(left), _scalar(right)
+    if variant is None:
+        raw_counts = sdk_position_counts(position_mm)
+        motor_rpm = int(_scalar(c.requested_speed_rpm))
+        cal_rpm = lookup.calibration_rpm
+        outside_cal = lookup.outside_calibration
+        static_force = model.static_force_n(lookup, max(0, min(84, gap)))
+    else:
+        spec = get_robotiq_spec(variant)
+        raw_counts = spec.gap_m_to_register(position_mm / 1000.0)
+        motor_rpm = 0
+        cal_rpm = 0.0
+        outside_cal = lookup.outside_calibration
+        static_force = model.static_force_n(lookup, max(0.0, min(spec.open_gap_mm, gap)))
     row = {
         "time_s": time_s,
         "phase": phase,
         "position_mm": position_mm,
-        "position_raw_counts": sdk_position_counts(position_mm),
+        "position_raw_counts": raw_counts,
         "speed_percent": _scalar(c.speed_percent),
         "force_percent": _scalar(c.force_percent),
         "speed_command_mm_s": _scalar(c.requested_speed_mm_s),
-        "motor_speed_command_rpm": int(_scalar(c.requested_speed_rpm)),
-        "calibration_speed_rpm": lookup.calibration_rpm,
-        "outside_calibration": lookup.outside_calibration,
+        "motor_speed_command_rpm": motor_rpm,
+        "calibration_speed_rpm": cal_rpm,
+        "outside_calibration": outside_cal,
         "curve_force_n": lookup.force_n,
-        "expected_static_force_n": model.static_force_n(lookup, max(0, min(84, gap))),
+        "expected_static_force_n": static_force,
         "reference_gap_mm": _scalar(output.reference_gap_mm),
         "gap_mm": gap,
         "gap_velocity_mm_s": (gap - previous_gap) / dt,
@@ -123,7 +146,10 @@ def _record(ctx, adapter, output, phase: str, time_s: float, previous_gap: float
     inverse = ctx.ik_link.get_quat().clone()
     inverse[..., 1:] *= -1
     relative = transform_by_quat(position - tool, inverse).detach().cpu().numpy().reshape(3)
-    a, b = pad_centers(model, ctx.left_finger, ctx.right_finger)
+    if variant is None:
+        a, b = pad_centers(model, ctx.left_finger, ctx.right_finger)
+    else:
+        a, b = robotiq_pad_centers(model, ctx.left_finger, ctx.right_finger)
     center = (a + b) / 2
     lq, rq = ctx.left_finger.get_quat(), ctx.right_finger.get_quat()
     sign = ((lq * rq).sum(dim=-1, keepdim=True) >= 0).to(lq.dtype) * 2 - 1
@@ -151,8 +177,24 @@ def _record(ctx, adapter, output, phase: str, time_s: float, previous_gap: float
     return row
 
 
-def replay_g2(
-    program, ctx, *, final_metric_settle_s=0.04, on_phase=None, on_tick=None, csv_path=None, sim_report_path=None
+def _replay_calibrated(
+    program,
+    ctx,
+    *,
+    adapter,
+    settings,
+    open_mm: float,
+    physics_profile: str,
+    physics_summary: dict,
+    grip_deadline_fn,
+    release_deadline_fn,
+    variant: str | None = None,
+    failure_subdir: str = "g2",
+    final_metric_settle_s: float = 0.04,
+    on_phase=None,
+    on_tick=None,
+    csv_path=None,
+    sim_report_path=None,
 ):
     from ufactory.trajectory.g2_confirmation import summarize
     from ufactory.trajectory.mirror_executor import resolve_tick_arm_q
@@ -160,17 +202,9 @@ def replay_g2(
 
     if not math.isfinite(final_metric_settle_s) or final_metric_settle_s < 0:
         raise ValueError("final_metric_settle_s must be finite and non-negative")
-    settings = ctx.g2_settings or G2SimulationConfig()
-    if settings.speed_percent <= 0:
-        raise ValueError("automatic G2 manipulation requires speed_percent > 0")
-    adapter = ctx.g2_controller
-    if adapter is None:
-        adapter = ctx.g2_controller = G2GenesisController(
-            ctx.robot, ctx.left_finger, ctx.right_finger, axis_link=ctx.ik_link
-        )
-    adapter.reset(max(0, min(84, adapter.gap_mm())))
-    adapter.command(84, settings.speed_percent, settings.force_percent)
-    report = SimReport(physics_profile=G2_PHYSICS_PROFILE, physics_parameters=g2_physics_summary())
+    adapter.reset(max(0.0, min(open_mm, adapter.gap_mm())))
+    adapter.command(open_mm, settings.speed_percent, settings.force_percent)
+    report = SimReport(physics_profile=physics_profile, physics_parameters=physics_summary)
     report.physics_parameters["command"] = asdict(settings)
     report.physics_parameters["rate_hz"] = program.rate
     report.physics_parameters.update(getattr(ctx, "simulation_parameters", {}))
@@ -218,13 +252,13 @@ def replay_g2(
             if segment.kind == "gripper" and segment.label in {"grip", "release"}:
                 reference = _scalar(adapter.controller.reference_gap_mm)
                 if segment.label == "grip":
-                    deadline = grip_timeout_s(reference, settings.position_mm, settings.speed_percent)
+                    deadline = grip_deadline_fn(reference, settings.position_mm, settings.speed_percent)
                     gate = GripForceGate(rate)
                     target = settings.position_mm
                 else:
-                    deadline = release_timeout_s(reference, settings.speed_percent)
-                    gate = ReleaseGate(rate)
-                    target = 84
+                    deadline = release_deadline_fn(reference, settings.speed_percent)
+                    gate = ReleaseGate(rate, open_position_mm=open_mm)
+                    target = open_mm
                 # The approved duration is the maximum reference stroke deadline.
                 # Reversal can only reduce the remaining reference travel.
                 count = int(math.ceil(min(deadline, segment.duration) * rate - 1e-9))
@@ -310,10 +344,74 @@ def replay_g2(
             ),
         )
         packaging = any(s.label == "post-release-settle" for s in program.segments)
-        report.acceptance = summarize(report.records, config, packaging=packaging)
+        report.acceptance = summarize(report.records, config, packaging=packaging, open_position_mm=open_mm)
         report.timing_passed = report.completed and report.acceptance["timing_passed"]
         report.transport_passed = report.completed and report.acceptance["transport_passed"]
     else:
         report.timing_passed = report.transport_passed = False
-    save_sim_report(report, csv_path, sim_report_path)
+    save_sim_report(report, csv_path, sim_report_path, failure_subdir=failure_subdir)
     return report
+
+
+def replay_g2(
+    program, ctx, *, final_metric_settle_s=0.04, on_phase=None, on_tick=None, csv_path=None, sim_report_path=None
+):
+    settings = ctx.g2_settings or G2SimulationConfig()
+    if settings.speed_percent <= 0:
+        raise ValueError("automatic G2 manipulation requires speed_percent > 0")
+    adapter = ctx.g2_controller
+    if adapter is None:
+        adapter = ctx.g2_controller = G2GenesisController(
+            ctx.robot, ctx.left_finger, ctx.right_finger, axis_link=ctx.ik_link
+        )
+    return _replay_calibrated(
+        program,
+        ctx,
+        adapter=adapter,
+        settings=settings,
+        open_mm=84.0,
+        physics_profile=G2_PHYSICS_PROFILE,
+        physics_summary=g2_physics_summary(),
+        grip_deadline_fn=grip_timeout_s,
+        release_deadline_fn=release_timeout_s,
+        variant=None,
+        failure_subdir="g2",
+        final_metric_settle_s=final_metric_settle_s,
+        on_phase=on_phase,
+        on_tick=on_tick,
+        csv_path=csv_path,
+        sim_report_path=sim_report_path,
+    )
+
+
+def replay_robotiq(
+    program, ctx, *, final_metric_settle_s=0.04, on_phase=None, on_tick=None, csv_path=None, sim_report_path=None
+):
+    variant = getattr(ctx.gripper, "family", "robotiq_2f_85")
+    settings = getattr(ctx, "robotiq_settings", None) or RobotiqSimulationConfig()
+    if settings.speed_percent <= 0:
+        raise ValueError("automatic Robotiq manipulation requires speed_percent > 0")
+    adapter = getattr(ctx, "robotiq_controller", None)
+    if adapter is None:
+        adapter = ctx.robotiq_controller = RobotiqGenesisController(
+            ctx.robot, ctx.left_finger, ctx.right_finger, variant=variant, axis_link=ctx.ik_link
+        )
+    summary = robotiq_physics_summary(variant)
+    return _replay_calibrated(
+        program,
+        ctx,
+        adapter=adapter,
+        settings=settings,
+        open_mm=adapter.model.spec.open_gap_mm,
+        physics_profile=summary["physics_profile"],
+        physics_summary=summary,
+        grip_deadline_fn=lambda ref, pos, spd: robotiq_grip_timeout_s(variant, ref, pos, spd),
+        release_deadline_fn=lambda ref, spd: robotiq_release_timeout_s(variant, ref, spd),
+        variant=variant,
+        failure_subdir="robotiq",
+        final_metric_settle_s=final_metric_settle_s,
+        on_phase=on_phase,
+        on_tick=on_tick,
+        csv_path=csv_path,
+        sim_report_path=sim_report_path,
+    )

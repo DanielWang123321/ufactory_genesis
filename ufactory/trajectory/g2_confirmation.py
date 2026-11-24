@@ -9,7 +9,9 @@ import statistics
 
 import numpy as np
 
+from ufactory.grippers.robotiq import get_robotiq_spec
 from ufactory.simulation.g2_model import checked, speed_mm_s
+from ufactory.simulation.robotiq_model import robotiq_speed_mm_s
 
 
 CONFIRMATION_FRAMES = 2
@@ -76,26 +78,47 @@ def release_timeout_s(reference_gap_mm: float, speed_percent: float) -> float:
     return grip_timeout_s(reference_gap_mm, OPEN_POSITION_MM, speed_percent)
 
 
-def release_at_target(row: dict) -> bool:
+def robotiq_grip_timeout_s(variant: str, reference_gap_mm: float, position_mm: float, speed_percent: float) -> float:
+    spec = get_robotiq_spec(variant)
+    reference = checked(reference_gap_mm, 0, spec.open_gap_mm, "reference_gap_mm")
+    position = checked(position_mm, 0, spec.open_gap_mm, "position_mm")
+    speed = robotiq_speed_mm_s(spec, checked(speed_percent, 1e-9, 100, "speed_percent"))
+    return max(2.0, abs(reference - position) / speed + 1.0)
+
+
+def robotiq_release_timeout_s(variant: str, reference_gap_mm: float, speed_percent: float) -> float:
+    spec = get_robotiq_spec(variant)
+    return robotiq_grip_timeout_s(variant, reference_gap_mm, spec.open_gap_mm, speed_percent)
+
+
+def release_at_target(row: dict, *, open_position_mm: float = OPEN_POSITION_MM) -> bool:
     gap, left, right = (row[key] for key in ("gap_mm", "left_normal_n", "right_normal_n"))
     return (
         all(math.isfinite(value) for value in (gap, left, right))
-        and abs(gap - OPEN_POSITION_MM) <= OPEN_TOLERANCE_MM
+        and abs(gap - open_position_mm) <= OPEN_TOLERANCE_MM
         and 0 <= min(left, right)
         and max(left, right) <= CONTACT_THRESHOLD_N
     )
 
 
+@dataclass
 class ReleaseGate(ConsecutiveFrameGate):
+    open_position_mm: float = OPEN_POSITION_MM
+
     def matches(self, row: dict) -> bool:
-        return release_at_target(row)
+        return release_at_target(row, open_position_mm=self.open_position_mm)
 
 
-def prepare_g2_program(program, settings):
-    """Keep the arm path; gripper durations become state-confirmed deadlines."""
-    if settings.speed_percent <= 0:
-        raise ValueError("automatic G2 manipulation requires speed_percent > 0")
-    close = settings.position_mm / 1000
+def _prepare_confirmed_program(
+    program,
+    *,
+    close_mm: float,
+    open_mm: float,
+    grip_duration_s: float,
+    release_duration_s: float,
+):
+    close = close_mm / 1000.0
+    open_gap_m = open_mm / 1000.0
     segments = []
     for segment in program.segments:
         if segment.label in {"grip-settle", "pre-release-relax"}:
@@ -103,22 +126,50 @@ def prepare_g2_program(program, settings):
         if segment.label == "grip":
             segment = replace(
                 segment,
-                gap_start=0.084,
+                gap_start=open_gap_m,
                 gap_end=close,
-                duration=grip_timeout_s(84, settings.position_mm, settings.speed_percent),
+                duration=grip_duration_s,
             )
         elif segment.label == "release":
             segment = replace(
                 segment,
                 gap_start=close,
-                gap_end=0.084,
-                duration=release_timeout_s(settings.position_mm, settings.speed_percent),
+                gap_end=open_gap_m,
+                duration=release_duration_s,
             )
         elif segment.kind == "gripper" and segment.label == "pre-release-settle":
             segment = replace(segment, gap_start=close, gap_end=close)
         _, count = segment.samples(program.rate)
         segments.append(replace(segment, samples_count=count))
     return replace(program, segments=segments)
+
+
+def prepare_g2_program(program, settings):
+    """Keep the arm path; gripper durations become state-confirmed deadlines."""
+    if settings.speed_percent <= 0:
+        raise ValueError("automatic G2 manipulation requires speed_percent > 0")
+    return _prepare_confirmed_program(
+        program,
+        close_mm=settings.position_mm,
+        open_mm=OPEN_POSITION_MM,
+        grip_duration_s=grip_timeout_s(OPEN_POSITION_MM, settings.position_mm, settings.speed_percent),
+        release_duration_s=release_timeout_s(settings.position_mm, settings.speed_percent),
+    )
+
+
+def prepare_robotiq_program(program, settings, variant: str = "robotiq_2f_85"):
+    """Keep the arm path; Robotiq gripper durations become state-confirmed deadlines."""
+    if settings.speed_percent <= 0:
+        raise ValueError("automatic Robotiq manipulation requires speed_percent > 0")
+    spec = get_robotiq_spec(variant)
+    close_mm = checked(settings.position_mm, 0.0, spec.open_gap_mm, "position_mm")
+    return _prepare_confirmed_program(
+        program,
+        close_mm=close_mm,
+        open_mm=spec.open_gap_mm,
+        grip_duration_s=robotiq_grip_timeout_s(spec.adapter, spec.open_gap_mm, close_mm, settings.speed_percent),
+        release_duration_s=robotiq_release_timeout_s(spec.adapter, close_mm, settings.speed_percent),
+    )
 
 
 @dataclass(frozen=True)
@@ -155,7 +206,13 @@ class G2Telemetry:
     sensor_force_n: float
 
 
-def summarize(rows: list[dict], config, *, packaging: bool = False) -> dict:
+def summarize(
+    rows: list[dict],
+    config,
+    *,
+    packaging: bool = False,
+    open_position_mm: float = OPEN_POSITION_MM,
+) -> dict:
     if not rows:
         raise ValueError("no pick-place samples")
     params = config.task.parameters
@@ -179,7 +236,7 @@ def summarize(rows: list[dict], config, *, packaging: bool = False) -> dict:
         confirmation_index is not None and lift_index is not None and confirmation_index < lift_index
     )
     delay = rows[lift_index]["time_s"] - gate.confirmed_time_s if confirmed_before_lift else None
-    release_gate = ReleaseGate(rate)
+    release_gate = ReleaseGate(rate, open_position_mm=open_position_mm)
     release_index = None
     release_confirmation = []
     release_indices = [i for i, row in enumerate(rows) if row["phase"] == "release"]
@@ -255,7 +312,7 @@ def summarize(rows: list[dict], config, *, packaging: bool = False) -> dict:
         "carry_slip_within_5mm": slip is not None and slip <= 5,
         **({} if packaging else {"placed_within_10mm": completed and place_error <= 10}),
         "released": released,
-        "opened_within_1mm": completed and abs(final["gap_mm"] - 84) <= 1,
+        "opened_within_1mm": completed and abs(final["gap_mm"] - open_position_mm) <= 1,
         "object_settled": completed and final["object_speed_mm_s"] <= 5,
         "home_within_10mm": completed and final["home_error_mm"] <= 10,
         "torque_within_limit": torque_ok,

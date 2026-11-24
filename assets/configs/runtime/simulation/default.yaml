@@ -19,3 +19,7 @@ simulation:
     position_mm: 0.0
     speed_percent: 50.0
     force_percent: 50.0
+  robotiq:
+    position_mm: 0.0
+    speed_percent: 50.0
+    force_percent: 50.0

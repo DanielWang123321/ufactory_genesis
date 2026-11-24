@@ -34,6 +34,16 @@ def main() -> None:
         help="Load Gripper G2 visual combo URDF",
     )
     parser.add_argument(
+        "--robotiq-2f-85",
+        action="store_true",
+        help="Load Robotiq 2F-85 visual combo URDF",
+    )
+    parser.add_argument(
+        "--robotiq-2f-140",
+        action="store_true",
+        help="Load Robotiq 2F-140 visual combo URDF",
+    )
+    parser.add_argument(
         "--vacuum-gripper",
         action="store_true",
         help="Load xArm/UF850 vacuum gripper static visual combo URDF",
@@ -93,20 +103,34 @@ def main() -> None:
     accessory_flags = (
         args.bio_gripper_g2,
         args.gripper_g2,
+        args.robotiq_2f_85,
+        args.robotiq_2f_140,
         args.vacuum_gripper,
         args.lite6_gripper,
         args.lite6_vacuum_gripper,
     )
     if sum(accessory_flags) > 1:
         parser.error("Only one end-effector flag may be set at a time")
-    if args.movable and not (args.gripper_g2 or args.lite6_gripper or args.bio_gripper_g2):
-        parser.error("--movable requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2")
-    if args.gripper_demo and not (args.gripper_g2 or args.lite6_gripper or args.bio_gripper_g2):
-        parser.error("--gripper-demo requires --gripper-g2, --lite6-gripper, or --bio-gripper-g2")
+    if args.movable and not (
+        args.gripper_g2 or args.robotiq_2f_85 or args.robotiq_2f_140 or args.lite6_gripper or args.bio_gripper_g2
+    ):
+        parser.error(
+            "--movable requires --gripper-g2, --robotiq-2f-85, --robotiq-2f-140, --lite6-gripper, or --bio-gripper-g2"
+        )
+    if args.gripper_demo and not (
+        args.gripper_g2 or args.robotiq_2f_85 or args.robotiq_2f_140 or args.lite6_gripper or args.bio_gripper_g2
+    ):
+        parser.error(
+            "--gripper-demo requires --gripper-g2, --robotiq-2f-85, --robotiq-2f-140, --lite6-gripper, or --bio-gripper-g2"
+        )
     if args.bio_gripper_g2 and not profile.supports_bio_gripper_g2:
         parser.error(f"{args.robot} does not support Bio Gripper G2")
     if args.gripper_g2 and not profile.supports_gripper_g2:
         parser.error(f"{args.robot} does not support Gripper G2")
+    if args.robotiq_2f_85 and not profile.supports_robotiq_2f_85:
+        parser.error(f"{args.robot} does not support Robotiq 2F-85")
+    if args.robotiq_2f_140 and not profile.supports_robotiq_2f_140:
+        parser.error(f"{args.robot} does not support Robotiq 2F-140")
     if args.vacuum_gripper and not profile.supports_vacuum_gripper:
         parser.error(f"{args.robot} does not support Vacuum Gripper")
     if args.lite6_gripper and not profile.supports_lite6_gripper:
@@ -118,7 +142,15 @@ def main() -> None:
             name
             for flag, name in zip(
                 accessory_flags,
-                ("bio_gripper_g2", "gripper_g2", "vacuum_gripper", "lite6_gripper", "lite6_vacuum_gripper"),
+                (
+                    "bio_gripper_g2",
+                    "gripper_g2",
+                    "robotiq_2f_85",
+                    "robotiq_2f_140",
+                    "vacuum_gripper",
+                    "lite6_gripper",
+                    "lite6_vacuum_gripper",
+                ),
                 strict=True,
             )
             if flag
@@ -129,13 +161,21 @@ def main() -> None:
         parser.error(f"--camera {args.camera} does not fit {args.robot} with {end_effector or 'no end effector'}")
 
     if args.diagnose:
-        run_glb_diagnose(profile, with_gripper_g2=args.gripper_g2, backend=args.backend)
+        run_glb_diagnose(
+            profile,
+            with_gripper_g2=args.gripper_g2,
+            with_robotiq_2f_85=args.robotiq_2f_85,
+            with_robotiq_2f_140=args.robotiq_2f_140,
+            backend=args.backend,
+        )
         return
 
     urdf_path = robot_visual_glb_urdf(
         args.robot,
         with_bio_gripper_g2=args.bio_gripper_g2,
         with_gripper_g2=args.gripper_g2,
+        with_robotiq_2f_85=args.robotiq_2f_85,
+        with_robotiq_2f_140=args.robotiq_2f_140,
         with_vacuum_gripper=args.vacuum_gripper,
         with_lite6_gripper=args.lite6_gripper,
         with_lite6_vacuum_gripper=args.lite6_vacuum_gripper,

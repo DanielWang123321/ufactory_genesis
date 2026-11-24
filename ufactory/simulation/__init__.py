@@ -12,6 +12,7 @@ from ufactory.simulation.bio_g2_model import (
     bio_g2_physics_summary,
 )
 from ufactory.simulation.g2_model import G2Model, g2_physics_summary
+from ufactory.simulation.robotiq_model import ROBOTIQ_RATE_HZ, RobotiqModel, robotiq_physics_summary
 from ufactory.simulation.physics import (
     DEFAULT_CONSTRAINT_SOLVER,
     DEFAULT_CONSTRAINT_TIMECONST,
@@ -52,6 +53,16 @@ _LAZY_EXPORTS = {
     "configure_g2_mimic_constraints": "ufactory.simulation.g2_adapter",
     "object_finger_contact_forces_n": "ufactory.simulation.g2_adapter",
     "validate_g2_contact_substeps": "ufactory.simulation.g2_adapter",
+    "ROBOTIQ_MAX_RIGID_SUBSTEP_DT_S": "ufactory.simulation.robotiq_adapter",
+    "ROBOTIQ_MIMIC_CONSTRAINT_SOL_PARAMS": "ufactory.simulation.robotiq_adapter",
+    "RobotiqContactCollisionBackend": "ufactory.simulation.robotiq_adapter",
+    "RobotiqController": "ufactory.simulation.robotiq_controller",
+    "RobotiqGenesisController": "ufactory.simulation.robotiq_adapter",
+    "apply_robotiq_batch_control": "ufactory.simulation.robotiq_adapter",
+    "configure_robotiq_drive": "ufactory.simulation.robotiq_adapter",
+    "configure_robotiq_mimic_constraints": "ufactory.simulation.robotiq_adapter",
+    "robotiq_mimic_equality_names": "ufactory.simulation.robotiq_adapter",
+    "validate_robotiq_contact_substeps": "ufactory.simulation.robotiq_adapter",
 }
 
 if TYPE_CHECKING:
@@ -64,6 +75,18 @@ if TYPE_CHECKING:
         validate_g2_contact_substeps,
     )
     from ufactory.simulation.g2_controller import ControlOutput, G2Controller
+    from ufactory.simulation.robotiq_adapter import (
+        ROBOTIQ_MAX_RIGID_SUBSTEP_DT_S,
+        ROBOTIQ_MIMIC_CONSTRAINT_SOL_PARAMS,
+        RobotiqContactCollisionBackend,
+        RobotiqGenesisController,
+        apply_robotiq_batch_control,
+        configure_robotiq_drive,
+        configure_robotiq_mimic_constraints,
+        robotiq_mimic_equality_names,
+        validate_robotiq_contact_substeps,
+    )
+    from ufactory.simulation.robotiq_controller import RobotiqController
 
 
 def __getattr__(name: str) -> Any:
@@ -114,6 +137,19 @@ __all__ = [
     "make_rigid_options",
     "object_finger_contact_forces_n",
     "override_simulation_backend",
+    "ROBOTIQ_MAX_RIGID_SUBSTEP_DT_S",
+    "ROBOTIQ_MIMIC_CONSTRAINT_SOL_PARAMS",
+    "ROBOTIQ_RATE_HZ",
+    "RobotiqContactCollisionBackend",
+    "RobotiqController",
+    "RobotiqGenesisController",
+    "RobotiqModel",
+    "apply_robotiq_batch_control",
+    "configure_robotiq_drive",
+    "configure_robotiq_mimic_constraints",
+    "robotiq_mimic_equality_names",
+    "robotiq_physics_summary",
+    "validate_robotiq_contact_substeps",
     "validate_g2_contact_substeps",
     "validate_rigid_physics",
 ]

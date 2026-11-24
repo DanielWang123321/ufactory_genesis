@@ -65,10 +65,10 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 
 | Robot | End effectors | Camera stand compatibility | Sim & preflight | Real packaging |
 |---|---|---|---|---|
-| `xarm5` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
-| `xarm6` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | Gripper G2 |
-| `xarm7` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
-| `uf850` | Gripper G2, Bio Gripper G2, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
+| `xarm5` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | — |
+| `xarm6` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | Gripper G2 |
+| `xarm7` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | — |
+| `uf850` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | — |
 | `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper | Bare arm, Lite6 Gripper, Lite6 Vacuum Gripper | Yes | Lite6 Gripper |
 
 All robots accept the [camera stand](../assets/urdf/camera_stand/README.md) (alone or with one depth camera looking along the tool axis), which moves the end effector and its TCP 3 mm along the tool axis:
@@ -103,6 +103,10 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 
 # xArm6 + Gripper G2 open/close demo
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo
+
+# xArm6 + Robotiq 2F-85 / 2F-140 open/close demo
+python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-85 --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-140 --gripper-demo
 
 # UF850 + Bio Gripper G2 static view (fixed open pose)
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2

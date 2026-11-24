@@ -77,7 +77,10 @@ PLATES: dict[str, dict[str, object]] = {
 XARM_ARMS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850")
 ARMS = (*XARM_ARMS, "lite6")
 ARM_END_EFFECTORS: dict[str, tuple[str | None, ...]] = {
-    **{arm: (None, "gripper_g2", "bio_gripper_g2", "vacuum_gripper") for arm in XARM_ARMS},
+    **{
+        arm: (None, "gripper_g2", "bio_gripper_g2", "robotiq_2f_85", "robotiq_2f_140", "vacuum_gripper")
+        for arm in XARM_ARMS
+    },
     "lite6": (None, "lite6_gripper", "lite6_vacuum_gripper"),
 }
 STANDALONE_LOADERS = {
@@ -191,7 +194,7 @@ def test_every_base_plate_combination_composes_deterministically(tmp_path: Path)
                 assert not os.path.isabs(fn)
                 assert (path.parent / fn).resolve().is_file(), fn
             count += 1
-    assert count == 58
+    assert count == 74
 
     cwd = os.getcwd()
     try:

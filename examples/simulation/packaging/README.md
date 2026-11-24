@@ -16,6 +16,7 @@ Grasp, transport, release and return-home checks remain in place.
 | Flag | Values / notes |
 |------|----------------|
 | `--robot` | Default `xarm6`; all five families supported in sim / dry-run |
+| `--gripper` | Optional: `default` / `g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` |
 | `--mode` | Required for simulation: `sim` (default), `dry-run` (offline preflight) |
 | `--executor` | Default `servo_j`; also `servo_cartesian` |
 | `--backend` | Optional: `cpu` / `gpu`; same meaning as [pick-place](../pick_place/README.md#flags) |
@@ -35,6 +36,12 @@ python examples/simulation/packaging/run.py \
 # xArm6 + Gripper G2: 1-cycle packaging physics simulation on CPU backend
 python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --backend cpu
+
+# xArm6 + Robotiq 2F-85 / 2F-140: 1-cycle packaging physics simulation
+python examples/simulation/packaging/run.py \
+  --robot xarm6 --gripper robotiq_2f_85 --mode sim --executor servo_j
+python examples/simulation/packaging/run.py \
+  --robot xarm6 --gripper robotiq_2f_140 --mode sim --executor servo_j
 
 # Lite6 + Lite6 Gripper: 3-cycle packaging physics simulation regression
 python examples/simulation/packaging/run.py \

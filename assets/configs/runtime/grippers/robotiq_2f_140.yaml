@@ -1,0 +1,43 @@
+schema_version: 1
+robot:
+  urdf: assembly:robotiq_2f_140
+  adjacent_collision_pairs:
+    - [robotiq_2f_140_left_finger, robotiq_2f_140_left_inner_knuckle]
+    - [robotiq_2f_140_right_inner_knuckle, robotiq_2f_140_right_finger]
+gripper:
+  adapter: robotiq_2f_140
+  drive_joint: robotiq_2f_140_drive_joint
+  all_joint_names:
+    - robotiq_2f_140_drive_joint
+    - robotiq_2f_140_left_finger_joint
+    - robotiq_2f_140_left_inner_knuckle_joint
+    - robotiq_2f_140_right_outer_knuckle_joint
+    - robotiq_2f_140_right_finger_joint
+    - robotiq_2f_140_right_inner_knuckle_joint
+  finger_link_names:
+    - robotiq_2f_140_left_finger
+    - robotiq_2f_140_right_finger
+  open_drive: 0.0038593285902723817
+  closed_drive: 0.7665940156296729
+  open_gap_m: 0.140
+  closed_gap_m: 0.0
+  kp: 120.0
+  kv: 10.0
+  force_lower_n: -30.0
+  force_upper_n: 30.0
+  damping: 0.1
+  frictionloss: 0.0
+  real_command: true
+  feedback: true
+  closed_loop: true
+  allowed_contact_links:
+    - robotiq_2f_140_left_finger
+    - robotiq_2f_140_right_finger
+  tool_tip_offset_z_m: 0.1293
+  finger_pad_below_center_m: 0.0805
+  finger_close_descent_m: 0.0253
+  grasp_table_clearance_m: 0.01
+  grasp_height_extra_m: 0.0
+task:
+  parameters:
+    default_ee_position_m: [0.30, 0.00, 0.36]

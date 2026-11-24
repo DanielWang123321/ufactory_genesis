@@ -14,8 +14,10 @@ from ufactory.robots.assembly import compose_robot_urdf
 from ufactory.manipulation.packaging.core import packaging_layout
 from ufactory.simulation import (
     configure_g2_mimic_constraints,
+    configure_robotiq_mimic_constraints,
     make_rigid_options,
     validate_g2_contact_substeps,
+    validate_robotiq_contact_substeps,
 )
 from ufactory.trajectory.scene import FINGER_FRICTION, OBJ_FRICTION
 from ufactory.simulation.collision import apply_collision_geometry_filters
@@ -323,6 +325,8 @@ def build_packaging_scene(
     substeps = int(config.simulation.substeps)
     if config.gripper.adapter == "g2":
         validate_g2_contact_substeps(dt=sim_dt, substeps=substeps)
+    elif config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+        validate_robotiq_contact_substeps(dt=sim_dt, substeps=substeps, variant=config.gripper.adapter)
     cam_pos, cam_lookat = packaging_camera(layout)
     scene_kwargs: dict = {}
     if renderer is not None:
@@ -360,7 +364,14 @@ def build_packaging_scene(
     add_cardboard_box(scene, layout)
 
     if robot_urdf_path is None:
-        end_effector = "lite6_gripper" if config.gripper.adapter == "lite6" else "gripper_g2"
+        adapter_name = config.gripper.adapter
+        end_effector = (
+            "lite6_gripper"
+            if adapter_name == "lite6"
+            else adapter_name
+            if adapter_name in {"robotiq_2f_85", "robotiq_2f_140"}
+            else "gripper_g2"
+        )
         urdf_path = compose_robot_urdf(config.robot.key, end_effector)
     else:
         urdf_path = robot_urdf_path
@@ -385,6 +396,8 @@ def build_packaging_scene(
         scene.build(n_envs=1)
         if config.gripper.adapter == "g2":
             configure_g2_mimic_constraints(robot)
+        elif config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+            configure_robotiq_mimic_constraints(robot, config.gripper.adapter)
         finalize_packaging_block(block, layout)
     return scene, robot, block, layout
 

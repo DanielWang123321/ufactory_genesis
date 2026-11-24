@@ -79,6 +79,28 @@ end_effectors:
     flange: xarm
     stl_visuals:
       xarm_vacuum_gripper_link: vacuum_gripper/meshes/visual/vacuum_gripper_visual.stl
+  robotiq_2f_85:
+    source: robotiq_2f_85/robotiq_2f_85_movable_visual.urdf
+    base_link: robotiq_2f_85_base_link
+    mount_joint: robotiq_2f_85_fix
+    flange: xarm
+    stl_visuals:
+      robotiq_2f_85_base_link: robotiq_2f_85/meshes/visual/robotiq_2f_85_base.stl
+    stl_materials:
+      robotiq_2f_85_left_inner_knuckle: Silver
+      robotiq_2f_85_right_inner_knuckle: Silver
+      "*": DarkGrey
+  robotiq_2f_140:
+    source: robotiq_2f_140/robotiq_2f_140_movable_visual.urdf
+    base_link: robotiq_2f_140_base_link
+    mount_joint: robotiq_2f_140_fix
+    flange: xarm
+    stl_visuals:
+      robotiq_2f_140_base_link: robotiq_2f_140/meshes/visual/robotiq_2f_140_base.stl
+    stl_materials:
+      robotiq_2f_140_left_inner_knuckle: Silver
+      robotiq_2f_140_right_inner_knuckle: Silver
+      "*": DarkGrey
   lite6_gripper:
     source: lite6_gripper/lite6_gripper_movable_visual.urdf
     base_link: uflite_gripper_link

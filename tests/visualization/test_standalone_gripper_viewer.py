@@ -71,6 +71,8 @@ def test_bio_g2_standalone_view_uses_the_mounted_home_orientation():
     ("tool", "base_joint", "tcp_joint", "expected_base_z", "expected_tcp_z"),
     [
         ("gripper_g2", "world_joint", "joint_tcp", 0.23, 0.23 - 0.1735),
+        ("robotiq_2f_85", "world_joint", "robotiq_2f_85_tcp_joint", 0.23, 0.23 - 0.162253),
+        ("robotiq_2f_140", "world_joint", "robotiq_2f_140_tcp_joint", 0.28, 0.28 - 0.234466),
         ("lite6_gripper", "world_joint", "joint_tcp", 0.18, 0.18 - 0.0836),
         ("vacuum_gripper", "vacuum_gripper_fix", "vacuum_joint_tcp", 0.20, 0.20 - 0.126),
         ("lite6_vacuum_gripper", "vacuum_gripper_fix", "joint_tcp", 0.17, 0.17 - 0.061),
@@ -116,6 +118,8 @@ def test_standalone_base_plates_use_upright_floor_pose(plate: str, thickness_m: 
     ("tool", "exp_pos", "exp_speed", "exp_force"),
     [
         ("gripper_g2", 0.0, 50.0, 50.0),
+        ("robotiq_2f_85", 0.0, 50.0, 50.0),
+        ("robotiq_2f_140", 0.0, 50.0, 50.0),
         ("bio_gripper_g2", 71.0, 50.0, 50.0),
         ("lite6_gripper", None, None, None),
         ("vacuum_gripper", None, None, None),
@@ -146,6 +150,9 @@ def test_parse_standalone_tool_args_defaults(tool: str, exp_pos, exp_speed, exp_
         ["--tool", "lite6_base_plate", "--force-percent", "50"],
         ["--tool", "gripper_g2", "--speed-mm-s", "20"],
         ["--tool", "gripper_g2", "--position-mm", "100"],
+        ["--tool", "robotiq_2f_85", "--position-mm", "100"],
+        ["--tool", "robotiq_2f_140", "--position-mm", "160"],
+        ["--tool", "robotiq_2f_85", "--speed-mm-s", "20"],
         ["--tool", "bio_gripper_g2", "--position-mm", "40"],
     ],
 )

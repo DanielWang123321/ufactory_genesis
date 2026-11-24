@@ -26,6 +26,12 @@ Visual and collision meshes for accessories follow the same upstream family
 where noted in each `assets/urdf/<name>/README.md`. Combo URDFs, movable
 visual variants, and compressed GLBs are maintained in this repository.
 
+### Robotiq 2F-85 and 2F-140 grippers (`assets/urdf/robotiq_2f_85/`, `assets/urdf/robotiq_2f_140/`)
+
+- **Upstream:** [Robotiq/robotiq-ros](https://github.com/Robotiq/robotiq-ros) (`grippers/` at commit `49167c4f44a1da2b564715fba3e729c8ce958b63`).
+- **License:** BSD-3-Clause (full text in `assets/urdf/robotiq_2f_85/LICENSE` and `assets/urdf/robotiq_2f_140/LICENSE`).
+- **This repository's modifications:** Normalized URDF frames, convex-decomposed / split STL collision meshes, Draco-compressed visual GLBs, and mimic-joint definitions for Genesis simulation.
+
 ### Camera stand and depth cameras (`assets/urdf/{camera_stand,d405,d435,gemini_305,zed_x_nano}/`)
 
 - **Camera stand:** UFACTORY CAD. GLB, STL and collision prisms are maintained in this repository.

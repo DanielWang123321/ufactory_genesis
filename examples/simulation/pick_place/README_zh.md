@@ -11,7 +11,7 @@
 | 参数               | 取值 / 说明                                                          |
 | ---------------- | ---------------------------------------------------------------- |
 | `--robot`        | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6`               |
-| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6`（`bio_gripper_g2` 支持 `xarm5`、`xarm6`、`xarm7`、`uf850` 微孔板任务，仅用于 `sim` 仿真） |
+| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140`（`bio_gripper_g2`、`robotiq_2f_*` 支持 `xarm5`、`xarm6`、`xarm7`、`uf850`） |
 | `--mode`         | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检）                    |
 | `--executor`     | `servo_j` 或 `servo_cartesian`；Bio G2 默认 `servo_cartesian`，其他夹爪必选 |
 | `--backend`      | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
@@ -38,6 +38,12 @@ python examples/simulation/pick_place/run.py \
 # xArm6 + Bio Gripper G2：微孔板抓放物理仿真并打开查看器（默认 servo_cartesian）
 python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode sim --visual
+
+# xArm6 + Robotiq 2F-85 / 2F-140：抓放物理仿真
+python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper robotiq_2f_85 --mode sim --executor servo_j
+python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper robotiq_2f_140 --mode sim --executor servo_cartesian
 
 # Lite6 + Lite6 Gripper：使用 CPU 后端运行抓放物理仿真（无支持 GPU 时）
 python examples/simulation/pick_place/run.py \

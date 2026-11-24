@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="robotiq_2f_85_movable_visual">
+  <material name="DarkGrey">
+    <color rgba="0.18 0.18 0.20 1.0" />
+  </material>
+  <material name="Silver">
+    <color rgba="0.78 0.79 0.80 1.0" />
+  </material>
+  <link name="world" />
+  <joint name="world_joint" type="fixed">
+    <parent link="world" />
+    <child link="robotiq_2f_85_base_link" />
+    <origin xyz="0 0 0.12" rpy="0 0 0" />
+  </joint>
+  <link name="robotiq_2f_85_base_link">
+    <inertial>
+      <origin xyz="-0.00002274 0.00000000 0.03232288" rpy="0 0 0" />
+      <mass value="0.66320197" />
+      <inertia ixx="0.00058802208" ixy="-2.936e-08" ixz="3.2296e-07" iyy="0.00051617816" iyz="-1.97755965e-23" izz="0.00039462776" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/base.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_base_col_00.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="robotiq_2f_85_left_outer_knuckle">
+    <inertial>
+      <origin xyz="0.00055052 0.02938674 0.01110696" rpy="0 0 0" />
+      <mass value="0.05645150" />
+      <inertia ixx="2.21233737e-05" ixy="-2.37618088e-07" ixz="-1.61032042e-07" iyy="1.67295143e-05" iyz="-5.7573776e-06" izz="1.29013306e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/left_outer_knuckle.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_left_outer_knuckle_col_0.stl" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_left_outer_finger_col_1.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="robotiq_2f_85_left_finger">
+    <inertial>
+      <origin xyz="0.00080000 -0.01456706 0.01649701" rpy="0 0 0" />
+      <mass value="0.04268589" />
+      <inertia ixx="1.197888e-05" ixy="-9.16868566e-23" ixz="2.1573378e-22" iyy="1.048152e-05" iyz="3.5232e-06" izz="4.22784e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/left_finger.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_left_finger_pad.stl" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_left_finger_body.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="robotiq_2f_85_left_inner_knuckle">
+    <inertial>
+      <origin xyz="-0.00015001 0.01897699 0.02247101" rpy="0 0 0" />
+      <mass value="0.02969376" />
+      <inertia ixx="8.69056e-06" ixy="5.3933445e-23" ixz="-2.40902721e-22" iyy="9.57136e-06" iyz="-3.93424e-06" izz="8.19144e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/left_inner_knuckle.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_left_inner_knuckle.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="robotiq_2f_85_right_outer_knuckle">
+    <inertial>
+      <origin xyz="-0.00004489 -0.02938674 0.01110696" rpy="0 0 0" />
+      <mass value="0.05645150" />
+      <inertia ixx="2.21233737e-05" ixy="4.91092196e-08" ixz="-3.32809593e-08" iyy="1.67196202e-05" iyz="5.7573776e-06" izz="1.28914365e-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/right_outer_knuckle.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_right_outer_knuckle_col_0.stl" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_right_outer_finger_col_1.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="robotiq_2f_85_right_finger">
+    <inertial>
+      <origin xyz="-0.00005000 0.01456706 0.01649701" rpy="0 0 0" />
+      <mass value="0.04268589" />
+      <inertia ixx="1.197888e-05" ixy="-9.16868566e-23" ixz="-2.1573378e-22" iyy="1.048152e-05" iyz="-3.5232e-06" izz="4.22784e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/right_finger.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_right_finger_pad.stl" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_right_finger_body.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="robotiq_2f_85_right_inner_knuckle">
+    <inertial>
+      <origin xyz="-0.00005001 -0.01926824 0.02222178" rpy="0 0 0" />
+      <mass value="0.02969376" />
+      <inertia ixx="8.69056e-06" ixy="4.49445375e-23" ixz="2.42700503e-22" iyy="9.42456e-06" iyz="3.9636e-06" izz="8.33824e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/visual/visual_glb/right_inner_knuckle.glb" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../robotiq_2f_85/meshes/collision/robotiq_2f_85_right_inner_knuckle.stl" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="robotiq_2f_85_drive_joint" type="revolute">
+    <parent link="robotiq_2f_85_base_link" />
+    <child link="robotiq_2f_85_left_outer_knuckle" />
+    <origin xyz="0.00000000 0.03060114 0.05490452" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="0.0" upper="0.8014334346423151" effort="50" velocity="2.0" />
+    <dynamics damping="1.0" friction="0.5" />
+  </joint>
+  <joint name="robotiq_2f_85_left_finger_joint" type="revolute">
+    <parent link="robotiq_2f_85_left_outer_knuckle" />
+    <child link="robotiq_2f_85_left_finger" />
+    <origin xyz="0.00000000 0.03715750 0.04342168" rpy="0 0 0" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0.0" upper="0.8014334346423151" effort="50" velocity="2.0" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="robotiq_2f_85_drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <joint name="robotiq_2f_85_left_inner_knuckle_joint" type="revolute">
+    <parent link="robotiq_2f_85_base_link" />
+    <child link="robotiq_2f_85_left_inner_knuckle" />
+    <origin xyz="0.00000000 0.01270000 0.06142000" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="0.0" upper="0.8014334346423151" effort="50" velocity="2.0" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="robotiq_2f_85_drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <joint name="robotiq_2f_85_right_outer_knuckle_joint" type="revolute">
+    <parent link="robotiq_2f_85_base_link" />
+    <child link="robotiq_2f_85_right_outer_knuckle" />
+    <origin xyz="0.00000000 -0.03060114 0.05490452" rpy="0 0 0" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0.0" upper="0.8014334346423151" effort="50" velocity="2.0" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="robotiq_2f_85_drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <joint name="robotiq_2f_85_right_finger_joint" type="revolute">
+    <parent link="robotiq_2f_85_right_outer_knuckle" />
+    <child link="robotiq_2f_85_right_finger" />
+    <origin xyz="0.00000000 -0.03715750 0.04342168" rpy="0 0 0" />
+    <axis xyz="1 0 0" />
+    <limit lower="0.0" upper="0.8014334346423151" effort="50" velocity="2.0" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="robotiq_2f_85_drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <joint name="robotiq_2f_85_right_inner_knuckle_joint" type="revolute">
+    <parent link="robotiq_2f_85_base_link" />
+    <child link="robotiq_2f_85_right_inner_knuckle" />
+    <origin xyz="0.00000000 -0.01270000 0.06142000" rpy="0 0 0" />
+    <axis xyz="-1 0 0" />
+    <limit lower="0.0" upper="0.8014334346423151" effort="50" velocity="2.0" />
+    <dynamics damping="1.0" friction="0.5" />
+    <mimic joint="robotiq_2f_85_drive_joint" multiplier="1" offset="0" />
+  </joint>
+  <link name="robotiq_2f_85_tcp_link" />
+  <joint name="robotiq_2f_85_tcp_joint" type="fixed">
+    <parent link="robotiq_2f_85_base_link" />
+    <child link="robotiq_2f_85_tcp_link" />
+    <origin xyz="0 0 0.162253" rpy="0 0 0" />
+  </joint>
+</robot>

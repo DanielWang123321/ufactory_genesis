@@ -20,11 +20,12 @@ from ufactory.config.models import (
     G2SimulationConfig,
     MotionConfig,
     ResolvedRuntimeConfig,
+    RobotiqSimulationConfig,
     RobotSpec,
     SimulationConfig,
     TaskProfile,
 )
-from ufactory.robots.assembly import validate_robot_urdf
+from ufactory.robots.assembly import AssemblyError, validate_assembly, validate_robot_urdf
 from ufactory.robots.registry import get_profile_key_for_robot_name
 from ufactory.safety.models import CollisionExemption, SafetyPolicy
 
@@ -377,7 +378,14 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         ),
         show_viewer=bool(simulation_data.get("show_viewer", False)),
         g2=G2SimulationConfig(**simulation_data["g2"]),
+        robotiq=RobotiqSimulationConfig(**simulation_data["robotiq"]),
     )
+    if gripper is not None and gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+        max_gap_mm = gripper.open_gap_m * 1000.0
+        if not 0.0 <= simulation.robotiq.position_mm <= max_gap_mm + 1e-9:
+            raise ConfigError(
+                f"simulation.robotiq.position_mm ({simulation.robotiq.position_mm}) exceeds {gripper.adapter} range [0, {max_gap_mm:g}]"
+            )
     safety_data = data["safety"]
     geometry_pairs = safety_data.get("excluded_geometry_pairs", [])
     if not isinstance(geometry_pairs, list) or any(not isinstance(pair, list | tuple) for pair in geometry_pairs):
@@ -424,6 +432,7 @@ def load_runtime_config(
     robot_key: str,
     *,
     task: str = "pick_place",
+    gripper: str | None = None,
     config_path: str | Path | None = None,
     overrides: Mapping[str, Any] | None = None,
     asset_store: RepositoryAssetStore | None = None,
@@ -447,7 +456,11 @@ def load_runtime_config(
     sources: list[str] = []
     for path in base_paths:
         layer = _read_yaml(path)
-        if "simulation" in layer and data.get("gripper", {}).get("adapter") == "g2":
+        if "simulation" in layer and data.get("gripper", {}).get("adapter") in {
+            "g2",
+            "robotiq_2f_85",
+            "robotiq_2f_140",
+        }:
             layer["simulation"]["constraint_time_constant_s"] = 0.00125
             layer["simulation"]["noslip_iterations"] = G2_NOSLIP_ITERATIONS
         for key, value in layer.items():
@@ -464,6 +477,29 @@ def load_runtime_config(
         if path.is_file():
             _merge_strict(data, _read_yaml(path))
             sources.append(relative)
+    normalized_gripper = None if gripper in (None, "default") else str(gripper)
+    if normalized_gripper is not None:
+        if task == "reach":
+            raise ConfigError("reach task does not support a gripper overlay")
+        default_adapter = str(data.get("gripper", {}).get("adapter", ""))
+        if normalized_gripper in {"g2", "gripper_g2"}:
+            if default_adapter != "g2":
+                raise ConfigError(f"robot {canonical} does not support gripper {normalized_gripper}")
+        elif normalized_gripper == "lite6":
+            if default_adapter != "lite6":
+                raise ConfigError(f"robot {canonical} does not support gripper {normalized_gripper}")
+        elif normalized_gripper in {"robotiq_2f_85", "robotiq_2f_140"}:
+            try:
+                validate_assembly(canonical, normalized_gripper, root=store.root)
+            except AssemblyError as exc:
+                raise ConfigError(str(exc)) from exc
+            overlay_rel = f"assets/configs/runtime/grippers/{normalized_gripper}.yaml"
+            _merge_strict(data, _read_yaml(store.require(overlay_rel)))
+            sources.append(overlay_rel)
+            data["simulation"]["constraint_time_constant_s"] = 0.00125
+            data["simulation"]["noslip_iterations"] = G2_NOSLIP_ITERATIONS
+        else:
+            raise ConfigError(f"unknown gripper: {normalized_gripper}")
     if config_path is not None:
         user_path = Path(config_path).expanduser().resolve()
         _merge_strict(data, _read_yaml(user_path))

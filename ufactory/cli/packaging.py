@@ -115,6 +115,12 @@ def _sdk_evidence_path(report: Path | None, robot_key: str) -> Path:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ufactory-packaging-showcase")
     parser.add_argument("--robot", default="xarm6", choices=robot_cli_choices())
+    parser.add_argument(
+        "--gripper",
+        choices=("default", "g2", "lite6", "robotiq_2f_85", "robotiq_2f_140"),
+        default="default",
+        help="Select end-effector variant (robotiq_2f_85, robotiq_2f_140 support xarm5/6/7 and uf850)",
+    )
     parser.add_argument("--mode", default="sim", choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", default="servo_j", choices=("servo_j", "servo_cartesian"))
     parser.add_argument("--config", type=Path)
@@ -139,12 +145,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
     parser.add_argument("--table-height", type=float, default=None)
     args = parser.parse_args(argv)
-    g2_overrides = {
-        f"simulation.g2.{name}": getattr(args, name)
+    sim_section = "robotiq" if args.gripper in {"robotiq_2f_85", "robotiq_2f_140"} else "g2"
+    gripper_overrides = {
+        f"simulation.{sim_section}.{name}": getattr(args, name)
         for name in ("position_mm", "speed_percent", "force_percent")
         if getattr(args, name) is not None
     }
-    if args.mode != "sim" and (g2_overrides or args.csv or args.sim_report):
+    if args.mode != "sim" and (gripper_overrides or args.csv or args.sim_report):
         parser.error("percentage commands and execution records require --mode sim")
 
     if args.speed <= 0.0:
@@ -155,7 +162,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("real packaging motion requires --confirm-real")
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
-    config = load_runtime_config(args.robot, task="packaging_showcase", config_path=args.config, overrides=g2_overrides)
+    selected_gripper = None if args.gripper == "default" else args.gripper
+    try:
+        config = load_runtime_config(
+            args.robot,
+            task="packaging_showcase",
+            gripper=selected_gripper,
+            config_path=args.config,
+            overrides=gripper_overrides,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.backend is not None:
         config = override_simulation_backend(config, args.backend)
     if args.print_config:
@@ -173,6 +190,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mode == "sim":
         if config.gripper is not None and config.gripper.adapter == "g2" and config.simulation.g2.speed_percent <= 0:
             parser.error("automatic G2 manipulation requires --speed-percent > 0")
+        if (
+            config.gripper is not None
+            and config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}
+            and config.simulation.robotiq.speed_percent <= 0
+        ):
+            parser.error("automatic Robotiq manipulation requires --speed-percent > 0")
         return _run_sim(args, config)
     _print_summary(config)
 

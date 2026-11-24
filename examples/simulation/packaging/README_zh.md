@@ -13,6 +13,7 @@
 | 参数                                         | 取值 / 说明                            |
 | ------------------------------------------ | ---------------------------------- |
 | `--robot`                                  | 默认 `xarm6`；五机型均支持 sim / dry-run    |
+| `--gripper`                                | 可选：`default` / `g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` |
 | `--mode`                                   | 仿真必选：`sim`（默认）、`dry-run`（离线预检）     |
 | `--executor`                               | 默认 `servo_j`；也可选 `servo_cartesian` |
 | `--backend`                                | 可选：`cpu` / `gpu`；含义与[抓放](../pick_place/README_zh.md#参数)相同 |
@@ -32,6 +33,12 @@ python examples/simulation/packaging/run.py \
 # xArm6 + Gripper G2：使用 CPU 后端运行单轮装箱物理仿真
 python examples/simulation/packaging/run.py \
   --robot xarm6 --mode sim --executor servo_j --backend cpu
+
+# xArm6 + Robotiq 2F-85 / 2F-140：单轮装箱物理仿真
+python examples/simulation/packaging/run.py \
+  --robot xarm6 --gripper robotiq_2f_85 --mode sim --executor servo_j
+python examples/simulation/packaging/run.py \
+  --robot xarm6 --gripper robotiq_2f_140 --mode sim --executor servo_j
 
 # Lite6 + Lite6 Gripper：连续运行 3 轮装箱物理仿真
 python examples/simulation/packaging/run.py \

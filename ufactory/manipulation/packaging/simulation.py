@@ -27,6 +27,7 @@ import genesis as gs
 from genesis.utils.geom import transform_quat_by_quat, xyz_to_quat
 
 from ufactory.config import load_runtime_config, runtime_config_dict
+from ufactory.config.models import ROBOTIQ_2F_85_PHYSICS_PROFILE, ROBOTIQ_2F_140_PHYSICS_PROFILE
 from ufactory.config.loader import config_sha256
 from ufactory.grippers import create_gripper_adapter
 from ufactory.grippers.g2 import (
@@ -72,6 +73,7 @@ class ShowcaseRobotCtx:
     gripper_initial_open_clearance_m: float = 0.0
     home_settle_steps: int = SETTLE_STEPS
     g2_controller: object | None = None
+    robotiq_controller: object | None = None
 
 
 def _scale_steps(steps: int, speed: float) -> int:
@@ -127,7 +129,7 @@ def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None, ca
     all_gripper_dof_idx = [robot.get_joint(name).dofs_idx_local[0] for name in gripper.all_joint_names]
     opening_gripper_dof_idx = (
         list(gripper_dof_idx)
-        if calibrated_g2 or gripper.adapter != "g2"
+        if calibrated_g2 or gripper.adapter not in {"g2", "robotiq_2f_85", "robotiq_2f_140"}
         else [gripper_dof_idx[0], all_gripper_dof_idx[3]]
     )
     applied_arm_kp_scale = layout.simulation_arm_kp_scale if arm_kp_scale is None else float(arm_kp_scale)
@@ -175,6 +177,15 @@ def _setup_robot(robot, layout, config, *, arm_kp_scale: float | None = None, ca
         from ufactory.simulation.g2_adapter import configure_g2_drive
 
         configure_g2_drive(robot, damping=gripper.damping, frictionloss=gripper.frictionloss)
+    elif calibrated_g2 and gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+        from ufactory.simulation.robotiq_adapter import configure_robotiq_drive
+
+        configure_robotiq_drive(
+            robot,
+            gripper.adapter,
+            damping=gripper.damping,
+            frictionloss=gripper.frictionloss,
+        )
     elif gripper.adapter == "lite6":
         from ufactory.grippers.lite6 import configure_lite6_gripper_drive
 
@@ -251,9 +262,16 @@ def init_showcase_robot(
         calibrated_g2=calibrated_g2,
     )
     from ufactory.simulation.g2_model import G2Model
+    from ufactory.simulation.robotiq_model import RobotiqModel
 
     is_g2 = calibrated_g2 and gripper.adapter == "g2"
-    open_drive = G2Model.load().linkage.drive_for_gap_m(0.084) if is_g2 else float(gripper.open_drive)
+    is_robotiq = calibrated_g2 and gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}
+    if is_g2:
+        open_drive = G2Model.load().linkage.drive_for_gap_m(0.084)
+    elif is_robotiq:
+        open_drive = RobotiqModel.load(gripper.adapter).linkage.drive_for_gap_m(gripper.open_gap_m)
+    else:
+        open_drive = float(gripper.open_drive)
     home_pos = _world_home(layout, cartesian_xy_offset_m=cartesian_xy_offset_m)
     home_qpos_saved = _init_home_qpos(
         robot,
@@ -268,8 +286,14 @@ def init_showcase_robot(
     finger_z_offset = _measure_finger_offset(ik_link, left_finger, right_finger)
     grasp_drive = create_gripper_adapter(gripper).gap_to_drive(task_layout.grasp_gap_m)
     from ufactory.simulation.g2_adapter import G2GenesisController
+    from ufactory.simulation.robotiq_adapter import RobotiqGenesisController
 
     adapter = G2GenesisController(robot, left_finger, right_finger, axis_link=ik_link) if is_g2 else None
+    robotiq_adapter = (
+        RobotiqGenesisController(robot, left_finger, right_finger, variant=gripper.adapter, axis_link=ik_link)
+        if is_robotiq
+        else None
+    )
     return ShowcaseRobotCtx(
         ik_link=ik_link,
         left_finger=left_finger,
@@ -287,6 +311,7 @@ def init_showcase_robot(
         gripper_initial_open_dof_idx=[],
         gripper_initial_open_clearance_m=0.0,
         g2_controller=adapter,
+        robotiq_controller=robotiq_adapter,
         home_settle_steps=max(1, int(round(task_layout.simulation_home_settle_s * config.motion.rate_hz))),
     )
 
@@ -299,6 +324,9 @@ def hold_robot_home(robot, scene, ctx: ShowcaseRobotCtx, *, steps: int = 1) -> N
         if ctx.g2_controller is not None:
             ctx.g2_controller.command(84)
             ctx.g2_controller.apply(SIM_DT)
+        elif ctx.robotiq_controller is not None:
+            ctx.robotiq_controller.command(ctx.robotiq_controller.model.spec.open_gap_mm)
+            ctx.robotiq_controller.apply(SIM_DT)
         else:
             robot.control_dofs_position(gripper_open, ctx.gripper_dof_idx)
         scene.step()
@@ -334,6 +362,8 @@ def prepare_packaging_cycle(
     )
     if getattr(ctx, "g2_controller", None) is not None:
         ctx.g2_controller.reset(84)
+    elif getattr(ctx, "robotiq_controller", None) is not None:
+        ctx.robotiq_controller.reset(ctx.robotiq_controller.model.spec.open_gap_mm)
     _reset_block(block, layout)
     hold_robot_home(robot, scene, ctx, steps=_scale_steps(getattr(ctx, "home_settle_steps", SETTLE_STEPS), speed))
 
@@ -412,7 +442,8 @@ def _trajectory_context(
     cartesian_xy_offset_m: tuple[float, float] | None = None,
 ) -> TrajSceneContext:
     task_layout = packaging_layout(config)
-    runtime = get_robot_runtime_profile(config.robot.key)
+    gripper_name = config.gripper.adapter if config.gripper is not None else None
+    runtime = get_robot_runtime_profile(config.robot.key, gripper=gripper_name)
     gripper = runtime.gripper
     if gripper is None:
         raise RuntimeError(f"{config.robot.key} packaging showcase requires a configured gripper")
@@ -465,6 +496,8 @@ def _trajectory_context(
         robot_urdf_path=getattr(robot, "_ufactory_model_path", ""),
         g2_settings=config.simulation.g2,
         g2_controller=ctx.g2_controller,
+        robotiq_settings=config.simulation.robotiq,
+        robotiq_controller=ctx.robotiq_controller,
         simulation_parameters={
             "rate_hz": config.motion.rate_hz,
             "substeps": config.simulation.substeps,
@@ -537,6 +570,10 @@ def run_pick_place_cycle(
         from ufactory.trajectory.g2_confirmation import prepare_g2_program
 
         program = prepare_g2_program(program, config.simulation.g2)
+    elif config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
+        from ufactory.trajectory.g2_confirmation import prepare_robotiq_program
+
+        program = prepare_robotiq_program(program, config.simulation.robotiq, config.gripper.adapter)
     else:
         program = _with_sim_release_timing(program, speed=speed, task_layout=task_layout)
 
@@ -547,7 +584,11 @@ def run_pick_place_cycle(
     from ufactory.trajectory.g2_replay import save_sim_report
 
     urdf = Path(traj_ctx.robot_urdf_path)
-    kinematics, collision = build_packaging_backends(config, urdf, calibrated_g2=ctx.g2_controller is not None)
+    kinematics, collision = build_packaging_backends(
+        config,
+        urdf,
+        calibrated_g2=(ctx.g2_controller is not None or ctx.robotiq_controller is not None),
+    )
     gate = create_safety_gate(
         config,
         kinematics=kinematics,
@@ -598,7 +639,7 @@ def run_pick_place_cycle(
         f"\n  Place error: {report.place_error_mm:.1f} mm  "
         f"Home drift: {report.home_drift_mm:.1f} mm  {'OK' if ok else 'CHECK'}"
     )
-    if config.gripper.adapter == "g2":
+    if config.gripper.adapter in {"g2", "robotiq_2f_85", "robotiq_2f_140"}:
         print(
             f"  completed={report.completed} timing={'PASS' if report.timing_passed else 'FAIL'} "
             f"transport={'PASS' if report.transport_passed else 'FAIL'}"
@@ -611,7 +652,10 @@ def _cycle_failure_reason(report: SimReport, layout, task_layout) -> str | None:
         return report.failure_reason or "simulation incomplete"
     if not report.timing_passed:
         return "timing acceptance failed"
-    if report.physics_profile == G2_PHYSICS_PROFILE and not report.transport_passed:
+    if (
+        report.physics_profile in {G2_PHYSICS_PROFILE, ROBOTIQ_2F_85_PHYSICS_PROFILE, ROBOTIQ_2F_140_PHYSICS_PROFILE}
+        and not report.transport_passed
+    ):
         return "transport acceptance failed"
     phases = {phase.label: phase for phase in report.phases}
     lift = phases.get("lift")
@@ -672,6 +716,11 @@ def run_packaging_simulation(options: PackagingSimulationOptions, runtime_config
         raise ValueError("packaging requires a configured gripper")
     if runtime_config.gripper.adapter == "g2" and runtime_config.simulation.g2.speed_percent <= 0:
         raise ValueError("automatic G2 manipulation requires speed_percent > 0")
+    if (
+        runtime_config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}
+        and runtime_config.simulation.robotiq.speed_percent <= 0
+    ):
+        raise ValueError("automatic Robotiq manipulation requires speed_percent > 0")
     require_genesis_capabilities(gs, pbr=True, deferred_viewer=True)
     with GenesisRuntimeManager(runtime_config.simulation):
         return _run_packaging_sim_body(options, runtime_config)
