@@ -417,6 +417,25 @@ def test_part_assets_budget_inertia_and_license(part: str) -> None:
     assert materials == (
         ["stand_anodized_aluminum"] if part == "camera_stand" else [f"{part}_housing", f"{part}_glass"]
     )
+    if part in ("camera_stand", "d405", "d435", "gemini_305"):
+        housing_pbr = meta["materials"][0]["pbrMetallicRoughness"]  # type: ignore[index]
+        for arm_glb in ("xarm6/meshes/xarm6_1305/visual_glb/link6.glb", "uf850/meshes/uf850/visual_glb/link6.glb"):
+            arm_meta = _glb_json(URDF_ROOT / arm_glb)
+            arm_metals = [
+                m["pbrMetallicRoughness"]
+                for m in arm_meta["materials"]  # type: ignore[index]
+                if m.get("pbrMetallicRoughness", {}).get("metallicFactor", 0.0) > 0.5
+            ]
+            assert len(arm_metals) == 1, arm_glb
+            np.testing.assert_allclose(housing_pbr["baseColorFactor"], arm_metals[0]["baseColorFactor"], atol=1e-5)
+            assert housing_pbr["metallicFactor"] == pytest.approx(arm_metals[0]["metallicFactor"], abs=1e-5)
+            assert housing_pbr["roughnessFactor"] == pytest.approx(arm_metals[0]["roughnessFactor"], abs=0.01)
+    elif part == "zed_x_nano":
+        housing_pbr = meta["materials"][0]["pbrMetallicRoughness"]  # type: ignore[index]
+        np.testing.assert_allclose(housing_pbr["baseColorFactor"], [0.16, 0.17, 0.19, 1.0], atol=1e-4)
+    if part != "camera_stand":
+        glass_pbr = meta["materials"][1]["pbrMetallicRoughness"]  # type: ignore[index]
+        np.testing.assert_allclose(glass_pbr["baseColorFactor"], [0.025, 0.03, 0.035, 1.0], atol=1e-4)
 
     root = ET.parse(URDF_ROOT / part / f"{part}.urdf").getroot()
     base = "camera_stand" if part == "camera_stand" else f"{part}_body"
