@@ -13,7 +13,7 @@
 | 参数                                         | 取值 / 说明                            |
 | ------------------------------------------ | ---------------------------------- |
 | `--robot`                                  | 默认 `xarm6`；五机型均支持 sim / dry-run    |
-| `--gripper`                                | 可选：`default` / `g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140`（`robotiq_2f_*` 在控制器 TCP 偏置/负载（含 11 mm 法兰转接件）与真机夹爪指令完成硬件验证前仅支持 `sim` / `dry-run`） |
+| `--gripper`                                | 可选：`default` / `g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140`（`robotiq_2f_*` 仅支持 `sim` / `dry-run`；Robotiq 连接真实控制器目前只验证了 `xarm6` + `robotiq_2f_85` 的抓放） |
 | `--mode`                                   | 仿真必选：`sim`（默认）、`dry-run`（离线预检）     |
 | `--executor`                               | 默认 `servo_j`；也可选 `servo_cartesian` |
 | `--backend`                                | 可选：`cpu` / `gpu`；含义与[抓放](../pick_place/README_zh.md#参数)相同 |

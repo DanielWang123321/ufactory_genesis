@@ -39,7 +39,7 @@ from ufactory.manipulation.commands import (
     print_preflight_complete as _print_preflight_complete,
     print_preflight_violation_summary as _print_preflight_violation_summary,
 )
-from ufactory.grippers.robotiq import ROBOTIQ_ADAPTERS, ROBOTIQ_BLOCKED_MODE_REASON, ROBOTIQ_BLOCKED_MODES
+from ufactory.grippers.robotiq import robotiq_controller_mode_error
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn, read_tcp_offset
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
@@ -407,8 +407,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
 
-    if args.gripper in ROBOTIQ_ADAPTERS and args.mode in ROBOTIQ_BLOCKED_MODES:
-        parser.error(f"--gripper {args.gripper} {ROBOTIQ_BLOCKED_MODE_REASON}")
+    robotiq_error = robotiq_controller_mode_error("pick_place", args.robot, args.gripper, args.mode)
+    if robotiq_error is not None:
+        parser.error(robotiq_error)
 
     if args.gripper == "bio_gripper_g2":
         if args.robot not in {"xarm5", "xarm6", "xarm7", "uf850"}:

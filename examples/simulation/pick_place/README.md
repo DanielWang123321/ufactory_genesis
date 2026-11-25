@@ -11,7 +11,7 @@ Multi-robot pick-place in Genesis physics simulation or offline trajectory and c
 | Flag | Values / notes |
 |------|----------------|
 | `--robot` | Required: `xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6` |
-| `--gripper` | Optional: `default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` (`bio_gripper_g2` and `robotiq_2f_*` support `xarm5`, `xarm6`, `xarm7`, `uf850`; `bio_gripper_g2` runs the microplate task in `sim` mode only; `robotiq_2f_*` runs in `sim` / `dry-run` only until controller TCP offset/load and the real Robotiq command path are validated on hardware) |
+| `--gripper` | Optional: `default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` (`bio_gripper_g2` and `robotiq_2f_*` support `xarm5`, `xarm6`, `xarm7`, `uf850`; `bio_gripper_g2` runs the microplate task in `sim` mode only; `robotiq_2f_*` runs on a real controller (`sdk-sim` / `real`) only as `robotiq_2f_85` on `xarm6`, validated on hardware with the 11 mm flange adapter; every other Robotiq combination is `sim` / `dry-run` only) |
 | `--mode` | Required for simulation: `sim` (Genesis physics), `dry-run` (offline trajectory and collision preflight) |
 | `--executor` | `servo_j` or `servo_cartesian`; Bio G2 defaults to `servo_cartesian`, required for other grippers |
 | `--backend` | Optional: `cpu` / `gpu`; overrides `simulation.backend` (use `cpu` without a Genesis-supported GPU) |

@@ -125,6 +125,28 @@ def test_gap_lspb_samples_use_requested_duration_without_overshoot():
     assert np.all(np.diff(gaps[:, 0]) <= 1e-12)
 
 
+@pytest.mark.parametrize(("gap_start", "gap_end"), [(0.022, 0.085), (0.085, 0.022), (0.022, 0.140), (0.0, 0.0089)])
+def test_gap_lspb_samples_stay_exactly_within_their_endpoints(gap_start: float, gap_end: float) -> None:
+    # Regression: 0.022 + 0.063 evaluated to 0.08500000000000005, above the Robotiq 2F-85 open gap (0.085 m), and
+    # the real gripper adapter rejected the release command on an xArm6 (2026-11-25).
+    gaps, _n, _duration = gap_lspb_samples(gap_start, gap_end, rate=50.0, duration_s=2.0)
+    lo, hi = sorted((gap_start, gap_end))
+    assert gaps.min() >= lo and gaps.max() <= hi
+    assert gaps[-1, 0] == pytest.approx(gap_end, abs=1e-15)
+
+
+def test_robotiq_release_samples_are_accepted_by_the_real_adapter() -> None:
+    from ufactory.config import load_runtime_config
+    from ufactory.grippers import create_gripper_adapter
+
+    config = load_runtime_config("xarm6", gripper="robotiq_2f_85")
+    assert config.gripper is not None
+    adapter = create_gripper_adapter(config.gripper)
+    gaps, _n, _duration = gap_lspb_samples(0.022, config.gripper.open_gap_m, rate=50.0, duration_s=2.0)
+    for gap in gaps[:, 0]:
+        adapter.gap_to_drive(float(gap))
+
+
 def test_gap_lspb_samples_can_hold_identical_gap_for_requested_duration():
     gaps, n, duration = gap_lspb_samples(0.020, 0.020, rate=50.0, duration_s=0.18)
 

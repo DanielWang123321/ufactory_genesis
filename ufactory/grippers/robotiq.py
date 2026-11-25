@@ -13,10 +13,24 @@ ROBOTIQ_ADAPTERS = frozenset((ROBOTIQ_2F_85_PREFIX, ROBOTIQ_2F_140_PREFIX))
 
 # Modes that touch a controller: sdk-sim may physically preposition the arm (--confirm-real) and real moves both.
 ROBOTIQ_BLOCKED_MODES = frozenset(("sdk-sim", "real"))
-ROBOTIQ_BLOCKED_MODE_REASON = (
-    "currently requires --mode sim or dry-run: the controller TCP offset/load (including the 11 mm flange adapter) "
-    "and the real Robotiq command path have not been validated on hardware"
-)
+# (task, CLI robot, gripper) combinations validated on a real controller with the 11 mm flange adapter and the
+# controller TCP offset / load set for adapter + gripper. Everything else stays in sim / dry-run.
+ROBOTIQ_CONTROLLER_VALIDATED = frozenset({("pick_place", "xarm6", ROBOTIQ_2F_85_PREFIX)})
+
+
+def robotiq_controller_mode_error(task: str, robot: str, gripper: str, mode: str) -> str | None:
+    """CLI error for a Robotiq gripper in a controller mode that is not hardware-validated, else ``None``."""
+    if gripper not in ROBOTIQ_ADAPTERS or mode not in ROBOTIQ_BLOCKED_MODES:
+        return None
+    if (task, robot, gripper) in ROBOTIQ_CONTROLLER_VALIDATED:
+        return None
+    validated = ", ".join(f"{t} on {r} with {g}" for t, r, g in sorted(ROBOTIQ_CONTROLLER_VALIDATED))
+    return (
+        f"--gripper {gripper} currently requires --mode sim or dry-run for {task} on {robot}: Robotiq on a real "
+        f"controller has only been validated on hardware for {validated} (11 mm flange adapter, controller TCP "
+        "offset / load set)"
+    )
+
 
 ROBOTIQ_JOINT_SUFFIXES = (
     "drive_joint",

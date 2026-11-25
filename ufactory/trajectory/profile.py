@@ -205,7 +205,10 @@ def gap_lspb_samples(
     alpha = _lspb_alpha_for_duration(d, v_cap, a_max, duration)
     disp = _lspb_displacement(u, d, alpha)
     s = 1.0 if gap_end >= gap_start else -1.0
-    gaps = float(gap_start) + s * disp
+    # The blend never leaves [start, end]; clip float round-off (0.022 + 0.063 = 0.08500000000000005), which would
+    # otherwise exceed the gripper's configured open gap and be rejected by the real gripper adapter.
+    lo, hi = sorted((float(gap_start), float(gap_end)))
+    gaps = np.clip(float(gap_start) + s * disp, lo, hi)
     return gaps.reshape(-1, 1), n, duration
 
 

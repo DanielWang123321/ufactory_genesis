@@ -11,7 +11,7 @@
 | 参数               | 取值 / 说明                                                          |
 | ---------------- | ---------------------------------------------------------------- |
 | `--robot`        | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6`               |
-| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140`（`bio_gripper_g2`、`robotiq_2f_*` 支持 `xarm5`、`xarm6`、`xarm7`、`uf850`；`bio_gripper_g2` 为微孔板任务，仅用于 `sim`；`robotiq_2f_*` 在控制器 TCP 偏置/负载（含 11 mm 法兰转接件）与真机夹爪指令完成硬件验证前仅支持 `sim` / `dry-run`） |
+| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140`（`bio_gripper_g2`、`robotiq_2f_*` 支持 `xarm5`、`xarm6`、`xarm7`、`uf850`；`bio_gripper_g2` 为微孔板任务，仅用于 `sim`；`robotiq_2f_*` 连接真实控制器（`sdk-sim` / `real`）目前只支持 `xarm6` + `robotiq_2f_85`，已在硬件上验证（含 11 mm 法兰转接件）；其他 Robotiq 组合只支持 `sim` / `dry-run`） |
 | `--mode`         | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检）                    |
 | `--executor`     | `servo_j` 或 `servo_cartesian`；Bio G2 默认 `servo_cartesian`，其他夹爪必选 |
 | `--backend`      | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |

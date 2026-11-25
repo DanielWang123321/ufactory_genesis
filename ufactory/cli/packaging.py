@@ -32,7 +32,7 @@ from ufactory.manipulation.commands import (
     write_json as _write_json,
 )
 from ufactory.config import dump_runtime_config, load_runtime_config
-from ufactory.grippers.robotiq import ROBOTIQ_ADAPTERS, ROBOTIQ_BLOCKED_MODE_REASON, ROBOTIQ_BLOCKED_MODES
+from ufactory.grippers.robotiq import ROBOTIQ_ADAPTERS, robotiq_controller_mode_error
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn, read_tcp_offset
 from ufactory.manipulation.packaging.core import (
@@ -146,8 +146,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
     parser.add_argument("--table-height", type=float, default=None)
     args = parser.parse_args(argv)
-    if args.gripper in ROBOTIQ_ADAPTERS and args.mode in ROBOTIQ_BLOCKED_MODES:
-        parser.error(f"--gripper {args.gripper} {ROBOTIQ_BLOCKED_MODE_REASON}")
+    robotiq_error = robotiq_controller_mode_error("packaging", args.robot, args.gripper, args.mode)
+    if robotiq_error is not None:
+        parser.error(robotiq_error)
     sim_section = "robotiq" if args.gripper in ROBOTIQ_ADAPTERS else "g2"
     gripper_overrides = {
         f"simulation.{sim_section}.{name}": getattr(args, name)
