@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import time
 from typing import Protocol, runtime_checkable
 
 from ufactory.config.models import GripperProfile
@@ -190,12 +191,27 @@ class RobotiqAdapter(ConfiguredGripperAdapter):
             raise ValueError(f"drive {value} outside [{lo}, {hi}]")
         return self.spec.sim_drive_to_gap_m(value)
 
-    def prepare_real(self, arm: object) -> int:
+    # gFLT 0x09 ("no communication for at least 1 s") is reported by the first poll after any idle period and clears
+    # once polling resumes (2F-85 on xArm6, 2026-11-25: 9 on the first read, 0 from the next read 0.25 s later).
+    COMM_TIMEOUT_FAULT = 0x09
+    COMM_TIMEOUT_REREADS = 3
+    COMM_TIMEOUT_REREAD_S = 0.1
+
+    @staticmethod
+    def _read_status(arm: object) -> tuple[int, dict, int]:
         code, _ret = getattr(arm, "robotiq_get_status")(number_of_registers=3)
-        if int(code) != 0:
-            return int(code)
         status = getattr(arm, "robotiq_status", {}) or {}
-        fault = int(status.get("gFLT", getattr(arm, "robotiq_error_code", 0)))
+        return int(code), status, int(status.get("gFLT", getattr(arm, "robotiq_error_code", 0)))
+
+    def prepare_real(self, arm: object) -> int:
+        code, status, fault = self._read_status(arm)
+        for _ in range(self.COMM_TIMEOUT_REREADS):
+            if code != 0 or fault != self.COMM_TIMEOUT_FAULT:
+                break
+            time.sleep(self.COMM_TIMEOUT_REREAD_S)
+            code, status, fault = self._read_status(arm)
+        if code != 0:
+            return code
         if fault != 0:
             raise RuntimeError(f"{self.spec.display_name} has fault gFLT={fault}; recover manually before real motion")
         gsta = int(status.get("gSTA", 0))

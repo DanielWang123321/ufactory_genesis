@@ -260,3 +260,52 @@ def test_robotiq_adapter_mapping_and_sdk_safety_contract(variant: str, open_m: f
     assert adapter.prepare_real(arm) == 0
     arm.robotiq_set_activate.assert_called_once_with(wait=True)
     arm.robotiq_reset.assert_not_called()
+
+
+class _RobotiqStatusArm:
+    """Fake SDK arm: each robotiq_get_status() publishes the next gFLT value in robotiq_status."""
+
+    def __init__(self, faults: list[int], *, gsta: int = 3) -> None:
+        self._faults = list(faults)
+        self._gsta = gsta
+        self.reads = 0
+        self.robotiq_status: dict[str, int] = {}
+        self.robotiq_is_activated = False
+        self.activations = 0
+
+    def robotiq_get_status(self, number_of_registers: int = 3) -> tuple[int, list[int]]:
+        fault = self._faults[min(self.reads, len(self._faults) - 1)]
+        self.reads += 1
+        self.robotiq_status = {"gSTA": self._gsta, "gFLT": fault}
+        return 0, [0] * 9
+
+    def robotiq_set_activate(self, wait: bool = True) -> tuple[int, list[int]]:
+        self.activations += 1
+        return 0, [0] * 6
+
+
+@pytest.mark.parametrize("variant", ["robotiq_2f_85", "robotiq_2f_140"])
+def test_robotiq_prepare_real_rereads_stale_communication_timeout(variant: str, monkeypatch) -> None:
+    from ufactory.grippers.adapters import RobotiqAdapter
+
+    monkeypatch.setattr("ufactory.grippers.adapters.time.sleep", lambda _s: None)
+    config = load_runtime_config("xarm6", gripper=variant)
+    assert config.gripper is not None
+    adapter = create_gripper_adapter(config.gripper)
+
+    # First poll after an idle period reports 0x09; it clears once polling resumes (observed on a real 2F-85).
+    arm = _RobotiqStatusArm([0x09, 0])
+    assert adapter.prepare_real(arm) == 0
+    assert (arm.reads, arm.activations) == (2, 0)
+
+    # A communication fault that persists through every re-read is still refused.
+    arm = _RobotiqStatusArm([0x09])
+    with pytest.raises(RuntimeError, match="gFLT=9"):
+        adapter.prepare_real(arm)
+    assert arm.reads == 1 + RobotiqAdapter.COMM_TIMEOUT_REREADS
+
+    # Any other fault is refused on the first read, without re-reading.
+    arm = _RobotiqStatusArm([0x0E, 0])
+    with pytest.raises(RuntimeError, match="gFLT=14"):
+        adapter.prepare_real(arm)
+    assert arm.reads == 1
