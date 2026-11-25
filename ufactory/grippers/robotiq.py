@@ -14,8 +14,8 @@ ROBOTIQ_ADAPTERS = frozenset((ROBOTIQ_2F_85_PREFIX, ROBOTIQ_2F_140_PREFIX))
 # Modes that touch a controller: sdk-sim may physically preposition the arm (--confirm-real) and real moves both.
 ROBOTIQ_BLOCKED_MODES = frozenset(("sdk-sim", "real"))
 ROBOTIQ_BLOCKED_MODE_REASON = (
-    "currently requires --mode sim or dry-run: the robot model lacks the 8 mm xArm-to-Robotiq flange adapter, "
-    "and the real Robotiq command path has not been validated on hardware"
+    "currently requires --mode sim or dry-run: the controller TCP offset/load (including the 11 mm flange adapter) "
+    "and the real Robotiq command path have not been validated on hardware"
 )
 
 ROBOTIQ_JOINT_SUFFIXES = (

@@ -65,10 +65,10 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 
 | Robot | End effectors | Camera stand compatibility | Sim & preflight | Real packaging |
 |---|---|---|---|---|
-| `xarm5` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | — |
-| `xarm6` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | Gripper G2 |
-| `xarm7` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | — |
-| `uf850` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Vacuum Gripper (not Bio Gripper G2 / Robotiq) | Yes | — |
+| `xarm5` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
+| `xarm6` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper (not Bio Gripper G2) | Yes | Gripper G2 |
+| `xarm7` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
+| `uf850` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
 | `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper | Bare arm, Lite6 Gripper, Lite6 Vacuum Gripper | Yes | Lite6 Gripper |
 
 All robots accept the [camera stand](../assets/urdf/camera_stand/README.md) (alone or with one depth camera looking along the tool axis), which moves the end effector and its TCP 3 mm along the tool axis:
@@ -104,9 +104,9 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 # xArm6 + Gripper G2 open/close demo
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo
 
-# xArm6 + Robotiq 2F-85 / 2F-140 open/close demo
+# xArm6 + Robotiq 2F-85 / 2F-140 open/close demo (automatically mounts the 11 mm robotiq_mounting adapter)
 python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-85 --gripper-demo
-python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-140 --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-140 --camera d435 --gripper-demo
 
 # UF850 + Bio Gripper G2 static view (fixed open pose)
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
@@ -135,8 +135,11 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 # xArm6 + Gripper G2 + D435 + mounting plate
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --camera d435 --mounting-plate
 
-# Standalone tool and mounting-plate preview
+# Standalone tool, adapter, and mounting-plate preview
 python examples/visualization/view_tool.py --tool gripper_g2
+python examples/visualization/view_tool.py --tool robotiq_2f_85
+python examples/visualization/view_tool.py --tool robotiq_2f_140
+python examples/visualization/view_tool.py --tool robotiq_mounting
 python examples/visualization/view_tool.py --tool bio_gripper_g2
 python examples/visualization/view_tool.py --tool lite6_gripper
 python examples/visualization/view_tool.py --tool vacuum_gripper
@@ -151,7 +154,7 @@ python examples/visualization/view_tool.py --tool lite6_mounting_plate
 | Flag | Meaning |
 |------|---------|
 | `--robot` | Required profile key |
-| `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
+| `--gripper-g2` / `--bio-gripper-g2` / `--robotiq-2f-85` / `--robotiq-2f-140` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
 | `--camera` | `camera_stand`, `d405`, `d435`, `gemini_305` or `zed_x_nano`: the camera stand, alone or with that camera (all robots; bare arm or any end effector except `--bio-gripper-g2`) |
 | `--mounting-plate` | Mount the robot's official aluminium mounting plate below `link_base` |
 | `--movable` | Compatibility no-op (grippers always use per-link movable GLBs) |
@@ -162,7 +165,7 @@ python examples/visualization/view_tool.py --tool lite6_mounting_plate
 | `--headless` | No viewer window |
 | `--backend` | `cpu` / `gpu` (default `gpu`; use `cpu` without a supported GPU) |
 
-`view_tool.py` accepts `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
+`view_tool.py` accepts `--tool {gripper_g2,robotiq_2f_85,robotiq_2f_140,robotiq_mounting,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
 
 ## Kinematics & Dynamics Simulation
 

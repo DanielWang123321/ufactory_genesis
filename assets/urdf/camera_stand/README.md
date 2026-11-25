@@ -14,8 +14,8 @@ Frame: `camera_stand`, origin at the flange centre on the flange face. The plate
   - `stand_hole_45_{0,1}`: 2 × M3 at 45 mm (D435).
   - `stand_hole_20x20_{0..3}`: 20 × 20 mm square of 4 × M3 at x = 57.5/77.5, z = ±10 mm (ZED X Nano).
   - A 20 × 23.2 mm centre opening; the ZED X Nano GMSL2 connector passes through it.
-- The stand adds 3 mm between the flange and the end effector. The end effector mount, and with it the TCP, moves 3 mm along flange +Z: Gripper G2 TCP goes from 173.5 to 176.5 mm, vacuum gripper TCP from 126 to 129 mm, Lite6 Gripper TCP from 83.6 to 86.6 mm, and Lite6 Vacuum Gripper TCP from 61 to 64 mm. The bare arm's `link_eef` (when present) moves the same 3 mm. **On the real robot, set the controller TCP offset to match.**
-- Fits: bare arm, `gripper_g2`, `vacuum_gripper`, `lite6_gripper`, `lite6_vacuum_gripper`. Not `bio_gripper_g2` (its body reaches x = 59.22 mm and hits the D405/D435).
+- The stand adds 3 mm between the flange and the end effector (or flange adapter). The end effector mount, and with it the TCP, moves 3 mm along flange +Z: Gripper G2 TCP goes from 173.5 to 176.5 mm, vacuum gripper TCP from 126 to 129 mm, Robotiq 2F-85 (via 11 mm `robotiq_mounting` adapter) from 173.253 to 176.253 mm, Robotiq 2F-140 from 245.466 to 248.466 mm, Lite6 Gripper TCP from 83.6 to 86.6 mm, and Lite6 Vacuum Gripper TCP from 61 to 64 mm. The bare arm's `link_eef` (when present) moves the same 3 mm. **On the real robot, set the controller TCP offset to match.**
+- Fits: bare arm, `gripper_g2`, `vacuum_gripper`, `robotiq_2f_85`, `robotiq_2f_140`, `lite6_gripper`, `lite6_vacuum_gripper`. Not `bio_gripper_g2` (its body reaches x = 59.22 mm and hits the D405/D435).
 
 ## Files
 

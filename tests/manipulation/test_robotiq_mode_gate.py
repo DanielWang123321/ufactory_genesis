@@ -1,4 +1,4 @@
-"""Robotiq grippers stay off real controllers until the flange adapter is modelled and the SDK path is validated."""
+"""Robotiq grippers stay off real controllers until controller TCP/load and SDK commands are validated on hardware."""
 
 from __future__ import annotations
 
@@ -20,4 +20,5 @@ def test_robotiq_controller_modes_are_refused_before_connecting(cli, gripper, mo
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert f"--gripper {gripper} currently requires --mode sim or dry-run" in err
-    assert "8 mm xArm-to-Robotiq flange adapter" in err
+    assert "11 mm flange adapter" in err
+    assert "have not been validated on hardware" in err

@@ -114,12 +114,24 @@ def test_standalone_mounting_plates_use_upright_floor_pose(plate: str, thickness
     assert fix.find("child").get("link") == plate
 
 
+def test_standalone_robotiq_mounting_uses_upright_floor_pose():
+    spec = STANDALONE_TOOL_SPECS["robotiq_mounting"]
+    assert spec.base_quat == UPRIGHT_QUAT_WXYZ
+    assert spec.base_pos == pytest.approx((0.0, 0.0, 0.0056))
+    root = ET.parse(spec.urdf_loader()).getroot()
+    fix = root.find("./joint[@name='robotiq_mounting_fix']")
+    assert fix is not None
+    assert fix.find("parent").get("link") == "world"
+    assert fix.find("child").get("link") == "robotiq_mounting"
+
+
 @pytest.mark.parametrize(
     ("tool", "exp_pos", "exp_speed", "exp_force"),
     [
         ("gripper_g2", 0.0, 50.0, 50.0),
         ("robotiq_2f_85", 0.0, 50.0, 50.0),
         ("robotiq_2f_140", 0.0, 50.0, 50.0),
+        ("robotiq_mounting", None, None, None),
         ("bio_gripper_g2", 71.0, 50.0, 50.0),
         ("lite6_gripper", None, None, None),
         ("vacuum_gripper", None, None, None),
@@ -145,6 +157,7 @@ def test_parse_standalone_tool_args_defaults(tool: str, exp_pos, exp_speed, exp_
         ["--tool", "lite6_gripper", "--position-mm", "10"],
         ["--tool", "vacuum_gripper", "--position-mm", "10"],
         ["--tool", "lite6_vacuum_gripper", "--speed-percent", "50"],
+        ["--tool", "robotiq_mounting", "--position-mm", "10"],
         ["--tool", "xarm_mounting_plate", "--position-mm", "10"],
         ["--tool", "uf850_mounting_plate", "--speed-percent", "50"],
         ["--tool", "lite6_mounting_plate", "--force-percent", "50"],

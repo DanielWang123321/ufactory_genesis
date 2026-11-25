@@ -61,10 +61,11 @@ def test_public_urdf_mesh_references_exist() -> None:
     urdfs += [
         Path(compose_robot_urdf(robot, ee, accessory=accessory, visual=visual))
         for robot in ("xarm6_1305", "uf850")
-        for ee in (None, "gripper_g2", "vacuum_gripper")
+        for ee in (None, "gripper_g2", "vacuum_gripper", "robotiq_2f_85", "robotiq_2f_140")
         for accessory in accessories()
         for visual in ("glb", "stl")
     ]
+    urdfs += [_URDF_ROOT / "robotiq_mounting" / "robotiq_mounting.urdf"]
     urdfs += [
         _URDF_ROOT / f"{plate}/{plate}.urdf"
         for plate in ("xarm_mounting_plate", "uf850_mounting_plate", "lite6_mounting_plate")

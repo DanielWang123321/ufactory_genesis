@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ufactory.robots.assembly import (
     compose_robot_urdf,
+    compose_standalone_adapter_urdf,
     compose_standalone_end_effector_urdf,
     compose_standalone_mounting_plate_urdf,
     parse_assembly_ref,
@@ -161,6 +162,11 @@ def robotiq_2f_85_movable_visual_urdf() -> str:
 def robotiq_2f_140_movable_visual_urdf() -> str:
     """Standalone Robotiq 2F-140 gripper-only movable visual URDF (no arm)."""
     return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "robotiq_2f_140" / "robotiq_2f_140_movable_visual.urdf")
+
+
+def robotiq_mounting_urdf() -> str:
+    """Standalone xArm-to-Robotiq flange adapter URDF with GLB visual resolved from assembly.yaml."""
+    return compose_standalone_adapter_urdf("robotiq_mounting", visual="glb")
 
 
 def bio_gripper_g2_urdf() -> str:

@@ -16,7 +16,7 @@ Grasp, transport, release and return-home checks remain in place.
 | Flag | Values / notes |
 |------|----------------|
 | `--robot` | Default `xarm6`; all five families supported in sim / dry-run |
-| `--gripper` | Optional: `default` / `g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` (`robotiq_2f_*`: `sim` / `dry-run` only until the xArm-to-Robotiq flange adapter is modelled) |
+| `--gripper` | Optional: `default` / `g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` (`robotiq_2f_*`: `sim` / `dry-run` only until controller TCP offset/load — including the 11 mm flange adapter — and real Robotiq commands are validated on hardware) |
 | `--mode` | Required for simulation: `sim` (default), `dry-run` (offline preflight) |
 | `--executor` | Default `servo_j`; also `servo_cartesian` |
 | `--backend` | Optional: `cpu` / `gpu`; same meaning as [pick-place](../pick_place/README.md#flags) |

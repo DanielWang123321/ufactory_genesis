@@ -73,6 +73,22 @@ class EndEffector:
     glb_visuals: Mapping[str, str]
     stl_visuals: Mapping[str, str]
     stl_materials: Mapping[str, str]
+    adapter: str | None = None
+
+
+@dataclass(frozen=True)
+class Adapter:
+    name: str
+    source: str
+    base_link: str
+    mount_joint: str
+    flange: str
+    robots: tuple[str, ...]
+    mount: Pose
+    tool_lift_m: float
+    glb_visuals: Mapping[str, str]
+    stl_visuals: Mapping[str, str]
+    stl_materials: Mapping[str, str]
 
 
 @dataclass(frozen=True)
@@ -133,6 +149,7 @@ class _VisualParts(Protocol):
 @dataclass(frozen=True)
 class _Catalog:
     end_effectors: dict[str, EndEffector]
+    adapters: dict[str, Adapter]
     spacers: dict[str, Spacer]
     cameras: dict[str, Camera]
     mounting_plates: dict[str, MountingPlate]
@@ -188,7 +205,7 @@ def _str_map(value: Any) -> dict[str, str]:
 @lru_cache(maxsize=8)
 def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("schema_version") not in (3, 4):
+    if not isinstance(data, dict) or data.get("schema_version") not in (3, 4, 5):
         raise AssemblyError(f"{path}: unsupported assembly schema")
     flanges = _load_flanges(data, path)
 
@@ -213,12 +230,43 @@ def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
                 seen.append(flange)
         return tuple(seen)
 
+    adapter_map: dict[str, Adapter] = {}
+    for name, spec in (data.get("adapters") or {}).items():
+        adapter_name = str(name)
+        flange = flange_of(adapter_name, spec)
+        lift_m = float(spec.get("tool_lift_m", 0.0))
+        if lift_m < 0.0:
+            raise AssemblyError(f"{adapter_name}: tool_lift_m must be non-negative")
+        adapter_map[adapter_name] = Adapter(
+            name=adapter_name,
+            source=str(spec["source"]),
+            base_link=str(spec["base_link"]),
+            mount_joint=str(spec["mount_joint"]),
+            flange=flange,
+            robots=flanges[flange],
+            mount=_pose(spec, adapter_name),
+            tool_lift_m=lift_m,
+            glb_visuals=_str_map(spec.get("glb_visuals")),
+            stl_visuals=_str_map(spec.get("stl_visuals")),
+            stl_materials=_str_map(spec.get("stl_materials")),
+        )
+
     out: dict[str, EndEffector] = {}
     for name, spec in (data.get("end_effectors") or {}).items():
-        flange = flange_of(str(name), spec)
-        mount = _pose(spec, str(name))
-        out[str(name)] = EndEffector(
-            name=str(name),
+        ee_name = str(name)
+        flange = flange_of(ee_name, spec)
+        mount = _pose(spec, ee_name)
+        raw_adapter = spec.get("adapter")
+        ee_adapter = None if raw_adapter is None else str(raw_adapter)
+        if ee_adapter is not None:
+            if ee_adapter not in adapter_map:
+                raise AssemblyError(f"{ee_name}: unknown adapter {ee_adapter!r}; expected one of {sorted(adapter_map)}")
+            if adapter_map[ee_adapter].flange != flange:
+                raise AssemblyError(
+                    f"{ee_name}: adapter {ee_adapter!r} is on flange {adapter_map[ee_adapter].flange!r}, not {flange!r}"
+                )
+        out[ee_name] = EndEffector(
+            name=ee_name,
             source=str(spec["source"]),
             base_link=str(spec["base_link"]),
             mount_joint=str(spec["mount_joint"]),
@@ -228,6 +276,7 @@ def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
             glb_visuals=_str_map(spec.get("glb_visuals")),
             stl_visuals=_str_map(spec.get("stl_visuals")),
             stl_materials=_str_map(spec.get("stl_materials")),
+            adapter=ee_adapter,
         )
     spacers: dict[str, Spacer] = {}
     for name, spec in (data.get("spacers") or {}).items():
@@ -296,7 +345,7 @@ def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
             stl_visuals=_str_map(spec.get("stl_visuals")),
             stl_materials=_str_map(spec.get("stl_materials")),
         )
-    sections = (set(out), set(spacers), set(cameras), set(plates))
+    sections = (set(out), set(adapter_map), set(spacers), set(cameras), set(plates))
     seen: set[str] = set()
     clash: set[str] = set()
     for sec in sections:
@@ -307,7 +356,7 @@ def _load_catalog(path: Path, mtime_ns: int) -> _Catalog:
         raise AssemblyError(
             f"{path}: part names must be unique across sections and not {BARE!r}/{MOUNTING_PLATE!r}: {sorted(clash)}"
         )
-    return _Catalog(out, spacers, cameras, plates)
+    return _Catalog(out, adapter_map, spacers, cameras, plates)
 
 
 def _catalog(root: Path | None = None) -> _Catalog:
@@ -318,6 +367,19 @@ def _catalog(root: Path | None = None) -> _Catalog:
 def end_effectors(root: Path | None = None) -> dict[str, EndEffector]:
     """End-effector parts declared in ``assets/urdf/assembly.yaml``."""
     return _catalog(root).end_effectors
+
+
+def adapters(root: Path | None = None) -> dict[str, Adapter]:
+    """Flange adapters declared in ``assets/urdf/assembly.yaml``."""
+    return _catalog(root).adapters
+
+
+def get_adapter(name: str, root: Path | None = None) -> Adapter:
+    """Return a declared flange adapter by name."""
+    parts = adapters(root)
+    if name not in parts:
+        raise AssemblyError(f"unknown adapter {name!r}; expected one of {sorted(parts)}")
+    return parts[name]
 
 
 def spacers(root: Path | None = None) -> dict[str, Spacer]:
@@ -477,6 +539,8 @@ def validate_assembly(
         ee = get_end_effector(end_effector, root)
         if key not in ee.robots:
             raise AssemblyError(f"{end_effector} is not supported on {key}; supported robots: {list(ee.robots)}")
+        if ee.adapter is not None:
+            sources.append(urdf_root / get_adapter(ee.adapter, root).source)
         sources.append(urdf_root / ee.source)
     if accessory is not None:
         spacer, camera = resolve_accessory(accessory, root)
@@ -521,7 +585,7 @@ def _link_ref(joint: ET.Element, tag: str) -> str | None:
 
 
 def _tool_elements(
-    ee: EndEffector | Spacer | Camera | MountingPlate, source: Path
+    ee: EndEffector | Adapter | Spacer | Camera | MountingPlate, source: Path
 ) -> tuple[list[ET.Element], dict[str, ET.Element]]:
     root = ET.parse(source).getroot()
     attach = [j for j in root.findall("joint") if _link_ref(j, "child") == ee.base_link]
@@ -588,9 +652,16 @@ def _fixed_joint(robot: ET.Element, name: str, parent: str, child: str, origin: 
 
 
 def _attach_part(
-    robot: ET.Element, part: Spacer | Camera | MountingPlate, parent: str, visual: str, urdf_root: Path, out_dir: Path
+    robot: ET.Element,
+    part: Adapter | Spacer | Camera | MountingPlate,
+    parent: str,
+    visual: str,
+    urdf_root: Path,
+    out_dir: Path,
+    *,
+    z_offset: float = 0.0,
 ) -> None:
-    """Append a spacer, camera, or mounting-plate part, fixed to ``parent`` at its mount pose."""
+    """Append an adapter, spacer, camera, or mounting-plate part, fixed to ``parent`` at its mount pose."""
     source = urdf_root / part.source
     elems, materials = _tool_elements(part, source)
     _apply_visual_mode(elems, part, visual, urdf_root)
@@ -598,6 +669,8 @@ def _attach_part(
         _rebase_meshes(e, source.parent, out_dir)
     _merge_part_materials(robot, elems, materials)
     xyz, rpy = part.mount
+    if z_offset:
+        xyz = (xyz[0], xyz[1], xyz[2] + z_offset)
     _fixed_joint(robot, part.mount_joint, parent, part.base_link, {"xyz": _fmt(xyz), "rpy": _fmt(rpy)})
     robot.extend(elems)
 
@@ -646,6 +719,7 @@ def build_assembly_tree(
     flange = get_robot_profile(key).ee_link
     plate = mounting_plate_for(key, root) if mounting_plate else None
     spacer, camera = resolve_accessory(accessory, root) if accessory is not None else (None, None)
+    adapter = get_adapter(ee.adapter, root) if ee is not None and ee.adapter is not None else None
 
     sources = [arm_file]
     if plate is not None:
@@ -654,6 +728,8 @@ def build_assembly_tree(
         sources.append(urdf_root / spacer.source)
     if camera is not None:
         sources.append(urdf_root / camera.source)
+    if adapter is not None:
+        sources.append(urdf_root / adapter.source)
     if ee is not None:
         sources.append(urdf_root / ee.source)
     label = _assembly_label(end_effector, accessory, mounting_plate)
@@ -678,6 +754,10 @@ def build_assembly_tree(
         lift = spacer.tool_lift_m
         if camera is not None:
             _attach_part(robot, camera, spacer.base_link, visual, urdf_root, out_dir)
+
+    if adapter is not None:
+        _attach_part(robot, adapter, flange, visual, urdf_root, out_dir, z_offset=lift)
+        lift += adapter.tool_lift_m
 
     if ee is not None:
         tool_file = urdf_root / ee.source
@@ -723,7 +803,7 @@ def _write_composed_urdf(out_dir: Path, stem: str, tree: ET.Element) -> str:
 
 
 def _build_standalone_part_tree(
-    part: EndEffector | MountingPlate,
+    part: EndEffector | Adapter | MountingPlate,
     *,
     mount_pose: Pose,
     visual: str = "glb",
@@ -797,6 +877,45 @@ def compose_standalone_end_effector_urdf(
     )
     ee = get_end_effector(end_effector, resolved_root)
     return _write_composed_urdf(resolved_out, f"standalone__{ee.name}__{visual}", tree)
+
+
+def build_standalone_adapter_tree(
+    name: str,
+    *,
+    visual: str = "glb",
+    root: Path | None = None,
+    out_dir: Path | None = None,
+) -> ET.Element:
+    """Return a standalone ``<robot>`` element (rooted at ``world``) for one flange adapter."""
+    resolved_root = (root or PROJECT_ROOT).resolve()
+    adapter = get_adapter(name, resolved_root)
+    return _build_standalone_part_tree(
+        adapter,
+        mount_pose=adapter.mount,
+        visual=visual,
+        root=resolved_root,
+        out_dir=out_dir,
+    )
+
+
+def compose_standalone_adapter_urdf(
+    name: str,
+    *,
+    visual: str = "glb",
+    root: Path | None = None,
+    out_dir: Path | None = None,
+) -> str:
+    """Compose (or reuse) a standalone flange-adapter URDF with visuals resolved from ``assembly.yaml``."""
+    resolved_root = (root or PROJECT_ROOT).resolve()
+    resolved_out = (out_dir or resolved_root / COMPOSED_DIR).resolve()
+    tree = build_standalone_adapter_tree(
+        name,
+        visual=visual,
+        root=resolved_root,
+        out_dir=resolved_out,
+    )
+    adapter = get_adapter(name, resolved_root)
+    return _write_composed_urdf(resolved_out, f"standalone__{adapter.name}__{visual}", tree)
 
 
 def build_standalone_mounting_plate_tree(

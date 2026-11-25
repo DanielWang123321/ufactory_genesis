@@ -33,7 +33,7 @@ gripper:
   allowed_contact_links:
     - robotiq_2f_140_left_finger
     - robotiq_2f_140_right_finger
-  tool_tip_offset_z_m: 0.1293
+  tool_tip_offset_z_m: 0.1403
   finger_pad_below_center_m: 0.0805
   finger_close_descent_m: 0.0253
   grasp_table_clearance_m: 0.01

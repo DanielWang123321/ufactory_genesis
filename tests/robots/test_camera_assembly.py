@@ -35,7 +35,7 @@ ACCESSORIES = ("camera_stand", *CAMERAS)
 XARM_ARMS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850")
 ARMS = (*XARM_ARMS, "lite6")
 ARM_END_EFFECTORS: dict[str, tuple[str | None, ...]] = {
-    **{arm: (None, "gripper_g2", "vacuum_gripper") for arm in XARM_ARMS},
+    **{arm: (None, "gripper_g2", "vacuum_gripper", "robotiq_2f_85", "robotiq_2f_140") for arm in XARM_ARMS},
     "lite6": (None, "lite6_gripper", "lite6_vacuum_gripper"),
 }
 STAND_MASS = 0.048
@@ -88,7 +88,14 @@ def test_catalog_lists_the_stand_and_four_cameras() -> None:
     assert stand.flanges == ("xarm", "lite6")
     assert stand.robots == ARMS
     assert stand.tool_lift_m == pytest.approx(0.003)
-    assert stand.end_effectors == ("gripper_g2", "vacuum_gripper", "lite6_gripper", "lite6_vacuum_gripper")
+    assert stand.end_effectors == (
+        "gripper_g2",
+        "vacuum_gripper",
+        "robotiq_2f_85",
+        "robotiq_2f_140",
+        "lite6_gripper",
+        "lite6_vacuum_gripper",
+    )
     for name, cam in cameras().items():
         assert cam.spacer == "camera_stand"
         assert cam.optical_frame == f"{name}_optical_frame"
@@ -141,7 +148,7 @@ def test_compatibility_matrix() -> None:
     for arm in XARM_ARMS:
         for ee in ("bio_gripper_g2", "lite6_gripper", "lite6_vacuum_gripper"):
             assert supported_accessories(arm, ee) == ()
-    for ee in ("gripper_g2", "bio_gripper_g2", "vacuum_gripper"):
+    for ee in ("gripper_g2", "bio_gripper_g2", "vacuum_gripper", "robotiq_2f_85", "robotiq_2f_140"):
         assert supported_accessories("lite6", ee) == ()
     cases = [
         (("lite6", "gripper_g2"), {"accessory": "d435"}, "not supported on lite6"),
@@ -181,7 +188,7 @@ def test_every_combination_composes_deterministically_with_relative_existing_mes
                     assert not os.path.isabs(filename), filename
                     assert (path.parent / filename).resolve().is_file(), filename
                 count += 1
-    assert count == 5 * 3 * 5 * 2
+    assert count == (4 * 5 + 3) * 5 * 2
 
     cwd = os.getcwd()
     try:
@@ -239,6 +246,8 @@ def _tcp(model: pin.Model, data: pin.Data, arm: str, ee: str | None) -> np.ndarr
     name = {
         "gripper_g2": "link_tcp",
         "vacuum_gripper": "vacuum_tcp",
+        "robotiq_2f_85": "robotiq_2f_85_tcp_link",
+        "robotiq_2f_140": "robotiq_2f_140_tcp_link",
         "lite6_gripper": "link_tcp",
         "lite6_vacuum_gripper": "link_tcp",
     }.get(ee or "", "")

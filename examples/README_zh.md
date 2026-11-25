@@ -64,10 +64,10 @@ python examples/visualization/view_robot.py --robot xarm6
 
 | 机械臂 | 可用末端 | 相机支架适配 | 仿真与预检 | 真机装箱 |
 |---|---|---|---|---|
-| `xarm5` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | — |
-| `xarm6` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | Gripper G2 |
-| `xarm7` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | — |
-| `uf850` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Vacuum Gripper（不适配 Bio Gripper G2 / Robotiq） | 支持 | — |
+| `xarm5` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
+| `xarm6` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | Gripper G2 |
+| `xarm7` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
+| `uf850` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
 | `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper | 裸臂、Lite6 Gripper、Lite6 Vacuum Gripper | 支持 | Lite6 Gripper |
 
 所有机械臂均支持加装[相机支架](../assets/urdf/camera_stand/README.md)（可单独安装或搭载一台视野沿工具轴方向的深度相机）；装上支架后，末端及其 TCP 沿工具轴前移 3 mm：
@@ -103,9 +103,9 @@ python examples/visualization/view_robot.py --robot xarm6 --gripper-g2
 # xArm6 + Gripper G2 开合演示
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --gripper-demo
 
-# xArm6 + Robotiq 2F-85 / 2F-140 开合演示
+# xArm6 + Robotiq 2F-85 / 2F-140 开合演示（自动装入 11 mm robotiq_mounting 转接件）
 python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-85 --gripper-demo
-python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-140 --gripper-demo
+python examples/visualization/view_robot.py --robot xarm6 --robotiq-2f-140 --camera d435 --gripper-demo
 
 # UF850 + Bio Gripper G2 静态查看（固定张开位姿）
 python examples/visualization/view_robot.py --robot uf850 --bio-gripper-g2
@@ -134,8 +134,11 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 # xArm6 + Gripper G2 + D435 + 安装底板
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --camera d435 --mounting-plate
 
-# 末端工具与安装底板独立查看
+# 末端工具、转接件与安装底板独立查看
 python examples/visualization/view_tool.py --tool gripper_g2
+python examples/visualization/view_tool.py --tool robotiq_2f_85
+python examples/visualization/view_tool.py --tool robotiq_2f_140
+python examples/visualization/view_tool.py --tool robotiq_mounting
 python examples/visualization/view_tool.py --tool bio_gripper_g2
 python examples/visualization/view_tool.py --tool lite6_gripper
 python examples/visualization/view_tool.py --tool vacuum_gripper
@@ -150,7 +153,7 @@ python examples/visualization/view_tool.py --tool lite6_mounting_plate
 | 参数                                                                                 | 说明                                    |
 | ---------------------------------------------------------------------------------- | ------------------------------------- |
 | `--robot`                                                                          | 必选机型 key                              |
-| `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
+| `--gripper-g2` / `--bio-gripper-g2` / `--robotiq-2f-85` / `--robotiq-2f-140` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
 | `--camera`                                                                         | `camera_stand`、`d405`、`d435`、`gemini_305` 或 `zed_x_nano`：加装相机支架，可单独装支架，也可再装对应相机（适配所有机型，支持裸臂及除 `--bio-gripper-g2` 外的末端） |
 | `--mounting-plate`                                                                 | 在 `link_base` 下方加装对应铝合金安装底板             |
 | `--movable`                                                                        | 兼容保留（所有夹爪默认均使用逐连杆可动 GLB）              |
@@ -161,7 +164,7 @@ python examples/visualization/view_tool.py --tool lite6_mounting_plate
 | `--headless`                                                                       | 不打开查看器窗口                              |
 | `--backend`                                                                        | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
 
-`view_tool.py` 支持 `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`、`--headless`、`--backend`，以及标定夹爪调参选项（`--position-mm`、`--speed-percent`、`--force-percent`，其中 `bio_gripper_g2` 另支持 `--speed-mm-s`）。
+`view_tool.py` 支持 `--tool {gripper_g2,robotiq_2f_85,robotiq_2f_140,robotiq_mounting,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`、`--headless`、`--backend`，以及标定夹爪调参选项（`--position-mm`、`--speed-percent`、`--force-percent`，其中 `bio_gripper_g2` 另支持 `--speed-mm-s`）。
 
 
 

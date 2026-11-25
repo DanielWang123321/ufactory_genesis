@@ -15,6 +15,8 @@
 #   base_link       part root link attached to the arm flange
 #   mount_joint     name of the fixed joint created between the flange and base_link
 #   flange          flange the part mounts on; compatible robots are that flange's robots
+#   adapter         optional flange adapter (from adapters.<name>) always inserted between the flange (or spacer)
+#                   and the end effector; its flange must match the end effector's flange
 #   mount           optional base_link pose {xyz, rpy} in the flange frame, same on every robot of the
 #                   flange; identity when absent
 #   glb_visuals     optional per-link GLB that replaces the source visual when visual is "glb"
@@ -23,9 +25,13 @@
 #                   carry none and to the remaining GLB visuals, which become the link's collision geometry
 #                   in that mode
 #
+# adapters.<name>: a required flange adapter automatically inserted for end effectors that declare adapter: <name>
+#   source, base_link, mount_joint, flange, mount, glb_visuals, stl_visuals, stl_materials: as for end_effectors
+#   tool_lift_m     the end effector mount moves this far along flange +Z (added on top of any spacer tool_lift_m)
+#
 # spacers.<name>: a plate clamped between the flange and the end effector (it may carry a camera)
 #   source, base_link, mount_joint, flange (or flanges), mount, stl_visuals, stl_materials: as for end_effectors
-#   tool_lift_m     the end effector mount (or the arm's link_eef when there is none) moves this far along flange +Z
+#   tool_lift_m     the adapter/end effector mount (or the arm's link_eef when there is none) moves this far along flange +Z
 #   end_effectors   end effectors that fit on the spacer; the bare arm always does
 #
 # cameras.<name>: a camera on a spacer
@@ -39,7 +45,7 @@
 #   robots          robot profile keys fitting this plate (each robot appears in at most one mounting plate)
 #   thickness_m     plate thickness (m); the plate occupies z in [-thickness_m, 0]
 #   mount           base_link pose {xyz, rpy} in the arm's link_base frame
-schema_version: 4
+schema_version: 5
 flanges:
   xarm:
     # One part on xArm5/6/7; same layout on UF850: PCD 50 mm, 4 x M6 at 45/135/225/315 deg,
@@ -84,6 +90,7 @@ end_effectors:
     base_link: robotiq_2f_85_base_link
     mount_joint: robotiq_2f_85_fix
     flange: xarm
+    adapter: robotiq_mounting
     stl_visuals:
       robotiq_2f_85_base_link: robotiq_2f_85/meshes/visual/robotiq_2f_85_base.stl
     stl_materials:
@@ -95,6 +102,7 @@ end_effectors:
     base_link: robotiq_2f_140_base_link
     mount_joint: robotiq_2f_140_fix
     flange: xarm
+    adapter: robotiq_mounting
     stl_visuals:
       robotiq_2f_140_base_link: robotiq_2f_140/meshes/visual/robotiq_2f_140_base.stl
     stl_materials:
@@ -115,6 +123,20 @@ end_effectors:
     flange: lite6
     glb_visuals:
       uflite_vacuum_gripper_link: lite6_vacuum_gripper/meshes/visual/lite6_vacuum_gripper_visual_link6.glb
+adapters:
+  robotiq_mounting:
+    # UFACTORY 11 mm silver anodized aluminium xArm-to-Robotiq flange adapter (OD 75 mm, 109.7 g, Ø31.5 x 5.6 mm
+    # centring boss). Fits xArm5/6/7 and UF850 (ISO 9409-1-50-4-M6 flange; not Lite 6) and adapts to Robotiq
+    # 2F-85 / 2F-140 (4 x M4 at (+/-16, +/-27) mm, Ø4 mm locating pin at (0, -30.5) mm, Ø71 mm centring recess).
+    source: robotiq_mounting/robotiq_mounting.urdf
+    base_link: robotiq_mounting
+    mount_joint: robotiq_mounting_fix
+    flange: xarm
+    tool_lift_m: 0.011
+    stl_visuals:
+      robotiq_mounting: robotiq_mounting/meshes/visual/robotiq_mounting.stl
+    stl_materials:
+      robotiq_mounting: AdapterAluminum
 spacers:
   camera_stand:
     # UFACTORY 3 mm aluminium camera stand, 48 g. Its frame has the plate thickness along +Y, so the mount turns
@@ -127,7 +149,7 @@ spacers:
     flanges: [xarm, lite6]
     mount: {xyz: [0.0, 0.0, 0.0], rpy: [1.5707963267948966, 0.0, 0.0]}
     tool_lift_m: 0.003
-    end_effectors: [gripper_g2, vacuum_gripper, lite6_gripper, lite6_vacuum_gripper]
+    end_effectors: [gripper_g2, vacuum_gripper, robotiq_2f_85, robotiq_2f_140, lite6_gripper, lite6_vacuum_gripper]
     stl_visuals:
       camera_stand: camera_stand/meshes/visual/camera_stand.stl
     stl_materials:

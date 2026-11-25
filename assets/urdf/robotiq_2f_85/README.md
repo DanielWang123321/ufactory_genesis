@@ -19,3 +19,4 @@ This directory holds the standalone movable URDF, collision STL meshes, and visu
 - Master actuated joint: `robotiq_2f_85_drive_joint` (`0.0` rad open at 85 mm gap to `0.801433` rad closed at 0 mm gap).
 - Five coupled mimic joints (`multiplier=1`, `offset=0`) drive the four-bar parallel finger linkage symmetrically.
 - `robotiq_2f_85_tcp_link` sits at `(0, 0, 0.162253)` m relative to `robotiq_2f_85_base_link` (base mounting face at `z = 0`).
+- When composed onto `xarm5`/`xarm6`/`xarm7`/`uf850` via `assets/urdf/assembly.yaml`, the 11 mm [`robotiq_mounting`](../robotiq_mounting/README.md) flange adapter is inserted automatically (not supported on `lite6`), placing `robotiq_2f_85_tcp_link` at `173.253 mm` from the arm flange (`176.253 mm` with the 3 mm `camera_stand`).

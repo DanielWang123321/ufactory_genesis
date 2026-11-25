@@ -17,6 +17,7 @@ from ufactory.robots.paths import (
     lite6_vacuum_gripper_visual_glb_urdf,
     robotiq_2f_85_movable_visual_urdf,
     robotiq_2f_140_movable_visual_urdf,
+    robotiq_mounting_urdf,
     uf850_mounting_plate_urdf,
     vacuum_gripper_urdf,
     xarm_mounting_plate_urdf,
@@ -32,6 +33,8 @@ CAMERA_LOOKAT = (0.0, 0.0, 0.14)
 CAMERA_FOV = 35
 PLATE_CAMERA_POS = (0.24, -0.30, 0.22)
 PLATE_CAMERA_LOOKAT = (0.0, 0.0, 0.005)
+ADAPTER_CAMERA_POS = (0.14, -0.18, 0.13)
+ADAPTER_CAMERA_LOOKAT = (0.0, 0.0, 0.008)
 # Same as the view_robot.py warm-up for calibrated grippers.
 VIEWER_WARMUP_STEPS = 3
 # Mounted at home on an arm: flange / adapter turned 180 deg about X (flange up, tool tip down).
@@ -146,6 +149,15 @@ STANDALONE_TOOL_SPECS: dict[str, StandaloneToolSpec] = {
         base_pos=(0.0, 0.0, 0.40),
         controller=_robotiq_controller("robotiq_2f_140"),
         calibrated_robotiq="robotiq_2f_140",
+    ),
+    "robotiq_mounting": StandaloneToolSpec(
+        name="robotiq_mounting",
+        description="xArm/UF850-to-Robotiq 11 mm flange adapter static preview (standalone)",
+        urdf_loader=robotiq_mounting_urdf,
+        base_pos=(0.0, 0.0, 0.0056),
+        base_quat=UPRIGHT_QUAT_WXYZ,
+        camera_pos=ADAPTER_CAMERA_POS,
+        camera_lookat=ADAPTER_CAMERA_LOOKAT,
     ),
     "bio_gripper_g2": StandaloneToolSpec(
         name="bio_gripper_g2",
