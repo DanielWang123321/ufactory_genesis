@@ -12,14 +12,14 @@ import genesis as gs
 from ufactory.robots.paths import (
     bio_gripper_g2_movable_visual_urdf,
     gripper_g2_movable_visual_urdf,
-    lite6_base_plate_urdf,
     lite6_gripper_movable_visual_urdf,
+    lite6_mounting_plate_urdf,
     lite6_vacuum_gripper_visual_glb_urdf,
     robotiq_2f_85_movable_visual_urdf,
     robotiq_2f_140_movable_visual_urdf,
-    uf850_base_plate_urdf,
+    uf850_mounting_plate_urdf,
     vacuum_gripper_urdf,
-    xarm_base_plate_urdf,
+    xarm_mounting_plate_urdf,
 )
 from ufactory.simulation import make_rigid_options
 from ufactory.simulation.collision import configure_lite6_collision_filters
@@ -36,13 +36,13 @@ PLATE_CAMERA_LOOKAT = (0.0, 0.0, 0.005)
 VIEWER_WARMUP_STEPS = 3
 # Mounted at home on an arm: flange / adapter turned 180 deg about X (flange up, tool tip down).
 MOUNTED_QUAT_WXYZ = (0.0, 1.0, 0.0, 0.0)
-# Base plates sit upright on the floor (top mounting surface facing +Z).
+# Mounting plates sit upright on the floor (top mounting surface facing +Z).
 UPRIGHT_QUAT_WXYZ = (1.0, 0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
 class StandaloneToolSpec:
-    """Configuration for previewing one standalone flange tool or mounting base plate."""
+    """Configuration for previewing one standalone flange tool or mounting plate."""
 
     name: str
     description: str
@@ -174,28 +174,28 @@ STANDALONE_TOOL_SPECS: dict[str, StandaloneToolSpec] = {
         urdf_loader=lite6_vacuum_gripper_visual_glb_urdf,
         base_pos=(0.0, 0.0, 0.17),
     ),
-    "xarm_base_plate": StandaloneToolSpec(
-        name="xarm_base_plate",
-        description="xArm5/6/7 mounting base plate static preview (standalone)",
-        urdf_loader=xarm_base_plate_urdf,
+    "xarm_mounting_plate": StandaloneToolSpec(
+        name="xarm_mounting_plate",
+        description="xArm5/6/7 mounting plate static preview (standalone)",
+        urdf_loader=xarm_mounting_plate_urdf,
         base_pos=(0.0, 0.0, 0.008),
         base_quat=UPRIGHT_QUAT_WXYZ,
         camera_pos=PLATE_CAMERA_POS,
         camera_lookat=PLATE_CAMERA_LOOKAT,
     ),
-    "uf850_base_plate": StandaloneToolSpec(
-        name="uf850_base_plate",
-        description="UF850 mounting base plate static preview (standalone)",
-        urdf_loader=uf850_base_plate_urdf,
+    "uf850_mounting_plate": StandaloneToolSpec(
+        name="uf850_mounting_plate",
+        description="UF850 mounting plate static preview (standalone)",
+        urdf_loader=uf850_mounting_plate_urdf,
         base_pos=(0.0, 0.0, 0.010),
         base_quat=UPRIGHT_QUAT_WXYZ,
         camera_pos=PLATE_CAMERA_POS,
         camera_lookat=PLATE_CAMERA_LOOKAT,
     ),
-    "lite6_base_plate": StandaloneToolSpec(
-        name="lite6_base_plate",
-        description="Lite 6 mounting base plate static preview (standalone)",
-        urdf_loader=lite6_base_plate_urdf,
+    "lite6_mounting_plate": StandaloneToolSpec(
+        name="lite6_mounting_plate",
+        description="Lite 6 mounting plate static preview (standalone)",
+        urdf_loader=lite6_mounting_plate_urdf,
         base_pos=(0.0, 0.0, 0.005),
         base_quat=UPRIGHT_QUAT_WXYZ,
         camera_pos=PLATE_CAMERA_POS,
@@ -254,12 +254,12 @@ def _validate_calibrated_args(
 
 def parse_standalone_tool_args(argv: Sequence[str] | None = None) -> tuple[StandaloneToolSpec, argparse.Namespace]:
     """Parse CLI arguments for the unified standalone tool viewer and resolve the matching tool spec."""
-    parser = argparse.ArgumentParser(description="View any standalone flange tool or mounting base plate in Genesis")
+    parser = argparse.ArgumentParser(description="View any standalone flange tool or mounting plate in Genesis")
     parser.add_argument(
         "--tool",
         required=True,
         choices=tuple(STANDALONE_TOOL_SPECS),
-        help="Flange tool (mounted orientation) or base plate (upright on floor) to preview",
+        help="Flange tool (mounted orientation) or mounting plate (upright on floor) to preview",
     )
     parser.add_argument("--headless", action="store_true", help="Run without viewer window")
     parser.add_argument(

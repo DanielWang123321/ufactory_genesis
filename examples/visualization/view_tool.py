@@ -1,4 +1,4 @@
-"""Standalone viewer for supported UFACTORY flange tools and mounting base plates."""
+"""Standalone viewer for supported UFACTORY flange tools and mounting plates."""
 
 from __future__ import annotations
 

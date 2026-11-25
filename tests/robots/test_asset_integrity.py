@@ -66,10 +66,11 @@ def test_public_urdf_mesh_references_exist() -> None:
         for visual in ("glb", "stl")
     ]
     urdfs += [
-        _URDF_ROOT / f"{plate}/{plate}.urdf" for plate in ("xarm_base_plate", "uf850_base_plate", "lite6_base_plate")
+        _URDF_ROOT / f"{plate}/{plate}.urdf"
+        for plate in ("xarm_mounting_plate", "uf850_mounting_plate", "lite6_mounting_plate")
     ]
     urdfs += [
-        Path(compose_robot_urdf(robot, None, base_plate=True, visual=visual))
+        Path(compose_robot_urdf(robot, None, mounting_plate=True, visual=visual))
         for robot in ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850", "lite6")
         for visual in ("glb", "stl")
     ]
@@ -1478,9 +1479,9 @@ def test_accessory_collision_meshes_are_stl_files() -> None:
         _URDF_ROOT / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
         _URDF_ROOT / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
         _URDF_ROOT / "vacuum_gripper" / "vacuum_gripper.urdf",
-        _URDF_ROOT / "xarm_base_plate" / "xarm_base_plate.urdf",
-        _URDF_ROOT / "uf850_base_plate" / "uf850_base_plate.urdf",
-        _URDF_ROOT / "lite6_base_plate" / "lite6_base_plate.urdf",
+        _URDF_ROOT / "xarm_mounting_plate" / "xarm_mounting_plate.urdf",
+        _URDF_ROOT / "uf850_mounting_plate" / "uf850_mounting_plate.urdf",
+        _URDF_ROOT / "lite6_mounting_plate" / "lite6_mounting_plate.urdf",
         *_assembly_urdfs(),
     )
     bad: list[str] = []

@@ -213,20 +213,20 @@ def test_flange_schema_rejects_shared_robots_and_unknown_flanges(tmp_path: Path)
         assembly._load_catalog(_write_schema(tmp_path, "  a:\n    robots: [lite6]\n", "c"), 1)
 
 
-def test_base_plate_schema_rejects_shared_robots_invalid_thickness_and_clashes(tmp_path: Path) -> None:
+def test_mounting_plate_schema_rejects_shared_robots_invalid_thickness_and_clashes(tmp_path: Path) -> None:
     flanges = "  a:\n    robots: [xarm6, lite6]\n"
     shared_plate = (
-        "base_plates:\n"
+        "mounting_plates:\n"
         "  p1:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
         "    robots: [xarm6]\n    thickness_m: 0.008\n"
         "  p2:\n    source: p2.urdf\n    base_link: p2\n    mount_joint: j2\n"
         "    robots: [xarm6_1305]\n    thickness_m: 0.008\n"
     )
-    with pytest.raises(AssemblyError, match="listed under base_plates"):
+    with pytest.raises(AssemblyError, match="listed under mounting_plates"):
         assembly._load_catalog(_write_schema(tmp_path, flanges, "a", extra=shared_plate), 0)
 
     zero_thick = (
-        "base_plates:\n"
+        "mounting_plates:\n"
         "  p1:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
         "    robots: [lite6]\n    thickness_m: 0.0\n"
     )
@@ -234,8 +234,8 @@ def test_base_plate_schema_rejects_shared_robots_invalid_thickness_and_clashes(t
         assembly._load_catalog(_write_schema(tmp_path, flanges, "a", extra=zero_thick), 1)
 
     name_clash = (
-        "base_plates:\n"
-        "  base_plate:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
+        "mounting_plates:\n"
+        "  mounting_plate:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
         "    robots: [lite6]\n    thickness_m: 0.005\n"
     )
     with pytest.raises(AssemblyError, match="part names must be unique"):

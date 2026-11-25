@@ -69,15 +69,15 @@ class RobotModelSpec:
         return self.supports_accessory("camera_stand")
 
     @property
-    def supports_base_plate(self) -> bool:
+    def supports_mounting_plate(self) -> bool:
         return True
 
     @property
-    def base_plate(self) -> str:
-        """Canonical mounting base-plate name for this arm from ``assets/urdf/assembly.yaml``."""
-        from ufactory.robots.assembly import base_plate_for
+    def mounting_plate(self) -> str:
+        """Canonical mounting plate name for this arm from ``assets/urdf/assembly.yaml``."""
+        from ufactory.robots.assembly import mounting_plate_for
 
-        return base_plate_for(self.key).name
+        return mounting_plate_for(self.key).name
 
 
 def _assets(robot: str) -> Path:

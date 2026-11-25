@@ -1,6 +1,6 @@
-# Runtime URDF assembly: arm + base plate / camera stand / cameras / end-effector parts.
+# Runtime URDF assembly: arm + mounting plate / camera stand / cameras / end-effector parts.
 #
-# ufactory.robots.assembly composes "arm URDF [+ base plate] [+ accessory] [+ end-effector part]" into one
+# ufactory.robots.assembly composes "arm URDF [+ mounting plate] [+ accessory] [+ end-effector part]" into one
 # deterministic URDF under .cache/ufactory/urdf/composed/ (relative mesh paths, content-addressed file name).
 # Arm sources come from the robot registry: visual "glb" uses <key>_visual.glb.urdf, visual "stl" uses the default
 # <key>.urdf.
@@ -34,9 +34,9 @@
 #   mount           base_link pose {xyz, rpy} in the spacer's base_link frame
 #   optical_frame   link with the OpenCV optical frame (+X right, +Y down, +Z forward), uncalibrated
 #
-# base_plates.<name>: a mounting base plate fixed below the arm's link_base (top mounting surface z = 0)
+# mounting_plates.<name>: a mounting plate fixed below the arm's link_base (top mounting surface z = 0)
 #   source, base_link, mount_joint, stl_visuals, stl_materials: as for end_effectors
-#   robots          robot profile keys fitting this plate (each robot appears in at most one base plate)
+#   robots          robot profile keys fitting this plate (each robot appears in at most one mounting plate)
 #   thickness_m     plate thickness (m); the plate occupies z in [-thickness_m, 0]
 #   mount           base_link pose {xyz, rpy} in the arm's link_base frame
 schema_version: 4
@@ -171,31 +171,31 @@ cameras:
     mount: {xyz: [0.052237, 0.02357, 0.0], rpy: [-3.141592653589793, -1.5707963267948966, 0.0]}
     optical_frame: zed_x_nano_optical_frame
     stl_materials: {"*": zed_x_nano_housing}
-base_plates:
-  xarm_base_plate:
+mounting_plates:
+  xarm_mounting_plate:
     # UFACTORY 8 mm aluminium mounting plate (136 x 185 mm, long edge along Y, two-chamfered tongue facing +X).
-    source: xarm_base_plate/xarm_base_plate.urdf
-    base_link: xarm_base_plate
-    mount_joint: base_plate_fix
+    source: xarm_mounting_plate/xarm_mounting_plate.urdf
+    base_link: xarm_mounting_plate
+    mount_joint: mounting_plate_fix
     robots: [xarm5_1305, xarm6_1305, xarm7_1305]
     thickness_m: 0.008
     mount: {xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     stl_materials: {"*": PlateAluminum}
-  uf850_base_plate:
+  uf850_mounting_plate:
     # UFACTORY 10 mm aluminium mounting plate (190 x 260 mm, long edge along Y).
-    source: uf850_base_plate/uf850_base_plate.urdf
-    base_link: uf850_base_plate
-    mount_joint: base_plate_fix
+    source: uf850_mounting_plate/uf850_mounting_plate.urdf
+    base_link: uf850_mounting_plate
+    mount_joint: mounting_plate_fix
     robots: [uf850]
     thickness_m: 0.010
     mount: {xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     stl_materials: {"*": PlateAluminum}
-  lite6_base_plate:
+  lite6_mounting_plate:
     # UFACTORY 5 mm aluminium mounting plate (130 x 190 mm, long edge along Y).
     # Lite 6's four base mounting holes are centred at (-3, 0) mm in link_base.
-    source: lite6_base_plate/lite6_base_plate.urdf
-    base_link: lite6_base_plate
-    mount_joint: base_plate_fix
+    source: lite6_mounting_plate/lite6_mounting_plate.urdf
+    base_link: lite6_mounting_plate
+    mount_joint: mounting_plate_fix
     robots: [lite6]
     thickness_m: 0.005
     mount: {xyz: [-0.003, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}

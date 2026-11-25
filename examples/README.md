@@ -81,16 +81,16 @@ All robots accept the [camera stand](../assets/urdf/camera_stand/README.md) (alo
 | `gemini_305` | [Orbbec Gemini 305](../assets/urdf/gemini_305/README.md) | Stand + Gemini 305 stereo depth camera (68 g) |
 | `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) | Stand + ZED X Nano stereo camera (75 g) |
 
-- Configuration URDF references: `assembly:gripper_g2+d435`, `assembly:lite6_gripper+d435`, `assembly:bare+camera_stand`, `assembly:bare+base_plate`, or `assembly:gripper_g2+d435+base_plate`.
+- Configuration URDF references: `assembly:gripper_g2+d435`, `assembly:lite6_gripper+d435`, `assembly:bare+camera_stand`, `assembly:bare+mounting_plate`, or `assembly:gripper_g2+d435+mounting_plate`.
 - Real packaging details: [Hardware & Real Robot](#hardware--real-robot). G2 simulations use `g2_calibrated_v1`; see the [pick-place RL guide](rl/pick_place/README.md) for training and the current v3 checkpoint contract.
 
-All robots also accept their official aluminium mounting base plate (mounted below `link_base`, top face at `z = 0`, keeping kinematics unchanged):
+All robots also accept their official aluminium mounting plate (mounted below `link_base`, top face at `z = 0`, keeping kinematics unchanged):
 
-| Base plate | Robots | Envelope (mm) | Standalone `--tool` |
+| Mounting plate | Robots | Envelope (mm) | Standalone `--tool` |
 |---|---|---|---|
-| [xArm Base Plate](../assets/urdf/xarm_base_plate/README.md) | `xarm5`, `xarm6`, `xarm7` | `136 × 185 × 8` | `xarm_base_plate` |
-| [UF850 Base Plate](../assets/urdf/uf850_base_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_base_plate` |
-| [Lite 6 Base Plate](../assets/urdf/lite6_base_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_base_plate` |
+| [xArm Mounting Plate](../assets/urdf/xarm_mounting_plate/README.md) | `xarm5`, `xarm6`, `xarm7` | `136 × 185 × 8` | `xarm_mounting_plate` |
+| [UF850 Mounting Plate](../assets/urdf/uf850_mounting_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_mounting_plate` |
+| [Lite 6 Mounting Plate](../assets/urdf/lite6_mounting_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_mounting_plate` |
 
 ## Visualization
 
@@ -132,18 +132,18 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --grip
 # Lite6 + Lite6 Vacuum Gripper static view
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
-# xArm6 + Gripper G2 + D435 + base plate
-python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --camera d435 --base-plate
+# xArm6 + Gripper G2 + D435 + mounting plate
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --camera d435 --mounting-plate
 
-# Standalone tool and base-plate preview
+# Standalone tool and mounting-plate preview
 python examples/visualization/view_tool.py --tool gripper_g2
 python examples/visualization/view_tool.py --tool bio_gripper_g2
 python examples/visualization/view_tool.py --tool lite6_gripper
 python examples/visualization/view_tool.py --tool vacuum_gripper
 python examples/visualization/view_tool.py --tool lite6_vacuum_gripper
-python examples/visualization/view_tool.py --tool xarm_base_plate
-python examples/visualization/view_tool.py --tool uf850_base_plate
-python examples/visualization/view_tool.py --tool lite6_base_plate
+python examples/visualization/view_tool.py --tool xarm_mounting_plate
+python examples/visualization/view_tool.py --tool uf850_mounting_plate
+python examples/visualization/view_tool.py --tool lite6_mounting_plate
 ```
 
 `view_robot.py` flags:
@@ -153,7 +153,7 @@ python examples/visualization/view_tool.py --tool lite6_base_plate
 | `--robot` | Required profile key |
 | `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
 | `--camera` | `camera_stand`, `d405`, `d435`, `gemini_305` or `zed_x_nano`: the camera stand, alone or with that camera (all robots; bare arm or any end effector except `--bio-gripper-g2`) |
-| `--base-plate` | Mount the robot's official aluminium base plate below `link_base` |
+| `--mounting-plate` | Mount the robot's official aluminium mounting plate below `link_base` |
 | `--movable` | Compatibility no-op (grippers always use per-link movable GLBs) |
 | `--gripper-demo` | Cycle open/close with a 0.5 s hold after reaching each endpoint (requires a gripper flag) |
 | `--pd` | Smooth joint-motion demo (~0.873 rad/s), visual only |
@@ -162,7 +162,7 @@ python examples/visualization/view_tool.py --tool lite6_base_plate
 | `--headless` | No viewer window |
 | `--backend` | `cpu` / `gpu` (default `gpu`; use `cpu` without a supported GPU) |
 
-`view_tool.py` accepts `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_base_plate,uf850_base_plate,lite6_base_plate}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
+`view_tool.py` accepts `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
 
 ## Kinematics & Dynamics Simulation
 

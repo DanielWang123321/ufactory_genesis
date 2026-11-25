@@ -98,17 +98,17 @@ def test_standalone_tools_use_mounted_home_orientation(
 @pytest.mark.parametrize(
     ("plate", "thickness_m"),
     [
-        ("xarm_base_plate", 0.008),
-        ("uf850_base_plate", 0.010),
-        ("lite6_base_plate", 0.005),
+        ("xarm_mounting_plate", 0.008),
+        ("uf850_mounting_plate", 0.010),
+        ("lite6_mounting_plate", 0.005),
     ],
 )
-def test_standalone_base_plates_use_upright_floor_pose(plate: str, thickness_m: float):
+def test_standalone_mounting_plates_use_upright_floor_pose(plate: str, thickness_m: float):
     spec = STANDALONE_TOOL_SPECS[plate]
     assert spec.base_quat == UPRIGHT_QUAT_WXYZ
     assert spec.base_pos == pytest.approx((0.0, 0.0, thickness_m))
     root = ET.parse(spec.urdf_loader()).getroot()
-    fix = root.find("./joint[@name='base_plate_fix']")
+    fix = root.find("./joint[@name='mounting_plate_fix']")
     assert fix is not None
     assert fix.find("parent").get("link") == "world"
     assert fix.find("child").get("link") == plate
@@ -124,9 +124,9 @@ def test_standalone_base_plates_use_upright_floor_pose(plate: str, thickness_m: 
         ("lite6_gripper", None, None, None),
         ("vacuum_gripper", None, None, None),
         ("lite6_vacuum_gripper", None, None, None),
-        ("xarm_base_plate", None, None, None),
-        ("uf850_base_plate", None, None, None),
-        ("lite6_base_plate", None, None, None),
+        ("xarm_mounting_plate", None, None, None),
+        ("uf850_mounting_plate", None, None, None),
+        ("lite6_mounting_plate", None, None, None),
     ],
 )
 def test_parse_standalone_tool_args_defaults(tool: str, exp_pos, exp_speed, exp_force):
@@ -145,9 +145,9 @@ def test_parse_standalone_tool_args_defaults(tool: str, exp_pos, exp_speed, exp_
         ["--tool", "lite6_gripper", "--position-mm", "10"],
         ["--tool", "vacuum_gripper", "--position-mm", "10"],
         ["--tool", "lite6_vacuum_gripper", "--speed-percent", "50"],
-        ["--tool", "xarm_base_plate", "--position-mm", "10"],
-        ["--tool", "uf850_base_plate", "--speed-percent", "50"],
-        ["--tool", "lite6_base_plate", "--force-percent", "50"],
+        ["--tool", "xarm_mounting_plate", "--position-mm", "10"],
+        ["--tool", "uf850_mounting_plate", "--speed-percent", "50"],
+        ["--tool", "lite6_mounting_plate", "--force-percent", "50"],
         ["--tool", "gripper_g2", "--speed-mm-s", "20"],
         ["--tool", "gripper_g2", "--position-mm", "100"],
         ["--tool", "robotiq_2f_85", "--position-mm", "100"],

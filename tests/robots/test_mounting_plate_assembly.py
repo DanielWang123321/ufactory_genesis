@@ -1,4 +1,4 @@
-"""Mounting base-plate asset, assembly, kinematics, safety, and Genesis simulation tests."""
+"""Mounting plate asset, assembly, kinematics, safety, and Genesis simulation tests."""
 
 from __future__ import annotations
 
@@ -17,21 +17,21 @@ from ufactory.robots.assembly import (
     AssemblyError,
     AssemblyRef,
     assembly_ref,
-    base_plate_for,
-    base_plates,
     compose_robot_urdf,
-    compose_standalone_base_plate_urdf,
-    get_base_plate,
+    compose_standalone_mounting_plate_urdf,
+    get_mounting_plate,
+    mounting_plate_for,
+    mounting_plates,
     parse_assembly_ref,
     resolve_robot_urdf,
     validate_robot_urdf,
 )
 from ufactory.robots.paths import (
-    lite6_base_plate_urdf,
+    lite6_mounting_plate_urdf,
     robot_urdf,
     robot_visual_glb_urdf,
-    uf850_base_plate_urdf,
-    xarm_base_plate_urdf,
+    uf850_mounting_plate_urdf,
+    xarm_mounting_plate_urdf,
 )
 from ufactory.robots.registry import ROBOT_PROFILES, get_robot_profile
 
@@ -39,7 +39,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
 
 PLATES: dict[str, dict[str, object]] = {
-    "xarm_base_plate": {
+    "xarm_mounting_plate": {
         "robots": ("xarm5_1305", "xarm6_1305", "xarm7_1305"),
         "thickness_mm": 8.0,
         "extent_mm": (136.0, 185.0),
@@ -50,7 +50,7 @@ PLATES: dict[str, dict[str, object]] = {
         "mount_xyz": (0.0, 0.0, 0.0),
         "solid_xy_mm": (0.0, 75.0),
     },
-    "uf850_base_plate": {
+    "uf850_mounting_plate": {
         "robots": ("uf850",),
         "thickness_mm": 10.0,
         "extent_mm": (190.0, 260.0),
@@ -61,7 +61,7 @@ PLATES: dict[str, dict[str, object]] = {
         "mount_xyz": (0.0, 0.0, 0.0),
         "solid_xy_mm": (0.0, 105.0),
     },
-    "lite6_base_plate": {
+    "lite6_mounting_plate": {
         "robots": ("lite6",),
         "thickness_mm": 5.0,
         "extent_mm": (130.0, 190.0),
@@ -84,9 +84,9 @@ ARM_END_EFFECTORS: dict[str, tuple[str | None, ...]] = {
     "lite6": (None, "lite6_gripper", "lite6_vacuum_gripper"),
 }
 STANDALONE_LOADERS = {
-    "xarm_base_plate": xarm_base_plate_urdf,
-    "uf850_base_plate": uf850_base_plate_urdf,
-    "lite6_base_plate": lite6_base_plate_urdf,
+    "xarm_mounting_plate": xarm_mounting_plate_urdf,
+    "uf850_mounting_plate": uf850_mounting_plate_urdf,
+    "lite6_mounting_plate": lite6_mounting_plate_urdf,
 }
 
 
@@ -94,8 +94,8 @@ STANDALONE_LOADERS = {
 
 
 def test_catalog_partitions_all_five_robots() -> None:
-    plates = base_plates()
-    assert tuple(plates) == ("xarm_base_plate", "uf850_base_plate", "lite6_base_plate")
+    plates = mounting_plates()
+    assert tuple(plates) == ("xarm_mounting_plate", "uf850_mounting_plate", "lite6_mounting_plate")
     covered: list[str] = []
     for name, cfg in PLATES.items():
         plate = plates[name]
@@ -103,84 +103,84 @@ def test_catalog_partitions_all_five_robots() -> None:
         assert plate.thickness_m == pytest.approx(float(cfg["thickness_mm"]) * 0.001)
         assert plate.mount[0] == pytest.approx(cfg["mount_xyz"])
         assert plate.mount[1] == (0.0, 0.0, 0.0)
-        assert get_base_plate(name) == plate
+        assert get_mounting_plate(name) == plate
         for arm in plate.robots:
-            assert base_plate_for(arm) == plate
+            assert mounting_plate_for(arm) == plate
             profile = get_robot_profile(arm)
-            assert profile.supports_base_plate
-            assert profile.base_plate == name
+            assert profile.supports_mounting_plate
+            assert profile.mounting_plate == name
             covered.append(arm)
     assert sorted(covered) == sorted(ROBOT_PROFILES)
-    with pytest.raises(AssemblyError, match="unknown base plate"):
-        get_base_plate("missing_plate")
+    with pytest.raises(AssemblyError, match="unknown mounting plate"):
+        get_mounting_plate("missing_plate")
     with pytest.raises(KeyError):
-        base_plate_for("unknown_arm")
+        mounting_plate_for("unknown_arm")
 
 
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("assembly:bare+base_plate", AssemblyRef(None, "glb", None, True)),
-        ("assembly:bare+base_plate:stl", AssemblyRef(None, "stl", None, True)),
-        ("assembly:gripper_g2+base_plate", AssemblyRef("gripper_g2", "glb", None, True)),
-        ("assembly:gripper_g2+d435+base_plate", AssemblyRef("gripper_g2", "glb", "d435", True)),
-        ("assembly:bare+camera_stand+base_plate:stl", AssemblyRef(None, "stl", "camera_stand", True)),
+        ("assembly:bare+mounting_plate", AssemblyRef(None, "glb", None, True)),
+        ("assembly:bare+mounting_plate:stl", AssemblyRef(None, "stl", None, True)),
+        ("assembly:gripper_g2+mounting_plate", AssemblyRef("gripper_g2", "glb", None, True)),
+        ("assembly:gripper_g2+d435+mounting_plate", AssemblyRef("gripper_g2", "glb", "d435", True)),
+        ("assembly:bare+camera_stand+mounting_plate:stl", AssemblyRef(None, "stl", "camera_stand", True)),
     ],
 )
-def test_parse_base_plate_refs_round_trip(value: str, expected: AssemblyRef) -> None:
+def test_parse_mounting_plate_refs_round_trip(value: str, expected: AssemblyRef) -> None:
     assert parse_assembly_ref(value) == expected
     assert str(expected) == value
 
 
-def test_parse_base_plate_refs_canonicalizes_and_rejects_malformed() -> None:
-    parsed = parse_assembly_ref("assembly:gripper_g2+base_plate+d435:stl")
+def test_parse_mounting_plate_refs_canonicalizes_and_rejects_malformed() -> None:
+    parsed = parse_assembly_ref("assembly:gripper_g2+mounting_plate+d435:stl")
     assert parsed == AssemblyRef("gripper_g2", "stl", "d435", True)
-    assert str(parsed) == "assembly:gripper_g2+d435+base_plate:stl"
+    assert str(parsed) == "assembly:gripper_g2+d435+mounting_plate:stl"
 
     for bad in (
-        "assembly:base_plate",
-        "assembly:+base_plate",
-        "assembly:bare+base_plate+base_plate",
-        "assembly:gripper_g2+d435+d405+base_plate",
-        "assembly:bare+base_plate:obj",
+        "assembly:mounting_plate",
+        "assembly:+mounting_plate",
+        "assembly:bare+mounting_plate+mounting_plate",
+        "assembly:gripper_g2+d435+d405+mounting_plate",
+        "assembly:bare+mounting_plate:obj",
     ):
         with pytest.raises(AssemblyError):
             parse_assembly_ref(bad)
 
-    assert assembly_ref(None, base_plate=True) == "assembly:bare+base_plate"
+    assert assembly_ref(None, mounting_plate=True) == "assembly:bare+mounting_plate"
 
 
-def test_path_helpers_and_asset_store_support_base_plates(tmp_path: Path) -> None:
-    assert robot_urdf("xarm6", "assembly:bare+base_plate") == compose_robot_urdf("xarm6", None, base_plate=True)
-    assert robot_urdf("lite6", "assembly:lite6_gripper+d435+base_plate:stl") == compose_robot_urdf(
-        "lite6", "lite6_gripper", accessory="d435", base_plate=True, visual="stl"
+def test_path_helpers_and_asset_store_support_mounting_plates(tmp_path: Path) -> None:
+    assert robot_urdf("xarm6", "assembly:bare+mounting_plate") == compose_robot_urdf("xarm6", None, mounting_plate=True)
+    assert robot_urdf("lite6", "assembly:lite6_gripper+d435+mounting_plate:stl") == compose_robot_urdf(
+        "lite6", "lite6_gripper", accessory="d435", mounting_plate=True, visual="stl"
     )
-    assert robot_visual_glb_urdf("uf850", base_plate=True) == compose_robot_urdf("uf850", None, base_plate=True)
+    assert robot_visual_glb_urdf("uf850", mounting_plate=True) == compose_robot_urdf("uf850", None, mounting_plate=True)
     assert robot_visual_glb_urdf(
-        "xarm6", with_gripper_g2=True, accessory="d435", base_plate=True
-    ) == compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", base_plate=True)
+        "xarm6", with_gripper_g2=True, accessory="d435", mounting_plate=True
+    ) == compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", mounting_plate=True)
 
     from ufactory.config import RepositoryAssetStore
 
     store = RepositoryAssetStore(PROJECT_ROOT)
-    validate_robot_urdf("xarm6_1305", "assembly:gripper_g2+base_plate", assets_dir="assets/urdf/xarm6", store=store)
-    resolved = resolve_robot_urdf("lite6", "assembly:bare+base_plate", store=store)
-    assert resolved == Path(compose_robot_urdf("lite6", None, base_plate=True))
+    validate_robot_urdf("xarm6_1305", "assembly:gripper_g2+mounting_plate", assets_dir="assets/urdf/xarm6", store=store)
+    resolved = resolve_robot_urdf("lite6", "assembly:bare+mounting_plate", store=store)
+    assert resolved == Path(compose_robot_urdf("lite6", None, mounting_plate=True))
 
 
 # --- deterministic composition ------------------------------------------------------------------------------------
 
 
-def test_every_base_plate_combination_composes_deterministically(tmp_path: Path) -> None:
+def test_every_mounting_plate_combination_composes_deterministically(tmp_path: Path) -> None:
     count = 0
     for arm in ARMS:
-        plate = base_plate_for(arm)
+        plate = mounting_plate_for(arm)
         combos: list[tuple[str | None, str | None]] = [(ee, None) for ee in ARM_END_EFFECTORS[arm]]
         default_ee = "lite6_gripper" if arm == "lite6" else "gripper_g2"
         combos += [(None, "camera_stand"), (default_ee, "d435")]
         for (ee, acc), visual in itertools.product(combos, ("glb", "stl")):
-            path = Path(compose_robot_urdf(arm, ee, accessory=acc, base_plate=True, visual=visual))
-            assert path == Path(compose_robot_urdf(arm, ee, accessory=acc, base_plate=True, visual=visual))
+            path = Path(compose_robot_urdf(arm, ee, accessory=acc, mounting_plate=True, visual=visual))
+            assert path == Path(compose_robot_urdf(arm, ee, accessory=acc, mounting_plate=True, visual=visual))
             root = ET.parse(path).getroot()
             names = [e.get("name") for e in root if e.tag in ("link", "joint")]
             assert len(names) == len(set(names))
@@ -199,34 +199,34 @@ def test_every_base_plate_combination_composes_deterministically(tmp_path: Path)
     cwd = os.getcwd()
     try:
         os.chdir(tmp_path)
-        elsewhere = Path(compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", base_plate=True))
+        elsewhere = Path(compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", mounting_plate=True))
     finally:
         os.chdir(cwd)
     assert (
         elsewhere.read_bytes()
-        == Path(compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", base_plate=True)).read_bytes()
+        == Path(compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", mounting_plate=True)).read_bytes()
     )
 
 
-def test_stl_mode_and_standalone_base_plates(tmp_path: Path) -> None:
-    root = ET.parse(compose_robot_urdf("xarm6", None, base_plate=True, visual="stl")).getroot()
-    plate_link = root.find("./link[@name='xarm_base_plate']")
+def test_stl_mode_and_standalone_mounting_plates(tmp_path: Path) -> None:
+    root = ET.parse(compose_robot_urdf("xarm6", None, mounting_plate=True, visual="stl")).getroot()
+    plate_link = root.find("./link[@name='xarm_mounting_plate']")
     assert plate_link is not None
     visuals = plate_link.findall("visual")
     assert len(visuals) == 17
     assert all((v.find("material").get("name") == "PlateAluminum") for v in visuals)  # type: ignore[union-attr]
     assert all(
-        (v.find("geometry/mesh").get("filename") or "").endswith(f"xarm_base_plate_col_{i:02d}.stl")
+        (v.find("geometry/mesh").get("filename") or "").endswith(f"xarm_mounting_plate_col_{i:02d}.stl")
         for i, v in enumerate(visuals)
     )
 
     for name, loader in STANDALONE_LOADERS.items():
         path = Path(loader())
         assert path.is_file()
-        assert path == Path(compose_standalone_base_plate_urdf(name, visual="glb"))
-        st_path = Path(compose_standalone_base_plate_urdf(name, visual="stl", out_dir=tmp_path))
+        assert path == Path(compose_standalone_mounting_plate_urdf(name, visual="glb"))
+        st_path = Path(compose_standalone_mounting_plate_urdf(name, visual="stl", out_dir=tmp_path))
         st_root = ET.parse(st_path).getroot()
-        fix = st_root.find("./joint[@name='base_plate_fix']")
+        fix = st_root.find("./joint[@name='mounting_plate_fix']")
         assert fix is not None and fix.find("parent").get("link") == "world"
         assert fix.find("child").get("link") == name
         assert fix.find("origin").get("xyz") == "0 0 0"
@@ -256,13 +256,13 @@ def _point_on_top_surface(mesh, xy_mm: tuple[float, float]) -> bool:
 
 
 def _expected_openings_xy_mm(plate: str) -> list[tuple[float, float]]:
-    if plate == "xarm_base_plate":
+    if plate == "xarm_mounting_plate":
         pts = [(0.0, 0.0)]
         pts += [(55.0 * math.cos(math.radians(a)), 55.0 * math.sin(math.radians(a))) for a in range(0, 360, 30)]
         pts += [(x, y) for x in (-37.5, 37.5) for y in (-83.0, 83.0)]
         pts += [(53.601, -58.945), (53.601, 58.945), (-51.253, -58.863), (-51.253, 58.743)]
         return pts
-    if plate == "uf850_base_plate":
+    if plate == "uf850_mounting_plate":
         pts = [(0.0, 0.0)]
         pts += [(x, y) for x in (-60.104076, 60.104076) for y in (-60.104076, 60.104076)]
         pts += [(x, y) for x in (-70.0, 70.0) for y in (-115.0, 115.0)]
@@ -377,7 +377,7 @@ def _fit_circle_center(points: np.ndarray) -> np.ndarray:
 @pytest.mark.parametrize("glb", [False, True])
 def test_robot_mounting_holes_and_bottom_plane_align_to_plate(arm: str, glb: bool) -> None:
     """Both link_base.stl and link_base.glb mounting holes align to the plate holes at z = 0."""
-    plate = base_plate_for(arm)
+    plate = mounting_plate_for(arm)
     plate_xyz_mm = np.asarray(plate.mount[0], dtype=np.float64) * 1000.0
     vertices = _base_mesh_vertices_mm(arm, glb=glb)
     z_min = float(vertices[:, 2].min())
@@ -398,15 +398,15 @@ def test_robot_mounting_holes_and_bottom_plane_align_to_plate(arm: str, glb: boo
 
 
 @pytest.mark.parametrize("arm", ARMS)
-def test_kinematics_dynamics_and_safety_collision_with_base_plate(arm: str) -> None:
+def test_kinematics_dynamics_and_safety_collision_with_mounting_plate(arm: str) -> None:
     pin = pytest.importorskip("pinocchio")
     coal = pytest.importorskip("coal")
     from ufactory.safety.adapters.pinocchio import PinocchioCollisionBackend
 
     profile = get_robot_profile(arm)
-    plate = base_plate_for(arm)
+    plate = mounting_plate_for(arm)
     bare_urdf = str(profile.assets_dir / profile.default_urdf)
-    plated_urdf = compose_robot_urdf(arm, None, base_plate=True, visual="stl")
+    plated_urdf = compose_robot_urdf(arm, None, mounting_plate=True, visual="stl")
 
     bm = pin.buildModelFromUrdf(bare_urdf, mimic=True)
     bd = bm.createData()
@@ -472,7 +472,7 @@ def test_kinematics_dynamics_and_safety_collision_with_base_plate(arm: str) -> N
         assert not res.colliding and res.min_distance_m > 0.005
 
 
-def test_full_stack_camera_and_gripper_safety_with_base_plate() -> None:
+def test_full_stack_camera_and_gripper_safety_with_mounting_plate() -> None:
     pytest.importorskip("pinocchio")
     pytest.importorskip("coal")
     from ufactory.config import load_runtime_config
@@ -480,7 +480,7 @@ def test_full_stack_camera_and_gripper_safety_with_base_plate() -> None:
 
     x_cfg = load_runtime_config("xarm6")
     assert x_cfg.gripper is not None
-    xarm_urdf = compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", base_plate=True)
+    xarm_urdf = compose_robot_urdf("xarm6", "gripper_g2", accessory="d435", mounting_plate=True)
     x_backend = PinocchioCollisionBackend(
         xarm_urdf,
         joint_names=x_cfg.robot.joint_names,
@@ -494,7 +494,7 @@ def test_full_stack_camera_and_gripper_safety_with_base_plate() -> None:
 
     l_cfg = load_runtime_config("lite6")
     assert l_cfg.gripper is not None
-    lite_urdf = compose_robot_urdf("lite6", "lite6_gripper", accessory="d435", base_plate=True)
+    lite_urdf = compose_robot_urdf("lite6", "lite6_gripper", accessory="d435", mounting_plate=True)
     l_backend = PinocchioCollisionBackend(
         lite_urdf,
         joint_names=l_cfg.robot.joint_names,
@@ -512,17 +512,17 @@ def test_full_stack_camera_and_gripper_safety_with_base_plate() -> None:
 
 @pytest.mark.gpu
 @pytest.mark.parametrize("arm", ARMS)
-def test_genesis_builds_arm_with_base_plate(arm: str) -> None:
+def test_genesis_builds_arm_with_mounting_plate(arm: str) -> None:
     gs = pytest.importorskip("genesis")
     pin = pytest.importorskip("pinocchio")
     from ufactory.config import load_runtime_config
     from ufactory.simulation import GenesisRuntimeManager, make_rigid_options
 
-    plate = base_plate_for(arm)
+    plate = mounting_plate_for(arm)
     config = load_runtime_config(arm)
     ee = "lite6_gripper" if arm == "lite6" else ("gripper_g2" if arm == "xarm6_1305" else None)
     acc = "d435" if arm == "xarm6_1305" else None
-    urdf = compose_robot_urdf(arm, ee, accessory=acc, base_plate=True)
+    urdf = compose_robot_urdf(arm, ee, accessory=acc, mounting_plate=True)
 
     with GenesisRuntimeManager(config.simulation):
         scene = gs.Scene(
@@ -546,17 +546,17 @@ def test_genesis_builds_arm_with_base_plate(arm: str) -> None:
 @pytest.mark.parametrize(
     ("plate", "xy_mm"),
     [
-        ("xarm_base_plate", (0.0, 75.0)),
-        ("xarm_base_plate", (0.0, 0.0)),
-        ("xarm_base_plate", (55.0, 0.0)),
-        ("xarm_base_plate", (67.0, 0.0)),
-        ("xarm_base_plate", (63.0, 0.0)),
-        ("uf850_base_plate", (0.0, 105.0)),
-        ("uf850_base_plate", (0.0, 0.0)),
-        ("uf850_base_plate", (60.104076, 60.104076)),
-        ("lite6_base_plate", (0.0, 70.0)),
-        ("lite6_base_plate", (0.0, 0.0)),
-        ("lite6_base_plate", (57.0, 57.0)),
+        ("xarm_mounting_plate", (0.0, 75.0)),
+        ("xarm_mounting_plate", (0.0, 0.0)),
+        ("xarm_mounting_plate", (55.0, 0.0)),
+        ("xarm_mounting_plate", (67.0, 0.0)),
+        ("xarm_mounting_plate", (63.0, 0.0)),
+        ("uf850_mounting_plate", (0.0, 105.0)),
+        ("uf850_mounting_plate", (0.0, 0.0)),
+        ("uf850_mounting_plate", (60.104076, 60.104076)),
+        ("lite6_mounting_plate", (0.0, 70.0)),
+        ("lite6_mounting_plate", (0.0, 0.0)),
+        ("lite6_mounting_plate", (57.0, 57.0)),
     ],
 )
 def test_genesis_drop_sphere_lands_on_plate_and_filled_holes(plate: str, xy_mm: tuple[float, float]) -> None:
@@ -567,7 +567,7 @@ def test_genesis_drop_sphere_lands_on_plate_and_filled_holes(plate: str, xy_mm: 
     config = load_runtime_config("xarm6")
     radius = 0.004 if xy_mm in ((0.0, 0.0), (0.0, 75.0), (0.0, 105.0), (0.0, 70.0)) else 0.002
     x_m, y_m = xy_mm[0] * 0.001, xy_mm[1] * 0.001
-    plate_urdf = compose_standalone_base_plate_urdf(plate, visual="glb")
+    plate_urdf = compose_standalone_mounting_plate_urdf(plate, visual="glb")
 
     with GenesisRuntimeManager(config.simulation):
         scene = gs.Scene(
@@ -587,5 +587,5 @@ def test_genesis_drop_sphere_lands_on_plate_and_filled_holes(plate: str, xy_mm: 
         assert np.all(np.isfinite(pos)) and np.all(np.isfinite(vel))
         assert float(pos[2]) == pytest.approx(radius, abs=0.0005)
         assert abs(float(vel[2])) < 0.002
-        max_speed = 0.05 if plate == "xarm_base_plate" and xy_mm[0] >= 63.0 else 0.01
+        max_speed = 0.05 if plate == "xarm_mounting_plate" and xy_mm[0] >= 63.0 else 0.01
         assert float(np.linalg.norm(vel)) < max_speed

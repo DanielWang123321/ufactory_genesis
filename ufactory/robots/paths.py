@@ -4,8 +4,8 @@ from pathlib import Path
 
 from ufactory.robots.assembly import (
     compose_robot_urdf,
-    compose_standalone_base_plate_urdf,
     compose_standalone_end_effector_urdf,
+    compose_standalone_mounting_plate_urdf,
     parse_assembly_ref,
 )
 from ufactory.robots.registry import PROJECT_ROOT, get_robot_profile
@@ -55,7 +55,7 @@ def robot_urdf(robot_key: str, name: str | None = None) -> str:
     """Return the absolute path of a robot URDF by profile key or robot name.
 
     ``name`` is a file in the arm asset directory (default: the dynamics URDF) or an assembly reference such as
-    ``assembly:gripper_g2``, ``assembly:gripper_g2+d435``, or ``assembly:bare+base_plate`` (see
+    ``assembly:gripper_g2``, ``assembly:gripper_g2+d435``, or ``assembly:bare+mounting_plate`` (see
     :mod:`ufactory.robots.assembly`), which is composed on demand.
     """
     profile = get_robot_profile(robot_key)
@@ -67,7 +67,7 @@ def robot_urdf(robot_key: str, name: str | None = None) -> str:
             ref.end_effector,
             visual=ref.visual,
             accessory=ref.accessory,
-            base_plate=ref.base_plate,
+            mounting_plate=ref.mounting_plate,
         )
     return _urdf_path(profile.assets_dir, urdf_name)
 
@@ -95,9 +95,9 @@ def robot_visual_glb_urdf(
     with_lite6_vacuum_gripper: bool = False,
     movable: bool = False,
     accessory: str | None = None,
-    base_plate: bool = False,
+    mounting_plate: bool = False,
 ) -> str:
-    """GLB-visual URDF of an arm, optionally composed with an end effector, accessory, and/or base plate.
+    """GLB-visual URDF of an arm, optionally composed with an end effector, accessory, and/or mounting plate.
 
     Without parts this is the arm's ``*_visual.glb.urdf``. With any, the arm and parts are assembled at runtime using
     per-link visuals; ``movable`` is kept for compatibility (grippers always use per-link movable visuals).
@@ -128,17 +128,19 @@ def robot_visual_glb_urdf(
             "with_robotiq_2f_140=True, with_lite6_gripper=True, or with_bio_gripper_g2=True"
         )
     if not selected:
-        if accessory is None and not base_plate:
+        if accessory is None and not mounting_plate:
             return _urdf_path(profile.assets_dir, profile.visual_glb_urdf)
         if accessory is not None and not profile.supports_accessory(accessory):
             raise ValueError(f"Robot {robot_key} does not support {accessory}")
-        return compose_robot_urdf(profile.key, None, visual="glb", accessory=accessory, base_plate=base_plate)
+        return compose_robot_urdf(profile.key, None, visual="glb", accessory=accessory, mounting_plate=mounting_plate)
     end_effector, label = selected[0]
     if not profile.supports(end_effector):
         raise ValueError(f"Robot {robot_key} does not support {label}")
     if accessory is not None and not profile.supports_accessory(accessory, end_effector):
         raise ValueError(f"{accessory} does not fit {label} on {robot_key}")
-    return compose_robot_urdf(profile.key, end_effector, visual="glb", accessory=accessory, base_plate=base_plate)
+    return compose_robot_urdf(
+        profile.key, end_effector, visual="glb", accessory=accessory, mounting_plate=mounting_plate
+    )
 
 
 def lite6_gripper_movable_visual_urdf() -> str:
@@ -181,19 +183,19 @@ def lite6_vacuum_gripper_visual_glb_urdf() -> str:
     return compose_standalone_end_effector_urdf("lite6_vacuum_gripper", visual="glb")
 
 
-def xarm_base_plate_urdf() -> str:
-    """Standalone xArm mounting base-plate URDF with GLB visual resolved from assembly.yaml."""
-    return compose_standalone_base_plate_urdf("xarm_base_plate", visual="glb")
+def xarm_mounting_plate_urdf() -> str:
+    """Standalone xArm mounting plate URDF with GLB visual resolved from assembly.yaml."""
+    return compose_standalone_mounting_plate_urdf("xarm_mounting_plate", visual="glb")
 
 
-def uf850_base_plate_urdf() -> str:
-    """Standalone UF850 mounting base-plate URDF with GLB visual resolved from assembly.yaml."""
-    return compose_standalone_base_plate_urdf("uf850_base_plate", visual="glb")
+def uf850_mounting_plate_urdf() -> str:
+    """Standalone UF850 mounting plate URDF with GLB visual resolved from assembly.yaml."""
+    return compose_standalone_mounting_plate_urdf("uf850_mounting_plate", visual="glb")
 
 
-def lite6_base_plate_urdf() -> str:
-    """Standalone Lite 6 mounting base-plate URDF with GLB visual resolved from assembly.yaml."""
-    return compose_standalone_base_plate_urdf("lite6_base_plate", visual="glb")
+def lite6_mounting_plate_urdf() -> str:
+    """Standalone Lite 6 mounting plate URDF with GLB visual resolved from assembly.yaml."""
+    return compose_standalone_mounting_plate_urdf("lite6_mounting_plate", visual="glb")
 
 
 def microplate_sbs_96_well_urdf() -> str:
