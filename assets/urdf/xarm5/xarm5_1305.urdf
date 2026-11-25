@@ -20,9 +20,9 @@
   </joint>
   <link name="link_base">
     <inertial>
-      <origin rpy="0 0 0" xyz="-0.00218 -0.00023 0.08604" />
-      <mass value="1.95" />
-      <inertia ixx="0.004805" ixy="-8.33E-06" ixz="0.00026847" iyy="0.0050349" iyz="7.23E-06" izz="0.0025418" />
+      <origin xyz="-0.002587 -0.000269 0.103569" rpy="0 0 0" />
+      <mass value="2.788411" />
+      <inertia ixx="0.008738440348" ixy="-1.7243198e-05" ixz="-0.000169824247" iyy="0.008801398397" iyz="-4.797104e-06" izz="0.003241739845" />
     </inertial>
     <visual>
       <geometry>

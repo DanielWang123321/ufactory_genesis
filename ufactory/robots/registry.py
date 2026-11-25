@@ -60,6 +60,17 @@ class RobotModelSpec:
     def supports_camera_stand(self) -> bool:
         return self.supports_accessory("camera_stand")
 
+    @property
+    def supports_base_plate(self) -> bool:
+        return True
+
+    @property
+    def base_plate(self) -> str:
+        """Canonical mounting base-plate name for this arm from ``assets/urdf/assembly.yaml``."""
+        from ufactory.robots.assembly import base_plate_for
+
+        return base_plate_for(self.key).name
+
 
 def _assets(robot: str) -> Path:
     return PROJECT_ROOT / "assets" / "urdf" / robot

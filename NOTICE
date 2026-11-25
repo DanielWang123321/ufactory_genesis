@@ -35,6 +35,11 @@ visual variants, and compressed GLBs are maintained in this repository.
 - **Orbbec Gemini 305 / Stereolabs ZED X Nano:** meshes converted from the vendors' public CAD downloads (see each
   part's `README.md`). Product names are trademarks of their owners.
 
+### Mounting base plates (`assets/urdf/{xarm_base_plate,uf850_base_plate,lite6_base_plate}/`)
+
+- **Upstream:** Derived from publicly published UFACTORY mechanical STEP files and validated meshes in `ufactory_mujoco` (`*_base_plate`).
+- **This repository's modifications:** Draco-compressed GLB visuals, prefixed convex collision prism STLs, uniform-density aluminium inertials, and runtime URDF packaging.
+
 ### SBS 96-well microplate (`assets/urdf/microplate/`)
 
 - **Upstream:** [ramonaoptics/labware](https://github.com/ramonaoptics/labware/tree/b2de87e717584b2e27f436ee03c17b827085e87b) (`b2de87e`).

@@ -9,7 +9,7 @@ Lite6 arm description.
 | `lite6.urdf` | Default URDF, STL visuals |
 | `lite6_visual.glb.urdf` | GLB visuals. Same physics, except that the `link_base` inertia tensor is zero (fixed base, no effect on dynamics) |
 | `meshes/lite6/visual/*.stl` | STL visuals (7) |
-| `meshes/lite6/visual_glb/*.glb` | Draco-compressed GLB visuals (7), 0.74 MB in total (test budget < 1 MB) |
+| `meshes/lite6/visual_glb/*.glb` | Draco-compressed GLB visuals (7), 0.75 MB in total (test budget < 1 MB); `link_base.glb` sits flush at `z = 0` matching `link_base.stl` |
 | `meshes/lite6/collision/lite6_link*_col_*.stl` | Convex collision hulls (17) |
 | `kinematics/user/` | Per-unit calibration `<prefix>_kinematics_<suffix>.yaml` (Git-ignored), read by `ufactory/kinematics/calibration.py` |
 

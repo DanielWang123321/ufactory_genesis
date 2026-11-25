@@ -337,6 +337,7 @@ def run_glb_viewer(
     force_percent: float = 50,
     speed_mm_s: float | None = None,
     headless_steps: int = 600,
+    floor_z: float = 0.0,
 ) -> dict | None:
     from ufactory.simulation import genesis_backend_constant
 
@@ -390,7 +391,7 @@ def run_glb_viewer(
         ),
         show_viewer=False,
     )
-    scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
+    scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", pos=(0.0, 0.0, float(floor_z)), fixed=True))
     with glb_pbr_surfaces():
         robot = scene.add_entity(
             gs.morphs.URDF(

@@ -80,8 +80,16 @@ python examples/visualization/view_robot.py --robot xarm6
 | `gemini_305` | [奥比中光 Gemini 305](../assets/urdf/gemini_305/README.md) | 支架 + Gemini 305 双目深度相机（68 g） |
 | `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) | 支架 + ZED X Nano 双目相机（75 g） |
 
-- 配置中的 URDF 引用示例：`assembly:gripper_g2+d435`、`assembly:lite6_gripper+d435`；裸臂写作 `assembly:bare+camera_stand`。
+- 配置中的 URDF 引用示例：`assembly:gripper_g2+d435`、`assembly:lite6_gripper+d435`、`assembly:bare+camera_stand`、`assembly:bare+base_plate` 或 `assembly:gripper_g2+d435+base_plate`。
 - 真机说明与安全约束见[真机操作与硬件校验](#真机操作与硬件校验)；G2 仿真使用 `g2_calibrated_v1`，策略训练与当前 v3 检查点契约见[抓放 RL 指南](rl/pick_place/README_zh.md)。
+
+全部 5 款机械臂均支持加装对应铝合金安装底板（安装在 `link_base` 下方，上安装面 `z = 0`，不改变机械臂运动学坐标）：
+
+| 安装底板 | 适配机型 | 外形包络（mm） | 独立查看 `--tool` |
+|---|---|---|---|
+| [xArm 安装底板](../assets/urdf/xarm_base_plate/README.md) | `xarm5`、`xarm6`、`xarm7` | `136 × 185 × 8` | `xarm_base_plate` |
+| [UF850 安装底板](../assets/urdf/uf850_base_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_base_plate` |
+| [Lite 6 安装底板](../assets/urdf/lite6_base_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_base_plate` |
 
 ## 可视化
 
@@ -119,12 +127,18 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-gripper --grip
 # Lite6 + Lite6 Vacuum Gripper 静态查看
 python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 
-# 末端工具独立查看
+# xArm6 + Gripper G2 + D435 + 安装底板
+python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --camera d435 --base-plate
+
+# 末端工具与安装底板独立查看
 python examples/visualization/view_tool.py --tool gripper_g2
 python examples/visualization/view_tool.py --tool bio_gripper_g2
 python examples/visualization/view_tool.py --tool lite6_gripper
 python examples/visualization/view_tool.py --tool vacuum_gripper
 python examples/visualization/view_tool.py --tool lite6_vacuum_gripper
+python examples/visualization/view_tool.py --tool xarm_base_plate
+python examples/visualization/view_tool.py --tool uf850_base_plate
+python examples/visualization/view_tool.py --tool lite6_base_plate
 ```
 
 `view_robot.py` 参数：
@@ -134,6 +148,7 @@ python examples/visualization/view_tool.py --tool lite6_vacuum_gripper
 | `--robot`                                                                          | 必选机型 key                              |
 | `--gripper-g2` / `--bio-gripper-g2` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | 末端组合（最多选一个）                           |
 | `--camera`                                                                         | `camera_stand`、`d405`、`d435`、`gemini_305` 或 `zed_x_nano`：加装相机支架，可单独装支架，也可再装对应相机（适配所有机型，支持裸臂及除 `--bio-gripper-g2` 外的末端） |
+| `--base-plate`                                                                     | 在 `link_base` 下方加装对应铝合金安装底板             |
 | `--movable`                                                                        | 兼容保留（所有夹爪默认均使用逐连杆可动 GLB）              |
 | `--gripper-demo`                                                                   | 循环开合，到位后保持 0.5 s 切换（需配合夹爪标志）          |
 | `--pd`                                                                             | 平滑关节运动演示（约 0.873 rad/s），仅视觉           |
@@ -142,7 +157,7 @@ python examples/visualization/view_tool.py --tool lite6_vacuum_gripper
 | `--headless`                                                                       | 不打开查看器窗口                              |
 | `--backend`                                                                        | `cpu` / `gpu`（默认 `gpu`；无支持显卡时用 `cpu`） |
 
-`view_tool.py` 支持 `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper}`、`--headless`、`--backend`，以及标定夹爪调参选项（`--position-mm`、`--speed-percent`、`--force-percent`，其中 `bio_gripper_g2` 另支持 `--speed-mm-s`）。
+`view_tool.py` 支持 `--tool {gripper_g2,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_base_plate,uf850_base_plate,lite6_base_plate}`、`--headless`、`--backend`，以及标定夹爪调参选项（`--position-mm`、`--speed-percent`、`--force-percent`，其中 `bio_gripper_g2` 另支持 `--speed-mm-s`）。
 
 
 

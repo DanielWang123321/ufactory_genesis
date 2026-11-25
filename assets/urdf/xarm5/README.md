@@ -1,6 +1,6 @@
 # xArm5 1305
 
-xArm5 arm description (1305 variant). The xArm5 is an xArm6 whose J4 harmonic joint is replaced by a fixed aluminium key, i.e. an xArm6 with J4 locked at 0. This folder stores no meshes: every visual and collision mesh references the [xArm6](../xarm6/README.md) files in `../xarm6/meshes/xarm6_1305/`. Kinematics, inertials, and link and joint names are the xArm5's own.
+xArm5 arm description (1305 variant). The xArm5 is an xArm6 whose J4 harmonic joint is replaced by a fixed aluminium key, i.e. an xArm6 with J4 locked at 0. This folder stores no meshes: every visual and collision mesh references the [xArm6](../xarm6/README.md) files in `../xarm6/meshes/xarm6_1305/`. Kinematics, moving-link inertials, and link and joint names are the xArm5's own; `link_base` shares the unified xArm5/6/7 inertial parameters.
 
 ## Files
 
@@ -23,7 +23,7 @@ No arm + end-effector URDFs are stored: `ufactory.robots.assembly` composes them
 
 - 22 hulls in total. xArm5 J4/J5 are xArm6 J5/J6.
 - `test_xarm5_is_xarm6_with_j4_locked` (`tests/robots/test_asset_integrity.py`) checks that the link poses and mesh placements equal the xArm6's at J4 = 0.
-- Inertials are not shared: xArm5 link3 is 2.121 kg, 1.07 kg lighter than xArm6 link3 + link4 (no J4 module).
+- Moving-link inertials are not shared: xArm5 link3 is 2.121 kg, 1.07 kg lighter than xArm6 link3 + link4 (no J4 module). `link_base` shares the unified xArm5/6/7 inertial parameters (`2.788411 kg`; see [xArm6 shared parts](../xarm6/README.md#shared-parts)).
 - Why the links use several hulls: see [xArm6 collision meshes](../xarm6/README.md#collision-meshes).
 
 ## Source / License

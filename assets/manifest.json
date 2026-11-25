@@ -30,7 +30,10 @@
     "assets/urdf/xarm7/xarm7_1305.urdf",
     "assets/urdf/assembly.yaml",
     "assets/urdf/gripper_g2/gripper_g2_movable_visual.urdf",
-    "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf"
+    "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf",
+    "assets/urdf/xarm_base_plate/xarm_base_plate.urdf",
+    "assets/urdf/uf850_base_plate/uf850_base_plate.urdf",
+    "assets/urdf/lite6_base_plate/lite6_base_plate.urdf"
   ],
   "schema_version": 1,
   "sha256": {
@@ -55,14 +58,17 @@
     "assets/configs/runtime/tasks/robots/xarm7_1305_reach.yaml": "5059ce9b53123689726e2d3846f43c18ba92db7ca8bba7e87f9dccea9c4fc4d7",
     "assets/scenes/packaging_showcase/meshes/uv_box.obj": "901c6efc7a1e1b4947af16ed95b9e76b2b1d053fd117d36641a9e770768e35cc",
     "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
-    "assets/urdf/assembly.yaml": "2ec27ad4a908ca4c432d6e3a4a7c422335b4750fdb6e4bb878bed16aa5240e3d",
+    "assets/urdf/assembly.yaml": "60a348e8fa2aa72e0b336c17e1b2314c73c9c343c79ab15c232fe83538d78ba4",
     "assets/urdf/gripper_g2/gripper_g2_movable_visual.urdf": "1088891ca89d14b1912ac62bd00c1ae0bebc287e7663821c372bfc32984c1bea",
     "assets/urdf/lite6/lite6.urdf": "0045071263238025da9c0719e5a12f8ef68881bd7c45105acbefedae2fd1748e",
+    "assets/urdf/lite6_base_plate/lite6_base_plate.urdf": "0fb48d5a1198b89a248a0d8b68ec4553f2efff269b35ec461d05bef42afe1b7f",
     "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf": "d4013937766d7bdb1bd83f82f66cd4720f0ac2fb10ad179889b4bf3b50db1ede",
     "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb": "1ae8f67d1ddfa3b5a7f09265aa680eff72bc05f4c817470ac885333dde1cce57",
     "assets/urdf/uf850/uf850.urdf": "5f5b83d084b78411267886b53420e004ef13ea9ec95c0af471cd7d6f0f6c9d67",
-    "assets/urdf/xarm5/xarm5_1305.urdf": "5ee94bb9b104db012fada66d9b272c6a44766a6b88c14ab34155c92fc44f7067",
-    "assets/urdf/xarm6/xarm6_1305.urdf": "73e03c904b18c70e489205c4d8c57242a6577d53b7b0ecb1f9384b487e2cb5ad",
-    "assets/urdf/xarm7/xarm7_1305.urdf": "dd33d6c298919a163481c8d0b80be82bdf7aa114fe79abcff70630806c4e6a2c"
+    "assets/urdf/uf850_base_plate/uf850_base_plate.urdf": "4d34123d7b28daed7acda1acbbdd265c94cebd503046355a10a65bc9df1d1bc5",
+    "assets/urdf/xarm5/xarm5_1305.urdf": "62325923a392dadd79c901135476b6422c5f375bc7a6a43343c025a45c0e0350",
+    "assets/urdf/xarm6/xarm6_1305.urdf": "c42cb8dd772a3eb155dbbc2141c96f3721155830c18408f7dd47a6eaf3a7ab2a",
+    "assets/urdf/xarm7/xarm7_1305.urdf": "703c66329704ea79ffa5fe7ff88394ea72f96be9c9100c44e3b201dc9c671517",
+    "assets/urdf/xarm_base_plate/xarm_base_plate.urdf": "3308919254a1d6d5d8e8f696ae19a90f34e82e321a67338d6045af615eb26cf6"
   }
 }

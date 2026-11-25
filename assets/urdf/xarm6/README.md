@@ -30,7 +30,7 @@ Other arms reference these meshes directly, so editing them changes those arms t
 - [xArm5](../xarm5/README.md): every link. The xArm5 is an xArm6 with J4 locked at 0.
 - [xArm7](../xarm7/README.md): `link_base`, and `link6` as the xArm7 flange link `link7`.
 
-The base is the production version A: flat top at z = 150.35 mm, body Ø95.4 mm. Its STL matches upstream `xarm6_1305`; its GLB comes from the CAD export `1305-xarm5-P01-95-3`. The prototype version B (body Ø98.0 mm, top rising to 152.55 mm) is not used.
+The base is the production version A: flat top at z = 150.35 mm, body Ø95.4 mm. Its STL matches upstream `xarm6_1305`; its GLB comes from the CAD export `1305-xarm5-P01-95-3`. The prototype version B (body Ø98.0 mm, top rising to 152.55 mm) is not used. All three arms also share the unified `link_base` inertial parameters evaluated in SolidWorks on the production base assembly `Xarm+_P01` (`2.788411 kg`, CoM `(-2.587, -0.269, 103.569) mm`, standard URDF negative off-diagonal product-of-inertia convention).
 
 ## Source / License
 

@@ -174,11 +174,11 @@ def test_flanges_partition_registry_and_define_compatibility() -> None:
     assert identity == {"gripper_g2", "vacuum_gripper", "lite6_gripper", "lite6_vacuum_gripper"}
 
 
-def _write_schema(tmp_path: Path, flanges: str, flange: str) -> Path:
+def _write_schema(tmp_path: Path, flanges: str, flange: str, *, extra: str = "") -> Path:
     path = tmp_path / "assembly.yaml"
     path.write_text(
-        f"schema_version: 3\nflanges:\n{flanges}end_effectors:\n  p:\n    source: s.urdf\n    base_link: b\n"
-        f"    mount_joint: j\n    flange: {flange}\n",
+        f"schema_version: 4\nflanges:\n{flanges}end_effectors:\n  p:\n    source: s.urdf\n    base_link: b\n"
+        f"    mount_joint: j\n    flange: {flange}\n{extra}",
         encoding="utf-8",
     )
     return path
@@ -190,6 +190,35 @@ def test_flange_schema_rejects_shared_robots_and_unknown_flanges(tmp_path: Path)
         assembly._load_catalog(_write_schema(tmp_path, shared, "a"), 0)
     with pytest.raises(AssemblyError, match="unknown flange"):
         assembly._load_catalog(_write_schema(tmp_path, "  a:\n    robots: [lite6]\n", "c"), 1)
+
+
+def test_base_plate_schema_rejects_shared_robots_invalid_thickness_and_clashes(tmp_path: Path) -> None:
+    flanges = "  a:\n    robots: [xarm6, lite6]\n"
+    shared_plate = (
+        "base_plates:\n"
+        "  p1:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
+        "    robots: [xarm6]\n    thickness_m: 0.008\n"
+        "  p2:\n    source: p2.urdf\n    base_link: p2\n    mount_joint: j2\n"
+        "    robots: [xarm6_1305]\n    thickness_m: 0.008\n"
+    )
+    with pytest.raises(AssemblyError, match="listed under base_plates"):
+        assembly._load_catalog(_write_schema(tmp_path, flanges, "a", extra=shared_plate), 0)
+
+    zero_thick = (
+        "base_plates:\n"
+        "  p1:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
+        "    robots: [lite6]\n    thickness_m: 0.0\n"
+    )
+    with pytest.raises(AssemblyError, match="thickness_m must be positive"):
+        assembly._load_catalog(_write_schema(tmp_path, flanges, "a", extra=zero_thick), 1)
+
+    name_clash = (
+        "base_plates:\n"
+        "  base_plate:\n    source: p1.urdf\n    base_link: p1\n    mount_joint: j1\n"
+        "    robots: [lite6]\n    thickness_m: 0.005\n"
+    )
+    with pytest.raises(AssemblyError, match="part names must be unique"):
+        assembly._load_catalog(_write_schema(tmp_path, flanges, "a", extra=name_clash), 2)
 
 
 @pytest.mark.parametrize("end_effector", sorted(end_effectors()))

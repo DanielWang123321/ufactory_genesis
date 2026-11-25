@@ -25,7 +25,7 @@ xArm7 arm description (1305 variant).
 
 ## Shared parts
 
-`link_base` and `link7` use the visual and collision meshes of xArm6 `link_base` and `link6` (see [xArm6 shared parts](../xarm6/README.md#shared-parts)): the production base (version A), and the flange link that xArm5/6/7 share.
+`link_base` and `link7` use the visual and collision meshes of xArm6 `link_base` and `link6` (see [xArm6 shared parts](../xarm6/README.md#shared-parts)): the production base (version A, also sharing the unified `2.788411 kg` / CoM `(-2.587, -0.269, 103.569) mm` `link_base` inertial parameters), and the flange link that xArm5/6/7 share.
 
 ## Source / License
 

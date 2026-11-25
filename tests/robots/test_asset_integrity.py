@@ -65,6 +65,14 @@ def test_public_urdf_mesh_references_exist() -> None:
         for accessory in accessories()
         for visual in ("glb", "stl")
     ]
+    urdfs += [
+        _URDF_ROOT / f"{plate}/{plate}.urdf" for plate in ("xarm_base_plate", "uf850_base_plate", "lite6_base_plate")
+    ]
+    urdfs += [
+        Path(compose_robot_urdf(robot, None, base_plate=True, visual=visual))
+        for robot in ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850", "lite6")
+        for visual in ("glb", "stl")
+    ]
     missing: list[str] = []
     for urdf in urdfs:
         root = ET.parse(urdf).getroot()
@@ -970,6 +978,59 @@ def test_xarm_bases_use_the_production_base() -> None:
     assert max(_mesh_vertices(path, trimesh)[:, 2].max() for path in hulls) == pytest.approx(stl_top, abs=1e-4)
 
 
+def test_xarm_bases_share_unified_inertial_parameters() -> None:
+    """xArm5/6/7 share the SolidWorks Xarm+_P01 link_base inertials (standard URDF negative off-diagonals)."""
+    expected_mass = 2.788411
+    expected_com = (-0.002587, -0.000269, 0.103569)
+    expected_rpy = (0.0, 0.0, 0.0)
+    expected_inertia = {
+        "ixx": 0.008738440348,
+        "ixy": -1.7243198e-05,
+        "ixz": -0.000169824247,
+        "iyy": 0.008801398397,
+        "iyz": -4.797104e-06,
+        "izz": 0.003241739845,
+    }
+    expected_principal = np.array([3236492.910, 8739003.273, 8806082.405], dtype=np.float64) * 1e-9
+
+    serialized: list[str] = []
+    for robot_dir in ("xarm5", "xarm6", "xarm7"):
+        for variant in _XARM_URDF_VARIANTS:
+            urdf = _URDF_ROOT / robot_dir / variant.format(robot_dir)
+            inertial = ET.parse(urdf).getroot().find("./link[@name='link_base']/inertial")
+            assert inertial is not None, _rel(urdf)
+
+            mass = float(inertial.find("mass").attrib["value"])
+            assert mass == pytest.approx(expected_mass, rel=0.0, abs=1e-12), _rel(urdf)
+
+            origin = inertial.find("origin")
+            xyz = tuple(float(v) for v in origin.attrib["xyz"].split())
+            rpy = tuple(float(v) for v in origin.attrib.get("rpy", "0 0 0").split())
+            assert xyz == pytest.approx(expected_com, rel=0.0, abs=1e-12), _rel(urdf)
+            assert rpy == pytest.approx(expected_rpy, rel=0.0, abs=1e-12), _rel(urdf)
+
+            inertia = {k: float(v) for k, v in inertial.find("inertia").attrib.items()}
+            for key, expected_val in expected_inertia.items():
+                assert inertia[key] == pytest.approx(expected_val, rel=0.0, abs=1e-12), (_rel(urdf), key)
+
+            serialized.append(ET.tostring(inertial, encoding="unicode").strip())
+
+    assert len(set(serialized)) == 1
+
+    tensor = np.array(
+        [
+            [expected_inertia["ixx"], expected_inertia["ixy"], expected_inertia["ixz"]],
+            [expected_inertia["ixy"], expected_inertia["iyy"], expected_inertia["iyz"]],
+            [expected_inertia["ixz"], expected_inertia["iyz"], expected_inertia["izz"]],
+        ],
+        dtype=np.float64,
+    )
+    eig = np.linalg.eigvalsh(tensor)
+    assert eig.min() > 0.0
+    assert eig[0] + eig[1] > eig[2]
+    np.testing.assert_allclose(eig, expected_principal, rtol=0.0, atol=1e-11)
+
+
 def test_xarm_flange_visual_is_centred_on_the_flange_frame() -> None:
     """xArm5/6/7 share one flange link; its GLB stays centred on the flange axis like the STL.
 
@@ -989,7 +1050,19 @@ def test_xarm_flange_visual_is_centred_on_the_flange_frame() -> None:
         vertices = _mesh_vertices(path, trimesh)
         return (vertices.min(axis=0) + vertices.max(axis=0)) / 2
 
-    np.testing.assert_allclose(bbox_centre(glb)[:2], bbox_centre(stl)[:2], atol=2e-4)
+    assert np.allclose(bbox_centre(glb)[:2], bbox_centre(stl)[:2], atol=2e-4)
+
+
+def test_lite6_base_glb_is_aligned_with_stl_at_z0() -> None:
+    """Lite 6 link_base.glb bottom mounting plane sits at z = 0 matching link_base.stl."""
+    trimesh = pytest.importorskip("trimesh")
+    pytest.importorskip("DracoPy")
+    pytest.importorskip("pygltflib")
+    meshes = _URDF_ROOT / "lite6" / "meshes" / "lite6"
+    stl = _mesh_vertices(meshes / "visual" / "link_base.stl", trimesh)
+    glb = _mesh_vertices(meshes / "visual_glb" / "link_base.glb", trimesh)
+    assert float(glb[:, 2].min()) == pytest.approx(float(stl[:, 2].min()), abs=2e-5)
+    assert float(glb[:, 2].max()) == pytest.approx(float(stl[:, 2].max()), abs=5e-4)
 
 
 def test_arm_and_bio_g2_collision_meshes_are_convex_hulls() -> None:
@@ -1405,6 +1478,9 @@ def test_accessory_collision_meshes_are_stl_files() -> None:
         _URDF_ROOT / "lite6_gripper" / "lite6_gripper_movable_visual.urdf",
         _URDF_ROOT / "lite6_vacuum_gripper" / "lite6_vacuum_gripper.urdf",
         _URDF_ROOT / "vacuum_gripper" / "vacuum_gripper.urdf",
+        _URDF_ROOT / "xarm_base_plate" / "xarm_base_plate.urdf",
+        _URDF_ROOT / "uf850_base_plate" / "uf850_base_plate.urdf",
+        _URDF_ROOT / "lite6_base_plate" / "lite6_base_plate.urdf",
         *_assembly_urdfs(),
     )
     bad: list[str] = []

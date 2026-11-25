@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from ufactory.robots.assembly import accessories
+from ufactory.robots.assembly import accessories, base_plate_for
 from ufactory.robots.paths import robot_visual_glb_urdf
 from ufactory.robots.registry import get_robot_profile, robot_cli_choices
 from ufactory.visualization.robot_viewer import run_glb_diagnose, run_glb_viewer
@@ -44,6 +44,11 @@ def main() -> None:
         default=None,
         help="Mount the camera stand (camera_stand) or a camera on it between the flange and the end effector "
         "(all robots; bare arm or any end effector except --bio-gripper-g2)",
+    )
+    parser.add_argument(
+        "--base-plate",
+        action="store_true",
+        help="Mount the robot's official aluminium base plate below link_base",
     )
     parser.add_argument(
         "--movable",
@@ -136,7 +141,9 @@ def main() -> None:
         with_lite6_vacuum_gripper=args.lite6_vacuum_gripper,
         movable=args.movable,
         accessory=args.camera,
+        base_plate=args.base_plate,
     )
+    floor_z = -base_plate_for(profile.key).thickness_m if args.base_plate else 0.0
     print(f"Loading: {urdf_path}")
     run_glb_viewer(
         profile,
@@ -151,6 +158,7 @@ def main() -> None:
         show_tcp=args.show_tcp,
         show_base_axes=args.show_base_axes,
         backend=args.backend,
+        floor_z=floor_z,
     )
 
 

@@ -12,9 +12,12 @@ import genesis as gs
 from ufactory.robots.paths import (
     bio_gripper_g2_movable_visual_urdf,
     gripper_g2_movable_visual_urdf,
+    lite6_base_plate_urdf,
     lite6_gripper_movable_visual_urdf,
     lite6_vacuum_gripper_visual_glb_urdf,
+    uf850_base_plate_urdf,
     vacuum_gripper_urdf,
+    xarm_base_plate_urdf,
 )
 from ufactory.simulation import make_rigid_options
 from ufactory.simulation.collision import configure_lite6_collision_filters
@@ -25,15 +28,19 @@ from ufactory.visualization.viewer import start_deferred_viewer
 CAMERA_POS = (0.22, -0.28, 0.18)
 CAMERA_LOOKAT = (0.0, 0.0, 0.14)
 CAMERA_FOV = 35
+PLATE_CAMERA_POS = (0.24, -0.30, 0.22)
+PLATE_CAMERA_LOOKAT = (0.0, 0.0, 0.005)
 # Same as the view_robot.py warm-up for calibrated grippers.
 VIEWER_WARMUP_STEPS = 3
 # Mounted at home on an arm: flange / adapter turned 180 deg about X (flange up, tool tip down).
 MOUNTED_QUAT_WXYZ = (0.0, 1.0, 0.0, 0.0)
+# Base plates sit upright on the floor (top mounting surface facing +Z).
+UPRIGHT_QUAT_WXYZ = (1.0, 0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
 class StandaloneToolSpec:
-    """Configuration for previewing one standalone flange tool in mounted orientation."""
+    """Configuration for previewing one standalone flange tool or mounting base plate."""
 
     name: str
     description: str
@@ -43,6 +50,8 @@ class StandaloneToolSpec:
     controller: Callable[[object], Callable[[int], None]] | None = None
     calibrated_g2: bool = False
     calibrated_bio_g2: bool = False
+    camera_pos: tuple[float, float, float] = CAMERA_POS
+    camera_lookat: tuple[float, float, float] = CAMERA_LOOKAT
 
 
 def _gripper_g2_controller(robot: object) -> Callable[[int], None]:
@@ -123,6 +132,33 @@ STANDALONE_TOOL_SPECS: dict[str, StandaloneToolSpec] = {
         urdf_loader=lite6_vacuum_gripper_visual_glb_urdf,
         base_pos=(0.0, 0.0, 0.17),
     ),
+    "xarm_base_plate": StandaloneToolSpec(
+        name="xarm_base_plate",
+        description="xArm5/6/7 mounting base plate static preview (standalone)",
+        urdf_loader=xarm_base_plate_urdf,
+        base_pos=(0.0, 0.0, 0.008),
+        base_quat=UPRIGHT_QUAT_WXYZ,
+        camera_pos=PLATE_CAMERA_POS,
+        camera_lookat=PLATE_CAMERA_LOOKAT,
+    ),
+    "uf850_base_plate": StandaloneToolSpec(
+        name="uf850_base_plate",
+        description="UF850 mounting base plate static preview (standalone)",
+        urdf_loader=uf850_base_plate_urdf,
+        base_pos=(0.0, 0.0, 0.010),
+        base_quat=UPRIGHT_QUAT_WXYZ,
+        camera_pos=PLATE_CAMERA_POS,
+        camera_lookat=PLATE_CAMERA_LOOKAT,
+    ),
+    "lite6_base_plate": StandaloneToolSpec(
+        name="lite6_base_plate",
+        description="Lite 6 mounting base plate static preview (standalone)",
+        urdf_loader=lite6_base_plate_urdf,
+        base_pos=(0.0, 0.0, 0.005),
+        base_quat=UPRIGHT_QUAT_WXYZ,
+        camera_pos=PLATE_CAMERA_POS,
+        camera_lookat=PLATE_CAMERA_LOOKAT,
+    ),
 }
 
 
@@ -163,12 +199,12 @@ def _validate_calibrated_args(args: argparse.Namespace, *, calibrated_g2: bool, 
 
 def parse_standalone_tool_args(argv: Sequence[str] | None = None) -> tuple[StandaloneToolSpec, argparse.Namespace]:
     """Parse CLI arguments for the unified standalone tool viewer and resolve the matching tool spec."""
-    parser = argparse.ArgumentParser(description="View any standalone flange tool visual model in Genesis")
+    parser = argparse.ArgumentParser(description="View any standalone flange tool or mounting base plate in Genesis")
     parser.add_argument(
         "--tool",
         required=True,
         choices=tuple(STANDALONE_TOOL_SPECS),
-        help="Flange tool to preview (mounted orientation: flange up, tool tip down)",
+        help="Flange tool (mounted orientation) or base plate (upright on floor) to preview",
     )
     parser.add_argument("--headless", action="store_true", help="Run without viewer window")
     parser.add_argument(
@@ -225,6 +261,8 @@ def _run_standalone_viewer(
     speed_percent: float = 50.0,
     speed_mm_s: float | None = None,
     force_percent: float = 50.0,
+    camera_pos: tuple[float, float, float] = CAMERA_POS,
+    camera_lookat: tuple[float, float, float] = CAMERA_LOOKAT,
 ) -> dict | None:
     from ufactory.simulation import genesis_backend_constant
 
@@ -240,7 +278,7 @@ def _run_standalone_viewer(
             else make_rigid_options(gs)
         ),
         viewer_options=gs.options.ViewerOptions(
-            camera_pos=CAMERA_POS, camera_lookat=CAMERA_LOOKAT, camera_fov=CAMERA_FOV
+            camera_pos=camera_pos, camera_lookat=camera_lookat, camera_fov=CAMERA_FOV
         ),
     )
     scene.add_entity(gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True))
@@ -315,6 +353,8 @@ def run_standalone_tool_viewer(argv: Sequence[str] | None = None, *, headless_st
         speed_percent=50.0 if args.speed_percent is None else args.speed_percent,
         speed_mm_s=args.speed_mm_s,
         force_percent=50.0 if args.force_percent is None else args.force_percent,
+        camera_pos=spec.camera_pos,
+        camera_lookat=spec.camera_lookat,
     )
 
 

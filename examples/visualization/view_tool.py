@@ -1,4 +1,4 @@
-"""Standalone viewer for supported UFACTORY flange tools (grippers and vacuum cups)."""
+"""Standalone viewer for supported UFACTORY flange tools and mounting base plates."""
 
 from __future__ import annotations
 

@@ -29,7 +29,7 @@ def test_gravity_matches_potential_gradient_including_fixed_gripper(q):
         _, minus = model.compute(positions | {name: positions[name] - 1e-6})
         assert torque[idx] == pytest.approx((plus - minus) / 2e-6, abs=1e-7)
     assert abs(torque[1]) > 1
-    assert sum(mass for mass, _ in model.inertials.values()) == pytest.approx(12.84164)
+    assert sum(mass for mass, _ in model.inertials.values()) == pytest.approx(12.930051)
     assert model.inertials["bio_gripper_g2_base_link"][0] > 0.7
 
 

@@ -9,9 +9,9 @@
   <link name="world" />
   <link name="link_base">
     <inertial>
-      <origin xyz="0.0 0.0 0.09103" rpy="0 0 0" />
-      <mass value="2.7" />
-      <inertia ixx="0.00494875" ixy="-3.5e-06" ixz="1.25e-05" iyy="0.00494174" iyz="1.67e-06" izz="0.002219" />
+      <origin xyz="-0.002587 -0.000269 0.103569" rpy="0 0 0" />
+      <mass value="2.788411" />
+      <inertia ixx="0.008738440348" ixy="-1.7243198e-05" ixz="-0.000169824247" iyy="0.008801398397" iyz="-4.797104e-06" izz="0.003241739845" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />

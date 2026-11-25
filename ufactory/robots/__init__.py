@@ -12,6 +12,8 @@ from ufactory.robots.registry import (
 from ufactory.robots.assembly import (
     AssemblyError,
     accessories,
+    base_plate_for,
+    base_plates,
     compose_robot_urdf,
     parse_assembly_ref,
     supported_accessories,
@@ -51,6 +53,8 @@ __all__ = [
     "RobotModelSpec",
     "RobotRuntimeProfile",
     "AssemblyError",
+    "base_plate_for",
+    "base_plates",
     "compose_robot_urdf",
     "parse_assembly_ref",
     "accessories",
