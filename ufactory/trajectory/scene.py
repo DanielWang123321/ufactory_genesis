@@ -20,6 +20,7 @@ import genesis as gs
 from genesis.utils.geom import xyz_to_quat
 from ufactory.config import load_runtime_config, resolve_pick_place_object_spec
 from ufactory.kinematics.calibration import prepare_robot_model_for_verification
+from ufactory.kinematics.genesis import solve_home_ik
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
 from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 from ufactory.simulation import (
@@ -532,12 +533,7 @@ def build_scene(
     home_pos_base = [obj_xy[0], obj_xy[1], home_z]
     home_pos = _base_to_world(robot_base, home_pos_base)
     home_link6_pos = torch.tensor([home_pos], device=gs.device, dtype=gs.tc_float)
-    home_qpos_result = robot.inverse_kinematics(
-        link=ik_link,
-        pos=home_link6_pos,
-        quat=dq,
-        dofs_idx_local=arm_dof_idx,
-    )
+    home_qpos_result = solve_home_ik(robot, ik_link, home_link6_pos, dq, arm_dof_idx=arm_dof_idx)
     init_qpos = torch.zeros(1, robot.n_dofs, device=gs.device, dtype=gs.tc_float)
     for i, idx in enumerate(arm_dof_idx):
         init_qpos[:, idx] = home_qpos_result[0, arm_dof_idx[i]]

@@ -30,6 +30,7 @@ from ufactory.config import load_runtime_config, runtime_config_dict
 from ufactory.config.models import ROBOTIQ_2F_85_PHYSICS_PROFILE, ROBOTIQ_2F_140_PHYSICS_PROFILE
 from ufactory.config.loader import config_sha256
 from ufactory.grippers import create_gripper_adapter
+from ufactory.kinematics.genesis import solve_home_ik
 from ufactory.grippers.g2 import (
     GRIPPER_G2_SIM_OPEN_DRIVE as GRIPPER_OPEN,
     GRIPPER_G2_SIM_CLOSE_DRIVE as GRIPPER_CLOSE,
@@ -217,12 +218,8 @@ def _init_home_qpos(
 ):
     home_link6_pos = torch.tensor([home_pos], device=gs.device, dtype=gs.tc_float)
     init_qpos = torch.zeros(1, robot.n_dofs, device=gs.device, dtype=gs.tc_float)
-    home_qpos_result = robot.inverse_kinematics(
-        link=ik_link,
-        pos=home_link6_pos,
-        quat=down_quat,
-        dofs_idx_local=arm_dof_idx,
-        init_qpos=init_qpos,
+    home_qpos_result = solve_home_ik(
+        robot, ik_link, home_link6_pos, down_quat, arm_dof_idx=arm_dof_idx, init_qpos=init_qpos
     )
     for i, idx in enumerate(arm_dof_idx):
         init_qpos[:, idx] = home_qpos_result[0, arm_dof_idx[i]]

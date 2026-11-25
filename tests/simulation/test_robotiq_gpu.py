@@ -19,6 +19,9 @@ PICK_CASES = [
     ("xarm5", "robotiq_2f_85", "servo_j", 50, 50),
     ("xarm7", "robotiq_2f_140", "servo_cartesian", 50, 50),
     ("uf850", "robotiq_2f_85", "servo_cartesian", 50, 50),
+    # The 2F-140 home sits higher; Genesis's default-tolerance home IK stopped 0.445 / 0.26 mm off it here.
+    ("xarm5", "robotiq_2f_140", "servo_cartesian", 50, 50),
+    ("uf850", "robotiq_2f_140", "servo_cartesian", 50, 50),
 ]
 
 PACKAGING_CASES = [

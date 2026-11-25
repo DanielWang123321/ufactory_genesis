@@ -145,6 +145,9 @@ def require_genesis_runtime(gs_module: ModuleType | Any | None = None) -> Any:
             "respect_joint_limit",
             "return_error",
             "max_solver_iters",
+            "max_samples",
+            "pos_tol",
+            "rot_tol",
         },
         "RigidEntity.inverse_kinematics",
     )

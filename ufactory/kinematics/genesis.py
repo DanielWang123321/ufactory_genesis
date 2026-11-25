@@ -27,6 +27,54 @@ def down_quat(device=None, dtype=None) -> torch.Tensor:
 
 DEFAULT_IK_MAX_POS_ERR_M = 2e-3
 
+# Genesis IK stops as soon as it is inside its default tolerances (0.5 mm, 5 mrad). A held start pose that far from the
+# program's first Cartesian point is a step in the planned stream: 0.445 mm at the xArm6 + Robotiq 2F-140 home read as
+# 1.40 m/s^2 against the 0.8 m/s^2 MoveL limit in preflight. Start poses are therefore solved to micrometres.
+HOME_IK_POS_TOL_M = 1e-6
+HOME_IK_ROT_TOL_RAD = 1e-5
+HOME_IK_REFINE_ITERS = 100
+HOME_IK_MAX_POS_ERR_M = 1e-5
+HOME_IK_MAX_ROT_ERR_RAD = 1e-4
+
+
+def solve_home_ik(robot, ik_link, pos, quat, *, arm_dof_idx, init_qpos=None):
+    """Solve a held start pose to micrometres on the joint branch Genesis's default IK picks.
+
+    The first solve is the plain Genesis call (default tolerances, random restarts) and chooses the branch. The second
+    starts from its result with a single sample, so it cannot restart on another branch, and iterates to
+    ``HOME_IK_POS_TOL_M`` / ``HOME_IK_ROT_TOL_RAD``. Returns the joint vector as Genesis returns it. Raises
+    :class:`ValueError` if the residual is still above ``HOME_IK_MAX_POS_ERR_M`` / ``HOME_IK_MAX_ROT_ERR_RAD``.
+    """
+    seed = {} if init_qpos is None else {"init_qpos": init_qpos}
+    coarse = robot.inverse_kinematics(link=ik_link, pos=pos, quat=quat, dofs_idx_local=arm_dof_idx, **seed)
+    refined, error = robot.inverse_kinematics(
+        link=ik_link,
+        pos=pos,
+        quat=quat,
+        dofs_idx_local=arm_dof_idx,
+        init_qpos=coarse,
+        max_samples=1,
+        max_solver_iters=HOME_IK_REFINE_ITERS,
+        pos_tol=HOME_IK_POS_TOL_M,
+        rot_tol=HOME_IK_ROT_TOL_RAD,
+        return_error=True,
+    )
+    if hasattr(error, "detach"):
+        error = error.detach().cpu().numpy()
+    residual = np.asarray(error, dtype=np.float64).reshape(-1, 6)
+    pos_err = float(np.max(np.linalg.norm(residual[:, :3], axis=1)))
+    rot_err = float(np.max(np.linalg.norm(residual[:, 3:], axis=1)))
+    if not (np.isfinite(pos_err) and np.isfinite(rot_err)) or (
+        pos_err > HOME_IK_MAX_POS_ERR_M or rot_err > HOME_IK_MAX_ROT_ERR_RAD
+    ):
+        target = pos.detach().cpu().numpy() if hasattr(pos, "detach") else pos
+        raise ValueError(
+            f"Genesis home IK residual {pos_err * 1e3:.4f} mm / {rot_err * 1e3:.4f} mrad exceeds "
+            f"{HOME_IK_MAX_POS_ERR_M * 1e3:.3f} mm / {HOME_IK_MAX_ROT_ERR_RAD * 1e3:.3f} mrad "
+            f"for target {np.asarray(target, dtype=np.float64).reshape(-1).round(6).tolist()}"
+        )
+    return refined
+
 
 def solve_link6_ik(
     robot,
