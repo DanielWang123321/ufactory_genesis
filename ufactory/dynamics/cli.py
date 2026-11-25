@@ -533,7 +533,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
 
     try:
         if args.hold_current_only:
-            session = RealRobotSession(args.ip, dof=runtime.model.dof, home_qpos=runtime.arm.home_qpos)
+            session = RealRobotSession(args.ip, robot_key=runtime.model.key, home_qpos=runtime.arm.home_qpos)
             session.configure_for_dynamics()
             session.print_config()
             q, qvel, tau = session.get_joint_states()
@@ -559,7 +559,7 @@ def cli_hardware_check(argv: Sequence[str] | None = None) -> int:
                     )
                 )
         else:
-            session = RealRobotSession(args.ip, dof=runtime.model.dof, home_qpos=runtime.arm.home_qpos)
+            session = RealRobotSession(args.ip, robot_key=runtime.model.key, home_qpos=runtime.arm.home_qpos)
             offset_z_issues = _check_controller_tcp_offset_z(session, safe_poses, runtime.arm.home_qpos)
             if offset_z_issues:
                 session.print_config()
@@ -1066,7 +1066,7 @@ def cli_sim_collision_check(argv: Sequence[str] | None = None) -> int:
     print(f"speed          : {args.speed:.4f} rad/s")
     print(f"move_strategy  : {args.move_strategy}")
 
-    session = RealRobotSession(args.ip, dof=runtime.model.dof, home_qpos=runtime.arm.home_qpos)
+    session = RealRobotSession(args.ip, robot_key=runtime.model.key, home_qpos=runtime.arm.home_qpos)
     try:
         session.configure_for_simulation_collision_check()
         session.print_config()

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import tomllib
 
-from conftest import PROJECT_ROOT
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _python_sources(root: Path) -> list[Path]:

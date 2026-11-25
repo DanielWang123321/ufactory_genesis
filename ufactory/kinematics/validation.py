@@ -28,6 +28,23 @@ from ufactory.simulation.compat import require_genesis_runtime
 
 PASS_POS_MM = 1.0
 PASS_RPY_DEG = 0.5
+IK_SAMPLE_SPAN_RAD = 0.8
+IK_SEED_NOISE_RAD = 0.15
+
+
+def sample_ik_case(
+    rng: np.random.Generator, lower: Sequence[float], upper: Sequence[float]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Random ``(q_target, q_seed)`` inside the joint limits (target also within ±IK_SAMPLE_SPAN_RAD).
+
+    Controller FK accepts out-of-limit angles, so an unclamped target can be a pose no in-limit
+    IK solution reaches (e.g. xArm5 J3 > 0.192 rad).
+    """
+    lower = np.asarray(lower, dtype=np.float64)
+    upper = np.asarray(upper, dtype=np.float64)
+    q_target = rng.uniform(np.maximum(lower, -IK_SAMPLE_SPAN_RAD), np.minimum(upper, IK_SAMPLE_SPAN_RAD))
+    noise = rng.uniform(-IK_SEED_NOISE_RAD, IK_SEED_NOISE_RAD, q_target.size)
+    return q_target, np.clip(q_target + noise, lower, upper)
 
 
 def quat_to_rpy(quat: Sequence[float]) -> tuple[float, float, float]:
@@ -110,18 +127,25 @@ def genesis_fk(
     return links_pos[0, ee_link_idx].cpu().numpy(), links_quat[0, ee_link_idx].cpu().numpy()
 
 
-def _connect_sdk(ip: str):
+def _connect_sdk(ip: str, robot_key: str):
     from xarm.wrapper import XArmAPI
+
+    from ufactory.hardware.xarm import verify_controller_robot
 
     arm = XArmAPI(ip, is_radian=True)
     connect = getattr(arm, "connect", None)
     if connect is not None:
         connect()
+    try:
+        verify_controller_robot(arm, robot_key)
+    except RuntimeError:
+        arm.disconnect()
+        raise
     return arm
 
 
 def _prepare_sdk_and_urdf(args, runtime: RobotRuntimeProfile) -> tuple[object, str, str | None, np.ndarray]:
-    arm = _connect_sdk(args.ip)
+    arm = _connect_sdk(args.ip, runtime.model.key)
     sn = get_robot_sn(arm)
     cli_suffix = args.kinematics_suffix
     resolved_suffix = resolve_kinematics_suffix(
@@ -221,12 +245,15 @@ def run_ik_validation(args) -> int:
     _, robot = build_genesis_robot(urdf_path, backend=args.backend, show_viewer=args.vis)
     ee_link = next(l for l in robot.links if l.name.split("/")[-1] == runtime.arm.ee_link)
     arm_dof_idx = _resolve_arm_dof_idx(robot, runtime)
+    lower, upper = (
+        np.asarray(t.cpu().numpy(), dtype=np.float64).reshape(-1)
+        for t in robot.get_dofs_limit(dofs_idx_local=arm_dof_idx)
+    )
     rng = np.random.default_rng(args.seed)
     failed = 0
 
     for i in range(args.samples):
-        q_target = rng.uniform(-0.8, 0.8, runtime.model.dof)
-        q_seed = q_target + rng.uniform(-0.15, 0.15, runtime.model.dof)
+        q_target, q_seed = sample_ik_case(rng, lower, upper)
         code, pose = arm.get_forward_kinematics(q_target.tolist(), input_is_radian=True, return_is_radian=True)
         if code != 0:
             print(f"SKIP ik_{i}: SDK FK code={code}")

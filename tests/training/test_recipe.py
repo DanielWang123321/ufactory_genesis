@@ -8,7 +8,6 @@ import sys
 
 import pytest
 
-from conftest import PROJECT_ROOT
 from ufactory.config import load_runtime_config
 from ufactory.training import (
     PICK_PLACE_RL_NOSLIP_ITERATIONS,
@@ -18,6 +17,8 @@ from ufactory.training import (
     load_pick_place_rl_runtime_config,
     load_training_recipe,
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 GRASP_RECIPE = PROJECT_ROOT / "examples" / "rl" / "pick_place" / "recipe.yaml"
 

@@ -15,10 +15,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ufactory.robots.registry import get_robot_profile
 from ufactory.robots.runtime import DEFAULT_DYNAMICS_MOVE_SPEED_RAD_S
 from ufactory.hardware.xarm import (
     MODE_POSITION,
     format_arm_status,
+    verify_controller_robot,
 )
 
 DEFAULT_GRAVITY_DIRECTION = [0.0, 0.0, -1.0]
@@ -93,7 +95,7 @@ def build_axis_sequential_waypoints(
     *,
     atol: float = 1e-9,
 ) -> list[np.ndarray]:
-    """Build waypoints that move J1..J6 one axis at a time."""
+    """Build waypoints that move J1..Jn one axis at a time."""
     start = np.asarray(start_q, dtype=np.float64).reshape(-1)
     target = np.asarray(target_q, dtype=np.float64).reshape(-1)
     if start.shape != target.shape:
@@ -126,21 +128,27 @@ def build_motion_waypoints(
 
 
 class RealRobotSession:
-    """Non-simulation xArm session for slow position holds and torque readback."""
+    """Non-simulation session for slow position holds and torque readback on any UFACTORY arm.
+
+    The controller must report the model of ``robot_key``; a different model is refused
+    right after connecting, before any command is sent.
+    """
 
     def __init__(
         self,
         ip: str,
         *,
-        dof: int = 6,
+        robot_key: str,
         home_qpos: Sequence[float] | None = None,
         is_radian: bool = True,
         motion_mode: int = MODE_POSITION,
     ):
         from xarm.wrapper import XArmAPI
 
+        profile = get_robot_profile(robot_key)
         self.ip = ip
-        self.dof = int(dof)
+        self.robot_key = profile.key
+        self.dof = int(profile.dof)
         self.home_qpos = np.asarray(
             home_qpos if home_qpos is not None else np.zeros(self.dof, dtype=np.float64),
             dtype=np.float64,
@@ -149,7 +157,12 @@ class RealRobotSession:
         self.arm = XArmAPI(ip, is_radian=is_radian)
         time.sleep(0.5)
         if not self.arm.connected:
-            raise ConnectionError(f"Failed to connect to xArm at {ip}")
+            raise ConnectionError(f"Failed to connect to the controller at {ip}")
+        try:
+            verify_controller_robot(self.arm, profile.key)
+        except RuntimeError:
+            self.arm.disconnect()
+            raise
 
     def ensure_ready(self, mode: int | None = None) -> None:
         """Enable an already healthy controller without clearing or resetting faults."""

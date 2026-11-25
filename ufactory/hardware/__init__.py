@@ -1,4 +1,4 @@
-"""Real UFACTORY/xArm hardware runtime helpers."""
+"""Real UFACTORY hardware runtime helpers (xArm5/6/7, Lite6, UF850 via the xArm Python SDK)."""
 
 from ufactory.hardware.session import (
     MOVE_STRATEGIES,
@@ -16,9 +16,10 @@ from ufactory.hardware.xarm import (
     MODE_SERVO,
     STATE_MOTION,
     assert_motion_ready,
+    controller_robot_name,
     format_arm_status,
     prepare_arm_for_motion,
-    prepare_gripper_g2_for_motion,
+    verify_controller_robot,
 )
 from ufactory.hardware.transport import XArmTransport
 
@@ -35,8 +36,9 @@ __all__ = [
     "MODE_POSITION",
     "MODE_SERVO",
     "assert_motion_ready",
+    "controller_robot_name",
     "format_arm_status",
     "prepare_arm_for_motion",
-    "prepare_gripper_g2_for_motion",
+    "verify_controller_robot",
     "XArmTransport",
 ]

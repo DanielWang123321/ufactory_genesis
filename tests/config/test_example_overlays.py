@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from conftest import PROJECT_ROOT
 from ufactory.config import ConfigError, load_runtime_config
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_pick_place_example_overlay_changes_only_motion_values() -> None:

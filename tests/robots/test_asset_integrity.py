@@ -3,20 +3,16 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-_TESTS_ROOT = Path(__file__).resolve().parents[1]
-if str(_TESTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TESTS_ROOT))
-from conftest import PROJECT_ROOT
-
 from ufactory.grippers.g2 import G2_LINKAGE_GEOMETRY
 from ufactory.robots.assembly import accessories, compose_robot_urdf, end_effectors
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 _URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
 

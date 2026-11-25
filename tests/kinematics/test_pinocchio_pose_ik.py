@@ -194,6 +194,10 @@ def test_run_ik_validation_normalizes_full_dof_seed_and_passes_dofs_idx_local(mo
         def get_qpos(self):
             return torch.zeros((1, 12), dtype=torch.float32)
 
+        def get_dofs_limit(self, dofs_idx_local=None):
+            n = len(dofs_idx_local)
+            return torch.full((n,), -3.0), torch.full((n,), 3.0)
+
         def inverse_kinematics(self, **kwargs):
             recorded_ik_kwargs.append(kwargs)
             q_full = torch.full((1, 12), 99.0, dtype=torch.float32)
@@ -235,3 +239,17 @@ def test_run_ik_validation_normalizes_full_dof_seed_and_passes_dofs_idx_local(mo
     for call in recorded_ik_kwargs:
         assert call["dofs_idx_local"] == arm_dof_idx
         assert tuple(call["init_qpos"].shape) == (12,)
+
+
+def test_sample_ik_case_stays_inside_joint_limits():
+    from ufactory.kinematics.validation import IK_SAMPLE_SPAN_RAD, sample_ik_case
+
+    # xArm5 limits: J3 tops out at 0.192 rad, below the ±0.8 rad sampling span.
+    lower = np.array([-6.2832, -2.059, -3.927, -1.693, -6.2832])
+    upper = np.array([6.2832, 2.0944, 0.192, 3.1416, 6.2832])
+    rng = np.random.default_rng(0)
+    for _ in range(500):
+        q_target, q_seed = sample_ik_case(rng, lower, upper)
+        assert np.all(q_target >= np.maximum(lower, -IK_SAMPLE_SPAN_RAD))
+        assert np.all(q_target <= np.minimum(upper, IK_SAMPLE_SPAN_RAD))
+        assert np.all((q_seed >= lower) & (q_seed <= upper))

@@ -405,7 +405,7 @@ def cli_observe_hold_current(argv: Sequence[str] | None = None) -> int:
 
     session = RealRobotSession(
         args.ip,
-        dof=runtime.model.dof,
+        robot_key=runtime.model.key,
         home_qpos=runtime.arm.home_qpos,
     )
     summaries: list[HoldObserveSummary] = []

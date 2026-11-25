@@ -21,6 +21,7 @@ from ufactory.robots.registry import (
     get_profile_key_for_robot_name,
     get_robot_profile,
     robot_cli_choices,
+    robot_name_for_controller,
 )
 
 
@@ -45,6 +46,23 @@ def test_get_robot_profile_accepts_short_names() -> None:
     profile = get_robot_profile("xarm6")
     assert profile.key == "xarm6_1305"
     assert profile.default_urdf == "xarm6_1305.urdf"
+
+
+@pytest.mark.parametrize(
+    ("axis", "device_type", "expected"),
+    [
+        (5, 5, "xarm5"),
+        (6, 6, "xarm6"),
+        (7, 7, "xarm7"),
+        (6, 9, "lite6"),
+        (6, 12, "uf850"),
+        (6, 99, None),
+        (7, 9, None),
+    ],
+)
+def test_robot_name_for_controller(axis: int, device_type: int, expected: str | None) -> None:
+    # (axis, device_type) pairs read from the five supported controllers (firmware v2.8.x).
+    assert robot_name_for_controller(axis, device_type) == expected
 
 
 def test_xarm_urdf_defaults_point_to_1305() -> None:

@@ -66,8 +66,12 @@ project-check deep
 
 # Hardware via inventory (preferred) or ad-hoc marker
 # project-check hardware --inventory dev/hardware/hardware_inventory.yaml --confirm-real
+# The ad-hoc marker reads the robot model from the controller; add XARM_ROBOT=<xarm5|xarm6|xarm7|lite6|uf850>
+# only when the controller model cannot be read.
 XARM_IP=192.168.1.xx pytest -m hardware
 ```
+
+Every real-robot entry point (`dynamics-hardware-check`, `dynamics-sim-collision-check`, `observe-hold-current`, FK/IK verification, pick-place and packaging `sdk-sim`/`real`) compares the controller-reported model with `--robot` before sending any command and refuses a mismatch.
 
 **Parallelism boundary:** `sdk-sim` / `hardware` inventory runs **one worker per robot IP** (cabinet evidence). In-process `@gpu` multi-robot matrices stay **serial** on a single GPU (Genesis one owner per process; 8GB VRAM). Five-robot CLI smoke is **not** re-run in `deep`; use `sdk-sim`.
 
@@ -94,7 +98,7 @@ Tests are grouped under `tests/` by `ufactory` module:
 | `tests/safety/` | `ufactory.safety` | `test_gate_failures.py`, `test_models.py` |
 | `tests/kinematics/` | `ufactory.kinematics` | `test_pinocchio_pose_ik.py`, `test_strict_calibration.py` |
 | `tests/dynamics/` | `ufactory.dynamics` | `test_dynamics_validation.py`, `test_dynamics_sim_regression.py` |
-| `tests/hardware/` | `ufactory.hardware` | `test_real_robot_session.py`, `test_xarm6_real.py` |
+| `tests/hardware/` | `ufactory.hardware` | `test_xarm_control.py`, `test_real_robot_session.py`, `test_real_robot.py` (`hardware` marker) |
 | `tests/trajectory/` | `ufactory.trajectory` | `test_trajectory_profile.py` |
 | `tests/training/` | `ufactory.training` | `test_artifacts.py`, `test_public_rl_example.py`, `test_recipe.py`, `test_pick_place_e2e.py`, `test_runner.py` |
 | `tests/visualization/` | `ufactory.visualization` | `test_pbr_scope.py` |

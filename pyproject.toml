@@ -86,7 +86,6 @@ relative_files = true
 # sim/sdk-sim/hardware layers instead of being imported by fast tests.
 omit = [
     "ufactory/cli/*",
-    "ufactory/hardware/*",
     "ufactory/quality/*",
     "ufactory/safety/adapters/*",
     "ufactory/simulation/*",

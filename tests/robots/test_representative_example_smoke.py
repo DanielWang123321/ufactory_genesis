@@ -15,10 +15,8 @@ from pathlib import Path
 
 import pytest
 
-_TESTS_ROOT = Path(__file__).resolve().parents[1]
-if str(_TESTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TESTS_ROOT))
-from conftest import PROJECT_ROOT
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 pytestmark = pytest.mark.integration
 

@@ -35,10 +35,7 @@ from ufactory.trajectory.mirror_executor import (
 from ufactory.trajectory.scene import build_scene, drive_for_gap_m
 from ufactory.robots.runtime import G2_GRIPPER_PARAMS, LITE6_GRIPPER_PARAMS
 
-_TESTS_ROOT = Path(__file__).resolve().parents[1]
-if str(_TESTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TESTS_ROOT))
-from conftest import PROJECT_ROOT
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _default_waypoints() -> list[dict]:

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Mapping
 
 from ufactory.robots.paths import PROJECT_ROOT, kinematics_user_dir
-from ufactory.robots.registry import get_robot_profile
+from ufactory.robots.registry import get_robot_profile, robot_name_for_controller
 
 # SN positions 3-6 (1-based) = four-digit model code, e.g. XI130506... -> 1305
 XARM_KINEMATICS_MIN_SN_MODEL_CODE = 1304  # xarm5/6/7: code < 1304 => no compensation
@@ -360,12 +360,12 @@ def parse_sn_model_code(sn: str) -> int | None:
 
 
 def robot_name_from_firmware(robot_dof: int, robot_type: int) -> str:
-    """Map control-box firmware identifiers to kinematics robot_name."""
-    if robot_dof == 6 and robot_type == 12:
-        return "uf850"
-    if robot_dof == 6 and robot_type == 9:
-        return "lite6"
-    return f"xarm{robot_dof}"
+    """Map control-box firmware identifiers to kinematics robot_name.
+
+    Unknown ``robot_type`` values fall back to ``xarm<dof>`` (kinematics file naming only;
+    real-robot entry points use the strict ``robot_name_for_controller``).
+    """
+    return robot_name_for_controller(robot_dof, robot_type) or f"xarm{robot_dof}"
 
 
 def has_per_unit_kinematics_calibration(sn: str, robot_name: str) -> bool:

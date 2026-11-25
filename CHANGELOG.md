@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Real-robot entry points verify the controller model before sending any command: `RealRobotSession` (`dynamics-hardware-check`, `dynamics-sim-collision-check`, `observe-hold-current`), FK/IK verification, and pick-place/packaging `sdk-sim`/`real` (`validate_robot_identity`, which previously compared only the axis count and could not tell xArm6, Lite6 and UF850 apart). A different model is refused; an unreadable or unknown identity prints a warning and trusts `--robot`.
+  - New `RobotModelSpec.controller_device_type` (xArm5/6/7 = `5`/`6`/`7`, Lite6 = `9`, UF850 = `12`, as reported by firmware v2.8.x), `ufactory.robots.registry.robot_name_for_controller()`, and `ufactory.hardware.controller_robot_name()` / `verify_controller_robot()`. `robot_name_from_firmware()` keeps its `xarm<dof>` fallback.
+
+### Changed
+
+- `RealRobotSession(ip, robot_key=..., home_qpos=...)` now requires `robot_key` and derives `dof` from the robot profile; the `dof` argument is removed.
+- `tests/hardware/` is model-agnostic. `test_xarm6_real.py` is now `test_real_robot.py`: it reads the robot model from the controller at `XARM_IP` and uses `XARM_ROBOT` only as a manual fallback. Shared mocks live in `tests/hardware/conftest.py`, DOF slicing is covered for 5/6/7 axes against the SDK's 7-slot joint readback, and `test_hold_observe.py` uses explicit synthetic limits instead of the Lite6 profile.
+- Test modules no longer import the root `conftest` as a module (`from conftest import PROJECT_ROOT`); each computes `PROJECT_ROOT` locally, so a nested `conftest.py` can no longer shadow it.
+- Fast coverage now measures `ufactory/hardware/*`.
+- `ufactory.hardware.xarm` error messages refer to UFACTORY Studio.
+
+### Removed
+
+- `ufactory.hardware.prepare_gripper_g2_for_motion` (no callers; real Gripper G2 preparation is `G2Adapter.prepare_real`), `ufactory.hardware.xarm.prime_servo_cartesian` (no callers), and the ignored `retries` argument of `prepare_arm_for_motion`.
+
+### Fixed
+
+- IK verification (`examples/kinematics/verify_ik.py`) drew target joint angles from ±0.8 rad on every joint, beyond xArm5's J3 upper limit (0.192 rad). Controller FK still returned those poses, which no in-limit IK solution reaches, so 7 of 10 samples failed on a real xArm5. Targets now stay within both the joint limits and ±0.8 rad (`ufactory.kinematics.validation.sample_ik_case()`).
+
 ## [0.3.9] — 2026-11-24
 
 ### Added

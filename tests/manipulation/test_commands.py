@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -9,6 +11,7 @@ from ufactory.manipulation.commands import (
     ensure_program_start as _ensure_program_start,
     ensure_cartesian_program_start as _ensure_cartesian_program_start,
     sdk_sim_feedback as _sdk_sim_feedback,
+    validate_robot_identity as _validate_robot_identity,
 )
 from ufactory.config import load_runtime_config
 from ufactory.hardware.transport import XArmTransport
@@ -397,3 +400,18 @@ def test_sdk_sim_feedback_converts_movel_targets_to_tcp(monkeypatch, explicit_of
         assert pose[:3] == pytest.approx([300.0, 50.0, 250.0 - 173.5])
         assert abs(pose[3]) == pytest.approx(np.pi)
     assert not arm.simulation_enabled
+
+
+def test_validate_robot_identity_refuses_another_six_axis_model():
+    config = load_runtime_config("xarm6")
+    arm = SimpleNamespace(axis=6, device_type=9, error_code=0)  # Lite6 controller
+
+    with pytest.raises(RuntimeError, match="controller reports lite6"):
+        _validate_robot_identity(arm, config, "LI1006XXXXXXXX")
+
+
+def test_validate_robot_identity_accepts_matching_model():
+    config = load_runtime_config("lite6")
+    arm = SimpleNamespace(axis=6, device_type=9, error_code=0)
+
+    _validate_robot_identity(arm, config, "LI1006XXXXXXXX")

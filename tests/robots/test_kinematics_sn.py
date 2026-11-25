@@ -11,8 +11,17 @@ from ufactory.kinematics.calibration import (
     kinematics_suffix_from_sn,
     parse_sn_model_code,
     resolve_kinematics_suffix,
+    robot_name_from_firmware,
     validate_kinematics_calibration_request,
 )
+
+
+@pytest.mark.parametrize(
+    ("robot_dof", "robot_type", "expected"),
+    [(5, 5, "xarm5"), (6, 6, "xarm6"), (7, 7, "xarm7"), (6, 9, "lite6"), (6, 12, "uf850"), (6, 99, "xarm6")],
+)
+def test_robot_name_from_firmware_falls_back_to_xarm_naming(robot_dof, robot_type, expected):
+    assert robot_name_from_firmware(robot_dof, robot_type) == expected
 
 
 def _lite6_user_yaml(path: Path, *, serial: str = "LI100307XXXXXX") -> Path:

@@ -21,6 +21,8 @@ class RobotModelSpec:
     default_urdf: str
     visual_glb_urdf: str
     kinematics_prefix: str
+    # Model id the controller reports as XArmAPI ``device_type`` (with ``axis == dof``).
+    controller_device_type: int
 
     # End-effector compatibility comes from assets/urdf/assembly.yaml (single source of truth).
     def supports(self, end_effector: str) -> bool:
@@ -76,6 +78,7 @@ def _xarm_profile(dof: int) -> RobotModelSpec:
         default_urdf=f"{key}.urdf",
         visual_glb_urdf=f"{key}_visual.glb.urdf",
         kinematics_prefix=robot,
+        controller_device_type=dof,
     )
 
 
@@ -92,6 +95,7 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         default_urdf="lite6.urdf",
         visual_glb_urdf="lite6_visual.glb.urdf",
         kinematics_prefix="lite6",
+        controller_device_type=9,
     ),
     "uf850": RobotModelSpec(
         key="uf850",
@@ -103,6 +107,7 @@ ROBOT_PROFILES: dict[str, RobotModelSpec] = {
         default_urdf="uf850.urdf",
         visual_glb_urdf="uf850_visual.glb.urdf",
         kinematics_prefix="uf850",
+        controller_device_type=12,
     ),
     "xarm6_1305": _xarm_profile(6),
 }
@@ -131,6 +136,16 @@ def get_profile_key_for_robot_name(robot_name: str) -> str:
     if matches:
         return sorted(matches)[0]
     raise KeyError(f"Unknown robot: {robot_name}")
+
+
+def robot_name_for_controller(axis: int, device_type: int) -> str | None:
+    """Robot name of a controller reporting ``(axis, device_type)``; ``None`` if no single model matches."""
+    names = {
+        profile.robot_name
+        for profile in ROBOT_PROFILES.values()
+        if (profile.dof, profile.controller_device_type) == (axis, device_type)
+    }
+    return names.pop() if len(names) == 1 else None
 
 
 def robot_cli_choices() -> list[str]:

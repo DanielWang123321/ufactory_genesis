@@ -14,7 +14,7 @@ import numpy as np
 from ufactory.config import RepositoryAssetStore
 from ufactory.grippers import create_gripper_adapter
 from ufactory.hardware import XArmTransport
-from ufactory.hardware.xarm import wait_for_servo_motion_ready
+from ufactory.hardware.xarm import verify_controller_robot, wait_for_servo_motion_ready
 from ufactory.kinematics import build_calibrated_urdf, load_kinematics_calibration
 from ufactory.robots.assembly import resolve_robot_urdf
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
@@ -400,9 +400,7 @@ def sdk_sim_feedback(
 def validate_robot_identity(arm: Any, config: Any, serial: str) -> None:
     if not serial or len(serial) < 8:
         raise RuntimeError("controller did not provide a complete serial number")
-    axis = int(getattr(arm, "axis", config.robot.dof))
-    if axis != config.robot.dof:
-        raise RuntimeError(f"connected robot DOF {axis} does not match {config.robot.dof}")
+    verify_controller_robot(arm, config.robot.key)
     if int(getattr(arm, "error_code", 0)) != 0:
         raise RuntimeError("controller has an active error; inspect it manually in UFACTORY Studio")
 

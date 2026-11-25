@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import re
 
-from conftest import PROJECT_ROOT
 import pytest
 
 from ufactory.training import (
@@ -12,6 +12,8 @@ from ufactory.training import (
     load_pick_place_rl_runtime_config,
     load_training_recipe,
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 EXAMPLE = PROJECT_ROOT / "examples" / "rl" / "pick_place"
 
