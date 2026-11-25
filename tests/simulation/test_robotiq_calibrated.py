@@ -27,6 +27,7 @@ def test_robotiq_linkage_and_model_roundtrip(
     f_max: float,
     profile_name: str,
 ) -> None:
+    pytest.importorskip("trimesh")  # RobotiqLinkageGeometry.from_urdf reads the pad mesh (sim extra)
     spec = get_robotiq_spec(variant)
     urdf = robotiq_2f_85_movable_visual_urdf() if variant == "robotiq_2f_85" else robotiq_2f_140_movable_visual_urdf()
     from_urdf = RobotiqLinkageGeometry.from_urdf(urdf, prefix=spec.prefix)

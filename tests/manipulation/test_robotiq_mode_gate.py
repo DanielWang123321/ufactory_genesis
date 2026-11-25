@@ -14,6 +14,10 @@ class _ReachedConnect(Exception):
 
 
 def _run(cli: str, robot: str, gripper: str, mode: str, monkeypatch) -> None:
+    if cli == "pick_place":
+        # The pick-place CLI imports the Genesis IK stack at module level; public CI installs neither.
+        pytest.importorskip("torch")
+        pytest.importorskip("genesis")
     module = importlib.import_module(f"ufactory.cli.{cli}")
 
     def connect(ip: str):

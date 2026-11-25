@@ -16,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 # with ``.[sim]`` still collect and run them under the usual markers.
 _TORCH_OR_GENESIS_COLLECTION_MODULES = frozenset(
     {
+        "test_genesis_home_ik.py",
         "test_pinocchio_pose_ik.py",
         "test_tcp_offset.py",
         "test_packaging_drop.py",
