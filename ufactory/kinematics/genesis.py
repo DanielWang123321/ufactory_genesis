@@ -34,7 +34,9 @@ HOME_IK_POS_TOL_M = 1e-6
 HOME_IK_ROT_TOL_RAD = 1e-5
 HOME_IK_REFINE_ITERS = 100
 HOME_IK_MAX_POS_ERR_M = 1e-5
-HOME_IK_MAX_ROT_ERR_RAD = 1e-4
+# Orientation stays at Genesis's default tolerance: a 5-axis xArm5 cannot always reach exactly gripper-down with a
+# per-unit calibration (1.47 mrad left on XF130505D43A02), and orientation did not cause the preflight step.
+HOME_IK_MAX_ROT_ERR_RAD = 5e-3
 
 
 def solve_home_ik(robot, ik_link, pos, quat, *, arm_dof_idx, init_qpos=None):

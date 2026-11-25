@@ -52,8 +52,16 @@ def test_without_a_seed_the_default_solve_starts_from_the_current_state() -> Non
     assert "init_qpos" not in robot.calls[0]
 
 
-def test_accepts_a_residual_just_inside_the_bound() -> None:
-    robot = _Robot([[0.9 * HOME_IK_MAX_POS_ERR_M, 0.0, 0.0, 0.0, 0.0, 0.0]])
+@pytest.mark.parametrize(
+    "residual",
+    [
+        [0.9 * HOME_IK_MAX_POS_ERR_M, 0.0, 0.0, 0.0, 0.0, 0.0],
+        # Calibrated 5-axis xArm5 (XF130505D43A02): exact gripper-down is out of reach, the position is not.
+        [1.8e-6, 0.0, 0.0, 0.0, 1.4747e-3, 0.0],
+    ],
+)
+def test_accepts_a_residual_inside_the_bounds(residual) -> None:
+    robot = _Robot([residual])
     assert solve_home_ik(robot, "link6", TARGET, "down", arm_dof_idx=ARM) is robot.refined
 
 
@@ -61,7 +69,7 @@ def test_accepts_a_residual_just_inside_the_bound() -> None:
     "residual",
     [
         [4.45e-4, 0.0, 0.0, 0.0, 0.0, 0.0],  # where the default solve stopped at the xArm6 + 2F-140 home
-        [0.0, 0.0, 0.0, 0.0, 2e-4, 0.0],
+        [0.0, 0.0, 0.0, 0.0, 6e-3, 0.0],
         [np.nan, 0.0, 0.0, 0.0, 0.0, 0.0],
     ],
 )
