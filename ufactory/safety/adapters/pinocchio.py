@@ -240,8 +240,32 @@ class PinocchioKinematicsBackend(_PinocchioModel):
         )
 
 
+def urdf_subtree_links(urdf_root: ET.Element, root_link: str) -> frozenset[str]:
+    """``root_link`` and every URDF link below it."""
+    children: dict[str, list[str]] = {}
+    for joint in urdf_root.findall("joint"):
+        parent, child = joint.find("parent"), joint.find("child")
+        if parent is not None and child is not None:
+            children.setdefault(parent.get("link", ""), []).append(child.get("link", ""))
+    links: set[str] = set()
+    stack = [root_link]
+    while stack:
+        link = stack.pop()
+        if link not in links:
+            links.add(link)
+            stack.extend(children.get(link, ()))
+    return frozenset(links)
+
+
 class PinocchioCollisionBackend(_PinocchioModel):
-    """Full-sample self/environment collision and minimum-distance checks."""
+    """Full-sample self/environment collision and minimum-distance checks.
+
+    ``tool_root_link`` (the arm flange link) skips every pair whose two links both lie in the URDF subtree rooted at
+    it: the flange link, camera stand, cameras, and end effector. That subtree is fixed to the flange, so the relative
+    poses inside it depend only on the gripper drive, never on the arm trajectory; whether those parts clear each
+    other over the full stroke is an asset property, verified by ``tests/robots/test_tool_internal_clearance.py``.
+    Pairs between the subtree and the arm or the environment remain checked.
+    """
 
     def __init__(
         self,
@@ -253,6 +277,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
         passive_joint_positions: dict[str, float] | None = None,
         adjacent_link_pairs: Iterable[tuple[str, str]] = (),
         excluded_geometry_pairs: Iterable[tuple[str, str]] = (),
+        tool_root_link: str | None = None,
     ) -> None:
         super().__init__(
             urdf_path,
@@ -285,6 +310,11 @@ class PinocchioCollisionBackend(_PinocchioModel):
             if (parent := joint.find("parent")) is not None and (child := joint.find("child")) is not None
         }
         adjacent_links.update(frozenset(map(str, pair)) for pair in adjacent_link_pairs)
+        self.tool_links: frozenset[str] = frozenset()
+        if tool_root_link is not None:
+            if urdf_root.find(f"./link[@name='{tool_root_link}']") is None:
+                raise ValueError(f"tool root link {tool_root_link!r} missing from URDF")
+            self.tool_links = urdf_subtree_links(urdf_root, tool_root_link)
         # Parent-child geometry intersects at the joint by construction.
         # Additional exclusions identify individual geometries, not whole links.
         remove_pairs: list[tuple[int, int]] = []
@@ -299,6 +329,7 @@ class PinocchioCollisionBackend(_PinocchioModel):
                 or int(self.model.parents[joint_a]) == joint_b
                 or int(self.model.parents[joint_b]) == joint_a
                 or frozenset((link_a, link_b)) in adjacent_links
+                or (link_a in self.tool_links and link_b in self.tool_links)
             )
             excluded = frozenset((str(first.name), str(second.name))) in excluded_pairs
             if adjacent or excluded:

@@ -51,6 +51,7 @@ def build_manipulation_backends(
             adjacent_link_pairs=config.robot.adjacent_collision_pairs,
             excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
             obstacles=tuple(obstacles),
+            tool_root_link=config.robot.ee_link,
         ),
         spawn_center_m=tuple(map(float, spawn_center_m)),
         place_center_m=tuple(map(float, place_center_m)),
