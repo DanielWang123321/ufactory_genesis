@@ -346,7 +346,9 @@ def test_lite6_has_no_link_wide_contact_exemption(simulation_model):
         "release",
     }
     assert config.safety.exemptions == ()
-    assert config.safety.excluded_geometry_pairs == (("uflite_finger1_0", "uflite_finger2_0"),)
+    # A Genesis physics filter owned by the gripper; preflight skips finger pairs through the flange subtree rule.
+    assert config.gripper is not None
+    assert config.gripper.excluded_geometry_pairs == (("uflite_finger1_0", "uflite_finger2_0"),)
     for stage in (*expected_stages, "start", "home->pregrasp", "descend", "retreat", "return-home", "grasp", "place"):
         assert not lite_gate.collision_allowed(finger_pair, stage)
     wrong_hash_gate = SafetyGate(

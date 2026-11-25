@@ -1,6 +1,0 @@
-schema_version: 1
-safety:
-  # URDF boxes: collision index 0 is the finger root; index 1 is the pad.
-  # Internal root contact is allowed; pads and external collisions remain checked.
-  excluded_geometry_pairs:
-    - [uflite_finger1_0, uflite_finger2_0]

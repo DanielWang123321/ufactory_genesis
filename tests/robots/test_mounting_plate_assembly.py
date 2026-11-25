@@ -486,7 +486,7 @@ def test_full_stack_camera_and_gripper_safety_with_mounting_plate() -> None:
         joint_names=x_cfg.robot.joint_names,
         ee_link=x_cfg.robot.ee_link,
         passive_joint_positions={x_cfg.gripper.drive_joint: x_cfg.gripper.open_drive},
-        adjacent_link_pairs=x_cfg.robot.adjacent_collision_pairs,
+        tool_root_link=x_cfg.robot.ee_link,
     )
     q_ready = np.array([0.0, -0.63088336, -0.837867545, 0.0, 1.468750905, 0.0])
     x_res = x_backend.check(q_ready, stage="ready")
@@ -500,8 +500,7 @@ def test_full_stack_camera_and_gripper_safety_with_mounting_plate() -> None:
         joint_names=l_cfg.robot.joint_names,
         ee_link=l_cfg.robot.ee_link,
         passive_joint_positions={l_cfg.gripper.drive_joint: l_cfg.gripper.open_drive},
-        adjacent_link_pairs=l_cfg.robot.adjacent_collision_pairs,
-        excluded_geometry_pairs=l_cfg.safety.excluded_geometry_pairs,
+        tool_root_link=l_cfg.robot.ee_link,
     )
     l_res = l_backend.check(np.array([0.0, -0.6, 0.0, 0.0, 0.6, 0.0]), stage="ready")
     assert not l_res.colliding and l_res.min_distance_m > 0.005

@@ -42,7 +42,7 @@ def test_only_roots_of_the_same_robot_are_filtered():
     scene.rigid_solver.entities.append(objects)
     all_geoms = first.geoms + second.geoms + objects.geoms
     before = {frozenset((a, b)): compatible(a, b) for a, b in combinations(all_geoms, 2)}
-    excluded = load_runtime_config("lite6").safety.excluded_geometry_pairs
+    excluded = load_runtime_config("lite6").gripper.excluded_geometry_pairs
     for entity in (first, second):
         apply_collision_geometry_filters(entity, excluded)
         apply_collision_geometry_filters(entity, excluded)  # idempotent before build
@@ -56,7 +56,7 @@ def test_only_roots_of_the_same_robot_are_filtered():
 def test_invalid_filter_fails_before_changing_any_mask(failure):
     scene = SimpleNamespace(is_built=False, rigid_solver=SimpleNamespace(entities=[]))
     entity = robot(scene)
-    excluded = load_runtime_config("lite6").safety.excluded_geometry_pairs
+    excluded = load_runtime_config("lite6").gripper.excluded_geometry_pairs
     if failure == "missing":
         excluded = (("uflite_finger1_0", "unknown_0"),)
     elif failure == "mesh":

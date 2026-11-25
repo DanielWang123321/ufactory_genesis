@@ -185,7 +185,7 @@ def test_default_pick_place_program_preflight_passes_servo_j():
             joint_names=config.robot.joint_names,
             ee_link=config.robot.ee_link,
             passive_joint_positions=passive,
-            adjacent_link_pairs=config.robot.adjacent_collision_pairs,
+            tool_root_link=config.robot.ee_link,
             obstacles=(
                 EnvironmentObstacle("table", (1.2, 1.2, 0.05), (0.3, 0.0, -0.025)),
                 EnvironmentObstacle(

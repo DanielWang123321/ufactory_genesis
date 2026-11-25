@@ -9,7 +9,6 @@ robot:
   assets_dir: assets/urdf/lite6
   urdf: "assembly:lite6_gripper:stl"
   capabilities: [servo_j, servo_cartesian, lite6_gripper, sdk_sim, hardware_gripper]
-  adjacent_collision_pairs: []
   environment_contact_pairs: [[link_base, table]]
 arm:
   default_qpos_rad: [0.0, -0.6, 0.0, 0.0, 0.6, 0.0]
@@ -37,6 +36,9 @@ gripper:
   feedback: false
   closed_loop: false
   allowed_contact_links: [uflite_finger1, uflite_finger2]
+  # Genesis physics only: the finger-root boxes (URDF collision index 0; index 1 is the pad) meet when the gripper
+  # closes fully, so contact between them is disabled. Safety preflight skips every pair below the flange anyway.
+  excluded_geometry_pairs: [[uflite_finger1_0, uflite_finger2_0]]
   tool_tip_offset_z_m: 0.0543
   finger_pad_below_center_m: 0.021
   finger_close_descent_m: 0.0

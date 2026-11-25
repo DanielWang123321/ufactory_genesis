@@ -1,9 +1,6 @@
 schema_version: 1
 robot:
   urdf: assembly:robotiq_2f_140
-  adjacent_collision_pairs:
-    - [robotiq_2f_140_left_finger, robotiq_2f_140_left_inner_knuckle]
-    - [robotiq_2f_140_right_inner_knuckle, robotiq_2f_140_right_finger]
 gripper:
   adapter: robotiq_2f_140
   drive_joint: robotiq_2f_140_drive_joint

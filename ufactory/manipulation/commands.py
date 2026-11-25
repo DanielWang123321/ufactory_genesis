@@ -48,8 +48,6 @@ def build_manipulation_backends(
             joint_names=config.robot.joint_names,
             ee_link=config.robot.ee_link,
             passive_joint_positions=passive,
-            adjacent_link_pairs=config.robot.adjacent_collision_pairs,
-            excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
             obstacles=tuple(obstacles),
             tool_root_link=config.robot.ee_link,
         ),

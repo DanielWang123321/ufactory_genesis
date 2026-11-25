@@ -391,7 +391,7 @@ def build_packaging_scene(
         surface=color_rough(BLOCK_COLOR),
     )
 
-    apply_collision_geometry_filters(robot, config.safety.excluded_geometry_pairs)
+    apply_collision_geometry_filters(robot, config.gripper.excluded_geometry_pairs)
     if build_scene:
         scene.build(n_envs=1)
         if config.gripper.adapter == "g2":

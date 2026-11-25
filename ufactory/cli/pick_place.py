@@ -263,7 +263,7 @@ def _build_ik_scene(
         g2_settings=config.simulation.g2,
         robotiq_settings=config.simulation.robotiq,
         gripper=gripper_name,
-        excluded_geometry_pairs=config.safety.excluded_geometry_pairs,
+        excluded_geometry_pairs=config.gripper.excluded_geometry_pairs if config.gripper is not None else (),
         **_scene_layout_kwargs(config),
     )
 

@@ -74,4 +74,5 @@ def configure_lite6_collision_filters(robot: Any) -> None:
         return
     from ufactory.config import load_runtime_config
 
-    apply_collision_geometry_filters(robot, load_runtime_config("lite6").safety.excluded_geometry_pairs)
+    gripper = load_runtime_config("lite6").gripper
+    apply_collision_geometry_filters(robot, gripper.excluded_geometry_pairs if gripper is not None else ())

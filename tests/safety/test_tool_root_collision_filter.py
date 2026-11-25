@@ -22,7 +22,6 @@ def _backend(config, urdf: str | Path, **kwargs) -> PinocchioCollisionBackend:
         joint_names=config.robot.joint_names,
         ee_link=config.robot.ee_link,
         passive_joint_positions={config.gripper.drive_joint: config.gripper.open_drive},
-        adjacent_link_pairs=config.robot.adjacent_collision_pairs,
         **kwargs,
     )
 
@@ -81,12 +80,20 @@ def test_preflight_backend_ignores_robotiq_internal_clearance(gripper: str) -> N
     plain = _backend(config, urdf)
     raw = plain.check_all_within_margin(q, stage="start", margin_m=margin, gripper_drive=config.gripper.open_drive)
     internal = [r for r in raw if r.link_a.startswith(prefix) and r.link_b.startswith(prefix)]
+    internal_links = {frozenset((r.link_a, r.link_b)) for r in internal}
+    # Four-bar pins: finger and inner knuckle meet by design (the former per-robot adjacent_collision_pairs).
+    assert {
+        frozenset((f"{prefix}left_finger", f"{prefix}left_inner_knuckle")),
+        frozenset((f"{prefix}right_inner_knuckle", f"{prefix}right_finger")),
+    } <= internal_links
     if gripper == "robotiq_2f_85":
-        assert {frozenset((r.link_a, r.link_b)) for r in internal} == {
+        knuckle_pairs = {
             frozenset((f"{prefix}left_outer_knuckle", f"{prefix}left_inner_knuckle")),
             frozenset((f"{prefix}right_outer_knuckle", f"{prefix}right_inner_knuckle")),
         }
-        assert min(r.min_distance_m for r in internal) == pytest.approx(0.0040596, abs=1e-6)
+        assert knuckle_pairs <= internal_links
+        knuckles = [r for r in internal if frozenset((r.link_a, r.link_b)) in knuckle_pairs]
+        assert min(r.min_distance_m for r in knuckles) == pytest.approx(0.0040596, abs=1e-6)
 
     _, collision = build_manipulation_backends(
         config,

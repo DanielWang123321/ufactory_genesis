@@ -197,7 +197,7 @@ def _robot_defaults(robot_key: str, *, gripper: str | None = None) -> dict:
         "finger_close_descent_m": gripper_profile.finger_close_descent_m,
         "grasp_table_clearance_m": gripper_profile.grasp_table_clearance_m,
         "grasp_height_extra_m": gripper_profile.grasp_height_extra_m,
-        "excluded_geometry_pairs": config.safety.excluded_geometry_pairs,
+        "excluded_geometry_pairs": gripper_profile.excluded_geometry_pairs,
     }
 
 

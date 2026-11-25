@@ -24,9 +24,25 @@ ROBOTS = ("xarm5", "xarm6", "xarm7", "uf850", "lite6")
 )
 def test_invalid_geometry_exclusions_are_rejected(tmp_path: Path, value: str) -> None:
     path = tmp_path / "bad_pairs.yaml"
-    path.write_text(f"schema_version: 1\nsafety:\n  excluded_geometry_pairs: {value}\n")
+    path.write_text(f"schema_version: 1\ngripper:\n  excluded_geometry_pairs: {value}\n")
     with pytest.raises(ValueError, match="excluded_geometry_pairs"):
         load_runtime_config("lite6", config_path=path)
+
+
+def test_collision_pair_settings_left_preflight(tmp_path: Path) -> None:
+    """Preflight skips every pair below the flange; the old per-robot pair lists are no longer configuration."""
+    lite6 = load_runtime_config("lite6")
+    assert lite6.gripper is not None
+    assert lite6.gripper.excluded_geometry_pairs == (("uflite_finger1_0", "uflite_finger2_0"),)
+    assert load_runtime_config("xarm6", gripper="robotiq_2f_85").gripper.excluded_geometry_pairs == ()
+    for robot, text in (
+        ("xarm6", "robot:\n  adjacent_collision_pairs: [[left_finger, left_inner_knuckle]]\n"),
+        ("lite6", "safety:\n  excluded_geometry_pairs: [[uflite_finger1_0, uflite_finger2_0]]\n"),
+    ):
+        path = tmp_path / f"{robot}_old_pairs.yaml"
+        path.write_text(f"schema_version: 1\n{text}")
+        with pytest.raises(ValueError, match="unknown configuration field"):
+            load_runtime_config(robot, config_path=path)
 
 
 def test_all_default_robot_configs_are_stable_and_assets_exist():

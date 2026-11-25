@@ -139,7 +139,6 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         assets_dir=str(robot_data["assets_dir"]),
         urdf=str(robot_data["urdf"]),
         capabilities=frozenset(map(str, robot_data["capabilities"])),
-        adjacent_collision_pairs=tuple((str(pair[0]), str(pair[1])) for pair in robot_data["adjacent_collision_pairs"]),
         environment_contact_pairs=tuple(
             (str(pair[0]), str(pair[1])) for pair in robot_data["environment_contact_pairs"]
         ),
@@ -160,6 +159,9 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
     gripper_data = None if task_name == "reach" else data.get("gripper")
     gripper = None
     if gripper_data is not None:
+        geometry_pairs = gripper_data.get("excluded_geometry_pairs", [])
+        if not isinstance(geometry_pairs, list) or any(not isinstance(pair, list | tuple) for pair in geometry_pairs):
+            raise ConfigError("gripper.excluded_geometry_pairs must be a list of geometry pairs")
         gripper = GripperProfile(
             adapter=str(gripper_data["adapter"]),
             drive_joint=str(gripper_data["drive_joint"]),
@@ -184,6 +186,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             finger_close_descent_m=float(gripper_data["finger_close_descent_m"]),
             grasp_table_clearance_m=float(gripper_data["grasp_table_clearance_m"]),
             grasp_height_extra_m=float(gripper_data["grasp_height_extra_m"]),
+            excluded_geometry_pairs=tuple(tuple(pair) for pair in geometry_pairs),
         )
     task_parameters = task_data["parameters"]
     if not isinstance(task_parameters, Mapping):
@@ -387,9 +390,6 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
                 f"simulation.robotiq.position_mm ({simulation.robotiq.position_mm}) exceeds {gripper.adapter} range [0, {max_gap_mm:g}]"
             )
     safety_data = data["safety"]
-    geometry_pairs = safety_data.get("excluded_geometry_pairs", [])
-    if not isinstance(geometry_pairs, list) or any(not isinstance(pair, list | tuple) for pair in geometry_pairs):
-        raise ConfigError("safety.excluded_geometry_pairs must be a list of geometry pairs")
     exemptions = tuple(CollisionExemption(**item) for item in safety_data.get("exemptions", []))
     workspace_lower = _tuple_floats(safety_data["workspace_lower_m"], field="safety.workspace_lower_m", size=3)
     workspace_upper = _tuple_floats(safety_data["workspace_upper_m"], field="safety.workspace_upper_m", size=3)
@@ -410,7 +410,6 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         require_kinematics=bool(safety_data["require_kinematics"]),
         require_collision=bool(safety_data["require_collision"]),
         exemptions=exemptions,
-        excluded_geometry_pairs=tuple(tuple(pair) for pair in geometry_pairs),
     )
     provisional = ResolvedRuntimeConfig(
         schema_version=1,

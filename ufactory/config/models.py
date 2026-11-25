@@ -45,7 +45,6 @@ class RobotSpec:
     assets_dir: str
     urdf: str
     capabilities: frozenset[str]
-    adjacent_collision_pairs: tuple[tuple[str, str], ...] = ()
     environment_contact_pairs: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
@@ -55,8 +54,6 @@ class RobotSpec:
             raise ValueError("RobotSpec joint_names must be unique")
         if not self.key or not self.robot_name or not self.ee_link or not self.urdf:
             raise ValueError("RobotSpec identity and asset fields cannot be empty")
-        if any(len(pair) != 2 or pair[0] == pair[1] for pair in self.adjacent_collision_pairs):
-            raise ValueError("each adjacent collision pair must contain two distinct links")
         if any(len(pair) != 2 or pair[0] == pair[1] for pair in self.environment_contact_pairs):
             raise ValueError("each environment contact pair must contain two distinct names")
 
@@ -112,10 +109,21 @@ class GripperProfile:
     finger_close_descent_m: float
     grasp_table_clearance_m: float
     grasp_height_extra_m: float
+    # URDF collision geometries (``<link>_<collision index>``) whose mutual contact Genesis physics ignores.
+    excluded_geometry_pairs: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.adapter or not self.drive_joint:
             raise ValueError("gripper adapter and drive joint are required")
+        pairs = self.excluded_geometry_pairs
+        if any(
+            len(pair) != 2 or any(not isinstance(name, str) or not name.strip() for name in pair) or pair[0] == pair[1]
+            for pair in pairs
+        ):
+            raise ValueError("excluded_geometry_pairs must contain pairs of distinct geometry names")
+        if len({frozenset(pair) for pair in pairs}) != len(pairs):
+            raise ValueError("excluded_geometry_pairs cannot contain duplicate pairs")
+        object.__setattr__(self, "excluded_geometry_pairs", tuple(tuple(pair) for pair in pairs))
         if self.open_gap_m <= self.closed_gap_m:
             raise ValueError("gripper open_gap_m must be greater than closed_gap_m")
         if not self.closed_gap_m >= 0.0:

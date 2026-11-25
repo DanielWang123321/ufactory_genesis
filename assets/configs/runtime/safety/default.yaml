@@ -16,4 +16,3 @@ safety:
   require_kinematics: true
   require_collision: true
   exemptions: []
-  excluded_geometry_pairs: []

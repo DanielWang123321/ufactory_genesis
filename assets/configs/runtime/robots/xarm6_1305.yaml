@@ -9,7 +9,6 @@ robot:
   assets_dir: assets/urdf/xarm6
   urdf: "assembly:gripper_g2"
   capabilities: [servo_j, servo_cartesian, gripper_g2, sdk_sim, hardware_gripper]
-  adjacent_collision_pairs: [[left_finger, left_inner_knuckle], [right_inner_knuckle, right_finger]]
   environment_contact_pairs: [[link_base, table]]
 arm:
   default_qpos_rad: [0.0, -0.5, 0.0, 0.0, 0.5, 0.0]
