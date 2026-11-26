@@ -311,6 +311,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 kinematics=kinematics,
                 collision=collision,
                 allowed_collision=gate.collision_allowed,
+                joint_lower_rad=gate.joint_lower_rad,
+                joint_upper_rad=gate.joint_upper_rad,
             )
             evidence_path = _sdk_evidence_path(args.report, config.robot.key)
             _write_json(evidence_path, asdict(evidence))

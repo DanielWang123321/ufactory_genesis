@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Split the Lite6 `link6` collision mesh into three exact watertight convex hulls (`lite6_link6_col_00..02.stl`: flange body, recessed neck, and side aviation connector; `0.000 mm` surface bloat / `0.000 mm` leak vs `visual/link6.stl`) and updated `lite6.urdf`, `lite6_visual.glb.urdf`, and `assets/manifest.json`. Previously, the single 66-vertex hull bridged across the concave neck and connector steps by up to 1.08 mm, pushing calibrated Lite6 `link4`/`link6` clearance below the 5 mm preflight margin (`4.990 mm` vs `5.539 mm` visual surface) in pick-place and packaging while near-limit contact at `|q5| ≈ 2.16 rad` remains detected.
+- `scripts/gen_kinematics_params.py` now identifies the per-unit joint origins from the controller's own forward kinematics instead of copying the register-8 export. The register-8 values were wrong on three models: the xArm5 export uses different frames (its YAML was 0.55–1.15 m off), and UF850 / Lite6 do not compensate the joint-1 tilt in joint 2 (1.92–3.06 mm off). The script reads the zero pose and single-joint sweeps (31–43 read-only `get_forward_kinematics` queries, plus 100 for verification; nothing is enabled or moved), removes the controller TCP offset, and writes the file only if 100 random held-out configurations match within the FK validation limits (1 mm, 0.5°). A non-zero controller world offset is refused. Measured on five arms (2026-11-26): held-out max error 0.07 mm (UF850), 0.42 mm (xArm5, xArm7), 0.43 mm (xArm6), 0.45 mm (Lite6); Pinocchio and Genesis reproduce the same values. The remaining error is the flange centre sitting 38–240 µm off the last joint axis, which joint origins cannot express; the model is exact whenever the last joint is at 0, like the register-8 form. New module `ufactory.kinematics.controller_fk`.
+
+### Changed
+
+- SDK simulation evidence (`schema_version` 2) compares a redundant arm (more than six joints, i.e. xArm7) by end-effector pose instead of joint by joint, because its firmware may resolve the elbow differently from the host IK. Every arm must now also match end-effector rotation within `max_shadow_joint_error_rad`, and the firmware stream must stay inside the joint limits less `joint_limit_margin_rad` (required for a redundant arm, and checked for any caller that passes `joint_lower_rad` / `joint_upper_rad`, as pick-place and packaging do). New evidence fields `max_ee_rotation_error_rad` and `self_motion_allowed`.
+
 ## [0.3.10] — 2026-11-25
 
 ### Added

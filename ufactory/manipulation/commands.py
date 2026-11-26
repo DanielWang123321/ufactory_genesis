@@ -166,7 +166,9 @@ def print_sdk_sim_failures(evidence: Any, evidence_path: Path | None) -> None:
 
     print(
         f"sdk_sim_failures={len(evidence.failures)} max_joint_error_rad={float(evidence.max_joint_error_rad):.6g} "
-        f"max_ee_error_m={float(evidence.max_ee_error_m):.6g}",
+        f"max_ee_error_m={float(evidence.max_ee_error_m):.6g} "
+        f"max_ee_rotation_error_rad={float(evidence.max_ee_rotation_error_rad):.6g} "
+        f"self_motion_allowed={bool(evidence.self_motion_allowed)}",
         file=sys.stderr,
     )
     for failure in evidence.failures:
