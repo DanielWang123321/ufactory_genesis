@@ -65,7 +65,7 @@
     "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
     "assets/urdf/assembly.yaml": "cb368b90a0d62af1498531bb77ed4b4c85104fc769284848d824ef1a1d4e20e1",
     "assets/urdf/gripper_g2/gripper_g2_movable_visual.urdf": "1088891ca89d14b1912ac62bd00c1ae0bebc287e7663821c372bfc32984c1bea",
-    "assets/urdf/lite6/lite6.urdf": "0045071263238025da9c0719e5a12f8ef68881bd7c45105acbefedae2fd1748e",
+    "assets/urdf/lite6/lite6.urdf": "8b8a64aae696811f7e10be9e2d583704ab1edd679b8bdd3a3127e3a1e6e78508",
     "assets/urdf/lite6_gripper/lite6_gripper_movable_visual.urdf": "d4013937766d7bdb1bd83f82f66cd4720f0ac2fb10ad179889b4bf3b50db1ede",
     "assets/urdf/lite6_gripper/meshes/visual/visual_glb/shell.glb": "1ae8f67d1ddfa3b5a7f09265aa680eff72bc05f4c817470ac885333dde1cce57",
     "assets/urdf/lite6_mounting_plate/lite6_mounting_plate.urdf": "b66a6e2ae2a7a1a2b33b05df12cdda51b912b29da69dba38ea404d4e2739363f",

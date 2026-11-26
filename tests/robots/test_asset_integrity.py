@@ -793,7 +793,7 @@ _EXPECTED_ARM_COLLISION_COUNTS: dict[str, dict[str, int]] = {
         "link3": 2,
         "link4": 4,
         "link5": 1,
-        "link6": 1,
+        "link6": 3,
     },
     "uf850": {
         "link_base": 3,
@@ -1899,3 +1899,57 @@ def test_robotiq_urdfs_share_joint_limits_mimic_and_glb_budget(variant: str) -> 
                 assert mimic.get("joint") == spec.drive_joint_name, (path, name)
                 assert float(mimic.get("multiplier", "1")) == 1.0, (path, name)
                 assert float(mimic.get("offset", "0")) == 0.0, (path, name)
+
+
+def test_lite6_link6_three_hull_enclosure_and_wrist_clearance() -> None:
+    """Lite6 link6's three convex hulls enclose link6.stl tightly without hiding near-limit link4/link6 contact."""
+    trimesh = pytest.importorskip("trimesh")
+    pytest.importorskip("pinocchio")
+    pytest.importorskip("coal")
+    from ufactory.safety.adapters.pinocchio import PinocchioCollisionBackend
+
+    meshes_dir = _URDF_ROOT / "lite6" / "meshes" / "lite6"
+    visual = trimesh.load(meshes_dir / "visual" / "link6.stl", force="mesh")
+    hulls = [
+        trimesh.load(meshes_dir / "collision" / f"lite6_link6_col_{idx:02d}.stl", force="mesh") for idx in range(3)
+    ]
+
+    for hull in hulls:
+        _, dists, _ = trimesh.proximity.closest_point(visual, hull.vertices)
+        assert float(np.max(dists)) < 5e-5
+
+    pts = np.asarray(visual.vertices, dtype=np.float64)
+    min_outside = np.full(len(pts), np.inf, dtype=np.float64)
+    for hull in hulls:
+        normals = np.asarray(hull.face_normals, dtype=np.float64)
+        v0 = np.asarray(hull.vertices[hull.faces[:, 0]], dtype=np.float64)
+        outside = np.max(pts @ normals.T - np.sum(v0 * normals, axis=1)[None, :], axis=1)
+        min_outside = np.minimum(min_outside, outside)
+    assert float(np.max(min_outside)) < 1e-6
+
+    backend = PinocchioCollisionBackend(
+        _URDF_ROOT / "lite6" / "lite6.urdf",
+        joint_names=("joint1", "joint2", "joint3", "joint4", "joint5", "joint6"),
+        ee_link="link6",
+        tool_root_link="link6",
+    )
+
+    def link4_link6_min_mm(q5: float, q6: float) -> float:
+        q = np.array([0.0, 0.0, 0.0, 0.0, q5, q6], dtype=np.float64)
+        return min(
+            res.min_distance_m * 1000.0
+            for res in backend.check_all(q, stage="start")
+            if {res.link_a, res.link_b} == {"link4", "link6"}
+        )
+
+    # Normal working range stays comfortably above the 5 mm preflight margin across all q6.
+    normal_min_mm = min(
+        link4_link6_min_mm(q5, q6)
+        for q5 in (-1.8, -1.0, 0.0, 0.2742, 1.0, 1.8)
+        for q6 in np.linspace(-np.pi, np.pi, 13)
+    )
+    assert normal_min_mm > 5.8
+
+    # Near the J5 mechanical limit, real link4/link6 contact is still detected.
+    limit_min_mm = min(link4_link6_min_mm(2.1642, q6) for q6 in np.linspace(-np.pi, np.pi, 13))
+    assert limit_min_mm < 0.5

@@ -257,6 +257,18 @@
         <mesh filename="meshes/lite6/collision/lite6_link6_col_00.stl" />
       </geometry>
     </collision>
+    <collision name="link6_col_1">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/lite6/collision/lite6_link6_col_01.stl" />
+      </geometry>
+    </collision>
+    <collision name="link6_col_2">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="meshes/lite6/collision/lite6_link6_col_02.stl" />
+      </geometry>
+    </collision>
   </link>
   <joint name="joint6" type="revolute">
     <origin rpy="-1.5708 0 0" xyz="0 0.0625 0" />
