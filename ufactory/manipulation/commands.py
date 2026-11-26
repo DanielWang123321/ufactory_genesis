@@ -418,8 +418,20 @@ def sdk_sim_feedback(
                 else:
                     code = 0
                 if int(code) != 0:
+                    err_warn: object = None
+                    state: object = None
+                    try:
+                        if callable(getattr(arm, "get_err_warn_code", None)):
+                            err_warn = arm.get_err_warn_code()
+                        if callable(getattr(arm, "get_state", None)):
+                            state = arm.get_state()
+                    except Exception:
+                        pass
                     arm.set_state(4)
-                    raise RuntimeError(f"SDK simulation command failed with code {code}")
+                    raise RuntimeError(
+                        f"SDK simulation command failed with code {code} "
+                        f"(segment={segment.label}, err_warn={err_warn}, state={state})"
+                    )
                 time.sleep(dt)
                 rows.append(read_q(arm, config.robot.dof))
         return np.stack(rows)

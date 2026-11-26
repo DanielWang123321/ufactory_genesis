@@ -36,11 +36,13 @@
     "assets/urdf/mounts/robotiq_mounting/robotiq_mounting.urdf",
     "assets/urdf/end_effectors/robotiq_2f_85/robotiq_2f_85_movable_visual.urdf",
     "assets/urdf/end_effectors/robotiq_2f_140/robotiq_2f_140_movable_visual.urdf",
+    "assets/configs/runtime/grippers/bio_gripper_g2.yaml",
     "assets/configs/runtime/grippers/robotiq_2f_85.yaml",
     "assets/configs/runtime/grippers/robotiq_2f_140.yaml"
   ],
   "schema_version": 1,
   "sha256": {
+    "assets/configs/runtime/grippers/bio_gripper_g2.yaml": "267adc8bfc3ea3d56fca687511789b37de5a02e97917a6dfd5ccfdf760bd8288",
     "assets/configs/runtime/grippers/robotiq_2f_140.yaml": "918933a1cb2fc666c2c8dee8398d6c3e37d9ab2043b522dddfdcfc558e47cdb5",
     "assets/configs/runtime/grippers/robotiq_2f_85.yaml": "b718cdf17fb6112d2c06a71850a9a07d7da58cd6ed1501da0992c4713e5d6bc5",
     "assets/configs/runtime/motion/default.yaml": "c28ba3e95eac42bd4ca688705f13ec345139973a3dbc18dcd741979051ac3d92",

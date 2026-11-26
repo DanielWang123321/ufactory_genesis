@@ -135,6 +135,37 @@ class Lite6Adapter(ConfiguredGripperAdapter):
 
 
 class BioG2Adapter(ConfiguredGripperAdapter):
+    """Adapter for BIO Gripper G2 over xArm RS-485 Modbus."""
+
+    SPEED_MIN_RPM = 500
+    SPEED_MAX_RPM = 4000
+    FORCE_MIN_PERCENT = 1
+    FORCE_MAX_PERCENT = 100
+    DEDUP_TOL_MM = 0.05
+
+    def __init__(
+        self,
+        profile: GripperProfile,
+        *,
+        speed_rpm: float = 2000.0,
+        force_percent: float = 50.0,
+    ) -> None:
+        super().__init__(profile)
+        self.speed_rpm: int = self._bounded_int(speed_rpm, self.SPEED_MIN_RPM, self.SPEED_MAX_RPM, "speed_rpm")
+        self.force_percent: int = self._bounded_int(
+            force_percent, self.FORCE_MIN_PERCENT, self.FORCE_MAX_PERCENT, "force_percent"
+        )
+        self._last_sent_mm: float | None = None
+
+    @staticmethod
+    def _bounded_int(value: float, lo: int, hi: int, name: str) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be finite, in [{lo}, {hi}]")
+        numeric = float(value)
+        if not math.isfinite(numeric) or not lo <= numeric <= hi:
+            raise ValueError(f"{name} must be finite, in [{lo}, {hi}], got {numeric}")
+        return int(round(numeric))
+
     def gap_to_drive(self, gap_m: float) -> float:
         gap = self._finite(gap_m, "gap_m")
         if not self.profile.closed_gap_m <= gap <= self.profile.open_gap_m:
@@ -149,18 +180,38 @@ class BioG2Adapter(ConfiguredGripperAdapter):
         return bio_gripper_g2_sim_drive_to_gap_m(value)
 
     def prepare_real(self, arm: object) -> int:
+        self._last_sent_mm = None
         code, error = getattr(arm, "get_bio_gripper_error")()
         if int(code) != 0:
             return int(code)
         if int(error) != 0:
             raise RuntimeError(f"Bio Gripper G2 has error {error}; recover manually before real motion")
-        return int(getattr(arm, "set_bio_gripper_enable")(True))
+        enable_code = int(getattr(arm, "set_bio_gripper_enable")(True))
+        if enable_code != 0:
+            return enable_code
+        # Pre-cache SDK _bio_gripper_version/_bio_gripper_mode before real-time streaming.
+        pos_code, _ = getattr(arm, "get_bio_gripper_g2_position")()
+        return int(pos_code)
 
     def send_real_gap(self, arm: object, gap_m: float) -> int:
         if not self.capabilities.real_command:
             raise RuntimeError("real Bio Gripper G2 commands are not enabled for this robot profile")
+        pos_mm = self._finite(gap_m, "gap_m") * 1000.0
+        if self._last_sent_mm is not None and abs(pos_mm - self._last_sent_mm) < self.DEDUP_TOL_MM:
+            return 0
         method = getattr(arm, "set_bio_gripper_g2_position")
-        return int(method(pos=self._finite(gap_m, "gap_m") * 1000.0, wait=False))
+        code = int(
+            method(
+                pos=pos_mm,
+                speed=self.speed_rpm,
+                force=self.force_percent,
+                wait=False,
+                wait_motion=False,
+            )
+        )
+        if code == 0:
+            self._last_sent_mm = pos_mm
+        return code
 
 
 class RobotiqAdapter(ConfiguredGripperAdapter):

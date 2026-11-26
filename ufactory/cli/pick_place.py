@@ -41,6 +41,7 @@ from ufactory.manipulation.commands import (
     print_preflight_complete as _print_preflight_complete,
     print_preflight_violation_summary as _print_preflight_violation_summary,
 )
+from ufactory.grippers.bio_g2 import BIO_GRIPPER_G2_TCP_IN_FLANGE_M, bio_g2_controller_mode_error
 from ufactory.grippers.robotiq import robotiq_controller_mode_error
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn, read_tcp_offset
@@ -101,6 +102,13 @@ def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[
     )
 
 
+def _flange_xy_offset(config: Any) -> tuple[float, float]:
+    """Return (x, y) offset from flange link to task grasp centre in the gripper-down XY plane."""
+    if str(getattr(config.gripper, "adapter", "")) == "bio_g2":
+        return float(BIO_GRIPPER_G2_TCP_IN_FLANGE_M[0]), float(BIO_GRIPPER_G2_TCP_IN_FLANGE_M[1])
+    return 0.0, 0.0
+
+
 def _build_program(config: Any, kinematics: Any | None = None, *, q_home: np.ndarray | None = None) -> Any:
     """Build the v0.2.4-style pick-place program starting at Cartesian home.
 
@@ -119,14 +127,15 @@ def _build_program(config: Any, kinematics: Any | None = None, *, q_home: np.nda
     gripper_name = config.gripper.adapter if config.gripper is not None else None
     heights = dry_heights(config.robot.key, gripper=gripper_name)
     is_lite6 = str(getattr(config.gripper, "adapter", "")) == "lite6"
-    obj_x, obj_y = float(object_pos[0]), float(object_pos[1])
-    place_x, place_y = float(target_pos[0]), float(target_pos[1])
+    offset_x, offset_y = _flange_xy_offset(config)
+    obj_x, obj_y = float(object_pos[0]) - offset_x, float(object_pos[1]) - offset_y
+    place_x, place_y = float(target_pos[0]) - offset_x, float(target_pos[1]) - offset_y
     grasp_z = float(heights.grasp_link6_z)
     pre_grasp_z = float(heights.pre_grasp_link6_z)
     lift_z = float(heights.lift_link6_z)
     home_z = float(heights.home_pos_base[2])
     open_gap = float(config.gripper.open_gap_m)
-    close_gap = LITE6_DEFAULT_GRIPPER_GRASP_GAP_M if is_lite6 else DEFAULT_GRIPPER_GRASP_GAP_M
+    close_gap = _close_gap_m(config)
     gripper_duration_s = LITE6_GRIPPER_DURATION_S if is_lite6 else float(config.motion.gripper_duration_s)
 
     pre_grasp = [obj_x, obj_y, pre_grasp_z]
@@ -230,8 +239,9 @@ def _home_xyz_m(config: Any) -> np.ndarray:
     object_pos = np.asarray(params["fixed_object_position_m"], dtype=np.float64)
     gripper_name = config.gripper.adapter if config.gripper is not None else None
     heights = dry_heights(config.robot.key, gripper=gripper_name)
+    offset_x, offset_y = _flange_xy_offset(config)
     return np.asarray(
-        [float(object_pos[0]), float(object_pos[1]), float(heights.home_pos_base[2])],
+        [float(object_pos[0]) - offset_x, float(object_pos[1]) - offset_y, float(heights.home_pos_base[2])],
         dtype=np.float64,
     )
 
@@ -310,7 +320,10 @@ def _compile_servo_j_program(
 
 def _close_gap_m(config: Any) -> float:
     adapter = str(getattr(config.gripper, "adapter", ""))
-    return LITE6_DEFAULT_GRIPPER_GRASP_GAP_M if adapter == "lite6" else DEFAULT_GRIPPER_GRASP_GAP_M
+    if adapter == "lite6":
+        return LITE6_DEFAULT_GRIPPER_GRASP_GAP_M
+    closed_gap = float(getattr(config.gripper, "closed_gap_m", 0.0))
+    return max(DEFAULT_GRIPPER_GRASP_GAP_M, closed_gap)
 
 
 def _scene_layout_kwargs(config: Any) -> dict[str, Any]:
@@ -436,66 +449,97 @@ def main(argv: Sequence[str] | None = None) -> int:
     if robotiq_error is not None:
         parser.error(robotiq_error)
 
+    bio_error = bio_g2_controller_mode_error("pick_place", args.robot, args.gripper, args.mode)
+    if bio_error is not None:
+        parser.error(bio_error)
+
     if args.gripper == "bio_gripper_g2":
         if args.robot not in {"xarm5", "xarm6", "xarm7", "uf850"}:
             parser.error("--gripper bio_gripper_g2 requires --robot xarm5, xarm6, xarm7 or uf850")
-        if args.mode != "sim":
-            parser.error("--gripper bio_gripper_g2 currently requires --mode sim")
-        if args.speed_mm_s is not None and args.speed_percent is not None:
-            parser.error("Provide at most one of --speed-mm-s or --speed-percent")
-        from ufactory.simulation.bio_g2_model import (
-            MAX_SPEED_MM_S,
-            MIN_SPEED_MM_S,
-            bio_g2_speed_mm_s_from_percent,
-            bounded,
-            finger_force_n,
-        )
-        from ufactory.trajectory.bio_g2_replay import (
-            DEFAULT_PICK_PLACE_SPEED_MM_S,
-            DEFAULT_SUBSTEPS,
-            DEFAULT_TRANSPORT_SPEED_MM_S,
-            run_bio_g2_pick_place,
-        )
-
-        try:
-            if args.speed_mm_s is not None:
-                speed_mm_s = bounded(args.speed_mm_s, MIN_SPEED_MM_S, MAX_SPEED_MM_S, "speed_mm_s")
-            elif args.speed_percent is not None:
-                if args.speed_percent <= 0:
-                    raise ValueError("automatic Bio Gripper G2 manipulation requires --speed-percent > 0")
-                speed_mm_s = bio_g2_speed_mm_s_from_percent(args.speed_percent)
-            else:
-                speed_mm_s = DEFAULT_PICK_PLACE_SPEED_MM_S
-            force_percent = 50.0 if args.force_percent is None else float(args.force_percent)
-            finger_force_n(force_percent)
-            transport_speed_mm_s = (
-                DEFAULT_TRANSPORT_SPEED_MM_S if args.transport_speed_mm_s is None else float(args.transport_speed_mm_s)
+        if args.mode == "sim":
+            if args.speed_mm_s is not None and args.speed_percent is not None:
+                parser.error("Provide at most one of --speed-mm-s or --speed-percent")
+            from ufactory.simulation.bio_g2_model import (
+                MAX_SPEED_MM_S,
+                MIN_SPEED_MM_S,
+                bio_g2_speed_mm_s_from_percent,
+                bounded,
+                finger_force_n,
             )
-            if not np.isfinite(transport_speed_mm_s) or transport_speed_mm_s <= 0:
-                raise ValueError("transport_speed_mm_s must be finite and positive")
-        except ValueError as exc:
-            parser.error(str(exc))
-
-        summary = run_bio_g2_pick_place(
-            robot=args.robot,
-            backend=args.backend or "gpu",
-            headless=not bool(args.visual),
-            executor=args.executor or "servo_cartesian",
-            speed_mm_s=speed_mm_s,
-            transport_speed_mm_s=transport_speed_mm_s,
-            substeps=DEFAULT_SUBSTEPS if args.substeps is None else int(args.substeps),
-            force_percent=force_percent,
-            csv_path=args.csv,
-            summary_path=args.sim_report or args.report,
-        )
-        metrics = summary["metrics"]
-        if "place_xy_error_mm" in metrics and "home_return_error_mm" in metrics:
-            print(
-                f"place_error_mm={metrics['place_xy_error_mm']:.3f} "
-                f"home_drift_mm={metrics['home_return_error_mm']:.3f} "
-                f"completed={summary['passed']}"
+            from ufactory.trajectory.bio_g2_replay import (
+                DEFAULT_PICK_PLACE_SPEED_MM_S,
+                DEFAULT_SUBSTEPS,
+                DEFAULT_TRANSPORT_SPEED_MM_S,
+                run_bio_g2_pick_place,
             )
-        return 0 if summary["passed"] else 1
+
+            try:
+                if args.speed_mm_s is not None:
+                    speed_mm_s = bounded(args.speed_mm_s, MIN_SPEED_MM_S, MAX_SPEED_MM_S, "speed_mm_s")
+                elif args.speed_percent is not None:
+                    if args.speed_percent <= 0:
+                        raise ValueError("automatic Bio Gripper G2 manipulation requires --speed-percent > 0")
+                    speed_mm_s = bio_g2_speed_mm_s_from_percent(args.speed_percent)
+                else:
+                    speed_mm_s = DEFAULT_PICK_PLACE_SPEED_MM_S
+                force_percent = 50.0 if args.force_percent is None else float(args.force_percent)
+                finger_force_n(force_percent)
+                transport_speed_mm_s = (
+                    DEFAULT_TRANSPORT_SPEED_MM_S
+                    if args.transport_speed_mm_s is None
+                    else float(args.transport_speed_mm_s)
+                )
+                if not np.isfinite(transport_speed_mm_s) or transport_speed_mm_s <= 0:
+                    raise ValueError("transport_speed_mm_s must be finite and positive")
+            except ValueError as exc:
+                parser.error(str(exc))
+
+            summary = run_bio_g2_pick_place(
+                robot=args.robot,
+                backend=args.backend or "gpu",
+                headless=not bool(args.visual),
+                executor=args.executor or "servo_cartesian",
+                speed_mm_s=speed_mm_s,
+                transport_speed_mm_s=transport_speed_mm_s,
+                substeps=DEFAULT_SUBSTEPS if args.substeps is None else int(args.substeps),
+                force_percent=force_percent,
+                csv_path=args.csv,
+                summary_path=args.sim_report or args.report,
+            )
+            metrics = summary["metrics"]
+            if "place_xy_error_mm" in metrics and "home_return_error_mm" in metrics:
+                print(
+                    f"place_error_mm={metrics['place_xy_error_mm']:.3f} "
+                    f"home_drift_mm={metrics['home_return_error_mm']:.3f} "
+                    f"completed={summary['passed']}"
+                )
+            return 0 if summary["passed"] else 1
+        if args.executor != "servo_cartesian":
+            parser.error(
+                "--gripper bio_gripper_g2 in dry-run/sdk-sim/real currently requires --executor servo_cartesian "
+                "(servo_j requires Genesis generic scene support)"
+            )
+        if args.visual:
+            parser.error(
+                "--visual is not supported with --gripper bio_gripper_g2 in real mode "
+                "(kinematic mirror requires Genesis generic scene support)"
+            )
+        if (
+            any(
+                getattr(args, name) is not None
+                for name in (
+                    "position_mm",
+                    "speed_percent",
+                    "force_percent",
+                    "speed_mm_s",
+                    "transport_speed_mm_s",
+                    "substeps",
+                )
+            )
+            or args.csv
+            or args.sim_report
+        ):
+            parser.error("Bio Gripper G2 simulation speed/force/record flags require --mode sim")
 
     if args.executor is None:
         parser.error("--executor is required for this gripper")

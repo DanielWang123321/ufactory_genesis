@@ -7,6 +7,13 @@ import math
 import xml.etree.ElementTree as ET
 
 from ufactory.robots.registry import RobotModelSpec, get_robot_profile, joint_names, robot_cli_choices
+from ufactory.grippers.bio_g2 import (
+    BIO_G2_JOINT_NAMES,
+    BIO_GRIPPER_G2_CLOSED_GAP_M,
+    BIO_GRIPPER_G2_OPEN_GAP_M,
+    BIO_GRIPPER_G2_SIM_CLOSED_DRIVE,
+    BIO_GRIPPER_G2_SIM_OPEN_DRIVE,
+)
 from ufactory.grippers.g2 import G2_JOINT_NAMES, GRIPPER_G2_SIM_OPEN_DRIVE, GRIPPER_G2_SIM_CLOSE_DRIVE
 from ufactory.grippers.robotiq import (
     ROBOTIQ_2F_85_JOINT_NAMES,
@@ -190,6 +197,23 @@ ROBOTIQ_2F_140_GRIPPER_PARAMS = GripperControlParams(
     frictionloss=0.0,
 )
 
+BIO_GRIPPER_G2_GRIPPER_PARAMS = GripperControlParams(
+    family="bio_gripper_g2",
+    drive_joint="bio_gripper_g2_right_finger_joint",
+    all_joint_names=BIO_G2_JOINT_NAMES,
+    finger_link_names=("bio_gripper_g2_left_finger", "bio_gripper_g2_right_finger"),
+    open_pos=BIO_GRIPPER_G2_SIM_OPEN_DRIVE,
+    close_pos=BIO_GRIPPER_G2_SIM_CLOSED_DRIVE,
+    closed_gap_m=BIO_GRIPPER_G2_CLOSED_GAP_M,
+    open_gap_m=BIO_GRIPPER_G2_OPEN_GAP_M,
+    kp=16000.0,
+    kv=40.0,
+    force_lower=-20.0,
+    force_upper=20.0,
+    damping=0.1,
+    frictionloss=0.0,
+)
+
 
 def _tuple(values) -> FloatTuple:
     return tuple(map(float, values))
@@ -336,6 +360,10 @@ def _gripper_params_for(profile: RobotModelSpec, *, gripper: str | None = None) 
         if not profile.supports_robotiq_2f_140:
             raise ValueError(f"Robot {profile.key} does not support gripper {choice!r}")
         return ROBOTIQ_2F_140_GRIPPER_PARAMS
+    if choice in {"bio_gripper_g2", "bio_g2"}:
+        if not profile.supports_bio_gripper_g2:
+            raise ValueError(f"Robot {profile.key} does not support gripper {choice!r}")
+        return BIO_GRIPPER_G2_GRIPPER_PARAMS
     raise ValueError(f"Unknown gripper {choice!r} for robot {profile.key}")
 
 

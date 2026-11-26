@@ -496,6 +496,14 @@ def load_runtime_config(
         elif normalized_gripper == "lite6":
             if default_adapter != "lite6":
                 raise ConfigError(f"robot {canonical} does not support gripper {normalized_gripper}")
+        elif normalized_gripper in {"bio_gripper_g2", "bio_g2"}:
+            try:
+                validate_assembly(canonical, "bio_gripper_g2", root=store.root)
+            except AssemblyError as exc:
+                raise ConfigError(str(exc)) from exc
+            overlay_rel = "assets/configs/runtime/grippers/bio_gripper_g2.yaml"
+            _merge_strict(data, _read_yaml(store.require(overlay_rel)))
+            sources.append(overlay_rel)
         elif normalized_gripper in {"robotiq_2f_85", "robotiq_2f_140"}:
             try:
                 validate_assembly(canonical, normalized_gripper, root=store.root)

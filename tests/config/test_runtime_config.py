@@ -233,6 +233,35 @@ def test_robotiq_2f_85_rejects_position_mm_above_85():
         load_runtime_config("xarm6", gripper="robotiq_2f_85", overrides={"simulation.robotiq.position_mm": 100.0})
 
 
+@pytest.mark.parametrize("robot", ["xarm5", "xarm6", "xarm7", "uf850"])
+@pytest.mark.parametrize("alias", ["bio_gripper_g2", "bio_g2"])
+def test_bio_g2_overlay_resolution_for_supported_arms(robot: str, alias: str):
+    cfg = load_runtime_config(robot, gripper=alias)
+    assert cfg.gripper is not None
+    assert cfg.gripper.adapter == "bio_g2"
+    assert cfg.gripper.closed_gap_m == pytest.approx(0.071)
+    assert cfg.gripper.open_gap_m == pytest.approx(0.150)
+    assert cfg.robot.urdf == "assembly:bio_gripper_g2"
+    assert list(cfg.task.parameters["fixed_object_position_m"]) == pytest.approx([0.38, -0.12, 0.015])
+    assert list(cfg.task.parameters["fixed_target_position_m"]) == pytest.approx([0.38, 0.12, 0.015])
+    assert list(cfg.task.parameters["default_ee_position_m"]) == pytest.approx([0.38, -0.12, 0.30])
+
+
+def test_bio_g2_overlay_rejects_lite6_and_reach():
+    with pytest.raises(ConfigError, match="not supported"):
+        load_runtime_config("lite6", gripper="bio_gripper_g2")
+    with pytest.raises(ConfigError, match="reach"):
+        load_runtime_config("xarm6", task="reach", gripper="bio_gripper_g2")
+
+
+def test_default_g2_and_robotiq_hashes_are_unchanged():
+    assert load_runtime_config("xarm6").sha256 == "c804401452de5eb83417fd8329496404dc09340f62305c6cdea188a1984e0957"
+    assert (
+        load_runtime_config("xarm6", gripper="robotiq_2f_85").sha256
+        == "51fe99506b46da67311cd72e624b47eb852c12f378c5e97dbcfca3e8034c6f88"
+    )
+
+
 @pytest.mark.parametrize("robot", ROBOTS)
 def test_default_approx_motion_and_simulation_rate_defaults(robot: str) -> None:
     cfg = load_runtime_config(robot)
