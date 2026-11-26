@@ -314,6 +314,48 @@ def test_mounting_plate_urdf_inertials() -> None:
                 assert i[key] == pytest.approx(expected_val, rel=0.0, abs=1e-12), key
 
 
+def test_mounting_plate_materials_match_arm_flanges() -> None:
+    """Validate plate GLB PBR and URDF materials match the arm flange metal without optional mesh deps."""
+    flange_glbs = (
+        "robots/xarm6/meshes/xarm6_1305/visual_glb/link6.glb",
+        "robots/uf850/meshes/uf850/visual_glb/link6.glb",
+        "robots/lite6/meshes/lite6/visual_glb/link6.glb",
+    )
+    for plate in PLATES:
+        plate_dir = URDF_ROOT / "mounts" / plate
+        meta = _glb_json(plate_dir / "meshes" / "visual" / f"{plate}.glb")
+        assert meta["extensionsRequired"] == ["KHR_draco_mesh_compression"]
+        mats = meta["materials"]
+        assert isinstance(mats, list) and len(mats) == 1
+        assert mats[0]["name"] == "plate_anodized_aluminum"
+        pbr = mats[0]["pbrMetallicRoughness"]
+        np.testing.assert_allclose(
+            pbr["baseColorFactor"],
+            [0.9529411764705883, 0.9529411764705883, 0.9490196078431372, 1.0],
+            atol=1e-5,
+        )
+        assert pbr["metallicFactor"] == pytest.approx(0.8, abs=1e-5)
+        assert pbr["roughnessFactor"] == pytest.approx(0.640130877494812, abs=1e-5)
+
+        for arm_glb in flange_glbs:
+            arm_meta = _glb_json(URDF_ROOT / arm_glb)
+            arm_metals = [
+                m["pbrMetallicRoughness"]
+                for m in arm_meta["materials"]  # type: ignore[index]
+                if m.get("pbrMetallicRoughness", {}).get("metallicFactor", 0.0) > 0.5
+            ]
+            assert len(arm_metals) == 1, arm_glb
+            np.testing.assert_allclose(pbr["baseColorFactor"], arm_metals[0]["baseColorFactor"], atol=1e-5)
+            assert pbr["metallicFactor"] == pytest.approx(arm_metals[0]["metallicFactor"], abs=1e-5)
+            assert pbr["roughnessFactor"] == pytest.approx(arm_metals[0]["roughnessFactor"], abs=0.01)
+
+        root = ET.parse(plate_dir / f"{plate}.urdf").getroot()
+        color = root.find("./material[@name='PlateAluminum']/color")
+        assert color is not None
+        rgba = [float(v) for v in color.attrib["rgba"].split()]
+        np.testing.assert_allclose(rgba, [0.952941, 0.952941, 0.94902, 1.0], atol=1e-5)
+
+
 @pytest.mark.parametrize("plate", tuple(PLATES))
 def test_plate_assets_geometry_openings_and_inertials(plate: str) -> None:
     trimesh = pytest.importorskip("trimesh")
