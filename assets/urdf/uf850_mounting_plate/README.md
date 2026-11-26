@@ -6,8 +6,8 @@ Official UFACTORY 10 mm aluminium mounting plate for **UF850**. Static part, no 
 
 Frame: `uf850_mounting_plate`, origin at the centre of the Ø130 mm central bore on the top mounting plane (`z = 0`). The plate spans `z ∈ [-10, 0] mm`, with its long edge parallel to `Y`. The runtime composer attaches it below `link_base` at `xyz = (0, 0, 0)` with `mounting_plate_fix`.
 
-- Estimated mass `0.9142 kg` (uniform 6061 aluminium density `2700 kg/m³` integrated over the watertight CAD mesh; fixed-base arm dynamics are unaffected); centre of mass at `(0.00, 0.00, -5.00) mm`.
-- Inertia at the centre of mass (kg·m²): `ixx = 6.4877e-3`, `iyy = 3.2775e-3`, `izz = 9.7500e-3`, `ixy = 2.45e-9`, `ixz = 7.71e-11`, `iyz = -1.87e-11`.
+- Measured mass `1.056 kg` (uniformly scaled over the watertight CAD mesh volume `338.578 cm³`, effective density `3118.92 kg/m³`; fixed-base arm dynamics are unaffected); centre of mass at `(0.00, 0.00, -5.00) mm`.
+- Inertia at the centre of mass (kg·m²): `ixx = 7.4944e-3`, `iyy = 3.7860e-3`, `izz = 1.1263e-2`, `ixy = 2.83e-9`, `ixz = 8.91e-11`, `iyz = -2.16e-11`.
 - Envelope `190 × 260 × 10 mm`: `x ∈ [-95.0, +95.0] mm`, `y ∈ [-130.0, +130.0] mm`, `z ∈ [-10.0, 0.0] mm` (corner radius 20 mm).
 - Features: Ø130 mm central through-bore, 4 × Ø6.8 mm arm mounting holes at `(±60.104, ±60.104) mm` (`uf850_mounting_plate_hole_0..3`), and 8 outer mounting slots (`(±70, ±115)` mm and `(±80, ±85)` mm).
 - Fits: `uf850` (bare arm or any compatible end effector / camera assembly).

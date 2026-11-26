@@ -23,6 +23,10 @@ The UF850 has the same `xarm` tool flange as xArm5/6/7, so it takes the same end
 
 Why the links use several hulls: see [xArm6 collision meshes](../xarm6/README.md#collision-meshes).
 
+## Base inertial
+
+`uf850.urdf` and `uf850_visual.glb.urdf` share the `link_base` inertial parameters evaluated in SolidWorks on the `Arm850_P01` base assembly (`5.869631 kg`, CoM `(-0.762, -0.044, 117.610) mm`, standard URDF negative off-diagonal product-of-inertia convention; total bare-arm mass `19.844631 kg`).
+
 ## Source / License
 
 - URDF and STL derive from the upstream UFACTORY / xArm ROS descriptions (see [NOTICE](../../../NOTICE)).

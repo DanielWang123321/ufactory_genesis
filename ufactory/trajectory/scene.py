@@ -116,6 +116,8 @@ class TrajSceneContext:
     robotiq_settings: object | None = None
     robotiq_controller: object | None = None
     simulation_parameters: dict = field(default_factory=dict)
+    sim_rate_hz: float = 50.0
+    arm_controller: object | None = None
 
     def base_to_world(self, pos_base) -> list[float]:
         """Convert a base-frame xyz (m) to the Genesis world frame (m)."""
@@ -198,6 +200,7 @@ def _robot_defaults(robot_key: str, *, gripper: str | None = None) -> dict:
         "grasp_table_clearance_m": gripper_profile.grasp_table_clearance_m,
         "grasp_height_extra_m": gripper_profile.grasp_height_extra_m,
         "excluded_geometry_pairs": gripper_profile.excluded_geometry_pairs,
+        "default_qpos_rad": config.arm.default_qpos_rad,
     }
 
 
@@ -280,6 +283,7 @@ def build_scene(
     robotiq_settings: object | None = None,
     gripper: str | None = None,
     excluded_geometry_pairs: tuple[tuple[str, str], ...] | None = None,
+    arm_controller: object | None = None,
 ) -> TrajSceneContext:
     """Build the single-env Genesis scene and configure PD gains + finger offsets.
 
@@ -533,7 +537,21 @@ def build_scene(
     home_pos_base = [obj_xy[0], obj_xy[1], home_z]
     home_pos = _base_to_world(robot_base, home_pos_base)
     home_link6_pos = torch.tensor([home_pos], device=gs.device, dtype=gs.tc_float)
-    home_qpos_result = solve_home_ik(robot, ik_link, home_link6_pos, dq, arm_dof_idx=arm_dof_idx)
+    home_controller = arm_controller
+    if home_controller is None and profile.dof == 5:
+        from ufactory.control import ArmMotionController
+
+        home_controller = ArmMotionController.from_robot(profile.key, urdf_path=robot_urdf_path)
+    home_qpos_result = solve_home_ik(
+        robot,
+        ik_link,
+        home_link6_pos,
+        dq,
+        arm_dof_idx=arm_dof_idx,
+        arm_controller=home_controller,
+        target_pos_base=home_pos_base,
+        default_qpos_rad=defaults["default_qpos_rad"],
+    )
     init_qpos = torch.zeros(1, robot.n_dofs, device=gs.device, dtype=gs.tc_float)
     for i, idx in enumerate(arm_dof_idx):
         init_qpos[:, idx] = home_qpos_result[0, arm_dof_idx[i]]
@@ -609,6 +627,7 @@ def build_scene(
         robotiq_settings=robotiq_settings,
         simulation_parameters={
             "rate_hz": rate,
+            "sim_rate_hz": float(rate),
             "substeps": substeps,
             "constraint_time_constant_s": constraint_timeconst,
             "constraint_solver": constraint_solver,
@@ -618,6 +637,8 @@ def build_scene(
             "contact_resolution": contact_resolution,
             "use_gjk_collision": use_gjk_collision,
         },
+        sim_rate_hz=float(rate),
+        arm_controller=arm_controller if arm_controller is not None else home_controller,
     )
     if is_calibrated_g2:
         from ufactory.simulation.g2_adapter import G2GenesisController

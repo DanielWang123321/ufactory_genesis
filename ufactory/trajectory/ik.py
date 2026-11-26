@@ -15,6 +15,7 @@ from __future__ import annotations
 import numpy as np
 
 from ufactory.kinematics.genesis import solve_link6_ik
+from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.trajectory.profile import (
     _EPS,
     _lspb_alpha_for_duration,
@@ -241,6 +242,27 @@ def _solve_base_xyz(
     init_qpos: np.ndarray | None,
     damping: float | None = None,
 ) -> np.ndarray:
+    controller = getattr(ctx, "arm_controller", None)
+    if controller is not None:
+        xyz = np.asarray(xyz_base, dtype=np.float64).reshape(3)
+        pose = np.concatenate((xyz, np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64)))
+        if init_qpos is None:
+            from ufactory.control.kinematics_chain import pose_to_se3
+            from ufactory.control.solvers import solve_exact_ik
+
+            res = solve_exact_ik(
+                controller.chain,
+                pose_to_se3(pose, position_in_mm=False),
+                include_tcp=False,
+                cold_start_fallback=True,
+            )
+            return np.asarray(res.q_rad, dtype=np.float64).reshape(-1)
+        res = controller.solve_step(
+            pose,
+            np.asarray(init_qpos, dtype=np.float64).reshape(-1),
+            include_tcp=False,
+        )
+        return np.asarray(res.q_rad, dtype=np.float64).reshape(-1)
     return solve_link6_ik(
         ctx.robot,
         ctx.ik_link,

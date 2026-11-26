@@ -1033,6 +1033,58 @@ def test_xarm_bases_share_unified_inertial_parameters() -> None:
     np.testing.assert_allclose(eig, expected_principal, rtol=0.0, atol=1e-11)
 
 
+def test_uf850_base_uses_solidworks_inertial_parameters() -> None:
+    """UF850 STL and GLB URDFs share the SolidWorks Arm850_P01 link_base inertials (URDF negative off-diagonals)."""
+    expected_mass = 5.869631
+    expected_com = (-0.000762, -4.4e-05, 0.11761)
+    expected_rpy = (0.0, 0.0, 0.0)
+    expected_inertia = {
+        "ixx": 0.032711870245,
+        "ixy": 8.0733473e-05,
+        "ixz": -0.000343329636,
+        "iyy": 0.03295126767,
+        "iyz": -1.0328638e-05,
+        "izz": 0.013458380527,
+    }
+    expected_principal = np.array([13452256.142, 32692678.345, 32976583.954], dtype=np.float64) * 1e-9
+
+    serialized: list[str] = []
+    for filename in ("uf850.urdf", "uf850_visual.glb.urdf"):
+        urdf = _URDF_ROOT / "uf850" / filename
+        inertial = ET.parse(urdf).getroot().find("./link[@name='link_base']/inertial")
+        assert inertial is not None, _rel(urdf)
+
+        mass = float(inertial.find("mass").attrib["value"])
+        assert mass == pytest.approx(expected_mass, rel=0.0, abs=1e-12), _rel(urdf)
+
+        origin = inertial.find("origin")
+        xyz = tuple(float(v) for v in origin.attrib["xyz"].split())
+        rpy = tuple(float(v) for v in origin.attrib.get("rpy", "0 0 0").split())
+        assert xyz == pytest.approx(expected_com, rel=0.0, abs=1e-12), _rel(urdf)
+        assert rpy == pytest.approx(expected_rpy, rel=0.0, abs=1e-12), _rel(urdf)
+
+        inertia = {k: float(v) for k, v in inertial.find("inertia").attrib.items()}
+        for key, expected_val in expected_inertia.items():
+            assert inertia[key] == pytest.approx(expected_val, rel=0.0, abs=1e-12), (_rel(urdf), key)
+
+        serialized.append(ET.tostring(inertial, encoding="unicode").strip())
+
+    assert len(set(serialized)) == 1
+
+    tensor = np.array(
+        [
+            [expected_inertia["ixx"], expected_inertia["ixy"], expected_inertia["ixz"]],
+            [expected_inertia["ixy"], expected_inertia["iyy"], expected_inertia["iyz"]],
+            [expected_inertia["ixz"], expected_inertia["iyz"], expected_inertia["izz"]],
+        ],
+        dtype=np.float64,
+    )
+    eig = np.linalg.eigvalsh(tensor)
+    assert eig.min() > 0.0
+    assert eig[0] + eig[1] > eig[2]
+    np.testing.assert_allclose(eig, expected_principal, rtol=0.0, atol=1e-11)
+
+
 def test_xarm_flange_visual_is_centred_on_the_flange_frame() -> None:
     """xArm5/6/7 share one flange link; its GLB stays centred on the flange axis like the STL.
 

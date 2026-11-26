@@ -39,14 +39,70 @@ HOME_IK_MAX_POS_ERR_M = 1e-5
 HOME_IK_MAX_ROT_ERR_RAD = 5e-3
 
 
-def solve_home_ik(robot, ik_link, pos, quat, *, arm_dof_idx, init_qpos=None):
+def solve_home_ik(
+    robot,
+    ik_link,
+    pos,
+    quat,
+    *,
+    arm_dof_idx,
+    init_qpos=None,
+    arm_controller=None,
+    target_pos_base=None,
+    default_qpos_rad=None,
+):
     """Solve a held start pose to micrometres on the joint branch Genesis's default IK picks.
 
-    The first solve is the plain Genesis call (default tolerances, random restarts) and chooses the branch. The second
-    starts from its result with a single sample, so it cannot restart on another branch, and iterates to
-    ``HOME_IK_POS_TOL_M`` / ``HOME_IK_ROT_TOL_RAD``. Returns the joint vector as Genesis returns it. Raises
-    :class:`ValueError` if the residual is still above ``HOME_IK_MAX_POS_ERR_M`` / ``HOME_IK_MAX_ROT_ERR_RAD``.
+    When ``arm_controller`` and ``target_pos_base`` are provided, uses the unified
+    pure-NumPy :class:`~ufactory.control.ArmMotionController` (Pieper analytical +
+    polish for Lite6/UF850, 5-DOF position-priority IK for xArm5, iterative SE(3)
+    for xArm6/xArm7) so preflight, simulation, and hardware start on the identical
+    exact joint configuration. Otherwise falls back to two-pass Genesis IK.
     """
+    if arm_controller is not None and target_pos_base is not None:
+        from ufactory.control.kinematics_chain import pose_to_se3
+        from ufactory.control.solvers import solve_exact_ik
+
+        base_xyz = np.asarray(target_pos_base, dtype=np.float64).reshape(3)
+        target_se3 = pose_to_se3(
+            np.concatenate((base_xyz, np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64))),
+            position_in_mm=False,
+        )
+        seed_q = None
+        if default_qpos_rad is not None:
+            seed_q = np.asarray(default_qpos_rad, dtype=np.float64).reshape(-1)
+        elif init_qpos is not None:
+            seed_arr = init_qpos.detach().cpu().numpy() if hasattr(init_qpos, "detach") else np.asarray(init_qpos)
+            seed_flat = np.asarray(seed_arr, dtype=np.float64).reshape(-1)
+            if seed_flat.size == len(arm_dof_idx):
+                seed_q = seed_flat
+            elif seed_flat.size > max(arm_dof_idx):
+                seed_q = seed_flat[list(arm_dof_idx)]
+        res = solve_exact_ik(
+            arm_controller.chain,
+            target_se3,
+            seed_q_rad=seed_q,
+            include_tcp=False,
+            pos_tol_m=HOME_IK_POS_TOL_M,
+            rot_tol_rad=HOME_IK_MAX_ROT_ERR_RAD if arm_controller.dof == 5 else HOME_IK_ROT_TOL_RAD,
+            cold_start_fallback=True,
+        )
+        if not (np.isfinite(res.position_error_m) and np.isfinite(res.orientation_error_rad)) or (
+            res.position_error_m > HOME_IK_MAX_POS_ERR_M or res.orientation_error_rad > HOME_IK_MAX_ROT_ERR_RAD
+        ):
+            raise ValueError(
+                f"ArmMotionController home IK residual {res.position_error_m * 1e3:.4f} mm / "
+                f"{res.orientation_error_rad * 1e3:.4f} mrad exceeds "
+                f"{HOME_IK_MAX_POS_ERR_M * 1e3:.3f} mm / {HOME_IK_MAX_ROT_ERR_RAD * 1e3:.3f} mrad "
+                f"for target {base_xyz.round(6).tolist()}"
+            )
+        device = pos.device if hasattr(pos, "device") else gs.device
+        dtype = pos.dtype if hasattr(pos, "dtype") else gs.tc_float
+        n_dofs = int(getattr(robot, "n_dofs", getattr(robot, "n_qs", max(arm_dof_idx) + 1)))
+        refined = torch.zeros((1, n_dofs), device=device, dtype=dtype)
+        for i, idx in enumerate(arm_dof_idx):
+            refined[0, idx] = float(res.q_rad[i])
+        return refined
     seed = {} if init_qpos is None else {"init_qpos": init_qpos}
     coarse = robot.inverse_kinematics(link=ik_link, pos=pos, quat=quat, dofs_idx_local=arm_dof_idx, **seed)
     refined, error = robot.inverse_kinematics(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 from dataclasses import asdict
 import os
 from pathlib import Path
@@ -57,7 +58,7 @@ def _build_packaging_context(config: Any, urdf: Path, *, show_viewer: bool = Fal
     )
 
     scene, robot, block, display_layout = build_packaging_scene(
-        sim_dt=1.0 / float(config.motion.rate_hz),
+        sim_dt=1.0 / float(config.simulation.rate_hz),
         show_viewer=show_viewer,
         robot_urdf_path=str(urdf),
         runtime_config=config,
@@ -141,6 +142,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--position-mm", type=float)
     parser.add_argument("--speed-percent", type=float)
     parser.add_argument("--force-percent", type=float)
+    parser.add_argument(
+        "--allow-approx-motion",
+        action="store_true",
+        help="Enable firmware-aligned DLS singularity avoidance (mirrors set_allow_approx_motion(True))",
+    )
+    parser.add_argument(
+        "--sim-rate-hz",
+        type=float,
+        default=None,
+        help="Override Genesis physics simulation step rate in Hz (default: 50.0)",
+    )
     parser.add_argument("--visual", action="store_true")
     parser.add_argument("--speed", type=float, default=1.0, help="Simulation-only playback multiplier")
     parser.add_argument("--cycles", type=_positive_cycles, default=None, help="Simulation cycle count (default: 1)")
@@ -167,13 +179,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.visual and args.mode in {"dry-run", "sdk-sim"}:
         parser.error("--visual is only supported with --mode sim or --mode real")
     selected_gripper = None if args.gripper == "default" else args.gripper
+    cli_overrides: dict[str, Any] = dict(gripper_overrides)
+    if args.allow_approx_motion:
+        cli_overrides["motion.allow_approx_motion"] = True
+    if args.sim_rate_hz is not None:
+        cli_overrides["simulation.rate_hz"] = args.sim_rate_hz
     try:
         config = load_runtime_config(
             args.robot,
             task="packaging_showcase",
             gripper=selected_gripper,
             config_path=args.config,
-            overrides=gripper_overrides,
+            overrides=cli_overrides,
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -298,7 +315,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.executor == "servo_cartesian" or args.mode == "sdk-sim":
             if shadow is None or stages is None:
                 shadow, stages = gate.shadow_joint_stream(program)
-            firmware = _sdk_sim_feedback(arm, program, config, start_q, tcp_offset=tcp_offset)
+            firmware = _sdk_sim_feedback(
+                arm,
+                program,
+                config,
+                start_q,
+                tcp_offset=tcp_offset,
+                allow_approx_motion=config.motion.allow_approx_motion,
+            )
             evidence = validate_sdk_simulation(
                 robot_key=config.robot.key,
                 serial_number=serial,
@@ -361,28 +385,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         current_drive, gripper_sender = prepare_real_gripper_sender(arm, transport, config.gripper)
 
-        execution = execute_real(
-            approved,
-            transport=transport,
-            bindings=ExecutionBindings(
-                robot_key=config.robot.key,
-                serial_number=serial,
-                config_sha256=config.sha256,
-                urdf_sha256=urdf_hash,
-                calibration_sha256=calibration_hash,
-                scene_sha256=scene_hash,
-            ),
-            confirm_real=True,
-            runtime_monitor=lambda q, stage: gate.runtime_monitor(
-                q,
-                stage,
-                gripper_drive=current_drive[0],
-                include_collision=False,
-            ),
-            gripper_sender=gripper_sender,
-            on_tick=bridge.on_tick if bridge is not None else None,
-            not_ready_codes=frozenset((9,)),
+        switch_ctx = (
+            kinematics.sync_hardware_switches(arm)
+            if args.executor == "servo_cartesian"
+            and callable(getattr(kinematics, "sync_hardware_switches", None))
+            and callable(getattr(arm, "set_allow_approx_motion", None))
+            else nullcontext()
         )
+        with switch_ctx:
+            execution = execute_real(
+                approved,
+                transport=transport,
+                bindings=ExecutionBindings(
+                    robot_key=config.robot.key,
+                    serial_number=serial,
+                    config_sha256=config.sha256,
+                    urdf_sha256=urdf_hash,
+                    calibration_sha256=calibration_hash,
+                    scene_sha256=scene_hash,
+                ),
+                confirm_real=True,
+                runtime_monitor=lambda q, stage: gate.runtime_monitor(
+                    q,
+                    stage,
+                    gripper_drive=current_drive[0],
+                    include_collision=False,
+                ),
+                gripper_sender=gripper_sender,
+                on_tick=bridge.on_tick if bridge is not None else None,
+                not_ready_codes=frozenset((9,)),
+            )
         print_real_execution_summary(execution)
         if bridge is not None:
             bridge.hold_until_closed()

@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from ufactory.kinematics.genesis import solve_link6_ik
+from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
 from ufactory.trajectory.ik import _ik_damping_for_context
 from ufactory.trajectory.scene import TrajSceneContext, drive_for_gap_m
 from ufactory.trajectory.segments import Program, Segment
@@ -43,6 +44,35 @@ def _default_ik_seed(ctx: TrajSceneContext) -> np.ndarray | None:
     return None
 
 
+def _solve_controller_base_xyz(
+    controller,
+    xyz_base,
+    *,
+    seed: np.ndarray | None,
+    dt_s: float | None = None,
+) -> np.ndarray:
+    xyz = np.asarray(xyz_base, dtype=np.float64).reshape(3)
+    pose = np.concatenate((xyz, np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64)))
+    if seed is None:
+        from ufactory.control.kinematics_chain import pose_to_se3
+        from ufactory.control.solvers import solve_exact_ik
+
+        res = solve_exact_ik(
+            controller.chain,
+            pose_to_se3(pose, position_in_mm=False),
+            include_tcp=False,
+            cold_start_fallback=True,
+        )
+        return np.asarray(res.q_rad, dtype=np.float64).reshape(-1)
+    res = controller.solve_step(
+        pose,
+        np.asarray(seed, dtype=np.float64).reshape(-1),
+        dt_s=dt_s,
+        include_tcp=False,
+    )
+    return np.asarray(res.q_rad, dtype=np.float64).reshape(-1)
+
+
 def resolve_segment_start_arm_q(
     ctx: TrajSceneContext,
     seg: Segment,
@@ -61,6 +91,11 @@ def resolve_segment_start_arm_q(
         if seg.pose_start is None:
             raise ValueError(f"MoveL segment {seg.label!r} has no pose_start")
         seed = _default_ik_seed(ctx) if init_qpos is None else init_qpos
+        controller = getattr(ctx, "arm_controller", None)
+        if controller is not None:
+            q = _solve_controller_base_xyz(controller, seg.pose_start, seed=seed)
+            ctx._last_ik_qpos = q.copy()
+            return q
         ik_damping = _ik_damping_for_context(ctx) if damping is None else float(damping)
         pose_world = ctx.base_to_world(seg.pose_start)
         q = solve_link6_ik(
@@ -85,6 +120,7 @@ def resolve_tick_arm_q(
     *,
     init_qpos: np.ndarray | None = None,
     damping: float | None = None,
+    dt_s: float | None = None,
 ) -> np.ndarray:
     """Resolve arm joint targets for one tick (same logic as sim replay)."""
     if seg.kind == "movej":
@@ -93,6 +129,13 @@ def resolve_tick_arm_q(
         return q
     if seg.kind == "movel":
         seed = _default_ik_seed(ctx) if init_qpos is None else init_qpos
+        controller = getattr(ctx, "arm_controller", None)
+        if controller is not None:
+            if seed is None and tick_idx == 0 and seg.pose_start is not None:
+                seed = _solve_controller_base_xyz(controller, seg.pose_start, seed=None, dt_s=dt_s)
+            q = _solve_controller_base_xyz(controller, samples[tick_idx], seed=seed, dt_s=dt_s)
+            ctx._last_ik_qpos = q.copy()
+            return q
         ik_damping = _ik_damping_for_context(ctx) if damping is None else float(damping)
         if tick_idx == 0 and seg.pose_start is not None:
             seed = solve_link6_ik(
@@ -363,6 +406,7 @@ class TrajKinematicMirror:
             samples,
             tick_idx,
             init_qpos=self._last_q_arm,
+            dt_s=1.0 / self.rate,
         )
         kinematic_step(
             self.ctx,

@@ -57,7 +57,7 @@ PLATES: dict[str, dict[str, object]] = {
         "x_bounds_mm": (-95.0, 95.0),
         "y_bounds_mm": (-130.0, 130.0),
         "collision_count": 1,
-        "mass_kg": 0.9141612212,
+        "mass_kg": 1.056,
         "mount_xyz": (0.0, 0.0, 0.0),
         "solid_xy_mm": (0.0, 105.0),
     },
@@ -280,6 +280,36 @@ def _is_convex(mesh, tol_m: float = 1e-6) -> bool:
     vertices, faces, normals = (np.asarray(a) for a in (mesh.vertices, mesh.faces, mesh.face_normals))
     offsets = np.einsum("ij,ij->i", normals, vertices[faces[:, 0]])
     return bool((vertices @ normals.T - offsets).max() <= tol_m)
+
+
+def test_mounting_plate_urdf_inertials() -> None:
+    """Validate plate URDF masses and inertia tensors without optional mesh dependencies."""
+    uf850_expected_inertia = {
+        "ixx": 0.007494367693,
+        "ixy": 2.827268798e-09,
+        "ixz": 8.907087421e-11,
+        "iyy": 0.003785981885,
+        "iyz": -2.155216145e-11,
+        "izz": 0.0112627498,
+    }
+    for plate, cfg in PLATES.items():
+        root = ET.parse(URDF_ROOT / plate / f"{plate}.urdf").getroot()
+        inertial = root.find(f"./link[@name='{plate}']/inertial")
+        assert inertial is not None
+        mass = float(inertial.find("mass").attrib["value"])  # type: ignore[union-attr]
+        assert mass == pytest.approx(float(cfg["mass_kg"]), rel=0.0, abs=1e-10)
+        xyz = tuple(float(v) for v in inertial.find("origin").attrib["xyz"].split())  # type: ignore[union-attr]
+        i = {k: float(v) for k, v in inertial.find("inertia").attrib.items()}  # type: ignore[union-attr]
+        tensor = np.array(
+            [[i["ixx"], i["ixy"], i["ixz"]], [i["ixy"], i["iyy"], i["iyz"]], [i["ixz"], i["iyz"], i["izz"]]]
+        )
+        eig = np.linalg.eigvalsh(tensor)
+        assert eig.min() > 0.0 and eig[0] + eig[1] > eig[2]
+        if plate == "uf850_mounting_plate":
+            assert mass == pytest.approx(1.056, rel=0.0, abs=1e-12)
+            assert xyz == pytest.approx((-5.112679085e-08, -1.296273053e-07, -0.005000003168), rel=0.0, abs=1e-12)
+            for key, expected_val in uf850_expected_inertia.items():
+                assert i[key] == pytest.approx(expected_val, rel=0.0, abs=1e-12), key
 
 
 @pytest.mark.parametrize("plate", tuple(PLATES))

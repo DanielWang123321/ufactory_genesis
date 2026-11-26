@@ -358,6 +358,7 @@ class ProjectCheck:
                 "--strict",
                 "--follow-imports=skip",
                 "ufactory/config",
+                "ufactory/control",
                 "ufactory/safety/models.py",
                 "ufactory/safety/interfaces.py",
                 "ufactory/safety/statistics.py",

@@ -125,6 +125,28 @@ class XArmTransport:
     def stop(self) -> int:
         return int(self.arm.set_state(4))
 
+    def set_allow_approx_motion(self, on_off: bool) -> int:
+        """Enable or disable controller singularity approximate motion (mirrors xArm SDK)."""
+
+        if not isinstance(on_off, bool):
+            raise TypeError("on_off must be a bool")
+        return int(self.arm.set_allow_approx_motion(on_off))
+
+    def get_allow_approx_motion(self) -> tuple[int, int]:
+        """Return ``(sdk_code, enabled_int)`` from the controller."""
+
+        code, enabled = self.arm.get_allow_approx_motion()
+        return int(code), int(enabled)
+
+    @property
+    def is_approx_motion(self) -> bool:
+        """Whether controller approximate motion is currently enabled."""
+
+        code, enabled = self.get_allow_approx_motion()
+        if code != 0:
+            raise RuntimeError(f"get_allow_approx_motion failed with SDK code {code}")
+        return bool(enabled)
+
     def disconnect(self) -> None:
         self.arm.disconnect()
 

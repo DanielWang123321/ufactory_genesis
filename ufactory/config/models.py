@@ -214,6 +214,11 @@ class MotionConfig:
     cartesian_speed_m_s: float
     cartesian_acceleration_m_s2: float
     gripper_duration_s: float
+    allow_approx_motion: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.allow_approx_motion, bool):
+            raise ValueError("motion.allow_approx_motion must be a boolean")
 
 
 @dataclass(frozen=True)
@@ -294,12 +299,15 @@ class SimulationConfig:
     show_viewer: bool
     g2: G2SimulationConfig = G2SimulationConfig()
     robotiq: RobotiqSimulationConfig = RobotiqSimulationConfig()
+    rate_hz: float = 50.0
 
     def __post_init__(self) -> None:
         if self.backend not in {"cpu", "gpu"}:
             raise ValueError("simulation backend must be cpu or gpu")
         if self.precision not in {"32", "64"}:
             raise ValueError("simulation precision must be 32 or 64")
+        if isinstance(self.rate_hz, bool) or not math.isfinite(float(self.rate_hz)) or float(self.rate_hz) <= 0.0:
+            raise ValueError("simulation rate_hz must be finite and positive")
         if self.substeps < 1 or self.solver_iterations < 1 or self.noslip_iterations < 0:
             raise ValueError("simulation iteration counts are invalid")
         if self.constraint_time_constant_s <= 0.0:

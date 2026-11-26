@@ -6,8 +6,8 @@ UFACTORY 11 mm silver anodized aluminium coupling adapter for mounting **Robotiq
 
 Frame: `robotiq_mounting`, origin at the flange centre on the xArm/UF850 mating plane (`z = 0`), with `+Z` pointing toward the Robotiq gripper.
 
-- Estimated mass `0.1097 kg` (exact B-Rep volume `40.638 cm³` × uniform 6061 aluminium density `2700 kg/m³`); centre of mass at `(0.00, -0.80, 4.46) mm`.
-- Inertia at the centre of mass (kg·m²): `ixx = 4.1165e-5`, `iyy = 4.6473e-5`, `izz = 8.3857e-5`, `ixy = 0`, `ixz = 0`, `iyz = 6.7024e-8`.
+- Measured mass `0.118 kg` (uniformly scaled over the exact B-Rep volume `40.638 cm³`, effective density `2903.72 kg/m³`); centre of mass at `(0.00, -0.80, 4.46) mm`.
+- Inertia at the centre of mass (kg·m²): `ixx = 4.4271e-5`, `iyy = 4.9980e-5`, `izz = 9.0184e-5`, `ixy = 0`, `ixz = 0`, `iyz = 7.2081e-8`.
 - Envelope: outer diameter `Ø75.0 mm` (`x, y ∈ [-37.5, +37.5] mm`), axial extent `z ∈ [-5.6, +13.9] mm`.
   - **xArm / UF850 side (`z = 0`)**: `Ø31.5 × 5.6 mm` centring boss (`z ∈ [-5.6, 0.0] mm`, fits inside the 6 mm arm flange recess and passes through the 3 mm `camera_stand` `Ø34.5 mm` centre bore), 4 × M6 counterbored bolt holes on PCD 50 mm at `(±17.68, ±17.68) mm` (`robotiq_mounting_xarm_hole_0..3`), `Ø6.0 mm` locating-pin hole at `(0, -25.0) mm` (`robotiq_mounting_xarm_pin`), and tool Pogo-Pin pass-through slot at `(0, +23.0) mm`.
   - **Robotiq side (`z = +11.0 mm`)**: flat seating plane at `z = +11.0 mm` (`robotiq_mounting_tool_mount`) surrounded by a `Ø71.0 mm` inner / `Ø75.0 mm` outer centring rim (`z ∈ [+11.0, +13.9] mm`), 4 × M4 clearance through-holes at `(±16.0, ±27.0) mm` (`robotiq_mounting_robotiq_hole_0..3`), and a `Ø4.0 mm` blind locating-pin hole at `(0, -30.5) mm` (`robotiq_mounting_robotiq_pin`).

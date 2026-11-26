@@ -231,3 +231,35 @@ def test_robotiq_gripper_overlay_resolution_and_validation(variant: str, open_m:
 def test_robotiq_2f_85_rejects_position_mm_above_85():
     with pytest.raises(ConfigError, match="85"):
         load_runtime_config("xarm6", gripper="robotiq_2f_85", overrides={"simulation.robotiq.position_mm": 100.0})
+
+
+@pytest.mark.parametrize("robot", ROBOTS)
+def test_default_approx_motion_and_simulation_rate_defaults(robot: str) -> None:
+    cfg = load_runtime_config(robot)
+    assert cfg.motion.allow_approx_motion is False
+    assert cfg.motion.rate_hz == pytest.approx(50.0)
+    assert cfg.simulation.rate_hz == pytest.approx(50.0)
+
+
+def test_allow_approx_motion_and_sim_rate_overrides_change_hash_and_validate(tmp_path: Path) -> None:
+    base = load_runtime_config("uf850")
+    approx_cfg = load_runtime_config("uf850", overrides={"motion.allow_approx_motion": True})
+    rate_cfg = load_runtime_config("uf850", overrides={"simulation.rate_hz": 250.0})
+    assert approx_cfg.motion.allow_approx_motion is True
+    assert rate_cfg.simulation.rate_hz == pytest.approx(250.0)
+    assert approx_cfg.sha256 != base.sha256
+    assert rate_cfg.sha256 != base.sha256
+    assert approx_cfg.sha256 != rate_cfg.sha256
+
+    for bad_approx in (1, "true", 0):
+        with pytest.raises(ConfigError, match=r"motion\.allow_approx_motion must be a boolean"):
+            load_runtime_config("uf850", overrides={"motion.allow_approx_motion": bad_approx})
+
+    for bad_rate in (0.0, -50.0, float("nan"), float("inf"), True):
+        with pytest.raises(ConfigError, match=r"simulation\.rate_hz must be finite"):
+            load_runtime_config("uf850", overrides={"simulation.rate_hz": bad_rate})
+
+    bad_yaml = tmp_path / "bad_approx.yaml"
+    bad_yaml.write_text("schema_version: 1\nmotion:\n  allow_approx_motion: 1\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="boolean"):
+        load_runtime_config("uf850", config_path=bad_yaml)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 from dataclasses import asdict
 import hashlib
 import json
@@ -19,6 +20,7 @@ from ufactory.config import (
     resolve_pick_place_object_spec,
 )
 from ufactory.manipulation.commands import (
+    build_arm_controller,
     build_manipulation_backends,
     model_and_hashes as _model_and_hashes,
     paced_start_hold as _paced_start_hold,
@@ -241,14 +243,19 @@ def _arm_q_from_scene(ctx: Any) -> np.ndarray:
 
 
 def _build_ik_scene(
-    config: Any, *, calibration: Path | None, show_viewer: bool = False, calibrated_g2: bool = False
+    config: Any,
+    *,
+    calibration: Path | None,
+    show_viewer: bool = False,
+    calibrated_g2: bool = False,
+    arm_controller: Any | None = None,
 ) -> Any:
     from ufactory.trajectory.scene import build_scene
 
     gripper_name = config.gripper.adapter if config.gripper is not None else None
     return build_scene(
         robot_key=config.robot.key,
-        rate=config.motion.rate_hz,
+        rate=config.simulation.rate_hz,
         show_viewer=show_viewer,
         substeps=config.simulation.substeps,
         constraint_solver=config.simulation.constraint_solver,
@@ -264,6 +271,7 @@ def _build_ik_scene(
         robotiq_settings=config.simulation.robotiq,
         gripper=gripper_name,
         excluded_geometry_pairs=config.gripper.excluded_geometry_pairs if config.gripper is not None else (),
+        arm_controller=arm_controller,
         **_scene_layout_kwargs(config),
     )
 
@@ -284,10 +292,16 @@ def _compile_servo_j_program(
     *,
     calibration: Path | None,
     show_viewer: bool = False,
+    arm_controller: Any | None = None,
 ) -> tuple[Any, Any, np.ndarray]:
-    """Build Cartesian program, Genesis-compile with down_quat, return (program, ctx, q_home)."""
+    """Build Cartesian program, compile with down_quat, return (program, ctx, q_home)."""
 
-    ctx = _build_ik_scene(config, calibration=calibration, show_viewer=show_viewer)
+    ctx = _build_ik_scene(
+        config,
+        calibration=calibration,
+        show_viewer=show_viewer,
+        arm_controller=arm_controller,
+    )
     q_home = _arm_q_from_scene(ctx)
     seeded = _build_program(config, q_home=q_home)
     compiled = compile_cartesian_program_to_joint_stream(seeded, ctx)
@@ -391,6 +405,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--substeps", type=int, choices=(8, 32))
     parser.add_argument("--force-percent", type=float)
     parser.add_argument(
+        "--allow-approx-motion",
+        action="store_true",
+        help="Enable firmware-aligned DLS singularity avoidance (mirrors set_allow_approx_motion(True))",
+    )
+    parser.add_argument(
+        "--sim-rate-hz",
+        type=float,
+        default=None,
+        help="Override Genesis physics simulation step rate in Hz (default: 50.0)",
+    )
+    parser.add_argument(
         "--visual",
         action="store_true",
         help="Sim: force Genesis viewer; real: open kinematic mirror viewer (async, off servo path)",
@@ -482,13 +507,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     }
     if args.mode != "sim" and (gripper_overrides or args.csv or args.sim_report):
         parser.error("percentage commands and execution records require --mode sim")
+    cli_overrides: dict[str, Any] = dict(gripper_overrides)
+    if args.allow_approx_motion:
+        cli_overrides["motion.allow_approx_motion"] = True
+    if args.sim_rate_hz is not None:
+        cli_overrides["simulation.rate_hz"] = args.sim_rate_hz
     selected_gripper = None if args.gripper == "default" else args.gripper
     try:
         config = load_runtime_config(
             args.robot,
             gripper=selected_gripper,
             config_path=args.config,
-            overrides=gripper_overrides,
+            overrides=cli_overrides,
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -528,6 +558,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     try:
         urdf, urdf_hash, calibration_hash = _model_and_hashes(config, args.calibration, serial)
+        arm_controller = build_arm_controller(config, urdf) if urdf.is_file() else None
         ik_ctx = None
         q_home: np.ndarray | None = None
         genesis_for_ik = None
@@ -537,10 +568,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 genesis_for_ik = GenesisRuntimeManager(config.simulation)
                 genesis_for_ik.__enter__()
-                ik_ctx = _build_ik_scene(config, calibration=args.calibration, calibrated_g2=True)
+                ik_ctx = _build_ik_scene(
+                    config,
+                    calibration=args.calibration,
+                    calibrated_g2=True,
+                    arm_controller=arm_controller,
+                )
                 urdf = Path(ik_ctx.robot_urdf_path)
                 urdf_hash = sha256_file(urdf)
                 kinematics, collision = _backends(config, urdf, calibrated_g2=True)
+                ik_ctx.arm_controller = kinematics
                 q_home = _arm_q_from_scene(ik_ctx)
                 program = _build_program(config, q_home=q_home)
                 if config.gripper.adapter == "g2":
@@ -562,6 +599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     config,
                     calibration=args.calibration,
                     show_viewer=False,
+                    arm_controller=kinematics,
                 )
                 _print_ik_compile_complete(program, elapsed_s=time.perf_counter() - ik_started)
             else:
@@ -661,7 +699,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.executor == "servo_cartesian" or args.mode == "sdk-sim":
                 if shadow is None or stages is None:
                     shadow, stages = gate.shadow_joint_stream(program)
-                firmware = _sdk_sim_feedback(arm, program, config, start_q, tcp_offset=tcp_offset)
+                firmware = _sdk_sim_feedback(
+                    arm,
+                    program,
+                    config,
+                    start_q,
+                    tcp_offset=tcp_offset,
+                    allow_approx_motion=config.motion.allow_approx_motion,
+                )
                 evidence = validate_sdk_simulation(
                     robot_key=config.robot.key,
                     serial_number=serial,
@@ -718,7 +763,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         if genesis_for_ik is None:
                             genesis_for_ik = GenesisRuntimeManager(config.simulation)
                             genesis_for_ik.__enter__()
-                        mirror_ctx = _build_ik_scene(config, calibration=args.calibration, show_viewer=False)
+                        mirror_ctx = _build_ik_scene(
+                            config,
+                            calibration=args.calibration,
+                            show_viewer=False,
+                            arm_controller=kinematics,
+                        )
                     base_mm = [v * 1000.0 for v in mirror_ctx.base_pos_world]
                     print(
                         f"\n[mirror] robot={mirror_ctx.robot_key} gripper={mirror_ctx.gripper.family} "
@@ -746,28 +796,36 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if mirror is not None:
                     mirror.prime_to_first_arm_segment_start(approved.program)
                 current_drive, gripper_sender = prepare_real_gripper_sender(arm, transport, config.gripper)
-                execution = execute_real(
-                    approved,
-                    transport=transport,
-                    bindings=ExecutionBindings(
-                        robot_key=config.robot.key,
-                        serial_number=serial,
-                        config_sha256=config.sha256,
-                        urdf_sha256=urdf_hash,
-                        calibration_sha256=calibration_hash,
-                        scene_sha256=scene_hash,
-                    ),
-                    confirm_real=True,
-                    runtime_monitor=lambda q, stage: gate.runtime_monitor(
-                        q,
-                        stage,
-                        gripper_drive=current_drive[0],
-                        include_collision=False,
-                    ),
-                    gripper_sender=gripper_sender,
-                    on_tick=bridge.on_tick if bridge is not None else None,
-                    not_ready_codes=frozenset((9,)),
+                switch_ctx = (
+                    kinematics.sync_hardware_switches(arm)
+                    if args.executor == "servo_cartesian"
+                    and callable(getattr(kinematics, "sync_hardware_switches", None))
+                    and callable(getattr(arm, "set_allow_approx_motion", None))
+                    else nullcontext()
                 )
+                with switch_ctx:
+                    execution = execute_real(
+                        approved,
+                        transport=transport,
+                        bindings=ExecutionBindings(
+                            robot_key=config.robot.key,
+                            serial_number=serial,
+                            config_sha256=config.sha256,
+                            urdf_sha256=urdf_hash,
+                            calibration_sha256=calibration_hash,
+                            scene_sha256=scene_hash,
+                        ),
+                        confirm_real=True,
+                        runtime_monitor=lambda q, stage: gate.runtime_monitor(
+                            q,
+                            stage,
+                            gripper_drive=current_drive[0],
+                            include_collision=False,
+                        ),
+                        gripper_sender=gripper_sender,
+                        on_tick=bridge.on_tick if bridge is not None else None,
+                        not_ready_codes=frozenset((9,)),
+                    )
                 print_real_execution_summary(execution)
                 if args.visual and mirror_ctx is not None and tracker is not None:
                     _hold_viewer(mirror_ctx, on_step=tracker.hold_step)

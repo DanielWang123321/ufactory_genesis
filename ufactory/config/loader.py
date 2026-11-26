@@ -343,6 +343,9 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         allowed_contacts=task_data["allowed_contacts"],
     )
     motion_data = data["motion"]
+    raw_allow_approx = motion_data.get("allow_approx_motion", False)
+    if not isinstance(raw_allow_approx, bool):
+        raise ConfigError("motion.allow_approx_motion must be a boolean")
     motion = MotionConfig(
         rate_hz=_positive(motion_data["rate_hz"], field="motion.rate_hz"),
         joint_speed_rad_s=_positive(motion_data["joint_speed_rad_s"], field="motion.joint_speed_rad_s"),
@@ -354,8 +357,13 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             motion_data["cartesian_acceleration_m_s2"], field="motion.cartesian_acceleration_m_s2"
         ),
         gripper_duration_s=_positive(motion_data["gripper_duration_s"], field="motion.gripper_duration_s"),
+        allow_approx_motion=raw_allow_approx,
     )
     simulation_data = data["simulation"]
+    raw_sim_rate = simulation_data.get("rate_hz", 50.0)
+    if isinstance(raw_sim_rate, bool):
+        raise ConfigError("simulation.rate_hz must be finite and positive")
+    simulation_rate_hz = _positive(raw_sim_rate, field="simulation.rate_hz")
     raw_simulation_substeps = simulation_data["substeps"]
     if isinstance(raw_simulation_substeps, bool) or not isinstance(raw_simulation_substeps, int):
         raise ConfigError("simulation.substeps must be a positive integer")
@@ -382,6 +390,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         show_viewer=bool(simulation_data.get("show_viewer", False)),
         g2=G2SimulationConfig(**simulation_data["g2"]),
         robotiq=RobotiqSimulationConfig(**simulation_data["robotiq"]),
+        rate_hz=simulation_rate_hz,
     )
     if gripper is not None and gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
         max_gap_mm = gripper.open_gap_m * 1000.0

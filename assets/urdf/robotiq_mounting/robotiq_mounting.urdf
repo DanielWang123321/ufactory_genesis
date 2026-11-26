@@ -13,8 +13,8 @@
   <link name="robotiq_mounting">
     <inertial>
       <origin xyz="0 -0.0007996449433 0.004455899167" rpy="0 0 0" />
-      <mass value="0.1097214329" />
-      <inertia ixx="4.116479176e-05" ixy="0" ixz="0" iyy="4.647310014e-05" iyz="6.702404878e-08" izz="8.385696053e-05" />
+      <mass value="0.118" />
+      <inertia ixx="4.427070717e-05" ixy="0" ixz="0" iyy="4.997953153e-05" iyz="7.208106518e-08" izz="9.018403314e-05" />
     </inertial>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />

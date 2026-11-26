@@ -35,7 +35,7 @@ ROBOTIQ_EES = ("robotiq_2f_85", "robotiq_2f_140")
 CAMERAS = ("d405", "d435", "gemini_305", "zed_x_nano")
 ADAPTER_LIFT_M = 0.011
 STAND_LIFT_M = 0.003
-ADAPTER_MASS_KG = 0.1097214329
+ADAPTER_MASS_KG = 0.118
 ROBOTIQ_BASE_TCP_Z_M = {"robotiq_2f_85": 0.162253, "robotiq_2f_140": 0.234466}
 ROBOTIQ_TOOL_TIP_Z_M = {"robotiq_2f_85": 0.1093, "robotiq_2f_140": 0.1403}
 
@@ -182,6 +182,16 @@ def test_adapter_assets_budget_material_hulls_and_inertial() -> None:
     tensor = np.array([[i["ixx"], i["ixy"], i["ixz"]], [i["ixy"], i["iyy"], i["iyz"]], [i["ixz"], i["iyz"], i["izz"]]])
     eig = np.linalg.eigvalsh(tensor)
     assert eig.min() > 0.0 and eig[0] + eig[1] > eig[2]
+    expected_inertia = {
+        "ixx": 4.427070717e-05,
+        "ixy": 0.0,
+        "ixz": 0.0,
+        "iyy": 4.997953153e-05,
+        "iyz": 7.208106518e-08,
+        "izz": 9.018403314e-05,
+    }
+    for key, expected_val in expected_inertia.items():
+        assert i[key] == pytest.approx(expected_val, rel=0.0, abs=1e-12), key
 
     cols = [m.get("filename") for m in root.findall("./link[@name='robotiq_mounting']/collision/geometry/mesh")]
     assert cols == ["meshes/collision/robotiq_mounting_col_00.stl", "meshes/collision/robotiq_mounting_col_01.stl"]
