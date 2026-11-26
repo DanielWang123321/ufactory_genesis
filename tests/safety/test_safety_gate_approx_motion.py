@@ -45,7 +45,7 @@ def test_arm_motion_controller_satisfies_safety_protocols() -> None:
 
 
 def test_safety_gate_uf850_wrist_singularity_fails_off_and_passes_on() -> None:
-    cal = Path("assets/urdf/uf850/kinematics/user/uf850_kinematics_F54B07.yaml")
+    cal = Path("assets/urdf/robots/uf850/kinematics/user/uf850_kinematics_F54B07.yaml")
     cfg_off = load_runtime_config("uf850")
     urdf, _, cal_hash = model_and_hashes(cfg_off, cal, None)
     ctrl_off = build_arm_controller(cfg_off, urdf)
@@ -160,7 +160,7 @@ def test_safety_gate_fails_closed_on_approx_motion_mismatch() -> None:
 
 
 def test_safety_gate_calibrated_xarm5_pick_place_passes_with_position_priority_ik() -> None:
-    cal = Path("assets/urdf/xarm5/kinematics/user/xarm5_kinematics_D43A02.yaml")
+    cal = Path("assets/urdf/robots/xarm5/kinematics/user/xarm5_kinematics_D43A02.yaml")
     cfg = load_runtime_config("xarm5")
     urdf, _, cal_hash = model_and_hashes(cfg, cal, None)
     ctrl = build_arm_controller(cfg, urdf)

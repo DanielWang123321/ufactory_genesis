@@ -70,15 +70,15 @@ python examples/visualization/view_robot.py --robot xarm6
 | `uf850` | Gripper G2、Bio Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper | 裸臂、Gripper G2、Robotiq 2F-85、Robotiq 2F-140、Vacuum Gripper（不适配 Bio Gripper G2） | 支持 | — |
 | `lite6` | Lite6 Gripper、Lite6 Vacuum Gripper | 裸臂、Lite6 Gripper、Lite6 Vacuum Gripper | 支持 | Lite6 Gripper |
 
-所有机械臂均支持加装[相机支架](../assets/urdf/camera_stand/README.md)（可单独安装或搭载一台视野沿工具轴方向的深度相机）；装上支架后，末端及其 TCP 沿工具轴前移 3 mm：
+所有机械臂均支持加装[相机支架](../assets/urdf/mounts/camera_stand/README.md)（可单独安装或搭载一台视野沿工具轴方向的深度相机）；装上支架后，末端及其 TCP 沿工具轴前移 3 mm：
 
 | 配件 key | 名称 | 说明 |
 |---|---|---|
-| `camera_stand` | [相机支架](../assets/urdf/camera_stand/README.md) | 3 mm 铝合金支架（48 g） |
-| `d405` | [Intel RealSense D405](../assets/urdf/d405/README.md) | 支架 + D405 短距双目深度相机（58 g） |
-| `d435` | [Intel RealSense D435](../assets/urdf/d435/README.md) | 支架 + D435 双目深度相机（75 g） |
-| `gemini_305` | [奥比中光 Gemini 305](../assets/urdf/gemini_305/README.md) | 支架 + Gemini 305 双目深度相机（68 g） |
-| `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) | 支架 + ZED X Nano 双目相机（75 g） |
+| `camera_stand` | [相机支架](../assets/urdf/mounts/camera_stand/README.md) | 3 mm 铝合金支架（48 g） |
+| `d405` | [Intel RealSense D405](../assets/urdf/cameras/d405/README.md) | 支架 + D405 短距双目深度相机（58 g） |
+| `d435` | [Intel RealSense D435](../assets/urdf/cameras/d435/README.md) | 支架 + D435 双目深度相机（75 g） |
+| `gemini_305` | [奥比中光 Gemini 305](../assets/urdf/cameras/gemini_305/README.md) | 支架 + Gemini 305 双目深度相机（68 g） |
+| `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/cameras/zed_x_nano/README.md) | 支架 + ZED X Nano 双目相机（75 g） |
 
 - 配置中的 URDF 引用示例：`assembly:gripper_g2+d435`、`assembly:lite6_gripper+d435`、`assembly:bare+camera_stand`、`assembly:bare+mounting_plate` 或 `assembly:gripper_g2+d435+mounting_plate`。
 - 真机说明与安全约束见[真机操作与硬件校验](#真机操作与硬件校验)；G2 仿真使用 `g2_calibrated_v1`，策略训练与当前 v3 检查点契约见[抓放 RL 指南](rl/pick_place/README_zh.md)。
@@ -87,9 +87,9 @@ python examples/visualization/view_robot.py --robot xarm6
 
 | 安装底板 | 适配机型 | 外形包络（mm） | 独立查看 `--tool` |
 |---|---|---|---|
-| [xArm 安装底板](../assets/urdf/xarm_mounting_plate/README.md) | `xarm5`、`xarm6`、`xarm7` | `136 × 185 × 8` | `xarm_mounting_plate` |
-| [UF850 安装底板](../assets/urdf/uf850_mounting_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_mounting_plate` |
-| [Lite 6 安装底板](../assets/urdf/lite6_mounting_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_mounting_plate` |
+| [xArm 安装底板](../assets/urdf/mounts/xarm_mounting_plate/README.md) | `xarm5`、`xarm6`、`xarm7` | `136 × 185 × 8` | `xarm_mounting_plate` |
+| [UF850 安装底板](../assets/urdf/mounts/uf850_mounting_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_mounting_plate` |
+| [Lite 6 安装底板](../assets/urdf/mounts/lite6_mounting_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_mounting_plate` |
 
 ## 可视化
 

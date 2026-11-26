@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,7 @@ class RobotModelSpec:
 
 
 def _assets(robot: str) -> Path:
-    return PROJECT_ROOT / "assets" / "urdf" / robot
+    return URDF_ROOT / "robots" / robot
 
 
 def _xarm_profile(dof: int) -> RobotModelSpec:

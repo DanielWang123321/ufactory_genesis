@@ -163,7 +163,9 @@ def test_path_helpers_and_asset_store_support_mounting_plates(tmp_path: Path) ->
     from ufactory.config import RepositoryAssetStore
 
     store = RepositoryAssetStore(PROJECT_ROOT)
-    validate_robot_urdf("xarm6_1305", "assembly:gripper_g2+mounting_plate", assets_dir="assets/urdf/xarm6", store=store)
+    validate_robot_urdf(
+        "xarm6_1305", "assembly:gripper_g2+mounting_plate", assets_dir="assets/urdf/robots/xarm6", store=store
+    )
     resolved = resolve_robot_urdf("lite6", "assembly:bare+mounting_plate", store=store)
     assert resolved == Path(compose_robot_urdf("lite6", None, mounting_plate=True))
 
@@ -293,7 +295,7 @@ def test_mounting_plate_urdf_inertials() -> None:
         "izz": 0.0112627498,
     }
     for plate, cfg in PLATES.items():
-        root = ET.parse(URDF_ROOT / plate / f"{plate}.urdf").getroot()
+        root = ET.parse(URDF_ROOT / "mounts" / plate / f"{plate}.urdf").getroot()
         inertial = root.find(f"./link[@name='{plate}']/inertial")
         assert inertial is not None
         mass = float(inertial.find("mass").attrib["value"])  # type: ignore[union-attr]
@@ -319,7 +321,7 @@ def test_plate_assets_geometry_openings_and_inertials(plate: str) -> None:
     pytest.importorskip("pygltflib")
 
     cfg = PLATES[plate]
-    plate_dir = URDF_ROOT / plate
+    plate_dir = URDF_ROOT / "mounts" / plate
     glb = plate_dir / "meshes" / "visual" / f"{plate}.glb"
     assert glb.stat().st_size < 1_000_000
     meta = _glb_json(glb)

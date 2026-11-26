@@ -9,7 +9,7 @@ from ufactory.robots.assembly import (
     compose_standalone_mounting_plate_urdf,
     parse_assembly_ref,
 )
-from ufactory.robots.registry import PROJECT_ROOT, get_robot_profile
+from ufactory.robots.registry import PROJECT_ROOT, URDF_ROOT, get_robot_profile
 
 DYNAMICS_VALIDATION_POSES_YAML = PROJECT_ROOT / "assets" / "configs" / "dynamics_validation_pose.yaml"
 
@@ -146,22 +146,22 @@ def robot_visual_glb_urdf(
 
 def lite6_gripper_movable_visual_urdf() -> str:
     """Standalone Lite6 gripper-only movable visual URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "lite6_gripper" / "lite6_gripper_movable_visual.urdf")
 
 
 def gripper_g2_movable_visual_urdf() -> str:
     """Standalone gripper-only movable visual URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "gripper_g2" / "gripper_g2_movable_visual.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "gripper_g2" / "gripper_g2_movable_visual.urdf")
 
 
 def robotiq_2f_85_movable_visual_urdf() -> str:
     """Standalone Robotiq 2F-85 gripper-only movable visual URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "robotiq_2f_85" / "robotiq_2f_85_movable_visual.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "robotiq_2f_85" / "robotiq_2f_85_movable_visual.urdf")
 
 
 def robotiq_2f_140_movable_visual_urdf() -> str:
     """Standalone Robotiq 2F-140 gripper-only movable visual URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "robotiq_2f_140" / "robotiq_2f_140_movable_visual.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "robotiq_2f_140" / "robotiq_2f_140_movable_visual.urdf")
 
 
 def robotiq_mounting_urdf() -> str:
@@ -171,17 +171,17 @@ def robotiq_mounting_urdf() -> str:
 
 def bio_gripper_g2_urdf() -> str:
     """Standalone Bio Gripper G2 URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "bio_gripper_g2" / "bio_gripper_g2.urdf")
 
 
 def bio_gripper_g2_movable_visual_urdf() -> str:
     """Standalone Bio Gripper G2 movable visual URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "bio_gripper_g2" / "bio_gripper_g2_movable_visual.urdf")
 
 
 def vacuum_gripper_urdf() -> str:
     """Standalone xArm / UF850 vacuum gripper URDF (no arm)."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "vacuum_gripper" / "vacuum_gripper.urdf")
+    return _existing_path(URDF_ROOT / "end_effectors" / "vacuum_gripper" / "vacuum_gripper.urdf")
 
 
 def lite6_vacuum_gripper_visual_glb_urdf() -> str:
@@ -206,4 +206,4 @@ def lite6_mounting_plate_urdf() -> str:
 
 def microplate_sbs_96_well_urdf() -> str:
     """SBS 96-well microplate URDF for Bio Gripper G2 pick-and-place."""
-    return _existing_path(PROJECT_ROOT / "assets" / "urdf" / "microplate" / "sbs_96_well.urdf")
+    return _existing_path(URDF_ROOT / "objects" / "microplate" / "sbs_96_well.urdf")

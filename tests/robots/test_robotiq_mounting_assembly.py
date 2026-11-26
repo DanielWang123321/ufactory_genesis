@@ -28,7 +28,7 @@ from ufactory.robots.registry import get_robot_profile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 URDF_ROOT = PROJECT_ROOT / "assets" / "urdf"
-ADAPTER_DIR = URDF_ROOT / "robotiq_mounting"
+ADAPTER_DIR = URDF_ROOT / "mounts" / "robotiq_mounting"
 
 XARM_ARMS = ("xarm5_1305", "xarm6_1305", "xarm7_1305", "uf850")
 ROBOTIQ_EES = ("robotiq_2f_85", "robotiq_2f_140")
@@ -159,7 +159,10 @@ def test_adapter_assets_budget_material_hulls_and_inertial() -> None:
     )
     assert pbr["metallicFactor"] == pytest.approx(0.8, abs=1e-5)
     assert pbr["roughnessFactor"] == pytest.approx(0.640130877494812, abs=1e-5)
-    for arm_glb in ("xarm6/meshes/xarm6_1305/visual_glb/link6.glb", "uf850/meshes/uf850/visual_glb/link6.glb"):
+    for arm_glb in (
+        "robots/xarm6/meshes/xarm6_1305/visual_glb/link6.glb",
+        "robots/uf850/meshes/uf850/visual_glb/link6.glb",
+    ):
         arm_meta = _glb_json(URDF_ROOT / arm_glb)
         arm_metals = [
             m["pbrMetallicRoughness"]
@@ -223,7 +226,7 @@ def test_robotiq_base_collar_is_smooth_coated_metal(ee: str) -> None:
     pygltflib = pytest.importorskip("pygltflib")
     DracoPy = pytest.importorskip("DracoPy")
 
-    glb_path = URDF_ROOT / ee / "meshes" / "visual" / "visual_glb" / "base.glb"
+    glb_path = URDF_ROOT / "end_effectors" / ee / "meshes" / "visual" / "visual_glb" / "base.glb"
     glb = pygltflib.GLTF2().load(str(glb_path))
     blob = glb.binary_blob()
     assert len(glb.meshes) == 2
@@ -372,7 +375,9 @@ def test_adapter_frames_and_robotiq_tcp_offsets() -> None:
         flange = get_robot_profile(arm).ee_link
 
         for ee in ROBOTIQ_EES:
-            rq_part = pin.buildModelFromUrdf(str(URDF_ROOT / ee / f"{ee}_movable_visual.urdf"), mimic=True)
+            rq_part = pin.buildModelFromUrdf(
+                str(URDF_ROOT / "end_effectors" / ee / f"{ee}_movable_visual.urdf"), mimic=True
+            )
             rq_mass = sum(i.mass for i in rq_part.inertias)
 
             m = pin.buildModelFromUrdf(compose_robot_urdf(arm, ee), mimic=True)

@@ -563,7 +563,7 @@ def validate_assembly(
 def _arm_source(robot_key: str, visual: str, root: Path) -> Path:
     profile = ROBOT_PROFILES[robot_key]
     name = str(profile.visual_glb_urdf if visual == "glb" else profile.default_urdf)
-    return root / "assets" / "urdf" / str(profile.assets_dir.name) / name
+    return root / "assets" / "urdf" / "robots" / str(profile.assets_dir.name) / name
 
 
 def _fmt(values: tuple[float, float, float]) -> str:

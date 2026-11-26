@@ -71,15 +71,15 @@ See the [RL index](rl/README.md) for the learning sequence and training/inferenc
 | `uf850` | Gripper G2, Bio Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper | Bare arm, Gripper G2, Robotiq 2F-85, Robotiq 2F-140, Vacuum Gripper (not Bio Gripper G2) | Yes | — |
 | `lite6` | Lite6 Gripper, Lite6 Vacuum Gripper | Bare arm, Lite6 Gripper, Lite6 Vacuum Gripper | Yes | Lite6 Gripper |
 
-All robots accept the [camera stand](../assets/urdf/camera_stand/README.md) (alone or with one depth camera looking along the tool axis), which moves the end effector and its TCP 3 mm along the tool axis:
+All robots accept the [camera stand](../assets/urdf/mounts/camera_stand/README.md) (alone or with one depth camera looking along the tool axis), which moves the end effector and its TCP 3 mm along the tool axis:
 
 | Accessory key | Name | Notes |
 |---|---|---|
-| `camera_stand` | [Camera Stand](../assets/urdf/camera_stand/README.md) | 3 mm aluminium stand (48 g) |
-| `d405` | [Intel RealSense D405](../assets/urdf/d405/README.md) | Stand + D405 short-range stereo depth camera (58 g) |
-| `d435` | [Intel RealSense D435](../assets/urdf/d435/README.md) | Stand + D435 stereo depth camera (75 g) |
-| `gemini_305` | [Orbbec Gemini 305](../assets/urdf/gemini_305/README.md) | Stand + Gemini 305 stereo depth camera (68 g) |
-| `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/zed_x_nano/README.md) | Stand + ZED X Nano stereo camera (75 g) |
+| `camera_stand` | [Camera Stand](../assets/urdf/mounts/camera_stand/README.md) | 3 mm aluminium stand (48 g) |
+| `d405` | [Intel RealSense D405](../assets/urdf/cameras/d405/README.md) | Stand + D405 short-range stereo depth camera (58 g) |
+| `d435` | [Intel RealSense D435](../assets/urdf/cameras/d435/README.md) | Stand + D435 stereo depth camera (75 g) |
+| `gemini_305` | [Orbbec Gemini 305](../assets/urdf/cameras/gemini_305/README.md) | Stand + Gemini 305 stereo depth camera (68 g) |
+| `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/cameras/zed_x_nano/README.md) | Stand + ZED X Nano stereo camera (75 g) |
 
 - Configuration URDF references: `assembly:gripper_g2+d435`, `assembly:lite6_gripper+d435`, `assembly:bare+camera_stand`, `assembly:bare+mounting_plate`, or `assembly:gripper_g2+d435+mounting_plate`.
 - Real packaging details: [Hardware & Real Robot](#hardware--real-robot). G2 simulations use `g2_calibrated_v1`; see the [pick-place RL guide](rl/pick_place/README.md) for training and the current v3 checkpoint contract.
@@ -88,9 +88,9 @@ All robots also accept their official aluminium mounting plate (mounted below `l
 
 | Mounting plate | Robots | Envelope (mm) | Standalone `--tool` |
 |---|---|---|---|
-| [xArm Mounting Plate](../assets/urdf/xarm_mounting_plate/README.md) | `xarm5`, `xarm6`, `xarm7` | `136 × 185 × 8` | `xarm_mounting_plate` |
-| [UF850 Mounting Plate](../assets/urdf/uf850_mounting_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_mounting_plate` |
-| [Lite 6 Mounting Plate](../assets/urdf/lite6_mounting_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_mounting_plate` |
+| [xArm Mounting Plate](../assets/urdf/mounts/xarm_mounting_plate/README.md) | `xarm5`, `xarm6`, `xarm7` | `136 × 185 × 8` | `xarm_mounting_plate` |
+| [UF850 Mounting Plate](../assets/urdf/mounts/uf850_mounting_plate/README.md) | `uf850` | `190 × 260 × 10` | `uf850_mounting_plate` |
+| [Lite 6 Mounting Plate](../assets/urdf/mounts/lite6_mounting_plate/README.md) | `lite6` | `130 × 190 × 5` | `lite6_mounting_plate` |
 
 ## Visualization
 

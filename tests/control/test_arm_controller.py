@@ -127,7 +127,7 @@ def test_mode0_250hz_movej_and_movel_and_tcp_offset() -> None:
 
 
 def test_mode0_and_mode1_singularity_c24_vs_approx_motion_with_calibrated_uf850() -> None:
-    cal = Path("assets/urdf/uf850/kinematics/user/uf850_kinematics_F54B07.yaml")
+    cal = Path("assets/urdf/robots/uf850/kinematics/user/uf850_kinematics_F54B07.yaml")
     if not cal.is_file():
         pytest.skip("local UF850 calibration YAML not present")
 

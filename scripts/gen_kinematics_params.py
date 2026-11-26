@@ -70,7 +70,7 @@ def _parse_robot_ipv4(value: str) -> str:
 
 
 def _output_dir_for_robot(robot_name: str) -> Path:
-    return _REPO_ROOT / "assets" / "urdf" / robot_name / "kinematics" / "user"
+    return _REPO_ROOT / "assets" / "urdf" / "robots" / robot_name / "kinematics" / "user"
 
 
 def _read_world_offset(arm, timeout_s: float = 2.0, poll_s: float = 0.05) -> np.ndarray:

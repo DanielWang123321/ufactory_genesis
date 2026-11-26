@@ -6,7 +6,7 @@ robot:
   dof: 5
   joint_names: [joint1, joint2, joint3, joint4, joint5]
   ee_link: link5
-  assets_dir: assets/urdf/xarm5
+  assets_dir: assets/urdf/robots/xarm5
   urdf: "assembly:gripper_g2"
   capabilities: [servo_j, servo_cartesian, gripper_g2, sdk_sim]
   environment_contact_pairs: [[link_base, table]]
