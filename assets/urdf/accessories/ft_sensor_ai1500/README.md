@@ -32,7 +32,7 @@ Because the AI1500 bottom skirt (`r ∈ [31.5, 38.8] mm`, `z ∈ [-3.0, 0.0] mm`
 - **Overload limit**: `±600 N`, `±30 N·m`
 - **Resolution**: `0.4 N` (force), `0.01 N·m` (torque)
 
-> **Hardware verification status (`xArm6` `192.168.1.60`, controller `v2.8.2`, AI1500 `SN=AI15000626001F`, `v1.1.1`)**: Bare-sensor communication, `enable`/`disable`, SN/firmware readback, stationary zeroing (`±0.05 N` / `±0.001 N·m` noise), ±45° tilt gravity sign convention (external force applied to distal flange in tool frame, `+Z` outward; bare distal cap mass ~154 g), admittance hold (`ft_mode=1`), and constant-force closed-loop sign/gain (`ft_mode=2`, `coord=TOOL`, `f_ref=-2 N` moves along tool `-Z` at `2.0 mm/s` for `kp=0.005`) have been verified via `scripts/ft_sensor_check.py`. Mounted-tool payload identification (`identify-load`, which requires a non-trivial external payload downstream of the sensor) and dynamic inertia calibration remain pending.
+> **Hardware verification status (`xArm6`, controller `v2.8.2`, AI1500 `SN=AI15000626001F`, `v1.1.1`)**: Bare-sensor communication, `enable`/`disable`, SN/firmware readback, stationary zeroing (`±0.05 N` / `±0.001 N·m` noise), ±45° tilt gravity sign convention (external force applied to distal flange in tool frame, `+Z` outward; bare distal cap mass ~154 g), admittance hold (`ft_mode=1`), and constant-force closed-loop sign/gain (`ft_mode=2`, `coord=TOOL`, `f_ref=-2 N` moves along tool `-Z` at `2.0 mm/s` for `kp=0.005`) have been verified via `scripts/ft_sensor_check.py`. Mounted-tool payload identification (`identify-load`, which requires a non-trivial external payload downstream of the sensor) and dynamic inertia calibration remain pending.
 
 ## Files
 

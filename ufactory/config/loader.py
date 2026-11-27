@@ -513,6 +513,14 @@ def load_runtime_config(
             overlay_rel = "assets/configs/runtime/grippers/bio_gripper_g2.yaml"
             _merge_strict(data, _read_yaml(store.require(overlay_rel)))
             sources.append(overlay_rel)
+        elif normalized_gripper == "vacuum_gripper":
+            try:
+                validate_assembly(canonical, "vacuum_gripper", root=store.root)
+            except AssemblyError as exc:
+                raise ConfigError(str(exc)) from exc
+            overlay_rel = "assets/configs/runtime/grippers/vacuum_gripper.yaml"
+            _merge_strict(data, _read_yaml(store.require(overlay_rel)))
+            sources.append(overlay_rel)
         elif normalized_gripper in {"robotiq_2f_85", "robotiq_2f_140"}:
             try:
                 validate_assembly(canonical, normalized_gripper, root=store.root)

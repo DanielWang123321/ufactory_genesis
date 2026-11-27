@@ -364,12 +364,20 @@ class SafetyGate:
                 gaps = samples.reshape(-1)
                 closed_gap = self.config.gripper.closed_gap_m
                 gap_span = self.config.gripper.open_gap_m - closed_gap
-                ratios = (gaps - closed_gap) / gap_span
-                if np.any(ratios < -1e-12) or np.any(ratios > 1.0 + 1e-12):
-                    violations.append(
-                        _violation(ViolationType.INVALID_INPUT, stage, "gripper gap exceeds configured range")
-                    )
-                    continue
+                if gap_span == 0.0:
+                    if np.any(np.abs(gaps - closed_gap) > 1e-12):
+                        violations.append(
+                            _violation(ViolationType.INVALID_INPUT, stage, "gripper gap exceeds configured range")
+                        )
+                        continue
+                    ratios = np.zeros_like(gaps, dtype=np.float64)
+                else:
+                    ratios = (gaps - closed_gap) / gap_span
+                    if np.any(ratios < -1e-12) or np.any(ratios > 1.0 + 1e-12):
+                        violations.append(
+                            _violation(ViolationType.INVALID_INPUT, stage, "gripper gap exceeds configured range")
+                        )
+                        continue
                 if self.config.gripper.adapter == "g2":
                     drive_segment = np.asarray([gripper_g2_gap_m_to_sim_drive(gap) for gap in gaps])
                 elif self.config.gripper.adapter in {"robotiq_2f_85", "robotiq_2f_140"}:
@@ -476,20 +484,23 @@ class SafetyGate:
 
         if self.collision is None:
             return ()
+        effective_drive = (
+            gripper_drive if self.config.gripper is not None and self.config.gripper.has_actuated_joints else None
+        )
         within_margin = getattr(self.collision, "check_all_within_margin", None)
         if callable(within_margin):
             return tuple(
                 within_margin(
                     q_rad,
                     stage=stage,
-                    gripper_drive=gripper_drive,
+                    gripper_drive=effective_drive,
                     margin_m=self.config.safety.min_collision_distance_m,
                 )
             )
         check_all = getattr(self.collision, "check_all", None)
         if callable(check_all):
-            return tuple(check_all(q_rad, stage=stage, gripper_drive=gripper_drive))
-        return (self.collision.check(q_rad, stage=stage, gripper_drive=gripper_drive),)
+            return tuple(check_all(q_rad, stage=stage, gripper_drive=effective_drive))
+        return (self.collision.check(q_rad, stage=stage, gripper_drive=effective_drive),)
 
     def _collision_query_mode(self) -> str:
         if self.collision is None:

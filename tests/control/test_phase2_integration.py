@@ -13,9 +13,7 @@ from ufactory.control import ArmMotionController
 from ufactory.hardware.transport import XArmTransport
 from ufactory.manipulation.commands import sdk_sim_feedback
 from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
-from ufactory.trajectory.mirror_executor import resolve_segment_start_arm_q, resolve_tick_arm_q
 from ufactory.trajectory.segments import JointLimits, Program, Segment, make_movel
-from ufactory.trajectory.sim_executor import physics_steps_for_tick
 
 
 class _ApproxFakeArm:
@@ -123,6 +121,10 @@ def test_sdk_sim_feedback_syncs_and_restores_approx_motion_on_success_and_failur
 
 
 def test_physics_steps_for_tick_rates() -> None:
+    pytest.importorskip("torch")
+    pytest.importorskip("genesis")
+    from ufactory.trajectory.sim_executor import physics_steps_for_tick
+
     assert physics_steps_for_tick(50.0, 50.0) == (1, 0.0)
     assert physics_steps_for_tick(100.0, 50.0) == (2, 0.0)
     assert physics_steps_for_tick(250.0, 50.0) == (5, 0.0)
@@ -177,6 +179,10 @@ def test_cli_print_config_accepts_allow_approx_motion_and_sim_rate_hz(capsys) ->
 
 
 def test_mirror_and_ik_compile_use_injected_arm_controller() -> None:
+    pytest.importorskip("torch")
+    pytest.importorskip("genesis")
+    from ufactory.trajectory.mirror_executor import resolve_segment_start_arm_q, resolve_tick_arm_q
+
     ctrl = ArmMotionController.from_robot("uf850", allow_approx_motion=True)
     _, q_a_list = ctrl.get_inverse_kinematics(
         [300.0, 0.0, 288.6, np.pi, 0.0, 0.0], input_is_radian=True, return_is_radian=True

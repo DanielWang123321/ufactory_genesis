@@ -28,6 +28,7 @@ from ufactory.manipulation.commands import (
     prime_first_movej_sample,
     print_real_execution_summary,
     print_sdk_sim_failures,
+    shutdown_real_gripper,
     write_json as _write_json,
     connect as _connect,
     read_q as _read_q,
@@ -43,6 +44,7 @@ from ufactory.manipulation.commands import (
 )
 from ufactory.grippers.bio_g2 import bio_g2_controller_mode_error
 from ufactory.grippers.robotiq import robotiq_controller_mode_error
+from ufactory.grippers.vacuum import vacuum_controller_mode_error
 from ufactory.manipulation.tcp import check_controller_tcp_offset, resolve_tool_tcp_spec
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn, read_tcp_offset
@@ -286,8 +288,8 @@ def _build_ik_scene(
 
 
 def _mirror_attach_dist_m(config: Any) -> float | None:
-    """Return mirror carry latch distance override, disabling carry for empty Bio G2 runs."""
-    if str(getattr(config.gripper, "adapter", "")) == "bio_g2":
+    """Return mirror carry latch distance override, disabling carry for empty Bio G2 / vacuum runs."""
+    if str(getattr(config.gripper, "adapter", "")) in {"bio_g2", "vacuum_gripper"}:
         return 0.0
     return None
 
@@ -355,6 +357,8 @@ def _close_gap_m(config: Any) -> float:
     adapter = str(getattr(config.gripper, "adapter", ""))
     if adapter == "lite6":
         return LITE6_DEFAULT_GRIPPER_GRASP_GAP_M
+    if adapter == "vacuum_gripper":
+        return float(getattr(config.gripper, "closed_gap_m", 0.0))
     closed_gap = float(getattr(config.gripper, "closed_gap_m", 0.0))
     return max(DEFAULT_GRIPPER_GRASP_GAP_M, closed_gap)
 
@@ -424,9 +428,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--robot", required=True, choices=("xarm5", "xarm6", "xarm7", "uf850", "lite6"))
     parser.add_argument(
         "--gripper",
-        choices=("default", "g2", "bio_gripper_g2", "lite6", "robotiq_2f_85", "robotiq_2f_140"),
+        choices=("default", "g2", "bio_gripper_g2", "lite6", "robotiq_2f_85", "robotiq_2f_140", "vacuum_gripper"),
         default="default",
-        help="Select end-effector variant (bio_gripper_g2, robotiq_2f_85, robotiq_2f_140 support xarm5/6/7 and uf850)",
+        help="Select end-effector variant (bio_gripper_g2, robotiq_2f_85, robotiq_2f_140, vacuum_gripper support xarm5/6/7 and uf850)",
+    )
+    parser.add_argument(
+        "--vacuum-hardware-version",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="Vacuum gripper hardware version (1: plug-in TGPIO 0/1, 2: contact TGPIO 3/4)",
     )
     parser.add_argument("--mode", required=True, choices=("sim", "dry-run", "sdk-sim", "real"))
     parser.add_argument("--executor", choices=("servo_j", "servo_cartesian"))
@@ -485,6 +496,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     bio_error = bio_g2_controller_mode_error("pick_place", args.robot, args.gripper, args.mode)
     if bio_error is not None:
         parser.error(bio_error)
+
+    vacuum_error = vacuum_controller_mode_error("pick_place", args.robot, args.gripper, args.mode)
+    if vacuum_error is not None:
+        parser.error(vacuum_error)
 
     if args.gripper == "bio_gripper_g2":
         if args.robot not in {"xarm5", "xarm6", "xarm7", "uf850"}:
@@ -874,7 +889,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 prime_first_movej_sample(transport, approved.program, executor=args.executor)
                 if mirror is not None:
                     mirror.prime_to_first_arm_segment_start(approved.program)
-                current_drive, gripper_sender = prepare_real_gripper_sender(arm, transport, config.gripper)
+                current_drive, gripper_sender = prepare_real_gripper_sender(
+                    arm,
+                    transport,
+                    config.gripper,
+                    hardware_version=int(args.vacuum_hardware_version),
+                )
                 switch_ctx = (
                     kinematics.sync_hardware_switches(arm)
                     if args.executor == "servo_cartesian"
@@ -882,28 +902,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                     and callable(getattr(arm, "set_allow_approx_motion", None))
                     else nullcontext()
                 )
-                with switch_ctx:
-                    execution = execute_real(
-                        approved,
-                        transport=transport,
-                        bindings=ExecutionBindings(
-                            robot_key=config.robot.key,
-                            serial_number=serial,
-                            config_sha256=config.sha256,
-                            urdf_sha256=urdf_hash,
-                            calibration_sha256=calibration_hash,
-                            scene_sha256=scene_hash,
-                        ),
-                        confirm_real=True,
-                        runtime_monitor=lambda q, stage: gate.runtime_monitor(
-                            q,
-                            stage,
-                            gripper_drive=current_drive[0],
-                            include_collision=False,
-                        ),
-                        gripper_sender=gripper_sender,
-                        on_tick=bridge.on_tick if bridge is not None else None,
-                        not_ready_codes=frozenset((9,)),
+                try:
+                    with switch_ctx:
+                        execution = execute_real(
+                            approved,
+                            transport=transport,
+                            bindings=ExecutionBindings(
+                                robot_key=config.robot.key,
+                                serial_number=serial,
+                                config_sha256=config.sha256,
+                                urdf_sha256=urdf_hash,
+                                calibration_sha256=calibration_hash,
+                                scene_sha256=scene_hash,
+                            ),
+                            confirm_real=True,
+                            runtime_monitor=lambda q, stage: gate.runtime_monitor(
+                                q,
+                                stage,
+                                gripper_drive=current_drive[0],
+                                include_collision=False,
+                            ),
+                            gripper_sender=gripper_sender,
+                            on_tick=bridge.on_tick if bridge is not None else None,
+                            not_ready_codes=frozenset((9,)),
+                        )
+                finally:
+                    shutdown_real_gripper(
+                        arm,
+                        config.gripper,
+                        hardware_version=int(args.vacuum_hardware_version),
                     )
                 print_real_execution_summary(execution)
                 if args.visual and mirror_ctx is not None and tracker is not None:

@@ -148,8 +148,10 @@ def prepare_real_gripper_sender(
     arm: Any,
     transport: XArmTransport,
     gripper_config: Any,
+    *,
+    hardware_version: int = 1,
 ) -> tuple[list[float], Callable[[float], int] | None]:
-    gripper_adapter = create_gripper_adapter(gripper_config)
+    gripper_adapter = create_gripper_adapter(gripper_config, hardware_version=hardware_version)
     if gripper_adapter.capabilities.real_command:
         prepare_code = gripper_adapter.prepare_real(arm)
         if prepare_code != 0:
@@ -163,6 +165,22 @@ def prepare_real_gripper_sender(
 
     gripper_sender = send_gripper if gripper_adapter.capabilities.real_command else None
     return current_drive, gripper_sender
+
+
+def shutdown_real_gripper(
+    arm: Any,
+    gripper_config: Any,
+    *,
+    hardware_version: int = 1,
+) -> int:
+    """Safely release stateless real end effectors (e.g. pneumatic vacuum suction) on exit."""
+    if gripper_config is None or not bool(getattr(gripper_config, "real_command", False)):
+        return 0
+    adapter = create_gripper_adapter(gripper_config, hardware_version=hardware_version)
+    shutdown = getattr(adapter, "shutdown_real", None)
+    if callable(shutdown):
+        return int(shutdown(arm))
+    return 0
 
 
 def print_real_execution_summary(execution: Any) -> None:

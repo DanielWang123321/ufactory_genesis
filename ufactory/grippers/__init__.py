@@ -69,9 +69,18 @@ from ufactory.grippers.adapters import (
     Robotiq2F85Adapter,
     Robotiq2F140Adapter,
     RobotiqAdapter,
+    VacuumProfileAdapter,
     create_gripper_adapter,
 )
-from ufactory.grippers.vacuum import VacuumGripperAdapter, vacuum_io_pins
+from ufactory.grippers.vacuum import (
+    VACUUM_GRIPPER_COM_FLANGE_MM,
+    VACUUM_GRIPPER_MASS_KG,
+    VACUUM_GRIPPER_SUPPORTED_ROBOTS,
+    VACUUM_GRIPPER_TCP_OFFSET_MM_DEG,
+    VacuumGripperAdapter,
+    vacuum_controller_mode_error,
+    vacuum_io_pins,
+)
 
 __all__ = [
     "BIO_G2_BLOCKED_MODES",
@@ -136,7 +145,13 @@ __all__ = [
     "RobotiqAdapter",
     "Robotiq2F85Adapter",
     "Robotiq2F140Adapter",
+    "VACUUM_GRIPPER_COM_FLANGE_MM",
+    "VACUUM_GRIPPER_MASS_KG",
+    "VACUUM_GRIPPER_SUPPORTED_ROBOTS",
+    "VACUUM_GRIPPER_TCP_OFFSET_MM_DEG",
     "VacuumGripperAdapter",
+    "VacuumProfileAdapter",
     "create_gripper_adapter",
+    "vacuum_controller_mode_error",
     "vacuum_io_pins",
 ]

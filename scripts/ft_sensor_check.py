@@ -2,21 +2,21 @@
 """Diagnostic and post-installation verification CLI for the xArm six-axis F/T sensor (AI1500).
 
 Enable / disable F/T sampling (no physical arm motion):
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py enable --robot xarm6 --ip 192.168.1.60
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py disable --robot xarm6 --ip 192.168.1.60
+    python scripts/ft_sensor_check.py enable --robot xarm6 --ip <ROBOT_IP>
+    python scripts/ft_sensor_check.py disable --robot xarm6 --ip <ROBOT_IP>
 
 Read-only status & wrench streaming:
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py status --robot xarm6 --ip 192.168.1.60 --duration 5
+    python scripts/ft_sensor_check.py status --robot xarm6 --ip <ROBOT_IP> --duration 5
 
 Stationary zeroing:
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py zero --robot xarm6 --ip 192.168.1.60
+    python scripts/ft_sensor_check.py zero --robot xarm6 --ip <ROBOT_IP>
 
 Load & zero-offset identification (moves the physical arm -> requires --confirm-real):
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py identify-load --robot xarm6 --ip 192.168.1.60 --confirm-real
+    python scripts/ft_sensor_check.py identify-load --robot xarm6 --ip <ROBOT_IP> --confirm-real
 
 Conservative admittance / force-control verification (requires --confirm-real):
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py admittance-test --robot xarm6 --ip 192.168.1.60 --confirm-real
-    PYTHONPATH=. /opt/conda_envs/py313/bin/python scripts/ft_sensor_check.py force-test --robot xarm6 --ip 192.168.1.60 --confirm-real
+    python scripts/ft_sensor_check.py admittance-test --robot xarm6 --ip <ROBOT_IP> --confirm-real
+    python scripts/ft_sensor_check.py force-test --robot xarm6 --ip <ROBOT_IP> --confirm-real
 """
 
 from __future__ import annotations

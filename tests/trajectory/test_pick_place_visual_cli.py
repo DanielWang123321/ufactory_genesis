@@ -10,7 +10,6 @@ import pytest
 
 from ufactory.cli import pick_place
 from ufactory.safety import PreflightCheck, SafetyViolation, ViolationType
-from ufactory.trajectory.mirror_executor import update_scene_visualizer
 from ufactory.visualization.viewer import start_deferred_viewer
 
 
@@ -373,6 +372,10 @@ def test_hold_viewer_runs_until_window_closes_and_paces_mirror(monkeypatch, caps
 
 
 def test_mirror_visual_update_drops_frame_when_render_lock_is_busy():
+    pytest.importorskip("torch")
+    pytest.importorskip("genesis")
+    from ufactory.trajectory.mirror_executor import update_scene_visualizer
+
     class BusyLock:
         def acquire(self, *, blocking: bool) -> bool:
             assert blocking is False
@@ -391,6 +394,9 @@ def test_mirror_visual_update_drops_frame_when_render_lock_is_busy():
 
 
 def test_mirror_visual_update_supports_genesis_1_4_7_rigid_geoms_t():
+    pytest.importorskip("torch")
+    pytest.importorskip("genesis")
+    from ufactory.trajectory.mirror_executor import update_scene_visualizer
     import numpy as np
 
     class FreeLock:
@@ -460,6 +466,10 @@ def test_mirror_visual_update_supports_genesis_1_4_7_rigid_geoms_t():
 
 
 def test_mirror_visual_update_falls_back_to_context_update_for_genesis_1_5():
+    pytest.importorskip("torch")
+    pytest.importorskip("genesis")
+    from ufactory.trajectory.mirror_executor import update_scene_visualizer
+
     class FreeLock:
         def acquire(self, *, blocking: bool) -> bool:
             return True

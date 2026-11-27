@@ -39,6 +39,7 @@
     "assets/configs/runtime/grippers/bio_gripper_g2.yaml",
     "assets/configs/runtime/grippers/robotiq_2f_85.yaml",
     "assets/configs/runtime/grippers/robotiq_2f_140.yaml",
+    "assets/configs/runtime/grippers/vacuum_gripper.yaml",
     "assets/urdf/accessories/ft_sensor_ai1500/ft_sensor_ai1500.urdf"
   ],
   "schema_version": 1,
@@ -46,6 +47,7 @@
     "assets/configs/runtime/grippers/bio_gripper_g2.yaml": "a8633c7235103025b953147aa9809a735d3e344ceb76d01516812f665fdbf3b8",
     "assets/configs/runtime/grippers/robotiq_2f_140.yaml": "5e6710b68986dd09f4deccc41628d58e3038305b9bb87624fe11de9c1059478d",
     "assets/configs/runtime/grippers/robotiq_2f_85.yaml": "6b345a42335e6fbef6fa99e5dba4457a86731dd16684d2871d1a93fee235c482",
+    "assets/configs/runtime/grippers/vacuum_gripper.yaml": "97d5b535817b694d7d26b1ccd364cdba3bd3c4c69a3b94aeabc0c42fb7ab944a",
     "assets/configs/runtime/motion/default.yaml": "c28ba3e95eac42bd4ca688705f13ec345139973a3dbc18dcd741979051ac3d92",
     "assets/configs/runtime/robots/lite6.yaml": "98a2d246aab432b49c1a2d51a9834b77dcd9d8d9f9ba9737cf5eb2a1cd9120b9",
     "assets/configs/runtime/robots/uf850.yaml": "214eb13dfce0c261e87e0e70403695074e2d26fe73a2bca0fbd864fab3850453",

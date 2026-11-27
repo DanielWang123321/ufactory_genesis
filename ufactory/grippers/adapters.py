@@ -11,6 +11,7 @@ from ufactory.config.models import GripperProfile
 from ufactory.grippers.bio_g2 import bio_gripper_g2_gap_m_to_sim_drive, bio_gripper_g2_sim_drive_to_gap_m
 from ufactory.grippers.g2 import gripper_g2_gap_m_to_sim_drive, gripper_g2_sim_drive_to_gap_m
 from ufactory.grippers.robotiq import RobotiqSpec, get_robotiq_spec, robotiq_percent_to_register
+from ufactory.grippers.vacuum import VacuumGripperAdapter
 
 
 @dataclass(frozen=True)
@@ -296,18 +297,106 @@ class Robotiq2F140Adapter(RobotiqAdapter):
     """Robotiq 2F-140 adapter."""
 
 
+class VacuumProfileAdapter(ConfiguredGripperAdapter):
+    """0-DOF pneumatic vacuum gripper adapter for runtime GripperProfile streaming."""
+
+    def __init__(self, profile: GripperProfile, *, hardware_version: int = 1) -> None:
+        super().__init__(profile)
+        self._vacuum = VacuumGripperAdapter(hardware_version=hardware_version)
+        self.hardware_version: int = self._vacuum.hardware_version
+        self._last_suction_on: bool | None = None
+
+    def gap_to_drive(self, gap_m: float) -> float:
+        gap = self._finite(gap_m, "gap_m")
+        if not self.profile.closed_gap_m <= gap <= self.profile.open_gap_m:
+            raise ValueError(f"gap_m {gap} outside [{self.profile.closed_gap_m}, {self.profile.open_gap_m}]")
+        return 0.0
+
+    def drive_to_gap(self, drive: float) -> float:
+        self._finite(drive, "drive")
+        return float(self.profile.open_gap_m)
+
+    def prepare_real(self, arm: object) -> int:
+        self._last_suction_on = None
+        missing = [
+            name
+            for name in ("set_vacuum_gripper", "get_tgpio_output_digital")
+            if not callable(getattr(arm, name, None))
+        ]
+        if missing:
+            raise RuntimeError(f"Vacuum gripper SDK capability is unavailable: {', '.join(missing)}")
+        # Keep SDK default sync=True: on xArm v2.8.2, sync=False drops one of the two
+        # back-to-back TGPIO writes in MODE_SERVO (leaving [1, 1] energized), whereas
+        # sync=True completes in <1 ms and switches both pins reliably.
+        code = self._vacuum.send_real_suction(arm, False)
+        if code == 0:
+            self._last_suction_on = False
+        return code
+
+    def send_real_gap(self, arm: object, gap_m: float) -> int:
+        if not self.capabilities.real_command:
+            raise RuntimeError("real vacuum gripper commands are not enabled for this robot profile")
+        gap = self._finite(gap_m, "gap_m")
+        midpoint = (self.profile.open_gap_m + self.profile.closed_gap_m) / 2.0
+        suction_on = gap < midpoint
+        if self._last_suction_on is suction_on:
+            return 0
+        code = self._vacuum.send_real_suction(arm, suction_on)
+        if code == 0:
+            self._last_suction_on = suction_on
+        return code
+
+    def shutdown_real(self, arm: object) -> int:
+        """Safely release suction on exit without deadlocking in paused controller state.
+
+        ``XArmAPI.set_vacuum_gripper`` is decorated with ``@xarm_wait_until_not_pause``,
+        which blocks indefinitely after ``execute_real`` pauses the arm (``state=3``).
+        Check live TGPIO outputs first; if suction is still on while paused/stopped,
+        fall back to raw ``arm._arm.arm_cmd.tgpio_set_digital`` so the valve turns off
+        without unpausing arm motion.
+        """
+        get_out = getattr(arm, "get_tgpio_output_digital", None)
+        if callable(get_out):
+            out_code, pair = self._vacuum.read_real_output(arm)
+            if out_code == 0 and pair == (0, 1):
+                self._last_suction_on = False
+                return 0
+        raw_state = getattr(arm, "state", None)
+        if isinstance(raw_state, int) and not isinstance(raw_state, bool) and raw_state in (3, 4):
+            inner = getattr(arm, "_arm", None)
+            arm_cmd = getattr(inner, "arm_cmd", None)
+            tgpio_set = getattr(arm_cmd, "tgpio_set_digital", None)
+            if callable(tgpio_set):
+                r1 = tgpio_set(self._vacuum.on_pin + 1, 0, sync=True)
+                r2 = tgpio_set(self._vacuum.off_pin + 1, 1, sync=True)
+                c1 = int(r1[0]) if isinstance(r1, (list, tuple)) else int(r1)
+                c2 = int(r2[0]) if isinstance(r2, (list, tuple)) else int(r2)
+                code = c1 if c2 == 0 else c2
+                if code == 0:
+                    self._last_suction_on = False
+                return code
+            return 0
+        code = self._vacuum.send_real_suction(arm, False)
+        if code == 0:
+            self._last_suction_on = False
+        return code
+
+
 _ADAPTERS = {
     "g2": G2Adapter,
     "bio_g2": BioG2Adapter,
     "lite6": Lite6Adapter,
     "robotiq_2f_85": Robotiq2F85Adapter,
     "robotiq_2f_140": Robotiq2F140Adapter,
+    "vacuum_gripper": VacuumProfileAdapter,
 }
 
 
-def create_gripper_adapter(profile: GripperProfile) -> GripperAdapter:
+def create_gripper_adapter(profile: GripperProfile, *, hardware_version: int = 1) -> GripperAdapter:
     try:
         adapter_type = _ADAPTERS[profile.adapter]
     except KeyError as exc:
         raise ValueError(f"unknown gripper adapter: {profile.adapter}") from exc
+    if adapter_type is VacuumProfileAdapter:
+        return VacuumProfileAdapter(profile, hardware_version=hardware_version)
     return adapter_type(profile)

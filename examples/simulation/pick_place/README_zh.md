@@ -11,7 +11,8 @@
 | 参数               | 取值 / 说明                                                          |
 | ---------------- | ---------------------------------------------------------------- |
 | `--robot`        | 必选：`xarm5` / `xarm6` / `xarm7` / `uf850` / `lite6`               |
-| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140`（`bio_gripper_g2`、`robotiq_2f_*` 支持 `xarm5`、`xarm6`、`xarm7`、`uf850`；`bio_gripper_g2` 在 `sim` 下运行微孔板任务，非 `sim` 模式（`dry-run` / `sdk-sim` / `real`）支持 `--executor servo_j` / `servo_cartesian` 且真机模式仅放行 `xarm6`；`robotiq_2f_*` 连接真实控制器（`sdk-sim` / `real`）目前只支持 `xarm6` + `robotiq_2f_85`，已在硬件上验证（含 11 mm 法兰转接件）；其他 Robotiq 组合只支持 `sim` / `dry-run`） |
+| `--gripper`      | 可选：`default` / `g2` / `bio_gripper_g2` / `lite6` / `robotiq_2f_85` / `robotiq_2f_140` / `vacuum_gripper`（`bio_gripper_g2`、`robotiq_2f_*`、`vacuum_gripper` 支持 `xarm5`、`xarm6`、`xarm7`、`uf850`；`bio_gripper_g2` 在 `sim` 下运行微孔板任务，非 `sim` 模式（`dry-run` / `sdk-sim` / `real`）支持 `--executor servo_j` / `servo_cartesian` 且真机模式仅放行 `xarm6`；`vacuum_gripper` 支持 `dry-run` / `sdk-sim` / `real`（`servo_j` / `servo_cartesian`，可配 `--visual` 空吸镜像，不含物理负压 `sim`），已在 `xarm5`（1 代直插线）上完成真机验证；`robotiq_2f_*` 连接真实控制器（`sdk-sim` / `real`）目前只支持 `xarm6` + `robotiq_2f_85`，已在硬件上验证（含 11 mm 法兰转接件）；其他 Robotiq 组合只支持 `sim` / `dry-run`） |
+| `--vacuum-hardware-version` | 可选：`1`（1 代插线 `TGPIO 0/1`，默认）或 `2`（2 代触点 `TGPIO 3/4`），配合 `--gripper vacuum_gripper` 使用 |
 | `--mode`         | 仿真必选：`sim`（Genesis 物理仿真）、`dry-run`（离线轨迹与碰撞预检）                    |
 | `--executor`     | `servo_j` 或 `servo_cartesian`；Bio G2 在 `sim` 下默认 `servo_cartesian`，非 `sim` 模式及其他夹爪必选 |
 | `--backend`      | 可选：`cpu` / `gpu`；覆盖 `simulation.backend`（无 Genesis 支持显卡时用 `cpu`） |
