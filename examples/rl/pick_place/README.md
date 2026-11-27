@@ -29,7 +29,7 @@ python -m examples.rl.pick_place.run_seeds \
   --seeds 1 2 3 -B 2048 --max-iterations 2000
 ```
 
-Trains three seeds sequentially, runs an independent 64-episode evaluation, and records a single-environment replay. Evaluates every 50 iterations and updates `model_best.pt`; stops early after two consecutive evaluations with ≥98% success rate and ≤1 mm maximum pressing. Outputs are saved under each `pick_place_e2e_s<seed>/` directory, with the overall summary in `e2e_validation/summary.json`. Exits with a non-zero code if validation fails.
+Trains three seeds sequentially, runs an independent 64-episode evaluation, and records a single-environment replay. Evaluates every 50 iterations (with dual-set holdout validation on seeds `17000` + `17500` totaling 192 episodes, requiring combined success rate ≥99.4%, max pressing ≤0.8 mm, and recent training stability) and updates `model_best.pt`; stops early after two consecutive passing evaluations. Outputs are saved under each `pick_place_e2e_s<seed>/` directory, with the overall summary in `e2e_validation/summary.json`. Exits with a non-zero code if validation fails.
 
 ### Single-seed training or resume
 
@@ -46,7 +46,7 @@ python -m examples.rl.pick_place.train \
   -e pick_place_e2e_s1_resume --seed 1 -B 2048 --max-iterations 200
 ```
 
-`-B` is the number of parallel environments; reduce it if VRAM is insufficient. `--max-iterations` caps the training iterations; `--early-stop-evaluations 0` disables early stopping. Existing experiment directories are not overwritten; pass `-e` to use a new directory for standalone runs.
+`-B` is the number of parallel environments; reduce it if VRAM is insufficient. `--max-iterations` caps the training iterations; `--eval-start-iteration` defers periodic strict evaluations until that iteration; `--early-stop-evaluations 0` disables early stopping. Existing experiment directories are not overwritten; pass `-e` to use a new directory for standalone runs.
 
 ## Local checkpoint evaluation and inference
 

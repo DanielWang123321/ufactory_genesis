@@ -29,7 +29,7 @@ python -m examples.rl.pick_place.run_seeds \
   --seeds 1 2 3 -B 2048 --max-iterations 2000
 ```
 
-对三个种子依次训练、独立评估 64 回合，并录制单环境回放。每 50 轮评估并更新 `model_best.pt`；连续两次达到成功率 ≥98%、最大下压 ≤1 mm 后提前停止。结果保存在各自的 `pick_place_e2e_s<种子>/` 目录，汇总见 `e2e_validation/summary.json`。验收未通过时命令返回非零退出码。
+对三个种子依次训练、独立评估 64 回合，并录制单环境回放。每 50 轮评估（采用 `seed=17000` 64 回合 + `seed=17500` 128 回合共 192 回合双验证集，要求合并成功率 ≥99.4%、最大下压 ≤0.8 mm 且近期训练曲线稳定）并更新 `model_best.pt`；连续两次达标后提前停止。结果保存在各自的 `pick_place_e2e_s<种子>/` 目录，汇总见 `e2e_validation/summary.json`。验收未通过时命令返回非零退出码。
 
 ### 单独训练或续训
 
@@ -46,7 +46,7 @@ python -m examples.rl.pick_place.train \
   -e pick_place_e2e_s1_resume --seed 1 -B 2048 --max-iterations 200
 ```
 
-`-B` 是并行环境数，显存不足时可减小。`--max-iterations` 是训练轮数上限；`--early-stop-evaluations 0` 可关闭提前停止。已有实验目录不会被覆盖，单独训练可通过 `-e` 指定新目录。
+`-B` 是并行环境数，显存不足时可减小。`--max-iterations` 是训练轮数上限；`--eval-start-iteration` 可推迟周期性严格评估起始轮次；`--early-stop-evaluations 0` 可关闭提前停止。已有实验目录不会被覆盖，单独训练可通过 `-e` 指定新目录。
 
 ## 本地检查点评估与推理
 
