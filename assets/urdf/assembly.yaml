@@ -29,10 +29,15 @@
 #   source, base_link, mount_joint, flange, mount, glb_visuals, stl_visuals, stl_materials: as for end_effectors
 #   tool_lift_m     the end effector mount moves this far along flange +Z (added on top of any spacer tool_lift_m)
 #
-# spacers.<name>: a plate clamped between the flange and the end effector (it may carry a camera)
+# spacers.<name>: a plate clamped between the flange (or F/T sensor output) and the end effector (it may carry a camera)
 #   source, base_link, mount_joint, flange (or flanges), mount, stl_visuals, stl_materials: as for end_effectors
 #   tool_lift_m     the adapter/end effector mount (or the arm's link_eef when there is none) moves this far along flange +Z
 #   end_effectors   end effectors that fit on the spacer; the bare arm always does
+#
+# ft_sensors.<name>: a six-axis force/torque sensor mounted on the arm flange (below any spacer, adapter, or end effector)
+#   source, base_link, mount_joint, flange, mount, glb_visuals, stl_visuals, stl_materials: as for end_effectors
+#   output_link     link on the sensor where downstream spacers, adapters, and end effectors attach
+#   tool_lift_m     cumulative tool offset added along flange +Z when counting bare link_eef lift
 #
 # cameras.<name>: a camera on a spacer
 #   source, base_link, mount_joint, stl_materials: as for end_effectors; visual "stl" draws the collision boxes
@@ -45,7 +50,7 @@
 #   robots          robot profile keys fitting this plate (each robot appears in at most one mounting plate)
 #   thickness_m     plate thickness (m); the plate occupies z in [-thickness_m, 0]
 #   mount           base_link pose {xyz, rpy} in the arm's link_base frame
-schema_version: 5
+schema_version: 6
 flanges:
   xarm:
     # One part on xArm5/6/7; same layout on UF850: PCD 50 mm, 4 x M6 at 45/135/225/315 deg,
@@ -137,6 +142,21 @@ adapters:
       robotiq_mounting: mounts/robotiq_mounting/meshes/visual/robotiq_mounting.stl
     stl_materials:
       robotiq_mounting: AdapterAluminum
+ft_sensors:
+  ft_sensor_ai1500:
+    # UFACTORY AI1500 six-axis force/torque sensor (0.6 kg, CoM [0, 0, 22] mm, +58.6 mm tool lift).
+    # Mounts onto the xArm/UF850 ISO 9409-1-50-4-M6 flange (not Lite 6); downstream camera stands,
+    # adapters, and end effectors stack on ft_sensor_ai1500_output.
+    source: accessories/ft_sensor_ai1500/ft_sensor_ai1500.urdf
+    base_link: ft_sensor_ai1500
+    output_link: ft_sensor_ai1500_output
+    mount_joint: ft_sensor_ai1500_fix
+    flange: xarm
+    tool_lift_m: 0.0586
+    stl_visuals:
+      ft_sensor_ai1500: accessories/ft_sensor_ai1500/meshes/visual/ft_sensor_ai1500.stl
+    stl_materials:
+      ft_sensor_ai1500: FtSensorAluminum
 spacers:
   camera_stand:
     # UFACTORY 3 mm aluminium camera stand, 48 g. Its frame has the plate thickness along +Y, so the mount turns

@@ -359,6 +359,7 @@ class ProjectCheck:
                 "--follow-imports=skip",
                 "ufactory/config",
                 "ufactory/control",
+                "ufactory/hardware/ft_sensor.py",
                 "ufactory/safety/models.py",
                 "ufactory/safety/interfaces.py",
                 "ufactory/safety/statistics.py",

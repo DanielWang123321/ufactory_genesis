@@ -81,8 +81,10 @@ All robots accept the [camera stand](../assets/urdf/mounts/camera_stand/README.m
 | `gemini_305` | [Orbbec Gemini 305](../assets/urdf/cameras/gemini_305/README.md) | Stand + Gemini 305 stereo depth camera (68 g) |
 | `zed_x_nano` | [Stereolabs ZED X Nano](../assets/urdf/cameras/zed_x_nano/README.md) | Stand + ZED X Nano stereo camera (75 g) |
 
-- Configuration URDF references: `assembly:gripper_g2+d435`, `assembly:lite6_gripper+d435`, `assembly:bare+camera_stand`, `assembly:bare+mounting_plate`, or `assembly:gripper_g2+d435+mounting_plate`.
+- Configuration URDF references: `assembly:gripper_g2+d435`, `assembly:gripper_g2+ft_sensor_ai1500+d435`, `assembly:lite6_gripper+d435`, `assembly:bare+ft_sensor_ai1500`, `assembly:bare+camera_stand`, `assembly:bare+mounting_plate`, or `assembly:gripper_g2+d435+mounting_plate`.
 - Real packaging details: [Hardware & Real Robot](#hardware--real-robot). G2 simulations use `g2_calibrated_v1`; see the [pick-place RL guide](rl/pick_place/README.md) for training and the current v3 checkpoint contract.
+
+`xarm5`, `xarm6`, `xarm7`, and `uf850` also accept the [AI1500 six-axis force/torque sensor](../assets/urdf/accessories/ft_sensor_ai1500/README.md) directly on the tool flange (`+58.6 mm` along flange `+Z`, `0.6 kg`), below any camera stand, adapter, or end effector.
 
 All robots also accept their official aluminium mounting plate (mounted below `link_base`, top face at `z = 0`, keeping kinematics unchanged):
 
@@ -135,11 +137,15 @@ python examples/visualization/view_robot.py --robot lite6 --lite6-vacuum-gripper
 # xArm6 + Gripper G2 + D435 + mounting plate
 python examples/visualization/view_robot.py --robot xarm6 --gripper-g2 --camera d435 --mounting-plate
 
-# Standalone tool, adapter, and mounting-plate preview
+# xArm6 + AI1500 F/T sensor + D435 + Gripper G2
+python examples/visualization/view_robot.py --robot xarm6 --ft-sensor --gripper-g2 --camera d435 --gripper-demo
+
+# Standalone tool, adapter, F/T sensor, and mounting-plate preview
 python examples/visualization/view_tool.py --tool gripper_g2
 python examples/visualization/view_tool.py --tool robotiq_2f_85
 python examples/visualization/view_tool.py --tool robotiq_2f_140
 python examples/visualization/view_tool.py --tool robotiq_mounting
+python examples/visualization/view_tool.py --tool ft_sensor_ai1500
 python examples/visualization/view_tool.py --tool bio_gripper_g2
 python examples/visualization/view_tool.py --tool lite6_gripper
 python examples/visualization/view_tool.py --tool vacuum_gripper
@@ -156,6 +162,7 @@ python examples/visualization/view_tool.py --tool lite6_mounting_plate
 | `--robot` | Required profile key |
 | `--gripper-g2` / `--bio-gripper-g2` / `--robotiq-2f-85` / `--robotiq-2f-140` / `--vacuum-gripper` / `--lite6-gripper` / `--lite6-vacuum-gripper` | End-effector combo (at most one) |
 | `--camera` | `camera_stand`, `d405`, `d435`, `gemini_305` or `zed_x_nano`: the camera stand, alone or with that camera (all robots; bare arm or any end effector except `--bio-gripper-g2`) |
+| `--ft-sensor` | Mount `ft_sensor_ai1500` on the tool flange (`xarm5`, `xarm6`, `xarm7`, `uf850`; optional value defaults to `ft_sensor_ai1500`) |
 | `--mounting-plate` | Mount the robot's official aluminium mounting plate below `link_base` |
 | `--movable` | Compatibility no-op (grippers always use per-link movable GLBs) |
 | `--gripper-demo` | Cycle open/close with a 0.5 s hold after reaching each endpoint (requires a gripper flag) |
@@ -165,7 +172,7 @@ python examples/visualization/view_tool.py --tool lite6_mounting_plate
 | `--headless` | No viewer window |
 | `--backend` | `cpu` / `gpu` (default `gpu`; use `cpu` without a supported GPU) |
 
-`view_tool.py` accepts `--tool {gripper_g2,robotiq_2f_85,robotiq_2f_140,robotiq_mounting,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
+`view_tool.py` accepts `--tool {gripper_g2,robotiq_2f_85,robotiq_2f_140,robotiq_mounting,ft_sensor_ai1500,bio_gripper_g2,lite6_gripper,vacuum_gripper,lite6_vacuum_gripper,xarm_mounting_plate,uf850_mounting_plate,lite6_mounting_plate}`, `--headless`, `--backend`, and calibrated gripper tuning flags (`--position-mm`, `--speed-percent`, `--force-percent`, plus `--speed-mm-s` for `bio_gripper_g2`).
 
 ## Kinematics & Dynamics Simulation
 

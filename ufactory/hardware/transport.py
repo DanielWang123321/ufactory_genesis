@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from ufactory.hardware.ft_sensor import XArmFTSensor
 from ufactory.hardware.xarm import (
     MODE_POSITION,
     MODE_SERVO,
@@ -149,6 +150,11 @@ class XArmTransport:
 
     def disconnect(self) -> None:
         self.arm.disconnect()
+
+    def ft_sensor(self) -> XArmFTSensor:
+        """Return a safe F/T sensor controller bound to this transport's arm and robot key."""
+
+        return XArmFTSensor(self.arm, robot_key=self.robot_key)
 
     def leave_software_stop(self) -> None:
         """Exit controller STOP when there is no active error (Studio Enable equivalent).

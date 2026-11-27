@@ -38,7 +38,8 @@
     "assets/urdf/end_effectors/robotiq_2f_140/robotiq_2f_140_movable_visual.urdf",
     "assets/configs/runtime/grippers/bio_gripper_g2.yaml",
     "assets/configs/runtime/grippers/robotiq_2f_85.yaml",
-    "assets/configs/runtime/grippers/robotiq_2f_140.yaml"
+    "assets/configs/runtime/grippers/robotiq_2f_140.yaml",
+    "assets/urdf/accessories/ft_sensor_ai1500/ft_sensor_ai1500.urdf"
   ],
   "schema_version": 1,
   "sha256": {
@@ -65,7 +66,8 @@
     "assets/configs/runtime/tasks/robots/xarm7_1305_reach.yaml": "5059ce9b53123689726e2d3846f43c18ba92db7ca8bba7e87f9dccea9c4fc4d7",
     "assets/scenes/packaging_showcase/meshes/uv_box.obj": "901c6efc7a1e1b4947af16ed95b9e76b2b1d053fd117d36641a9e770768e35cc",
     "assets/scenes/packaging_showcase/textures/cardboard.jpg": "4d6b57827d7398b7679e4d5d8687ae18ed5ba179e2d62d66e209aac800cf591b",
-    "assets/urdf/assembly.yaml": "f95152665d261df0bcaed352cf0468656dd7c43151f4414f458686050c25d4d3",
+    "assets/urdf/accessories/ft_sensor_ai1500/ft_sensor_ai1500.urdf": "55b35db04ac4eebbed383b03ba8326620732b04e97257d5b5597550e1774d162",
+    "assets/urdf/assembly.yaml": "3f676b74a333535e055739eb839e0437c836257970ae36b41205690cce82a7f9",
     "assets/urdf/end_effectors/gripper_g2/gripper_g2_movable_visual.urdf": "1088891ca89d14b1912ac62bd00c1ae0bebc287e7663821c372bfc32984c1bea",
     "assets/urdf/end_effectors/lite6_gripper/lite6_gripper_movable_visual.urdf": "d4013937766d7bdb1bd83f82f66cd4720f0ac2fb10ad179889b4bf3b50db1ede",
     "assets/urdf/end_effectors/lite6_gripper/meshes/visual/visual_glb/shell.glb": "1ae8f67d1ddfa3b5a7f09265aa680eff72bc05f4c817470ac885333dde1cce57",
