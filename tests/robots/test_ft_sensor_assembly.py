@@ -316,34 +316,34 @@ def test_pinocchio_cumulative_lift_mass_and_internal_clearance() -> None:
 @pytest.mark.gpu
 def test_genesis_loads_ft_sensor_standalone_and_assembled() -> None:
     gs = pytest.importorskip("genesis")
-    from ufactory.simulation import genesis_backend_constant, make_rigid_options
+    from ufactory.config import load_runtime_config
+    from ufactory.simulation import GenesisRuntimeManager, make_rigid_options
     from ufactory.visualization.glb import glb_pbr_surfaces, glb_view_surface
 
-    if not getattr(gs, "_initialized", False):
-        gs.init(backend=genesis_backend_constant(gs, "gpu"), logging_level="error")
-
-    scene = gs.Scene(
-        show_viewer=False,
-        sim_options=gs.options.SimOptions(dt=0.02, substeps=8),
-        rigid_options=make_rigid_options(gs),
-    )
-    with glb_pbr_surfaces():
-        sensor_ent = scene.add_entity(
-            gs.morphs.URDF(file=ft_sensor_ai1500_urdf(), fixed=True, pos=(0.5, 0.0, 0.1)),
-            surface=glb_view_surface(),
+    config = load_runtime_config("xarm6_1305")
+    with GenesisRuntimeManager(config.simulation):
+        scene = gs.Scene(
+            show_viewer=False,
+            sim_options=gs.options.SimOptions(dt=0.02, substeps=8),
+            rigid_options=make_rigid_options(gs),
         )
-        arm_urdf = robot_visual_glb_urdf(
-            "xarm6_1305",
-            with_gripper_g2=True,
-            accessory="d435",
-            ft_sensor="ft_sensor_ai1500",
-        )
-        arm_ent = scene.add_entity(
-            gs.morphs.URDF(file=arm_urdf, fixed=True),
-            surface=glb_view_surface(),
-        )
-    scene.build()
-    for _ in range(5):
-        scene.step()
-    assert sensor_ent.n_links >= 1
-    assert arm_ent.n_links >= 7
+        with glb_pbr_surfaces():
+            sensor_ent = scene.add_entity(
+                gs.morphs.URDF(file=ft_sensor_ai1500_urdf(), fixed=True, pos=(0.5, 0.0, 0.1)),
+                surface=glb_view_surface(),
+            )
+            arm_urdf = robot_visual_glb_urdf(
+                "xarm6_1305",
+                with_gripper_g2=True,
+                accessory="d435",
+                ft_sensor="ft_sensor_ai1500",
+            )
+            arm_ent = scene.add_entity(
+                gs.morphs.URDF(file=arm_urdf, fixed=True),
+                surface=glb_view_surface(),
+            )
+        scene.build()
+        for _ in range(5):
+            scene.step()
+        assert sensor_ent.n_links >= 1
+        assert arm_ent.n_links >= 7
