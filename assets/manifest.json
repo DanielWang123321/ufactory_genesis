@@ -1,5 +1,5 @@
 {
-  "manifest_version": "0.3.10",
+  "manifest_version": "0.3.11",
   "required_paths": [
     "assets/configs/runtime/motion/default.yaml",
     "assets/configs/runtime/safety/default.yaml",
