@@ -40,16 +40,15 @@ def test_bio_g2_controller_validation_matrix() -> None:
     "argv",
     [
         ["--robot", "xarm6", "--gripper", "bio_gripper_g2", "--mode", "dry-run"],
-        ["--robot", "xarm6", "--gripper", "bio_gripper_g2", "--mode", "dry-run", "--executor", "servo_j"],
         [
             "--robot",
             "xarm6",
             "--gripper",
             "bio_gripper_g2",
             "--mode",
-            "real",
+            "sdk-sim",
             "--executor",
-            "servo_cartesian",
+            "servo_j",
             "--visual",
         ],
         [
@@ -79,6 +78,70 @@ def test_bio_g2_non_sim_gates_reject_unsupported_combinations(argv: list[str]) -
     with pytest.raises(SystemExit) as exc:
         module.main(argv)
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("executor", ["servo_j", "servo_cartesian"])
+def test_bio_g2_real_visual_passes_gate_and_reaches_ip_check(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    executor: str,
+) -> None:
+    module = _pick_place_module()
+    monkeypatch.delenv("XARM_IP", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        module.main(
+            [
+                "--robot",
+                "xarm6",
+                "--gripper",
+                "bio_gripper_g2",
+                "--mode",
+                "real",
+                "--executor",
+                executor,
+                "--visual",
+            ]
+        )
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    error_line = err.splitlines()[-1]
+    assert "--ip or XARM_IP" in error_line
+    assert "servo_cartesian" not in error_line
+    assert "requires --executor servo_cartesian" not in err
+
+
+@pytest.mark.gpu
+def test_bio_g2_servo_j_compile_and_dry_run_pass(tmp_path: Path) -> None:
+    import numpy as np
+
+    from ufactory.simulation import GenesisRuntimeManager
+
+    module = _pick_place_module()
+    cfg = load_runtime_config("xarm6", gripper="bio_gripper_g2")
+    with GenesisRuntimeManager(cfg.simulation):
+        program, ctx, q_home = module._compile_servo_j_program(cfg, calibration=None)
+        home_pregrasp = next(seg for seg in program.segments if seg.label == "home->pregrasp")
+        assert home_pregrasp.q_start is not None
+        assert float(np.max(np.abs(np.asarray(home_pregrasp.q_start, dtype=np.float64) - q_home))) < 2e-3
+        assert ctx.gripper_dof_multipliers == (1.0, -1.0)
+
+    report = tmp_path / "bio_dry_run_servo_j.json"
+    rc = module.main(
+        [
+            "--robot",
+            "xarm6",
+            "--gripper",
+            "bio_gripper_g2",
+            "--mode",
+            "dry-run",
+            "--executor",
+            "servo_j",
+            "--report",
+            str(report),
+        ]
+    )
+    assert rc == 0
+    assert report.is_file()
 
 
 def test_bio_g2_build_program_applies_flange_xy_offset_and_closed_gap() -> None:

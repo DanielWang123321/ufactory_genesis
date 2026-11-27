@@ -60,14 +60,8 @@ def solve_home_ik(
     exact joint configuration. Otherwise falls back to two-pass Genesis IK.
     """
     if arm_controller is not None and target_pos_base is not None:
-        from ufactory.control.kinematics_chain import pose_to_se3
-        from ufactory.control.solvers import solve_exact_ik
+        from ufactory.trajectory.ik import solve_arm_home_q
 
-        base_xyz = np.asarray(target_pos_base, dtype=np.float64).reshape(3)
-        target_se3 = pose_to_se3(
-            np.concatenate((base_xyz, np.asarray(GRIPPER_DOWN_QUAT_XYZW, dtype=np.float64))),
-            position_in_mm=False,
-        )
         seed_q = None
         if default_qpos_rad is not None:
             seed_q = np.asarray(default_qpos_rad, dtype=np.float64).reshape(-1)
@@ -78,30 +72,22 @@ def solve_home_ik(
                 seed_q = seed_flat
             elif seed_flat.size > max(arm_dof_idx):
                 seed_q = seed_flat[list(arm_dof_idx)]
-        res = solve_exact_ik(
-            arm_controller.chain,
-            target_se3,
-            seed_q_rad=seed_q,
+        q_rad = solve_arm_home_q(
+            arm_controller,
+            target_pos_base,
+            default_qpos_rad=seed_q,
             include_tcp=False,
             pos_tol_m=HOME_IK_POS_TOL_M,
-            rot_tol_rad=HOME_IK_MAX_ROT_ERR_RAD if arm_controller.dof == 5 else HOME_IK_ROT_TOL_RAD,
-            cold_start_fallback=True,
+            rot_tol_rad=HOME_IK_ROT_TOL_RAD,
+            max_pos_err_m=HOME_IK_MAX_POS_ERR_M,
+            max_rot_err_rad=HOME_IK_MAX_ROT_ERR_RAD,
         )
-        if not (np.isfinite(res.position_error_m) and np.isfinite(res.orientation_error_rad)) or (
-            res.position_error_m > HOME_IK_MAX_POS_ERR_M or res.orientation_error_rad > HOME_IK_MAX_ROT_ERR_RAD
-        ):
-            raise ValueError(
-                f"ArmMotionController home IK residual {res.position_error_m * 1e3:.4f} mm / "
-                f"{res.orientation_error_rad * 1e3:.4f} mrad exceeds "
-                f"{HOME_IK_MAX_POS_ERR_M * 1e3:.3f} mm / {HOME_IK_MAX_ROT_ERR_RAD * 1e3:.3f} mrad "
-                f"for target {base_xyz.round(6).tolist()}"
-            )
         device = pos.device if hasattr(pos, "device") else gs.device
         dtype = pos.dtype if hasattr(pos, "dtype") else gs.tc_float
         n_dofs = int(getattr(robot, "n_dofs", getattr(robot, "n_qs", max(arm_dof_idx) + 1)))
         refined = torch.zeros((1, n_dofs), device=device, dtype=dtype)
         for i, idx in enumerate(arm_dof_idx):
-            refined[0, idx] = float(res.q_rad[i])
+            refined[0, idx] = float(q_rad[i])
         return refined
     seed = {} if init_qpos is None else {"init_qpos": init_qpos}
     coarse = robot.inverse_kinematics(link=ik_link, pos=pos, quat=quat, dofs_idx_local=arm_dof_idx, **seed)

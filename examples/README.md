@@ -240,7 +240,10 @@ python examples/simulation/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
 
-# xArm6 + Bio Gripper G2: pick-place controller-internal simulation (sdk-sim, servo_cartesian only)
+# xArm6 + Bio Gripper G2: pick-place controller-internal simulation (sdk-sim, servo_j or servo_cartesian)
+python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper bio_gripper_g2 --mode sdk-sim --executor servo_j \
+  --ip <ip> --calibration path/to/exact.yaml
 python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
@@ -259,7 +262,10 @@ XARM_IP=<ip> python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 
-# xArm6 + Bio Gripper G2: real empty pick-place motion (servo_cartesian only; requires per-unit calibration + --confirm-real)
+# xArm6 + Bio Gripper G2: real empty pick-place motion (servo_j or servo_cartesian, optional --visual mirror; requires per-unit calibration + --confirm-real)
+XARM_IP=<ip> python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper bio_gripper_g2 --mode real --executor servo_j --visual \
+  --calibration path/to/exact.yaml --confirm-real
 XARM_IP=<ip> python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode real --executor servo_cartesian \
   --calibration path/to/exact.yaml --confirm-real

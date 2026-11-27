@@ -255,11 +255,24 @@ def test_bio_g2_overlay_rejects_lite6_and_reach():
 
 
 def test_default_g2_and_robotiq_hashes_are_unchanged():
-    assert load_runtime_config("xarm6").sha256 == "c804401452de5eb83417fd8329496404dc09340f62305c6cdea188a1984e0957"
-    assert (
-        load_runtime_config("xarm6", gripper="robotiq_2f_85").sha256
-        == "51fe99506b46da67311cd72e624b47eb852c12f378c5e97dbcfca3e8034c6f88"
+    g2_cfg = load_runtime_config("xarm6")
+    robotiq_cfg = load_runtime_config("xarm6", gripper="robotiq_2f_85")
+    bio_cfg = load_runtime_config("xarm6", gripper="bio_gripper_g2")
+    assert g2_cfg.gripper is not None and g2_cfg.gripper.tcp_offset == pytest.approx((0.0, 0.0, 178.6, 0.0, 0.0, 0.0))
+    assert robotiq_cfg.gripper is not None and robotiq_cfg.gripper.tcp_offset == pytest.approx(
+        (0.0, 0.0, 173.8, 0.0, 0.0, 0.0)
     )
+    assert bio_cfg.gripper is not None and bio_cfg.gripper.tcp_offset == pytest.approx(
+        (157.64, 0.0, 59.5, 0.0, 0.0, 0.0)
+    )
+    assert g2_cfg.sha256 == "f4ecfc73c965d1163e44c68a42867cfe8157e569912ec8d2ccc6efd5be95b88c"
+    assert robotiq_cfg.sha256 == "119a0c44439e3f6495f50209c05457b41eae78318ccb5105fe839d1b97bc20e0"
+    assert bio_cfg.sha256 == "154ddbc4baf6485c00da7cfc11612887953d97b7629a54e9c64de2594a458454"
+
+    overridden = load_runtime_config("xarm6", overrides={"gripper.tcp_offset": [0.0, 0.0, 180.0, 0.0, 0.0, 0.0]})
+    assert overridden.sha256 != g2_cfg.sha256
+    with pytest.raises(ConfigError, match="gripper.tcp_offset"):
+        load_runtime_config("xarm6", overrides={"gripper.tcp_offset": [0.0, 0.0, 180.0]})
 
 
 @pytest.mark.parametrize("robot", ROBOTS)

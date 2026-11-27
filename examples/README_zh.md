@@ -247,7 +247,10 @@ python examples/simulation/packaging/run.py \
   --robot lite6 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
 
-# xArm6 + Bio Gripper G2：抓放控制器内部虚拟仿真（sdk-sim，仅支持 servo_cartesian）
+# xArm6 + Bio Gripper G2：抓放控制器内部虚拟仿真（sdk-sim，支持 servo_j / servo_cartesian）
+python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper bio_gripper_g2 --mode sdk-sim --executor servo_j \
+  --ip <ip> --calibration path/to/exact.yaml
 python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode sdk-sim --executor servo_cartesian \
   --ip <ip> --calibration path/to/exact.yaml
@@ -268,7 +271,10 @@ XARM_IP=<ip> python examples/simulation/pick_place/run.py \
   --robot xarm6 --mode real --executor servo_j \
   --calibration path/to/exact.yaml --confirm-real
 
-# xArm6 + Bio Gripper G2：抓放真机物理运动（仅支持 servo_cartesian；需实机标定文件与 --confirm-real）
+# xArm6 + Bio Gripper G2：抓放真机物理运动（支持 servo_j / servo_cartesian，可选 --visual 镜像；需实机标定文件与 --confirm-real）
+XARM_IP=<ip> python examples/simulation/pick_place/run.py \
+  --robot xarm6 --gripper bio_gripper_g2 --mode real --executor servo_j --visual \
+  --calibration path/to/exact.yaml --confirm-real
 XARM_IP=<ip> python examples/simulation/pick_place/run.py \
   --robot xarm6 --gripper bio_gripper_g2 --mode real --executor servo_cartesian \
   --calibration path/to/exact.yaml --confirm-real

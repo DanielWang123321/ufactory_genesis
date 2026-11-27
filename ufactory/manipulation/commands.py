@@ -53,7 +53,11 @@ def build_manipulation_backends(
     object_width_m: float,
     calibrated_g2: bool = False,
 ) -> tuple[Any, Any]:
-    passive = {config.gripper.drive_joint: config.gripper.open_drive} if config.gripper is not None else {}
+    passive = (
+        {config.gripper.drive_joint: config.gripper.open_drive}
+        if config.gripper is not None and config.gripper.drive_joint
+        else {}
+    )
     kinematics = build_arm_controller(config, urdf)
     collision: Any = StageAwareObjectCollisionBackend(
         PinocchioCollisionBackend(

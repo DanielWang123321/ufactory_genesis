@@ -162,6 +162,7 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
         geometry_pairs = gripper_data.get("excluded_geometry_pairs", [])
         if not isinstance(geometry_pairs, list) or any(not isinstance(pair, list | tuple) for pair in geometry_pairs):
             raise ConfigError("gripper.excluded_geometry_pairs must be a list of geometry pairs")
+        tcp_offset_raw = _tuple_floats(gripper_data["tcp_offset"], field="gripper.tcp_offset", size=6)
         gripper = GripperProfile(
             adapter=str(gripper_data["adapter"]),
             drive_joint=str(gripper_data["drive_joint"]),
@@ -187,6 +188,14 @@ def _build_resolved(data: dict[str, Any], sources: tuple[str, ...]) -> ResolvedR
             grasp_table_clearance_m=float(gripper_data["grasp_table_clearance_m"]),
             grasp_height_extra_m=float(gripper_data["grasp_height_extra_m"]),
             excluded_geometry_pairs=tuple(tuple(pair) for pair in geometry_pairs),
+            tcp_offset=(
+                tcp_offset_raw[0],
+                tcp_offset_raw[1],
+                tcp_offset_raw[2],
+                tcp_offset_raw[3],
+                tcp_offset_raw[4],
+                tcp_offset_raw[5],
+            ),
         )
     task_parameters = task_data["parameters"]
     if not isinstance(task_parameters, Mapping):

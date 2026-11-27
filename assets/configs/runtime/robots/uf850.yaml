@@ -41,3 +41,4 @@ gripper:
   finger_close_descent_m: 0.015
   grasp_table_clearance_m: 0.010
   grasp_height_extra_m: 0.0
+  tcp_offset: [0.0, 0.0, 178.6, 0.0, 0.0, 0.0]

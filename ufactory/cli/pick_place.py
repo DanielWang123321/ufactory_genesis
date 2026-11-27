@@ -41,8 +41,9 @@ from ufactory.manipulation.commands import (
     print_preflight_complete as _print_preflight_complete,
     print_preflight_violation_summary as _print_preflight_violation_summary,
 )
-from ufactory.grippers.bio_g2 import BIO_GRIPPER_G2_TCP_IN_FLANGE_M, bio_g2_controller_mode_error
+from ufactory.grippers.bio_g2 import bio_g2_controller_mode_error
 from ufactory.grippers.robotiq import robotiq_controller_mode_error
+from ufactory.manipulation.tcp import check_controller_tcp_offset, resolve_tool_tcp_spec
 from ufactory.hardware import XArmTransport
 from ufactory.kinematics import get_robot_sn, read_tcp_offset
 from ufactory.kinematics.orientation import GRIPPER_DOWN_QUAT_XYZW
@@ -52,7 +53,11 @@ from ufactory.safety.gate import program_sha256, sha256_file
 from ufactory.simulation import GenesisRuntimeManager, override_simulation_backend
 from ufactory.simulation.compat import require_genesis_capabilities
 from ufactory.trajectory.execution import ExecutionBindings, execute_real, execute_sim
-from ufactory.trajectory.ik import compile_cartesian_program_to_joint_stream
+from ufactory.trajectory.ik import (
+    ArmIKContext,
+    compile_cartesian_program_to_joint_stream,
+    solve_arm_home_q,
+)
 from ufactory.trajectory.planner import (
     CartesianWaypoint,
     JointWaypoint,
@@ -102,38 +107,33 @@ def _backends(config: Any, urdf: Path, *, calibrated_g2: bool = False) -> tuple[
     )
 
 
-def _flange_xy_offset(config: Any) -> tuple[float, float]:
-    """Return (x, y) offset from flange link to task grasp centre in the gripper-down XY plane."""
-    if str(getattr(config.gripper, "adapter", "")) == "bio_g2":
-        return float(BIO_GRIPPER_G2_TCP_IN_FLANGE_M[0]), float(BIO_GRIPPER_G2_TCP_IN_FLANGE_M[1])
-    return 0.0, 0.0
-
-
 def _build_program(config: Any, kinematics: Any | None = None, *, q_home: np.ndarray | None = None) -> Any:
     """Build the v0.2.4-style pick-place program starting at Cartesian home.
 
-    ``start_xyz`` is always ``[obj_x, obj_y, home_z]`` (not FK of default_qpos).
-    When ``q_home`` is provided (Genesis home IK), a zero-length MoveJ seed is
-    prepended for ``servo_j`` compilation/preposition. Otherwise, if
-    ``kinematics`` is provided, Pinocchio IK seeds a MoveJ at home for
-    ``servo_cartesian`` preflight.
+    ``start_xyz`` is always the flange position above the pick point at ``home_z``
+    (not FK of ``default_qpos``). Task pick/place coordinates are expressed in
+    TCP space and converted to flange (``link6``) waypoints via
+    :func:`~ufactory.manipulation.tcp.resolve_tool_tcp_spec`.
+    When ``q_home`` is provided, a zero-length MoveJ seed is prepended for
+    ``servo_j`` compilation/preposition. Otherwise, if ``kinematics`` is
+    provided, exact IK seeds a MoveJ at home for ``servo_cartesian`` preflight.
     """
 
     params = config.task.parameters
     object_pos = np.asarray(params["fixed_object_position_m"], dtype=np.float64)
     target_pos = np.asarray(params["fixed_target_position_m"], dtype=np.float64)
-    from ufactory.trajectory.scene import dry_heights
-
-    gripper_name = config.gripper.adapter if config.gripper is not None else None
-    heights = dry_heights(config.robot.key, gripper=gripper_name)
+    tool_tcp = resolve_tool_tcp_spec(config)
+    grasp_tcp_z = tool_tcp.grasp_tcp_z_m
+    grasp_flange = tool_tcp.tcp_to_flange_xyz([float(object_pos[0]), float(object_pos[1]), grasp_tcp_z])
+    place_flange = tool_tcp.tcp_to_flange_xyz([float(target_pos[0]), float(target_pos[1]), grasp_tcp_z])
     is_lite6 = str(getattr(config.gripper, "adapter", "")) == "lite6"
-    offset_x, offset_y = _flange_xy_offset(config)
-    obj_x, obj_y = float(object_pos[0]) - offset_x, float(object_pos[1]) - offset_y
-    place_x, place_y = float(target_pos[0]) - offset_x, float(target_pos[1]) - offset_y
-    grasp_z = float(heights.grasp_link6_z)
-    pre_grasp_z = float(heights.pre_grasp_link6_z)
-    lift_z = float(heights.lift_link6_z)
-    home_z = float(heights.home_pos_base[2])
+    obj_x, obj_y = float(grasp_flange[0]), float(grasp_flange[1])
+    place_x, place_y = float(place_flange[0]), float(place_flange[1])
+    grasp_z = float(grasp_flange[2])
+    pre_grasp_z = grasp_z + 0.10
+    default_ee_z = float(params["default_ee_position_m"][2])
+    lift_z = default_ee_z
+    home_z = default_ee_z
     open_gap = float(config.gripper.open_gap_m)
     close_gap = _close_gap_m(config)
     gripper_duration_s = LITE6_GRIPPER_DURATION_S if is_lite6 else float(config.motion.gripper_duration_s)
@@ -233,17 +233,12 @@ def _build_program(config: Any, kinematics: Any | None = None, *, q_home: np.nda
 
 
 def _home_xyz_m(config: Any) -> np.ndarray:
-    from ufactory.trajectory.scene import dry_heights
-
     params = config.task.parameters
     object_pos = np.asarray(params["fixed_object_position_m"], dtype=np.float64)
-    gripper_name = config.gripper.adapter if config.gripper is not None else None
-    heights = dry_heights(config.robot.key, gripper=gripper_name)
-    offset_x, offset_y = _flange_xy_offset(config)
-    return np.asarray(
-        [float(object_pos[0]) - offset_x, float(object_pos[1]) - offset_y, float(heights.home_pos_base[2])],
-        dtype=np.float64,
-    )
+    tool_tcp = resolve_tool_tcp_spec(config)
+    flange_xy = tool_tcp.tcp_to_flange_xyz([float(object_pos[0]), float(object_pos[1]), 0.0])[:2]
+    home_z = float(params["default_ee_position_m"][2])
+    return np.asarray([float(flange_xy[0]), float(flange_xy[1]), home_z], dtype=np.float64)
 
 
 def _arm_q_from_scene(ctx: Any) -> np.ndarray:
@@ -263,6 +258,9 @@ def _build_ik_scene(
     from ufactory.trajectory.scene import build_scene
 
     gripper_name = config.gripper.adapter if config.gripper is not None else None
+    tool_tcp = resolve_tool_tcp_spec(config)
+    has_xy_offset = any(abs(v) > 1e-9 for v in tool_tcp.tcp_offset_flange_m[:2])
+    home_xy_base = tuple(float(v) for v in _home_xyz_m(config)[:2]) if has_xy_offset else None
     return build_scene(
         robot_key=config.robot.key,
         rate=config.simulation.rate_hz,
@@ -282,8 +280,16 @@ def _build_ik_scene(
         gripper=gripper_name,
         excluded_geometry_pairs=config.gripper.excluded_geometry_pairs if config.gripper is not None else (),
         arm_controller=arm_controller,
+        home_xy_base=home_xy_base,
         **_scene_layout_kwargs(config),
     )
+
+
+def _mirror_attach_dist_m(config: Any) -> float | None:
+    """Return mirror carry latch distance override, disabling carry for empty Bio G2 runs."""
+    if str(getattr(config.gripper, "adapter", "")) == "bio_g2":
+        return 0.0
+    return None
 
 
 def _open_sim_viewer(ctx: Any, *, warmup_steps: int = 3) -> None:
@@ -295,6 +301,33 @@ def _open_sim_viewer(ctx: Any, *, warmup_steps: int = 3) -> None:
     for _ in range(max(0, int(warmup_steps))):
         scene.step()
     start_deferred_viewer(scene)
+
+
+def _compile_servo_j_offline(
+    config: Any,
+    *,
+    kinematics: Any,
+    urdf: Path,
+    calibration: Path | None = None,
+    serial: str | None = None,
+) -> tuple[Any, np.ndarray]:
+    """Compile the Cartesian pick-place program to a joint stream without starting Genesis."""
+
+    q_home = solve_arm_home_q(
+        kinematics,
+        _home_xyz_m(config),
+        default_qpos_rad=config.arm.default_qpos_rad,
+    )
+    seeded = _build_program(config, q_home=q_home)
+    ik_ctx = ArmIKContext(
+        arm_controller=kinematics,
+        robot_key=config.robot.key,
+        robot_urdf_path=str(urdf),
+        kinematics_yaml_path=str(calibration) if calibration is not None else None,
+        kinematics_suffix=serial,
+    )
+    compiled = compile_cartesian_program_to_joint_stream(seeded, ik_ctx)
+    return compiled, q_home
 
 
 def _compile_servo_j_program(
@@ -514,16 +547,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     f"completed={summary['passed']}"
                 )
             return 0 if summary["passed"] else 1
-        if args.executor != "servo_cartesian":
-            parser.error(
-                "--gripper bio_gripper_g2 in dry-run/sdk-sim/real currently requires --executor servo_cartesian "
-                "(servo_j requires Genesis generic scene support)"
-            )
-        if args.visual:
-            parser.error(
-                "--visual is not supported with --gripper bio_gripper_g2 in real mode "
-                "(kinematic mirror requires Genesis generic scene support)"
-            )
         if (
             any(
                 getattr(args, name) is not None
@@ -579,7 +602,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.print_config:
         print(dump_runtime_config(config), end="")
         return 0
-    if args.executor == "servo_j" or args.mode == "sim" or args.visual:
+    if args.mode == "sim" or args.visual:
         require_genesis_capabilities(
             pbr=True,
             deferred_viewer=bool(args.visual) or bool(config.simulation.show_viewer),
@@ -633,17 +656,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             elif args.executor == "servo_j":
                 kinematics, collision = _backends(config, urdf)
                 print(
-                    "[ik-compile] building Genesis scene and compiling servo_j trajectory...",
+                    "[ik-compile] compiling servo_j trajectory with ArmMotionController...",
                     flush=True,
                 )
                 ik_started = time.perf_counter()
-                genesis_for_ik = GenesisRuntimeManager(config.simulation)
-                genesis_for_ik.__enter__()
-                program, ik_ctx, q_home = _compile_servo_j_program(
+                program, q_home = _compile_servo_j_offline(
                     config,
+                    kinematics=kinematics,
+                    urdf=urdf,
                     calibration=args.calibration,
-                    show_viewer=False,
-                    arm_controller=kinematics,
+                    serial=serial,
                 )
                 _print_ik_compile_complete(program, elapsed_s=time.perf_counter() - ik_started)
             else:
@@ -713,6 +735,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Read once so SDK simulation and real execution share the same TCP conversion.
             tcp_offset = read_tcp_offset(arm)
             print(f"[hardware] controller tcp_offset={tcp_offset.tolist()} (xyz mm, rpy rad)", flush=True)
+            check_controller_tcp_offset(
+                tcp_offset,
+                resolve_tool_tcp_spec(config).tcp_offset_mm_deg,
+                mode=args.mode,
+            )
             transport = XArmTransport(arm, robot_key=config.robot.key, serial_number=serial, tcp_offset=tcp_offset)
             shadow = None
             stages = None
@@ -813,25 +840,33 @@ def main(argv: Sequence[str] | None = None) -> int:
                             show_viewer=False,
                             arm_controller=kinematics,
                         )
+                    attach_dist_m = _mirror_attach_dist_m(config)
+                    carry_note = (
+                        "empty grasp; cube not carried"
+                        if attach_dist_m == 0.0
+                        else "cube kinematically carried while gripped"
+                    )
                     base_mm = [v * 1000.0 for v in mirror_ctx.base_pos_world]
                     print(
                         f"\n[mirror] robot={mirror_ctx.robot_key} gripper={mirror_ctx.gripper.family} "
                         f"rate={config.motion.rate_hz}Hz visual_model={mirror_ctx.visual_model} "
                         f"base=[{base_mm[0]:.0f},{base_mm[1]:.0f},{base_mm[2]:.0f}]mm "
-                        f"kinematic open-loop; cube kinematically carried while gripped "
+                        f"kinematic open-loop; {carry_note} "
                         f"(no contact physics; async mirror off servo critical path)"
                     )
                     mirror = TrajKinematicMirror(mirror_ctx, approved.program)
                     mirror.prime_to_home()
                     start_deferred_viewer(mirror_ctx.scene, kinematic_mirror=True)
                     _hold_mirror_at_program_start(mirror, hold_s=args.visual_start_hold_s)
-                    tracker = KinematicCarryTracker(
-                        mirror,
-                        grasp_gap_m=_close_gap_m(config),
-                        grasp_segment_label="grip",
-                        release_segment_label="release",
-                        approach_freeze_labels=("descend",),
-                    )
+                    tracker_kwargs: dict[str, Any] = {
+                        "grasp_gap_m": _close_gap_m(config),
+                        "grasp_segment_label": "grip",
+                        "release_segment_label": "release",
+                        "approach_freeze_labels": ("descend",),
+                    }
+                    if attach_dist_m is not None:
+                        tracker_kwargs["attach_dist_m"] = attach_dist_m
+                    tracker = KinematicCarryTracker(mirror, **tracker_kwargs)
                     _warm_real_visual_tracker(tracker)
                     bridge = AsyncMirrorBridge(tracker)
 
