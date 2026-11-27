@@ -105,7 +105,7 @@ class ControllerFkIdentification:
 def _transform(
     rotation: FloatArray | None = None, translation: Sequence[float] | FloatArray = (0.0, 0.0, 0.0)
 ) -> FloatArray:
-    matrix = np.eye(4, dtype=np.float64)
+    matrix: FloatArray = np.eye(4, dtype=np.float64)
     if rotation is not None:
         matrix[:3, :3] = rotation
     matrix[:3, 3] = np.asarray(translation, dtype=np.float64)

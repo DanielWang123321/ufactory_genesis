@@ -18,6 +18,7 @@ import numpy as np
 
 from ufactory.kinematics.orientation import GRIPPER_DOWN_RPY_RAD
 from ufactory.kinematics.tcp_offset import pose_flange_to_tcp, pose_tcp_to_flange, rpy_matrix
+from ufactory.types import FloatArray
 
 DEFAULT_REAL_TCP_POS_TOL_MM = 10.0
 DEFAULT_REAL_TCP_ROT_TOL_DEG = 2.0
@@ -30,21 +31,22 @@ _ADAPTER_TOOL_TIP_LINKS: dict[str, str] = {
 }
 
 
-def _as_vec6(values: Sequence[float] | np.ndarray, *, name: str) -> np.ndarray:
-    arr = np.asarray(values, dtype=np.float64).reshape(-1)
+def _as_vec6(values: Sequence[float] | np.ndarray[Any, Any], *, name: str) -> FloatArray:
+    arr: FloatArray = np.asarray(values, dtype=np.float64).reshape(-1)
     if arr.size != 6 or not np.all(np.isfinite(arr)):
         raise ValueError(f"{name} must contain 6 finite values")
-    return arr.copy()
+    out: FloatArray = arr.copy()
+    return out
 
 
-def tcp_offset_mm_deg_to_mm_rad(tcp_offset_mm_deg: Sequence[float] | np.ndarray) -> np.ndarray:
+def tcp_offset_mm_deg_to_mm_rad(tcp_offset_mm_deg: Sequence[float] | np.ndarray[Any, Any]) -> FloatArray:
     """Convert ``[x_mm, y_mm, z_mm, r_deg, p_deg, y_deg]`` to ``[mm, mm, mm, rad, rad, rad]``."""
     arr = _as_vec6(tcp_offset_mm_deg, name="tcp_offset_mm_deg")
     arr[3:] = np.deg2rad(arr[3:])
     return arr
 
 
-def tcp_offset_mm_rad_to_mm_deg(tcp_offset_mm_rad: Sequence[float] | np.ndarray) -> np.ndarray:
+def tcp_offset_mm_rad_to_mm_deg(tcp_offset_mm_rad: Sequence[float] | np.ndarray[Any, Any]) -> FloatArray:
     """Convert ``[x_mm, y_mm, z_mm, r_rad, p_rad, y_rad]`` to ``[mm, mm, mm, deg, deg, deg]``."""
     arr = _as_vec6(tcp_offset_mm_rad, name="tcp_offset_mm_rad")
     arr[3:] = np.rad2deg(arr[3:])
@@ -74,7 +76,7 @@ class ToolTcpSpec:
             object.__setattr__(self, name, val)
 
     @property
-    def tcp_offset_mm_rad(self) -> np.ndarray:
+    def tcp_offset_mm_rad(self) -> FloatArray:
         """Return ``[x_mm, y_mm, z_mm, r_rad, p_rad, y_rad]`` for SDK / ArmMotionController."""
         return tcp_offset_mm_deg_to_mm_rad(self.tcp_offset_mm_deg)
 
@@ -94,29 +96,31 @@ class ToolTcpSpec:
 
     def tcp_to_flange_xyz(
         self,
-        tcp_xyz_base_m: Sequence[float] | np.ndarray,
+        tcp_xyz_base_m: Sequence[float] | np.ndarray[Any, Any],
         *,
         orientation_rpy_rad: Sequence[float] = GRIPPER_DOWN_RPY_RAD,
-    ) -> np.ndarray:
+    ) -> FloatArray:
         """Convert base-frame TCP xyz (m) to flange (link6) xyz (m) at the given tool orientation."""
         xyz = np.asarray(tcp_xyz_base_m, dtype=np.float64).reshape(3)
         rpy = tuple(float(v) for v in orientation_rpy_rad)
         tcp_pose_mm_rpy = [xyz[0] * 1000.0, xyz[1] * 1000.0, xyz[2] * 1000.0, rpy[0], rpy[1], rpy[2]]
         flange_pose_mm_rpy = pose_tcp_to_flange(tcp_pose_mm_rpy, self.tcp_offset_mm_rad)
-        return np.asarray(flange_pose_mm_rpy[:3], dtype=np.float64) / 1000.0
+        result: FloatArray = np.asarray(flange_pose_mm_rpy[:3], dtype=np.float64) / 1000.0
+        return result
 
     def flange_to_tcp_xyz(
         self,
-        flange_xyz_base_m: Sequence[float] | np.ndarray,
+        flange_xyz_base_m: Sequence[float] | np.ndarray[Any, Any],
         *,
         orientation_rpy_rad: Sequence[float] = GRIPPER_DOWN_RPY_RAD,
-    ) -> np.ndarray:
+    ) -> FloatArray:
         """Convert base-frame flange (link6) xyz (m) to TCP xyz (m) at the given tool orientation."""
         xyz = np.asarray(flange_xyz_base_m, dtype=np.float64).reshape(3)
         rpy = tuple(float(v) for v in orientation_rpy_rad)
         flange_pose_mm_rpy = [xyz[0] * 1000.0, xyz[1] * 1000.0, xyz[2] * 1000.0, rpy[0], rpy[1], rpy[2]]
         tcp_pose_mm_rpy = pose_flange_to_tcp(flange_pose_mm_rpy, self.tcp_offset_mm_rad)
-        return np.asarray(tcp_pose_mm_rpy[:3], dtype=np.float64) / 1000.0
+        result: FloatArray = np.asarray(tcp_pose_mm_rpy[:3], dtype=np.float64) / 1000.0
+        return result
 
 
 def resolve_tool_tcp_spec(config_or_gripper: Any) -> ToolTcpSpec:
@@ -160,8 +164,8 @@ def resolve_tool_tcp_spec(config_or_gripper: Any) -> ToolTcpSpec:
 
 
 def tcp_offset_difference(
-    controller_tcp_mm_rad: Sequence[float] | np.ndarray,
-    expected_tcp_mm_deg: Sequence[float] | np.ndarray,
+    controller_tcp_mm_rad: Sequence[float] | np.ndarray[Any, Any],
+    expected_tcp_mm_deg: Sequence[float] | np.ndarray[Any, Any],
 ) -> tuple[float, float]:
     """Return ``(pos_diff_mm, rot_diff_deg)`` between live controller TCP (mm, rad) and YAML TCP (mm, deg)."""
     ctrl = _as_vec6(controller_tcp_mm_rad, name="controller_tcp_mm_rad")
@@ -175,8 +179,8 @@ def tcp_offset_difference(
 
 
 def check_controller_tcp_offset(
-    controller_tcp_mm_rad: Sequence[float] | np.ndarray,
-    expected_tcp_mm_deg: Sequence[float] | np.ndarray,
+    controller_tcp_mm_rad: Sequence[float] | np.ndarray[Any, Any],
+    expected_tcp_mm_deg: Sequence[float] | np.ndarray[Any, Any],
     *,
     mode: str,
     pos_tol_mm: float = DEFAULT_REAL_TCP_POS_TOL_MM,
